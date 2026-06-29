@@ -580,7 +580,7 @@ class MentorApp:
 
     def ensure_data_store(self):
         os.makedirs(DATA_DIR, exist_ok=True)
-        self.conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        self.conn = sqlite3.connect(DB_PATH)
 
         # task_completions: create with new schema if fresh, or migrate v1
         self.conn.execute(
