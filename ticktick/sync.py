@@ -14,22 +14,72 @@ except ImportError:
     _req = None
     HAS_REQUESTS = False
 
+try:
+    import keyring as _keyring
+    HAS_KEYRING = True
+except ImportError:
+    _keyring = None
+    HAS_KEYRING = False
+
 REDIRECT_PORT = 8765
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/callback"
 AUTH_URL = "https://ticktick.com/oauth/authorize"
 TOKEN_URL = "https://ticktick.com/oauth/token"
 API_BASE = "https://api.ticktick.com/open/v1"
 PROJECT_NAME = "Netherlands Plan"
+_KR_SVC = "MentorOverseer"
+
+
+def _kr_get(key: str) -> str:
+    if HAS_KEYRING:
+        try:
+            return (_keyring.get_password(_KR_SVC, key) or "").strip()
+        except Exception:
+            pass
+    return ""
+
+
+def _kr_set(key: str, value: str) -> None:
+    if HAS_KEYRING and value:
+        try:
+            _keyring.set_password(_KR_SVC, key, value)
+        except Exception:
+            pass
 
 
 class TickTickClient:
     def __init__(self, config: dict):
         tt = config.get("ticktick", {})
         self.client_id = tt.get("client_id", "").strip()
-        self.client_secret = tt.get("client_secret", "").strip()
-        self.access_token = tt.get("access_token", "").strip()
-        self.refresh_token_val = tt.get("refresh_token", "").strip()
+        # Read secrets from keyring; migrate from config on first run
+        self.client_secret = _kr_get("ticktick_client_secret") or tt.get("client_secret", "").strip()
+        self.access_token = _kr_get("ticktick_access_token") or tt.get("access_token", "").strip()
+        self.refresh_token_val = _kr_get("ticktick_refresh_token") or tt.get("refresh_token", "").strip()
+        # Migrate plaintext values found in config into keyring
+        self.needs_config_cleanup = False
+        for kr_key, cfg_key, val in (
+            ("ticktick_client_secret", "client_secret", self.client_secret),
+            ("ticktick_access_token",  "access_token",  self.access_token),
+            ("ticktick_refresh_token", "refresh_token", self.refresh_token_val),
+        ):
+            if tt.get(cfg_key, ""):
+                _kr_set(kr_key, val)
+                self.needs_config_cleanup = True
         self.on_tokens_updated = None  # callable(access_token, refresh_token)
+
+    def save_client_secret(self, client_secret: str) -> None:
+        """Persist client_secret to keyring (never to disk)."""
+        self.client_secret = client_secret
+        _kr_set("ticktick_client_secret", client_secret)
+
+    def save_tokens(self, access_token: str, refresh_token: str) -> None:
+        """Persist OAuth tokens to keyring (never to disk)."""
+        self.access_token = access_token
+        self.refresh_token_val = refresh_token
+        _kr_set("ticktick_access_token", access_token)
+        _kr_set("ticktick_refresh_token", refresh_token)
+        if self.on_tokens_updated:
+            self.on_tokens_updated()
 
     @property
     def is_configured(self):
@@ -142,10 +192,7 @@ class TickTickClient:
         )
         resp.raise_for_status()
         data = resp.json()
-        self.access_token = data["access_token"]
-        self.refresh_token_val = data.get("refresh_token", "")
-        if self.on_tokens_updated:
-            self.on_tokens_updated(self.access_token, self.refresh_token_val)
+        self.save_tokens(data["access_token"], data.get("refresh_token", ""))
 
     def refresh(self):
         if not self.refresh_token_val:
@@ -167,10 +214,7 @@ class TickTickClient:
         )
         resp.raise_for_status()
         data = resp.json()
-        self.access_token = data["access_token"]
-        self.refresh_token_val = data.get("refresh_token", self.refresh_token_val)
-        if self.on_tokens_updated:
-            self.on_tokens_updated(self.access_token, self.refresh_token_val)
+        self.save_tokens(data["access_token"], data.get("refresh_token", self.refresh_token_val))
 
     # ── API core ─────────────────────────────────────────────────────────────
 

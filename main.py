@@ -1318,7 +1318,15 @@ class MentorApp:
         dlg.configure(bg=C["bg"])
         dlg.attributes("-topmost", True)
         dlg.resizable(False, True)
-        dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # block X button
+        def _dismiss():
+            if self.tracker:
+                self.tracker.log_idle_answer(idle_start_str, idle_minutes, "dismissed")
+            dlg.grab_release()
+            dlg.destroy()
+            if self.root.state() != "withdrawn":
+                self._show_report_view() if self.list_title_var.get() == "Weekly Report" else None
+
+        dlg.protocol("WM_DELETE_WINDOW", _dismiss)
         dlg.grab_set()
 
         w, h = 500, 320
@@ -1539,7 +1547,9 @@ class MentorApp:
             return
 
         self.ticktick = TickTickClient(self.config)
-        self.ticktick.on_tokens_updated = self._save_ticktick_tokens
+        self.ticktick.on_tokens_updated = self._on_ticktick_tokens_saved
+        if self.ticktick.needs_config_cleanup:
+            self._strip_ticktick_secrets_from_config()
 
         # Connect button is always active once the module is available
         self.tt_connect_btn.config(state="normal")
@@ -1557,9 +1567,15 @@ class MentorApp:
         self.tt_sync_btn.config(state="normal")
         self._tt_fetch_async()
 
-    def _save_ticktick_tokens(self, access_token, refresh_token):
-        self.config["ticktick"]["access_token"] = access_token
-        self.config["ticktick"]["refresh_token"] = refresh_token
+    def _on_ticktick_tokens_saved(self):
+        """Called by TickTickClient.save_tokens after keyring write — just refresh UI."""
+        pass
+
+    def _strip_ticktick_secrets_from_config(self):
+        """Remove plaintext secrets from config.json after migrating to keyring."""
+        tt = self.config.setdefault("ticktick", {})
+        for key in ("client_secret", "access_token", "refresh_token"):
+            tt.pop(key, None)
         self.save_config(self.config)
 
     def _tt_fetch_async(self):
@@ -1655,7 +1671,8 @@ class MentorApp:
                  relief="flat").grid(row=0, column=1, pady=4, sticky="ew")
 
         tk.Label(grid, text="Client Secret:", width=14, anchor="w", **_lbl).grid(row=1, column=0, pady=4, sticky="w")
-        secret_var = tk.StringVar(value=self.config.get("ticktick", {}).get("client_secret", ""))
+        from ticktick.sync import _kr_get as _tt_kr_get
+        secret_var = tk.StringVar(value=_tt_kr_get("ticktick_client_secret"))
         tk.Entry(grid, textvariable=secret_var, width=44, show="*",
                  bg=C["surface"], fg=C["text"], insertbackground=C["text"],
                  relief="flat").grid(row=1, column=1, pady=4, sticky="ew")
@@ -1670,10 +1687,9 @@ class MentorApp:
                 return
             self.config.setdefault("ticktick", {})
             self.config["ticktick"]["client_id"] = cid
-            self.config["ticktick"]["client_secret"] = sec
             self.save_config(self.config)
             self.ticktick.client_id = cid
-            self.ticktick.client_secret = sec
+            self.ticktick.save_client_secret(sec)
             saved["ok"] = True
             dlg.destroy()
 
@@ -2680,6 +2696,17 @@ class MentorApp:
         delay_ms = max(0, int((nxt - datetime.now()).total_seconds() * 1000))
         self.root.after(delay_ms, self.fire_eod_summary)
 
+    def _count_dismissed_idle_today(self) -> int:
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT COUNT(*) FROM time_diary "
+                "WHERE category='idle' AND description='dismissed' AND date = date('now')"
+            )
+            return cur.fetchone()[0]
+        except Exception:
+            return 0
+
     def fire_eod_summary(self):
         total = done = 0
         lines = []
@@ -2700,6 +2727,10 @@ class MentorApp:
             body = f"All done — {done}/{total} tasks complete!\n" + "\n".join(lines)
         else:
             body = f"{done}/{total} done today. {total - done} missed.\n" + "\n".join(lines)
+
+        dismissed = self._count_dismissed_idle_today()
+        if dismissed:
+            body += f"\n\n⏱ {dismissed} idle session(s) were dismissed — open the report to fill them in."
 
         self._notify(f"{APP_NAME} — Daily Summary", body)
         if self.root.state() != "withdrawn":
@@ -2774,6 +2805,14 @@ class MentorApp:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Show window", self._tray_show, default=True),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Start with Windows",
+                lambda icon, item: self.root.after(
+                    0, lambda: self.set_start_with_windows(not self.config.get("start_with_windows", True))
+                ),
+                checked=lambda item: self.config.get("start_with_windows", True),
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._tray_quit),
         )
         self.tray_icon = pystray.Icon(
@@ -2806,22 +2845,47 @@ class MentorApp:
 
     # ── startup registration ─────────────────────────────────────────────────
 
-    def register_startup(self):
+    def _startup_exe_value(self):
+        if getattr(sys, "frozen", False):
+            return f'"{sys.executable}" --minimized'
+        return f'"{sys.executable}" "{os.path.abspath(__file__)}" --minimized'
+
+    def _set_startup_key(self, enable: bool):
         try:
             import winreg
-            if getattr(sys, "frozen", False):
-                value = f'"{sys.executable}" --minimized'
-            else:
-                value = f'"{sys.executable}" "{os.path.abspath(__file__)}" --minimized'
             key = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows\CurrentVersion\Run",
                 0, winreg.KEY_SET_VALUE,
             )
-            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, value)
+            if enable:
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, self._startup_exe_value())
+            else:
+                try:
+                    winreg.DeleteValue(key, APP_NAME)
+                except FileNotFoundError:
+                    pass
             winreg.CloseKey(key)
         except Exception:
             pass
+
+    def register_startup(self):
+        """Write registry key only on first run; subsequently respect the config flag."""
+        if "start_with_windows" not in self.config:
+            # First run — default on, write key, persist choice
+            self.config["start_with_windows"] = True
+            self.save_config(self.config)
+            self._set_startup_key(True)
+        elif self.config["start_with_windows"]:
+            # User opted in — keep key current (handles exe moves)
+            self._set_startup_key(True)
+        # else: user opted out — don't touch the registry
+
+    def set_start_with_windows(self, enable: bool):
+        """Toggle autostart; called from Settings UI."""
+        self.config["start_with_windows"] = enable
+        self.save_config(self.config)
+        self._set_startup_key(enable)
 
     # ── teardown ─────────────────────────────────────────────────────────────
 
