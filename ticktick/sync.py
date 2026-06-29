@@ -1,6 +1,7 @@
 """TickTick Open API v1 client — OAuth2 + task management."""
 import base64
 import http.server
+import secrets
 import threading
 import urllib.parse
 import webbrowser
@@ -53,10 +54,15 @@ class TickTickClient:
 
         code_holder = {"code": None, "error": None}
         done = threading.Event()
+        csrf_state = secrets.token_hex(16)
 
         class _Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                if qs.get("state", [None])[0] != csrf_state:
+                    code_holder["error"] = "State mismatch — possible CSRF; please retry."
+                    done.set()
+                    return
                 if "code" in qs:
                     code_holder["code"] = qs["code"][0]
                 elif "error" in qs:
@@ -94,6 +100,7 @@ class TickTickClient:
             "response_type": "code",
             "redirect_uri": REDIRECT_URI,
             "scope": "tasks:read tasks:write",
+            "state": csrf_state,
         })
         webbrowser.open(url)
 

@@ -1,8 +1,12 @@
 import ctypes
 import ctypes.wintypes
+import logging
+import sqlite3
 import threading
 import time
 from datetime import datetime, time as dtime, timedelta
+
+_log = logging.getLogger(__name__)
 
 
 class _LASTINPUTINFO(ctypes.Structure):
@@ -91,9 +95,9 @@ def _idle_seconds():
 class ActivityTracker:
     POLL_SECONDS = 60
 
-    def __init__(self, config, conn, on_alert, on_idle=None):
+    def __init__(self, config, db_path, on_alert, on_idle=None):
         self.config   = config
-        self.conn     = conn
+        self.conn     = sqlite3.connect(db_path)
         self.on_alert = on_alert
         self.on_idle  = on_idle  # callable(idle_minutes, idle_start_str)
 
@@ -271,85 +275,90 @@ class ActivityTracker:
 
     def _poll(self):
         while self._running:
-            now    = datetime.now()
-            title  = _active_window_title()
-            title  = self._normalise_title(title) or title
-            idle_s = _idle_seconds()
-            cls    = self.classify(title)
+            try:
+                self._poll_once()
+            except Exception:
+                _log.exception("ActivityTracker poll error")
+            time.sleep(self.POLL_SECONDS)
 
-            # Sleep detection: if wall-clock gap >> POLL_SECONDS the PC was sleeping
-            if self._last_poll_at is not None:
-                gap_s = (now - self._last_poll_at).total_seconds()
-                sleep_s = gap_s - self.POLL_SECONDS
-                if sleep_s >= self._idle_threshold * 60 and not self._idle_notified:
-                    # Close current active session up to when sleep started
-                    sleep_start = self._last_poll_at
+    def _poll_once(self):
+        now    = datetime.now()
+        title  = _active_window_title()
+        title  = self._normalise_title(title) or title
+        idle_s = _idle_seconds()
+        cls    = self.classify(title)
+
+        # Sleep detection: if wall-clock gap >> POLL_SECONDS the PC was sleeping
+        if self._last_poll_at is not None:
+            gap_s = (now - self._last_poll_at).total_seconds()
+            sleep_s = gap_s - self.POLL_SECONDS
+            if sleep_s >= self._idle_threshold * 60 and not self._idle_notified:
+                # Close current active session up to when sleep started
+                sleep_start = self._last_poll_at
+                if self._session_start and self._session_app:
+                    self._log_diary_session(
+                        self._session_start, sleep_start,
+                        self._session_class, self._session_app,
+                    )
+                    self._session_start = None
+                    self._session_app   = None
+                    self._session_class = None
+                self._idle_since    = sleep_start
+                self._idle_notified = True
+                if self.on_idle:
+                    self.on_idle(
+                        int(sleep_s / 60),
+                        sleep_start.strftime("%Y-%m-%d %H:%M:%S"),
+                    )
+        self._last_poll_at = now
+
+        # Focus alert tracking (working hours)
+        self._current_window = title
+        self._current_class  = cls
+        self._log(title, cls)
+        self._check_alert(cls)
+
+        # Diary session tracking (06:00–20:00)
+        if self._in_diary_hours():
+            if idle_s >= self._idle_threshold * 60:
+                if not self._idle_notified:
+                    # Close current active session before going idle
                     if self._session_start and self._session_app:
                         self._log_diary_session(
-                            self._session_start, sleep_start,
+                            self._session_start, now,
                             self._session_class, self._session_app,
                         )
                         self._session_start = None
                         self._session_app   = None
                         self._session_class = None
-                    self._idle_since    = sleep_start
+                    idle_start = now - timedelta(seconds=idle_s)
+                    self._idle_since    = idle_start
                     self._idle_notified = True
                     if self.on_idle:
                         self.on_idle(
-                            int(sleep_s / 60),
-                            sleep_start.strftime("%Y-%m-%d %H:%M:%S"),
+                            int(idle_s / 60),
+                            idle_start.strftime("%Y-%m-%d %H:%M:%S"),
                         )
-            self._last_poll_at = now
-
-            # Focus alert tracking (working hours)
-            self._current_window = title
-            self._current_class  = cls
-            self._log(title, cls)
-            self._check_alert(cls)
-
-            # Diary session tracking (06:00–20:00)
-            if self._in_diary_hours():
-                if idle_s >= self._idle_threshold * 60:
-                    if not self._idle_notified:
-                        # Close current active session before going idle
-                        if self._session_start and self._session_app:
-                            self._log_diary_session(
-                                self._session_start, now,
-                                self._session_class, self._session_app,
-                            )
-                            self._session_start = None
-                            self._session_app   = None
-                            self._session_class = None
-                        idle_start = now - timedelta(seconds=idle_s)
-                        self._idle_since    = idle_start
-                        self._idle_notified = True
-                        if self.on_idle:
-                            self.on_idle(
-                                int(idle_s / 60),
-                                idle_start.strftime("%Y-%m-%d %H:%M:%S"),
-                            )
-                else:
-                    # Active — idle just ended or never started
-                    if self._idle_notified:
-                        self._idle_notified = False
-                        self._idle_since    = None
-                        self._session_start = now
-                        self._session_app   = title
-                        self._session_class = cls
-                    elif self._session_start is None:
-                        self._session_start = now
-                        self._session_app   = title
-                        self._session_class = cls
-                    elif title != self._session_app:
-                        self._log_diary_session(
-                            self._session_start, now,
-                            self._session_class, self._session_app,
-                        )
-                        self._session_start = now
-                        self._session_app   = title
-                        self._session_class = cls
-
-            time.sleep(self.POLL_SECONDS)
+            else:
+                # Active — idle just ended or never started
+                if self._idle_notified:
+                    self._idle_notified = False
+                    self._idle_since    = None
+                    self._session_start = now
+                    self._session_app   = title
+                    self._session_class = cls
+                elif self._session_start is None:
+                    self._session_start = now
+                    self._session_app   = title
+                    self._session_class = cls
+                elif title != self._session_app:
+                    self._log_diary_session(
+                        self._session_start, now,
+                        self._session_class, self._session_app,
+                    )
+                    self._session_start = now
+                    self._session_app   = title
+                    self._session_class = cls
 
     def start(self):
         self._running = True

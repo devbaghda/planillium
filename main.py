@@ -1,4 +1,5 @@
 import ctypes as _ctypes
+import html as _html
 import json
 import os
 import sqlite3
@@ -284,6 +285,9 @@ class MentorApp:
 
         # Activity tracker
         self.tracker = None
+
+        # Cached temp ICO path (generated once, reused for icon and notifications)
+        self._ico_path: str = ""
 
         self.build_interface()
         self.schedule_eod_summary()
@@ -680,7 +684,8 @@ class MentorApp:
         # Set window + dialog icon.  iconbitmap propagates to messageboxes on Windows;
         # iconphoto is the fallback for non-.ico environments (Linux/Mac dev runs).
         try:
-            self.root.iconbitmap(self._write_temp_ico())
+            self._ico_path = self._write_temp_ico()
+            self.root.iconbitmap(self._ico_path)
         except Exception:
             pass
         if HAS_TRAY:
@@ -1294,7 +1299,7 @@ class MentorApp:
             return
         self.tracker = ActivityTracker(
             config=self.config,
-            conn=self.conn,
+            db_path=DB_PATH,
             on_alert=self._on_tracker_alert,
             on_idle=self._on_idle_detected,
         )
@@ -1994,18 +1999,25 @@ class MentorApp:
         return stats
 
     def _waste_patterns(self, period="week"):
-        _filters = {
-            "day":   "date = date('now')",
-            "week":  "date >= date('now','-7 days')",
-            "month": "date >= date('now','-30 days')",
-            "year":  "date >= date('now','-365 days')",
+        _cutoffs = {
+            "day":   (True,  None),
+            "week":  (False, "-7 days"),
+            "month": (False, "-30 days"),
+            "year":  (False, "-365 days"),
         }
-        where = _filters.get(period, _filters["week"])
+        exact, offset = _cutoffs.get(period, _cutoffs["week"])
         cur = self.conn.cursor()
-        cur.execute(
-            f"SELECT window, SUM(duration_min) as mins FROM time_diary "
-            f"WHERE category='off_plan' AND {where} GROUP BY window"
-        )
+        if exact:
+            cur.execute(
+                "SELECT window, SUM(duration_min) as mins FROM time_diary "
+                "WHERE category='off_plan' AND date = date('now') GROUP BY window"
+            )
+        else:
+            cur.execute(
+                "SELECT window, SUM(duration_min) as mins FROM time_diary "
+                "WHERE category='off_plan' AND date >= date('now', ?) GROUP BY window",
+                (offset,),
+            )
         aggregated: dict = {}
         for window, mins in cur.fetchall():
             app = self._extract_app_name(window)
@@ -2017,18 +2029,25 @@ class MentorApp:
         Structure: [(app_name, {total, on_plan, off_plan, neutral,
                                  subs: {sub_name: {total, on_plan, off_plan, neutral}}})]
         """
-        _filters = {
-            "day":   "date = date('now')",
-            "week":  "date >= date('now','-7 days')",
-            "month": "date >= date('now','-30 days')",
-            "year":  "date >= date('now','-365 days')",
+        _cutoffs = {
+            "day":   (True,  None),
+            "week":  (False, "-7 days"),
+            "month": (False, "-30 days"),
+            "year":  (False, "-365 days"),
         }
-        where = _filters.get(period, _filters["week"])
+        exact, offset = _cutoffs.get(period, _cutoffs["week"])
         cur = self.conn.cursor()
-        cur.execute(
-            f"SELECT window, category, SUM(duration_min) as mins FROM time_diary "
-            f"WHERE {where} GROUP BY window, category"
-        )
+        if exact:
+            cur.execute(
+                "SELECT window, category, SUM(duration_min) as mins FROM time_diary "
+                "WHERE date = date('now') GROUP BY window, category"
+            )
+        else:
+            cur.execute(
+                "SELECT window, category, SUM(duration_min) as mins FROM time_diary "
+                "WHERE date >= date('now', ?) GROUP BY window, category",
+                (offset,),
+            )
         groups: dict = {}
         for window, cls, mins in cur.fetchall():
             grp = self._get_app_group(window)
@@ -2497,7 +2516,7 @@ class MentorApp:
             )
 
         dist_rows = "".join(
-            f"<tr><td>{app[:60]}</td><td>{m}m</td></tr>"
+            f"<tr><td>{_html.escape(app[:60])}</td><td>{m}m</td></tr>"
             for app, m in patterns
         ) or "<tr><td colspan='2'>No distractions logged.</td></tr>"
 
@@ -2519,7 +2538,7 @@ class MentorApp:
             neu   = app_data.get("neutral",  0)
             app_rows += (
                 f"<tr style='font-weight:bold'>"
-                f"<td>{app_name[:50]}</td>"
+                f"<td>{_html.escape(app_name[:50])}</td>"
                 f"<td style='color:#30d158'>{on_p}m</td>"
                 f"<td style='color:#ff453a'>{off_p}m</td>"
                 f"<td style='color:#0a84ff'>{neu}m</td>"
@@ -2533,7 +2552,7 @@ class MentorApp:
                 sn = sub_data.get("neutral",  0)
                 app_rows += (
                     f"<tr style='color:#636366'>"
-                    f"<td style='padding-left:24px'>↳ {sub_name[:48]}</td>"
+                    f"<td style='padding-left:24px'>↳ {_html.escape(sub_name[:48])}</td>"
                     f"<td>{so}m</td><td>{sf}m</td><td>{sn}m</td>"
                     f"<td>{_hfmt(sub_data['total'])}</td></tr>"
                 )
@@ -2559,9 +2578,9 @@ class MentorApp:
             col = cat_colors_hex.get(cat, "#8e8e93")
             lbl = cat_labels_html.get(cat, cat)
             if cat == "idle" and description:
-                content = f'<em style="color:#ff9f0a">"{description}"</em>'
+                content = f'<em style="color:#ff9f0a">"{_html.escape(description)}"</em>'
             else:
-                content = self._extract_app_name(window, 70)
+                content = _html.escape(self._extract_app_name(window, 70))
             diary_rows += (
                 f"<tr>"
                 f"<td style='color:#8e8e93'>{start} → {end}</td>"
@@ -2701,7 +2720,7 @@ class MentorApp:
                 try:
                     plyer_notification.notify(
                         title=title, message=message, timeout=12,
-                        app_icon=self._write_temp_ico(),
+                        app_icon=self._ico_path or self._write_temp_ico(),
                     )
                 except Exception:
                     plyer_notification.notify(title=title, message=message, timeout=12)
@@ -2834,7 +2853,24 @@ def _acquire_instance_mutex():
     return handle                          # keep alive for process lifetime
 
 
+def _setup_logging():
+    import logging as _logging
+    os.makedirs(DATA_DIR, exist_ok=True)
+    _logging.basicConfig(
+        filename=os.path.join(DATA_DIR, "mentor.log"),
+        level=_logging.ERROR,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+    def _excepthook(exc_type, value, tb):
+        _logging.critical("Uncaught exception", exc_info=(exc_type, value, tb))
+    sys.excepthook = _excepthook
+    threading.excepthook = lambda args: _excepthook(
+        args.exc_type, args.exc_value, args.exc_traceback
+    )
+
+
 def main():
+    _setup_logging()
     _mutex = _acquire_instance_mutex()
     if _mutex is None:
         sys.exit(0)
