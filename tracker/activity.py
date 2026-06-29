@@ -97,7 +97,8 @@ class ActivityTracker:
 
     def __init__(self, config, db_path, on_alert, on_idle=None):
         self.config   = config
-        self.conn     = sqlite3.connect(db_path)
+        self._db_path = db_path
+        self.conn     = None  # opened inside poll thread; each thread owns its connection
         self.on_alert = on_alert
         self.on_idle  = on_idle  # callable(idle_minutes, idle_start_str)
 
@@ -130,7 +131,9 @@ class ActivityTracker:
         self._last_poll_at  = None   # wall-clock time of previous poll (sleep detection)
 
         self._running = False
-        self._ensure_tables()
+        # Create tables now (main thread, short-lived connection)
+        with sqlite3.connect(db_path) as _setup:
+            self._ensure_tables(_setup)
 
     @staticmethod
     def _t(s):
@@ -155,8 +158,8 @@ class ActivityTracker:
 
     # ── database ──────────────────────────────────────────────────────────────
 
-    def _ensure_tables(self):
-        self.conn.execute(
+    def _ensure_tables(self, conn):
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS activity_log ("
             "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
             "  logged_at TEXT NOT NULL,"
@@ -164,7 +167,7 @@ class ActivityTracker:
             "  class     TEXT NOT NULL"
             ")"
         )
-        self.conn.execute(
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS time_diary ("
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT,"
             "  date         TEXT NOT NULL,"
@@ -176,7 +179,7 @@ class ActivityTracker:
             "  description  TEXT"
             ")"
         )
-        self.conn.commit()
+        conn.commit()
 
     def _log(self, window, cls):
         now = datetime.now().isoformat(sep=" ", timespec="seconds")
@@ -205,13 +208,28 @@ class ActivityTracker:
         self.conn.commit()
 
     def log_idle_answer(self, idle_start_str, idle_minutes, description):
-        """Called from main thread after user submits idle dialog."""
+        """Called from main thread — opens its own connection to avoid cross-thread use."""
         try:
             start = datetime.strptime(idle_start_str, "%Y-%m-%d %H:%M:%S")
         except Exception:
             start = datetime.now() - timedelta(minutes=idle_minutes)
         end = start + timedelta(minutes=idle_minutes)
-        self._log_diary_session(start, end, "idle", "idle", description)
+        duration = max(1, int((end - start).total_seconds() / 60))
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                "INSERT INTO time_diary "
+                "(date, start_time, end_time, duration_min, category, window, description) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    start.date().isoformat(),
+                    start.strftime("%H:%M"),
+                    end.strftime("%H:%M"),
+                    duration,
+                    "idle",
+                    "idle",
+                    description,
+                )
+            )
 
     # ── focus alert logic ─────────────────────────────────────────────────────
 
@@ -274,12 +292,17 @@ class ActivityTracker:
         return t
 
     def _poll(self):
-        while self._running:
-            try:
-                self._poll_once()
-            except Exception:
-                _log.exception("ActivityTracker poll error")
-            time.sleep(self.POLL_SECONDS)
+        self.conn = sqlite3.connect(self._db_path)
+        try:
+            while self._running:
+                try:
+                    self._poll_once()
+                except Exception:
+                    _log.exception("ActivityTracker poll error")
+                time.sleep(self.POLL_SECONDS)
+        finally:
+            self.conn.close()
+            self.conn = None
 
     def _poll_once(self):
         now    = datetime.now()
