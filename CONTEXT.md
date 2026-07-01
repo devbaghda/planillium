@@ -19,7 +19,9 @@ keeps him on-plan, logs his full day (06:00–20:00), and generates weekly repor
 ```
 mentor-overseer/
 ├── CONTEXT.md              ← you are here. Read this first every session.
-├── config.json             ← user settings, API keys, idle threshold, scoring rules
+├── config.json             ← user settings, idle threshold, scoring rules (no secrets —
+│                              TickTick client_secret/access_token live in Windows
+│                              Credential Manager via `keyring`, not on disk)
 ├── main.py                 ← single-file app entry point (MentorApp class, ~2100 lines)
 ├── plans/
 │   ├── active/             ← up to 2 active plan JSONs (e.g. netherlands.json)
@@ -160,7 +162,7 @@ ticktick_sync (id, plan_day, task_text, ticktick_task_id,
   "reminder_interval_minutes": 5,
   "idle_threshold_minutes": 10,
   "end_of_day_summary_time": "20:00",
-  "ticktick": { "client_id": "...", "client_secret": "...", "access_token": "..." },
+  "ticktick": { "client_id": "..." },
   "activity_rules": {
     "on_plan":  ["Power BI", "PowerPoint", "LinkedIn", "Excel", "Claude", ...],
     "off_plan": ["Netflix", "YouTube", "Steam", "Tanki Online", "Besiege", ...],
@@ -170,6 +172,9 @@ ticktick_sync (id, plan_day, task_text, ticktick_task_id,
                "on_plan_hour": 3, "off_plan_hour": -2, "streak_bonus_per_day": 5 }
 }
 ```
+`ticktick.client_secret` / `access_token` / `refresh_token` are never written to this file —
+they live in Windows Credential Manager via `keyring`, migrated out of config.json on first
+launch after the 2026-06-29 audit fix.
 
 ---
 
@@ -201,11 +206,49 @@ _Update this section at the end of each Claude Code session:_
     constraint from before multi-plan support (global across all plans, not caught by
     the `ON CONFLICT` clause in `save_completion`). `ensure_data_store()` now detects
     and rebuilds the table without it, preserving data.
+  - Telegram grouping fix (2026-07-01): "Time By App" reports were splitting the same
+    Telegram chat between a standalone top-level entry and a nested Telegram sub-item,
+    and some Telegram sub-names retained leftover unread-badge digits (e.g.
+    "Telegram (1027)"). Root causes, confirmed against a week of real `time_diary` data:
+    - `_active_window_title()` re-resolved the owning exe via `OpenProcess` on every
+      poll; when that WinAPI call failed (happened often for Telegram), the title was
+      stored with no "– Telegram" suffix and got misfiled as a standalone app. Fixed
+      with a sticky per-PID cache (`_pid_app_cache` in tracker/activity.py) so one
+      successful resolution covers the rest of that process's session.
+    - `_strip_unread_badge()` required pure ASCII digits inside the parens, so a
+      locale-formatted thousands separator (`1,027`) or a second trailing paren group
+      (`(525) (2)`) left the badge stuck. Now strips iteratively and tolerates common
+      separator characters.
+    - `_poll_once()` was re-stripping the Unicode LTR mark *after*
+      `_active_window_title()` already returned, without also stripping the badge that
+      went with it — this silently broke the report's older LTR-mark-based Telegram
+      fallback whenever exe resolution failed. Removed the redundant re-normalisation.
+    - `main.py`'s `_get_app_sub()` now re-applies badge stripping at report-render time
+      too, so already-logged rows with a stuck badge display correctly with no DB
+      migration needed. Chats logged with zero identifying signal at all (bare name,
+      no marker — e.g. old data predating any of this session's fixes) can't be
+      retroactively regrouped; only newly-logged sessions benefit going forward.
+  - Security: found `ticktick.client_secret` / `access_token` committed in plaintext in
+    git history (baseline commit, predating the keyring migration). No remote was
+    configured, so exposure was local-only. Rewrote git history on both `master` and
+    `audit-remediation` with `git filter-branch` to redact the values, then purged all
+    backup refs/reflog and ran `git gc --prune=now --aggressive` — verified via a full
+    object scan that the secret no longer exists anywhere in the repo. Commit hashes on
+    both branches changed as a result. the user still needs to rotate the TickTick OAuth
+    credential at developer.ticktick.com as a precaution (old values are unrecoverable
+    now, but treat them as burned).
 - What to build next: nothing specified — await the user's direction
 - Known issues / notes:
   - TickTick redirect URI must be registered at developer.ticktick.com: `http://localhost:8765/callback`
   - `tracker/__init__.py` / `ticktick/__init__.py` were missing from git for a while
     (package worked locally without them tracked) — now added.
+  - `run.bat` mentioned in the architecture diagram above does not actually exist on
+    disk — use `python main.py` directly for dev runs, or `build.bat` for a full
+    PyInstaller rebuild (kills any running `MentorOverseer.exe` first).
+  - Historical Telegram activity data from before 2026-07-01 may still show some chats
+    as standalone top-level apps instead of nested under Telegram (see Telegram
+    grouping fix above) — this is expected and won't self-correct for old rows.
 - Python: `C:\Users\devba\AppData\Local\Programs\Python\Python311\python.exe`
-- Exe: `MentorOverseer.exe` (next to config.json / plans/ / data/)
+- Exe: `MentorOverseer.exe` (next to config.json / plans/ / data/) — rebuild with
+  `build.bat` after any source change; the compiled exe does NOT auto-update.
 - Desktop shortcut: `C:\Users\devba\Desktop\Mentor-Overseer.lnk`
