@@ -54,6 +54,24 @@ _EXE_APP_NAMES = {
 }
 
 
+_LTR_STRIP = str.maketrans("", "", "‎‏")
+
+def _strip_unread_badge(title: str) -> str:
+    """Remove leading/trailing unread-count badges like '(3) Chat' or 'Chat (3)'."""
+    t = title.strip()
+    # Trailing "(N)"
+    if t.endswith(")"):
+        inner_start = t.rfind("(")
+        if inner_start != -1 and t[inner_start + 1:-1].isdigit():
+            t = t[:inner_start].rstrip(" –—-")
+    # Leading "(N)"
+    if t.startswith("(") and ")" in t:
+        inner = t[1:t.index(")")]
+        if inner.isdigit():
+            t = t[t.index(")") + 1:].lstrip(" –—-")
+    return t.strip()
+
+
 def _active_window_title():
     hwnd = _u32.GetForegroundWindow()
     length = _u32.GetWindowTextLengthW(hwnd)
@@ -62,24 +80,31 @@ def _active_window_title():
         _u32.GetWindowTextW(hwnd, buf, length + 1)
     title = buf.value
 
-    # Messenger apps put only the chat/contact name in the window title with no app suffix.
-    # Look up the process exe and inject " – AppName" so the display layer can identify it.
-    if " – " not in title and " - " not in title and " — " not in title:
-        try:
-            pid = ctypes.wintypes.DWORD()
-            _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-            h = _k32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
-            if h:
-                ebuf = ctypes.create_unicode_buffer(260)
-                sz   = ctypes.wintypes.DWORD(260)
-                _k32.QueryFullProcessImageNameW(h, 0, ebuf, ctypes.byref(sz))
-                _k32.CloseHandle(h)
-                exe = ebuf.value.rsplit("\\", 1)[-1].lower() if ebuf.value else ""
-                app = _EXE_APP_NAMES.get(exe, "")
-                if app and title.lower() != app.lower():
-                    title = f"{title} – {app}" if title else app
-        except Exception:
-            pass
+    # Always look up exe for known messenger apps — they use chat name as window title.
+    try:
+        pid = ctypes.wintypes.DWORD()
+        _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        h = _k32.OpenProcess(0x1000, False, pid.value)
+        exe = ""
+        if h:
+            ebuf = ctypes.create_unicode_buffer(260)
+            sz   = ctypes.wintypes.DWORD(260)
+            _k32.QueryFullProcessImageNameW(h, 0, ebuf, ctypes.byref(sz))
+            _k32.CloseHandle(h)
+            exe = ebuf.value.rsplit("\\", 1)[-1].lower() if ebuf.value else ""
+        app = _EXE_APP_NAMES.get(exe, "")
+        if app:
+            # Strip Unicode direction marks then unread-count badge before injecting app name
+            clean = title.translate(_LTR_STRIP).strip()
+            clean = _strip_unread_badge(clean)
+            if clean.lower() != app.lower():
+                title = f"{clean} – {app}" if clean else app
+            else:
+                title = app
+        elif " – " not in title and " - " not in title and " — " not in title:
+            pass  # non-messenger, no suffix needed
+    except Exception:
+        pass
 
     return title
 
@@ -260,36 +285,12 @@ class ActivityTracker:
 
     # ── poll loop ─────────────────────────────────────────────────────────────
 
-    # Telegram prefixes titles with U+200E Left-to-Right Mark
-    _LTR_MARKS = ('‎', '‏')
-
     @staticmethod
     def _normalise_title(title: str) -> str:
-        """Normalise so unread-count changes don't split diary sessions."""
+        """Strip Unicode direction marks; badge stripping is done in _active_window_title."""
         if not title:
             return title
-        # Telegram: ‎CHAT_NAME – (N)  →  CHAT_NAME
-        if title.startswith(ActivityTracker._LTR_MARKS):
-            t = title.lstrip('‎‏').strip()
-            for sep in (" – (", " — (", " - ("):
-                idx = t.rfind(sep)
-                if idx != -1:
-                    candidate = t[idx + len(sep):]
-                    if candidate.rstrip().rstrip(")").isdigit() and candidate.rstrip().endswith(")"):
-                        return t[:idx].strip()
-            return t
-        # Leading badge "(N) ..."
-        t = title.strip()
-        if t.startswith("(") and ")" in t:
-            inner = t[1:t.index(")")]
-            after = t[t.index(")") + 1:].strip()
-            if inner.isdigit():
-                for sep in ("– ", "— ", "- "):
-                    if after.startswith(sep):
-                        after = after[len(sep):].strip()
-                        break
-                return after
-        return t
+        return title.translate(_LTR_STRIP).strip()
 
     def _poll(self):
         self.conn = sqlite3.connect(self._db_path)
@@ -304,6 +305,9 @@ class ActivityTracker:
             self.conn.close()
             self.conn = None
 
+    def _diary_end_today(self):
+        return datetime.combine(datetime.now().date(), self._diary_end)
+
     def _poll_once(self):
         now    = datetime.now()
         title  = _active_window_title()
@@ -313,10 +317,9 @@ class ActivityTracker:
 
         # Sleep detection: if wall-clock gap >> POLL_SECONDS the PC was sleeping
         if self._last_poll_at is not None:
-            gap_s = (now - self._last_poll_at).total_seconds()
+            gap_s   = (now - self._last_poll_at).total_seconds()
             sleep_s = gap_s - self.POLL_SECONDS
             if sleep_s >= self._idle_threshold * 60 and not self._idle_notified:
-                # Close current active session up to when sleep started
                 sleep_start = self._last_poll_at
                 if self._session_start and self._session_app:
                     self._log_diary_session(
@@ -328,24 +331,44 @@ class ActivityTracker:
                     self._session_class = None
                 self._idle_since    = sleep_start
                 self._idle_notified = True
-                if self.on_idle:
-                    self.on_idle(
-                        int(sleep_s / 60),
-                        sleep_start.strftime("%Y-%m-%d %H:%M:%S"),
-                    )
+                # on_idle fired when user actually returns (see below)
         self._last_poll_at = now
 
-        # Focus alert tracking (working hours)
+        # Focus alert tracking (working hours only)
         self._current_window = title
         self._current_class  = cls
         self._log(title, cls)
         self._check_alert(cls)
 
         # Diary session tracking (06:00–20:00)
-        if self._in_diary_hours():
+        if self._idle_notified and idle_s < self._idle_threshold * 60:
+            # User has returned from idle/sleep — fire dialog with actual duration
+            diary_end = self._diary_end_today()
+            idle_end  = min(now, diary_end)
+            idle_start = self._idle_since or (now - timedelta(seconds=idle_s))
+            idle_start = max(idle_start,
+                             datetime.combine(now.date(), self._diary_start))
+
+            if idle_start < idle_end:
+                actual_min = max(1, int((idle_end - idle_start).total_seconds() / 60))
+                if self._in_diary_hours() and self.on_idle:
+                    # Still within tracking hours → ask user
+                    self.on_idle(actual_min, idle_start.strftime("%Y-%m-%d %H:%M:%S"))
+                elif idle_start < diary_end:
+                    # Returned after 20:00 — auto-log the diary-hours portion silently
+                    self._log_diary_session(idle_start, idle_end, "idle", "idle")
+
+            self._idle_notified = False
+            self._idle_since    = None
+            if self._in_diary_hours():
+                self._session_start = now
+                self._session_app   = title
+                self._session_class = cls
+
+        elif self._in_diary_hours():
             if idle_s >= self._idle_threshold * 60:
                 if not self._idle_notified:
-                    # Close current active session before going idle
+                    # Close active session, mark idle start
                     if self._session_start and self._session_app:
                         self._log_diary_session(
                             self._session_start, now,
@@ -354,23 +377,12 @@ class ActivityTracker:
                         self._session_start = None
                         self._session_app   = None
                         self._session_class = None
-                    idle_start = now - timedelta(seconds=idle_s)
-                    self._idle_since    = idle_start
+                    self._idle_since    = now - timedelta(seconds=idle_s)
                     self._idle_notified = True
-                    if self.on_idle:
-                        self.on_idle(
-                            int(idle_s / 60),
-                            idle_start.strftime("%Y-%m-%d %H:%M:%S"),
-                        )
+                    # on_idle will fire when user returns
             else:
-                # Active — idle just ended or never started
-                if self._idle_notified:
-                    self._idle_notified = False
-                    self._idle_since    = None
-                    self._session_start = now
-                    self._session_app   = title
-                    self._session_class = cls
-                elif self._session_start is None:
+                # Active
+                if self._session_start is None:
                     self._session_start = now
                     self._session_app   = title
                     self._session_class = cls
@@ -382,6 +394,20 @@ class ActivityTracker:
                     self._session_start = now
                     self._session_app   = title
                     self._session_class = cls
+
+        else:
+            # Outside diary hours — close any open session capped at diary_end
+            diary_end = self._diary_end_today()
+            if self._session_start and self._session_app:
+                end = min(now, diary_end)
+                if end > self._session_start:
+                    self._log_diary_session(
+                        self._session_start, end,
+                        self._session_class, self._session_app,
+                    )
+                self._session_start = None
+                self._session_app   = None
+                self._session_class = None
 
     def start(self):
         self._running = True
