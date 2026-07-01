@@ -1,0 +1,16 @@
+# Personal data / runtime state — never commit
+data/
+
+# Build artifacts
+build/
+dist/
+*.spec
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor/tooling
+.vscode/
+.claude/

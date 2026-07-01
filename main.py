@@ -629,6 +629,36 @@ class MentorApp:
             self.conn.execute("ALTER TABLE task_completions ADD COLUMN plan_id TEXT DEFAULT 'netherlands'")
         except Exception:
             pass
+
+        # v1 tables carry an inline UNIQUE(plan_day, task_text) constraint that predates
+        # multi-plan support. It applies across ALL plan_ids, so completing a task that
+        # happens to share a (plan_day, task_text) pair with another plan raises an
+        # uncaught IntegrityError (ON CONFLICT below targets the newer plan_id-aware
+        # index and doesn't catch it). Rebuild without the stale constraint if present.
+        cur = self.conn.cursor()
+        cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='task_completions'")
+        row = cur.fetchone()
+        if row and row[0] and "UNIQUE(plan_day, task_text)" in " ".join(row[0].split()):
+            self.conn.execute("ALTER TABLE task_completions RENAME TO task_completions_v1")
+            self.conn.execute(
+                "CREATE TABLE task_completions ("
+                "  id           INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  plan_id      TEXT    NOT NULL DEFAULT 'netherlands',"
+                "  plan_day     INTEGER NOT NULL,"
+                "  task_text    TEXT    NOT NULL,"
+                "  completed    INTEGER NOT NULL,"
+                "  completed_at TEXT,"
+                "  last_updated TEXT    NOT NULL"
+                ")"
+            )
+            self.conn.execute(
+                "INSERT INTO task_completions "
+                "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) "
+                "SELECT plan_id, plan_day, task_text, completed, completed_at, last_updated "
+                "FROM task_completions_v1"
+            )
+            self.conn.execute("DROP TABLE task_completions_v1")
+
         # Ensure unique index on (plan_id, plan_day, task_text)
         self.conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS tc_plan_idx "
@@ -1047,11 +1077,17 @@ class MentorApp:
                         command=lambda tt=task_text, od=orig_day, p=plan: _do_today(p, tt, od),
                     ).pack(side="right", padx=(8, 0))
 
-        # Mouse wheel scroll
+        # Mouse wheel scroll — bind on this dialog's widgets only, not bind_all,
+        # so it doesn't clobber the main window's global mousewheel scroll binding.
         def _scroll(e):
             canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
-        dlg.bind_all("<MouseWheel>", _scroll)
-        dlg.bind("<Destroy>", lambda e: dlg.unbind_all("<MouseWheel>"))
+
+        def _bind_wheel(widget):
+            widget.bind("<MouseWheel>", _scroll)
+            for child in widget.winfo_children():
+                _bind_wheel(child)
+        _bind_wheel(inner)
+        canvas.bind("<MouseWheel>", _scroll)
 
     def _swap_task_to_today(self, plan, target_task_text, target_original_day):
         """Pull a future task to today; shift everything between forward by +1 day."""
@@ -1242,6 +1278,26 @@ class MentorApp:
                  fg=color, bg=C["bg"], padx=24).pack(anchor="w", pady=(6, 2))
 
     def render_tasks(self):
+        try:
+            self._render_tasks_unsafe()
+        except Exception:
+            import logging
+            logging.critical("render_tasks failed", exc_info=True)
+            for child in self.task_frame.winfo_children():
+                child.destroy()
+            tk.Label(
+                self.task_frame,
+                text="Something went wrong showing today's tasks.\nSee data/mentor.log for details.",
+                font=("Segoe UI", 11), fg=C["text_muted"], bg=C["bg"],
+                padx=24, pady=24, justify="left",
+            ).pack(anchor="w")
+            tk.Button(
+                self.task_frame, text="Retry", font=("Segoe UI", 9),
+                bg=C["surface"], fg=C["text"], relief="flat", padx=10,
+                command=self.render_tasks,
+            ).pack(anchor="w", padx=24)
+
+    def _render_tasks_unsafe(self):
         for child in self.task_frame.winfo_children():
             child.destroy()
         self.task_vars.clear()
@@ -2206,12 +2262,14 @@ class MentorApp:
     def _show_today_view(self):
         self.list_title_var.set("Today")
         self.render_tasks()
+        self.canvas.yview_moveto(0)
 
     def _show_report_view(self):
         self.list_title_var.set("Weekly Report")
         for w in self.task_frame.winfo_children():
             w.destroy()
         self._render_report()
+        self.canvas.yview_moveto(0)
 
     # ── data queries ─────────────────────────────────────────────────────────
 
@@ -3297,16 +3355,21 @@ def _setup_logging():
     threading.excepthook = lambda args: _excepthook(
         args.exc_type, args.exc_value, args.exc_traceback
     )
+    return _excepthook
 
 
 def main():
-    _setup_logging()
+    _log_exception = _setup_logging()
     _mutex = _acquire_instance_mutex()
     if _mutex is None:
         sys.exit(0)
 
     start_minimized = "--minimized" in sys.argv
     root = tk.Tk()
+    # Tkinter routes exceptions raised inside widget callbacks (button commands,
+    # binds, after()) through this hook instead of sys.excepthook — without this,
+    # callback errors are silently swallowed and never reach mentor.log.
+    root.report_callback_exception = lambda exc, val, tb: _log_exception(exc, val, tb)
     if start_minimized:
         root.withdraw()
     app = MentorApp(root)
