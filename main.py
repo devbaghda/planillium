@@ -25,11 +25,13 @@ except ImportError:
     HAS_TICKTICK = False
 
 try:
-    from tracker.activity import ActivityTracker
+    from tracker.activity import ActivityTracker, _strip_unread_badge
     HAS_TRACKER = True
 except ImportError:
     ActivityTracker = None
     HAS_TRACKER = False
+    def _strip_unread_badge(title):
+        return title
 
 try:
     import pystray
@@ -226,7 +228,14 @@ class MentorApp:
                     return parts[-2]
 
                 if raw_last in MentorApp._MESSENGERS:
-                    return parts[0]
+                    # Badge-stripping at write time can occasionally miss a locale-
+                    # formatted unread count (e.g. "1,027") or a second paren group,
+                    # leaving it stuck to the sub-name — strip it again here so it's
+                    # cleaned up in the report regardless of when it was logged.
+                    sub = _strip_unread_badge(parts[0])
+                    if not sub or sub.lower() == raw_last:
+                        return None  # no specific chat — just counts toward the group total
+                    return sub
 
                 # VS Code: sub = workspace/project (segment just before "VS Code")
                 if app_group in MentorApp._VS_CODE_NAMES:

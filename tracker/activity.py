@@ -55,21 +55,41 @@ _EXE_APP_NAMES = {
 
 
 _LTR_STRIP = str.maketrans("", "", "‎‏")
+_BADGE_SEP_STRIP = str.maketrans("", "", ",.   '")
+
+
+def _is_badge_number(s: str) -> bool:
+    s = s.translate(_BADGE_SEP_STRIP)
+    return s.isdigit() and s != ""
+
 
 def _strip_unread_badge(title: str) -> str:
-    """Remove leading/trailing unread-count badges like '(3) Chat' or 'Chat (3)'."""
+    """Remove leading/trailing unread-count badges like '(3) Chat', 'Chat (3)',
+    'Chat (1,027)', or 'Chat (3) (2)' — loops until no more badges are found,
+    since some window titles carry more than one trailing/leading paren group."""
     t = title.strip()
-    # Trailing "(N)"
-    if t.endswith(")"):
-        inner_start = t.rfind("(")
-        if inner_start != -1 and t[inner_start + 1:-1].isdigit():
-            t = t[:inner_start].rstrip(" –—-")
-    # Leading "(N)"
-    if t.startswith("(") and ")" in t:
-        inner = t[1:t.index(")")]
-        if inner.isdigit():
-            t = t[t.index(")") + 1:].lstrip(" –—-")
-    return t.strip()
+    changed = True
+    while changed:
+        changed = False
+        if t.endswith(")"):
+            inner_start = t.rfind("(")
+            if inner_start != -1 and _is_badge_number(t[inner_start + 1:-1]):
+                t = t[:inner_start].rstrip(" –—-").strip()
+                changed = True
+                continue
+        if t.startswith("(") and ")" in t:
+            inner = t[1:t.index(")")]
+            if _is_badge_number(inner):
+                t = t[t.index(")") + 1:].lstrip(" –—-").strip()
+                changed = True
+    return t
+
+
+# Sticky per-PID cache: OpenProcess/QueryFullProcessImageNameW occasionally fail
+# transiently for a foreground window even though the process is a known messenger
+# (observed with Telegram) — without this, a single failed poll drops the "– AppName"
+# suffix and the session gets misfiled as a standalone app instead of nested under it.
+_pid_app_cache = {}
 
 
 def _active_window_title():
@@ -84,7 +104,8 @@ def _active_window_title():
     try:
         pid = ctypes.wintypes.DWORD()
         _u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        h = _k32.OpenProcess(0x1000, False, pid.value)
+        pid_val = pid.value
+        h = _k32.OpenProcess(0x1000, False, pid_val)
         exe = ""
         if h:
             ebuf = ctypes.create_unicode_buffer(260)
@@ -94,6 +115,10 @@ def _active_window_title():
             exe = ebuf.value.rsplit("\\", 1)[-1].lower() if ebuf.value else ""
         app = _EXE_APP_NAMES.get(exe, "")
         if app:
+            _pid_app_cache[pid_val] = app
+        elif pid_val in _pid_app_cache:
+            app = _pid_app_cache[pid_val]
+        if app:
             # Strip Unicode direction marks then unread-count badge before injecting app name
             clean = title.translate(_LTR_STRIP).strip()
             clean = _strip_unread_badge(clean)
@@ -101,8 +126,6 @@ def _active_window_title():
                 title = f"{clean} – {app}" if clean else app
             else:
                 title = app
-        elif " – " not in title and " - " not in title and " — " not in title:
-            pass  # non-messenger, no suffix needed
     except Exception:
         pass
 
@@ -285,13 +308,6 @@ class ActivityTracker:
 
     # ── poll loop ─────────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _normalise_title(title: str) -> str:
-        """Strip Unicode direction marks; badge stripping is done in _active_window_title."""
-        if not title:
-            return title
-        return title.translate(_LTR_STRIP).strip()
-
     def _poll(self):
         self.conn = sqlite3.connect(self._db_path)
         try:
@@ -311,7 +327,6 @@ class ActivityTracker:
     def _poll_once(self):
         now    = datetime.now()
         title  = _active_window_title()
-        title  = self._normalise_title(title) or title
         idle_s = _idle_seconds()
         cls    = self.classify(title)
 
