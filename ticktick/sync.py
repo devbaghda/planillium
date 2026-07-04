@@ -5,7 +5,7 @@ import secrets
 import threading
 import urllib.parse
 import webbrowser
-from datetime import date
+from datetime import date, datetime, time, timezone
 
 try:
     import requests as _req
@@ -293,8 +293,15 @@ class TickTickClient:
             "priority": 1,
         }
         if due_date:
-            payload["dueDate"] = due_date.strftime("%Y-%m-%dT23:59:00+0000")
-            payload["startDate"] = due_date.strftime("%Y-%m-%dT00:00:00+0000")
+            # Build local midnight/end-of-day first, then convert to UTC for the
+            # API — a fixed "+0000" offset on the naive date string would stamp
+            # e.g. 23:59 UTC, which is already past midnight local time for any
+            # UTC+ timezone (confirmed: silently pushed plan tasks due "today"
+            # to TickTick as due in the small hours of the next calendar day).
+            start_utc = datetime.combine(due_date, time(0, 0)).astimezone(timezone.utc)
+            end_utc = datetime.combine(due_date, time(23, 59)).astimezone(timezone.utc)
+            payload["dueDate"] = end_utc.strftime("%Y-%m-%dT%H:%M:%S+0000")
+            payload["startDate"] = start_utc.strftime("%Y-%m-%dT%H:%M:%S+0000")
         return self._request("POST", "/task", json=payload)
 
     def complete_task(self, project_id, task_id):

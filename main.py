@@ -1657,6 +1657,15 @@ class MentorApp:
         _render_days()
         canvas.bind("<MouseWheel>", _scroll)
 
+    def _reassign_task_day(self, plan_id, task_text, original_day, old_assigned_day, new_assigned_day):
+        """Move one task to a new assigned day, migrating its completion record
+        (keyed on assigned day) so a done/undone mark isn't lost in the move."""
+        self._save_override(plan_id, task_text, original_day, new_assigned_day)
+        old_key = (plan_id, old_assigned_day, task_text)
+        new_key = (plan_id, new_assigned_day, task_text)
+        if old_key in self.completions:
+            self.completions[new_key] = self.completions.pop(old_key)
+
     def _swap_task_to_today(self, plan, target_task_text, target_original_day):
         """Pull a future task to today; shift everything between forward by +1 day."""
         plan_id  = plan["id"]
@@ -1685,22 +1694,10 @@ class MentorApp:
             if txt == target_task_text:
                 continue
             if today <= assigned < target_assigned:
-                self._save_override(plan_id, txt, orig, assigned + 1)
-                # Also shift completions key so marks are preserved
-                # (completions key uses assigned day — update in-memory dict)
-                old_key = (plan_id, assigned, txt)
-                new_key = (plan_id, assigned + 1, txt)
-                if old_key in self.completions:
-                    val = self.completions.pop(old_key)
-                    self.completions[new_key] = val
+                self._reassign_task_day(plan_id, txt, orig, assigned, assigned + 1)
 
         # Move target to today
-        self._save_override(plan_id, target_task_text, target_original_day, today)
-        old_key = (plan_id, target_assigned, target_task_text)
-        new_key = (plan_id, today, target_task_text)
-        if old_key in self.completions:
-            val = self.completions.pop(old_key)
-            self.completions[new_key] = val
+        self._reassign_task_day(plan_id, target_task_text, target_original_day, target_assigned, today)
 
         self.render_tasks()
         self._rebuild_plans_sidebar()
@@ -1718,16 +1715,95 @@ class MentorApp:
             assigned = t["day"]
             if assigned < day:
                 continue
-            self._save_override(plan_id, txt, orig, assigned + 1)
-            old_key = (plan_id, assigned, txt)
-            new_key = (plan_id, assigned + 1, txt)
-            if old_key in self.completions:
-                val = self.completions.pop(old_key)
-                self.completions[new_key] = val
+            self._reassign_task_day(plan_id, txt, orig, assigned, assigned + 1)
 
         self._mark_day_off_record(plan_id, day)
         self.render_tasks()
         self._rebuild_plans_sidebar()
+
+    def _pick_date_dialog(self, title, min_date=None):
+        """Modal month-grid calendar picker. Returns a date, or None if cancelled.
+        Days before min_date (if given) are shown disabled."""
+        import calendar as _calendar_mod
+
+        result = {"date": None}
+        today = date.today()
+        view = {"year": today.year, "month": today.month}
+        if min_date and (min_date.year, min_date.month) > (today.year, today.month):
+            view["year"], view["month"] = min_date.year, min_date.month
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title)
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        tk.Label(dlg, text=title, font=("Segoe UI", 10, "bold"),
+                 fg=C["text"], bg=C["bg"], wraplength=260,
+                 justify="left").pack(padx=16, pady=(14, 6), anchor="w")
+
+        hdr = tk.Frame(dlg, bg=C["bg"], padx=16)
+        hdr.pack(fill="x")
+        month_var = tk.StringVar()
+
+        grid_frame = tk.Frame(dlg, bg=C["bg"], padx=16)
+        grid_frame.pack(pady=(6, 4))
+
+        def _pick(d):
+            result["date"] = d
+            dlg.destroy()
+
+        def _render_month():
+            for w in grid_frame.winfo_children():
+                w.destroy()
+            y, m = view["year"], view["month"]
+            month_var.set(f"{_calendar_mod.month_name[m]} {y}")
+
+            for i, wd in enumerate(("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")):
+                tk.Label(grid_frame, text=wd, font=("Segoe UI", 8, "bold"),
+                         fg=C["text_muted"], bg=C["bg"], width=4).grid(row=0, column=i, pady=(0, 4))
+
+            for r, week in enumerate(_calendar_mod.Calendar(firstweekday=0).monthdayscalendar(y, m), start=1):
+                for c, day_num in enumerate(week):
+                    if day_num == 0:
+                        tk.Label(grid_frame, text="", bg=C["bg"], width=4).grid(row=r, column=c, pady=1, padx=1)
+                        continue
+                    d = date(y, m, day_num)
+                    disabled = min_date is not None and d < min_date
+                    tk.Button(
+                        grid_frame, text=str(day_num), font=("Segoe UI", 9), width=4,
+                        fg=C["text_muted"] if disabled else C["text"],
+                        bg=C["surface"] if d == today else C["bg"],
+                        relief="flat", activebackground=C["accent_blue"], activeforeground="white",
+                        state="disabled" if disabled else "normal",
+                        command=None if disabled else (lambda dd=d: _pick(dd)),
+                    ).grid(row=r, column=c, pady=1, padx=1)
+
+        def _shift_month(delta):
+            m = view["month"] + delta
+            y = view["year"]
+            if m < 1:
+                m, y = 12, y - 1
+            elif m > 12:
+                m, y = 1, y + 1
+            view["month"], view["year"] = m, y
+            _render_month()
+
+        tk.Button(hdr, text="<", font=("Segoe UI", 10), width=3, relief="flat",
+                  bg=C["surface"], fg=C["text"], command=lambda: _shift_month(-1)).pack(side="left")
+        tk.Label(hdr, textvariable=month_var, font=("Segoe UI", 11, "bold"),
+                 fg=C["text"], bg=C["bg"], width=16, anchor="center").pack(side="left", expand=True)
+        tk.Button(hdr, text=">", font=("Segoe UI", 10), width=3, relief="flat",
+                  bg=C["surface"], fg=C["text"], command=lambda: _shift_month(1)).pack(side="left")
+
+        _render_month()
+
+        tk.Button(dlg, text="Cancel", font=("Segoe UI", 9), relief="flat",
+                  bg=C["surface"], fg=C["text"], padx=12,
+                  command=dlg.destroy).pack(pady=(4, 14))
+
+        dlg.wait_window()
+        return result["date"]
 
     def _reschedule_task_dialog(self, task, plan_id):
         """Pick a specific future date for one overdue task. Unlike 'Day off' or
@@ -1745,32 +1821,14 @@ class MentorApp:
         except Exception:
             return
         pday = self._plan_day_for(plan)
+        min_date = start + timedelta(days=pday)  # tomorrow (day pday+1)
 
-        while True:
-            answer = simpledialog.askstring(
-                APP_NAME,
-                f"Reschedule '{task_text}' to (DD.MM.YYYY):",
-                parent=self.root,
-            )
-            if answer is None:
-                return
-            try:
-                new_date = datetime.strptime(answer.strip(), "%d.%m.%Y").date()
-            except ValueError:
-                messagebox.showerror("Bad date", "Use DD.MM.YYYY format, e.g. 28.06.2026", parent=self.root)
-                continue
-            new_day = (new_date - start).days + 1
-            if new_day <= pday:
-                messagebox.showerror(APP_NAME, "Pick a date after today.", parent=self.root)
-                continue
-            break
+        new_date = self._pick_date_dialog(f"Reschedule '{task_text}' to:", min_date=min_date)
+        if new_date is None:
+            return
+        new_day = (new_date - start).days + 1
 
-        self._save_override(plan_id, task_text, orig_day, new_day)
-        old_key = (plan_id, old_day, task_text)
-        new_key = (plan_id, new_day, task_text)
-        if old_key in self.completions:
-            val = self.completions.pop(old_key)
-            self.completions[new_key] = val
+        self._reassign_task_day(plan_id, task_text, orig_day, old_day, new_day)
 
         self.render_tasks()
         self._rebuild_plans_sidebar()
@@ -2765,6 +2823,7 @@ class MentorApp:
         btn_row.pack(pady=16)
         tk.Button(btn_row, text="Buy", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda e: _confirm())
 
     def _show_log_expenditure_dialog(self):
         _, rate, symbol = self._score_rates()
@@ -2829,6 +2888,7 @@ class MentorApp:
         btn_row.pack(pady=16)
         tk.Button(btn_row, text="Log spend", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda e: _confirm())
 
     # ── settings dialog ─────────────────────────────────────────────────────
 
@@ -3067,7 +3127,8 @@ class MentorApp:
                             conn=tt_conn,
                         )
                     except Exception:
-                        pass
+                        import logging
+                        logging.error("TickTick push failed for %r", task_text, exc_info=True)
 
                 raw_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
                 tt_by_id = {t["id"]: t for t in raw_tasks}
@@ -3094,7 +3155,8 @@ class MentorApp:
                         try:
                             self.ticktick.complete_task(tt_pid or self.tt_project_id, tt_id)
                         except Exception:
-                            pass
+                            import logging
+                            logging.error("TickTick complete_task failed for %r", task_text, exc_info=True)
                     elif tt_done and not app_done:
                         tt_conn.execute(
                             "INSERT INTO task_completions "
@@ -3280,6 +3342,7 @@ class MentorApp:
         btn_row.pack(pady=10)
         tk.Button(btn_row, text="Save & Connect", command=_save, width=16, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda e: _save())
 
         dlg.wait_window()
         return saved["ok"]
@@ -3337,6 +3400,7 @@ class MentorApp:
         tk.Button(dlg, text="OK", command=dlg.destroy, width=10,
                   bg=C["surface"], fg=C["text"], relief="flat",
                   activebackground=C["border"], activeforeground=C["text"]).pack()
+        dlg.bind("<Return>", lambda e: dlg.destroy())
         dlg.wait_window()
 
     def _tt_on_authorized(self):
@@ -4672,6 +4736,14 @@ def main():
         sys.exit(0)
 
     start_minimized = "--minimized" in sys.argv
+
+    # Must be set before the first window is created, or Windows bitmap-scales
+    # the whole UI on any display above 100% scaling — blurry text/controls.
+    try:
+        _ctypes.windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE
+    except Exception:
+        pass
+
     root = tk.Tk()
     # Tkinter routes exceptions raised inside widget callbacks (button commands,
     # binds, after()) through this hook instead of sys.excepthook — without this,
