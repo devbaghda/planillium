@@ -208,7 +208,43 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-04 (fifth pass same day)
+- Last session: 2026-07-04 (sixth pass same day)
+- What was built:
+  - **"✨ Generate with Claude" plan-generation wizard** — no live Anthropic API
+    integration (deliberately cancelled: needs a paid API key separate from a
+    claude.ai subscription); instead the app builds a filled-in prompt from 3
+    fields, the user copies it to claude.ai manually, and pastes Claude's JSON
+    reply back in to import it as a real plan. New sidebar button next to
+    "+ Add Plan" opens `_show_generate_plan_dialog`, a 2-step wizard:
+    - **Step 1** — a mode toggle ("🎯 Learn a skill" / "📌 Achieve a goal")
+      backed by `PLAN_GEN_MODES`, plus 3 fields (subject, Claude's role, area
+      of expertise) with per-mode captions/examples. "Generate prompt →" fills
+      the active mode's template (`TEMPLATE_SKILL` / `TEMPLATE_GOAL`, module-
+      level constants) via `str.replace` (not `.format`, since the templates
+      contain literal JSON braces).
+    - **Step 2** — the filled prompt in a read-only `Text` box with a
+      clipboard "Copy prompt" button (same pattern as the TickTick redirect-URI
+      copy button), and a second box to paste Claude's reply. "Import plan"
+      extracts JSON directly or from a ```json fenced block via regex, then
+      calls the new shared `_import_plan_dict()` (extracted out of the
+      existing file-based `_add_plan_dialog` so both paths share one
+      validation/save path).
+    - Both prompt templates ask Claude to (a) write every task's `detail` as
+      the concrete how-to and a separate `mentor_note` as the why-it-matters +
+      common-mistake commentary — mentoring baked into the plan content itself,
+      not a live back-and-forth chat — and (b) repeat the 4-point strategic
+      briefing (80/20 high-leverage items, what to ignore, time-wasters to
+      skip, realistic timeline) as a structured `briefing` object on the plan,
+      not just prose in the chat reply.
+    - New UI to surface the new fields: `_show_task_detail` shows a
+      "💡 Mentor's note" block under the existing detail text; `_edit_task_
+      dialog`/`_apply_task_edit` can edit it; a new "📋 Briefing" button (shown
+      only if `plan.get("briefing")` is set) opens `_show_plan_briefing_dialog`,
+      a read-only 4-section view of the briefing.
+    - Added 8 generic `CATEGORY_COLORS` entries (`theory`/`practice`/`project`/
+      `review` for skill plans, `research`/`decision`/`logistics`/`execution`
+      for goal plans) alongside the existing Netherlands-specific ones.
+- Previous session: 2026-07-04 (fifth pass same day)
 - What was built:
   - **Project cleanup** — removed everything unused/stale from the repo root:
     build cruft not worth tracking in the first place (`dist/`, `build/`,

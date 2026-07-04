@@ -67,6 +67,188 @@ CATEGORY_COLORS = {
     "admin":   "#ff9f0a",
     "apply":   "#ff453a",
     "visa":    "#64d2ff",
+    # generic categories used by Claude-generated plans (see _show_generate_plan_dialog)
+    "theory":    "#5e5ce6",
+    "practice":  "#ffd60a",
+    "project":   "#00c7be",
+    "review":    "#8e8e93",
+    "research":  "#ac8e68",
+    "decision":  "#ff375f",
+    "logistics": "#5ac8fa",
+    "execution": "#34c759",
+}
+
+# ── Claude plan-generation prompt templates (see _show_generate_plan_dialog) ──
+# Placeholders {subject}/{claude_role}/{area_of_interest} are filled via str.replace(),
+# not str.format(), because the templates contain literal JSON braces.
+
+TEMPLATE_SKILL = """I need to become functional in {subject} as fast as possible. I'm not a beginner
+at life or at learning hard things — I'm a beginner in this specific skill. Act as
+a {claude_role} with 10+ years of hands-on experience in {area_of_interest}. Treat
+me like a capable professional who has no time to waste, not like a student.
+Write the plan itself as if you were mentoring me through it in person: for
+each day, don't just list a task — tell me why it matters at this exact
+point, what a beginner in {subject} typically gets wrong right there, and
+what "doing it right" actually looks like, the way a real mentor corrects you
+before you form a bad habit rather than after.
+
+Before any plan, give me a short, blunt briefing:
+1. The 3 highest-leverage things that produce ~80% of real-world results in
+   {subject}. Be specific, not generic.
+2. What to completely ignore — the stuff that feels productive but doesn't move
+   the needle for someone who needs to be functional, not credentialed.
+3. What most learners waste months on that I can skip entirely, and why.
+4. A realistic time estimate to reach "functional" (able to do real work
+   unsupervised) — no optimism, no sandbagging either.
+
+Then build a day-by-day plan to get me there in the shortest realistic time.
+Rules for the plan:
+- Every day mixes theory with immediate hands-on practice — no day is pure
+  passive learning.
+- Difficulty escalates day over day, each day building on what I actually
+  practiced, not a generic curriculum order.
+- Include real practical outputs (small builds, drills, exercises), not just
+  "read about X".
+- Be honest if a day needs less time or more time than others — don't pad for
+  symmetry.
+
+After the briefing, output ONLY the plan as a single JSON code block (```json
+... ```), with nothing else inside the fence. Repeat the 4-point briefing
+inside the JSON too (structured, not prose) so it's saved permanently with
+the plan, not just visible here in chat. Match this exact schema:
+
+{
+  "id": "kebab-case-slug",
+  "name": "Short plan title",
+  "color": "#3b82f6",
+  "total_days": 14,
+  "briefing": {
+    "high_leverage": ["The 3 highest-leverage things, one per string"],
+    "ignore_completely": "What to completely ignore and why",
+    "common_time_wasters": "What most learners waste months on that can be skipped",
+    "realistic_timeline": "The honest time estimate to reach functional, with reasoning"
+  },
+  "phases": [
+    {
+      "title": "Phase name (e.g. Foundations, Applied practice, Stress-testing)",
+      "tasks": [
+        {
+          "day": 1,
+          "task": "Short task title",
+          "detail": "Concrete instructions: exactly what to do, for how long, and what 'done' looks like.",
+          "mentor_note": "Why this matters right now, the mistake beginners make at this exact step, and what doing it right looks like.",
+          "category": "theory | practice | project | review",
+          "duration_min": 60
+        }
+      ]
+    }
+  ]
+}
+
+Multiple tasks can share the same "day" if they belong together in one
+session. Use "category": "theory" for concept learning, "practice" for
+drills/exercises, "project" for a built artifact, "review" for consolidation/
+spaced repetition days. Keep "detail" to the concrete how-to (what to do,
+for how long, what "done" looks like); put the mentor commentary — why it
+matters right now, the mistake beginners make at this exact step, what
+right looks like — in "mentor_note", so both are visible together for every
+task, not buried back in the briefing."""
+
+TEMPLATE_GOAL = """I need to {subject} as effectively and quickly as realistically possible. I'm
+not naive about how hard real-world goals are — I want a plan, not a pep talk.
+Act as a {claude_role} with 10+ years of hands-on experience getting people
+through exactly this kind of goal in {area_of_interest}. Talk to me like an
+operator who has done this dozens of times for clients, not like a
+motivational speaker. Write the plan itself as if you were mentoring me
+through it in person: for each step, don't just list an action — tell me why
+it matters at this exact point, what people trying to {subject} typically
+get wrong right there, and what "doing it right" actually looks like, the
+way a real mentor corrects you before a mistake happens rather than after.
+
+Before any plan, give me a short, blunt briefing:
+1. The 3 decisions or actions that determine ~80% of whether this succeeds,
+   fails, or drags on. Be specific to my situation, not generic advice.
+2. What to completely ignore — the research rabbit holes, comparison
+   shopping, or "just in case" prep that feels responsible but doesn't
+   actually move this forward.
+3. The mistakes or wasted time that trip up most people trying to {subject},
+   and how to route around them.
+4. A realistic timeline to get this done — call out anything outside my
+   control (approvals, waiting periods, other people's schedules) that sets a
+   floor on how fast this can go, and what's actually in my control to
+   compress.
+
+Then build a day-by-day plan to get there in the shortest realistic time.
+Rules for the plan:
+- Every step is a concrete action I can actually take that day (a call to
+  make, a document to gather, a decision to lock in) — not "consider" or
+  "think about".
+- Sequence dependencies correctly: never schedule something before its
+  prerequisite is actually done.
+- Call out any days that are just waiting on something external, and what I
+  should do in parallel instead of sitting idle.
+- Be honest if a step needs a single hour or several days — don't pad for
+  symmetry, and don't compress steps that genuinely take external processing
+  time.
+
+After the briefing, output ONLY the plan as a single JSON code block (```json
+... ```), with nothing else inside the fence. Repeat the 4-point briefing
+inside the JSON too (structured, not prose) so it's saved permanently with
+the plan, not just visible here in chat. Match this exact schema:
+
+{
+  "id": "kebab-case-slug",
+  "name": "Short plan title",
+  "color": "#3b82f6",
+  "total_days": 30,
+  "briefing": {
+    "high_leverage": ["The 3 decisions/actions that determine 80% of the outcome, one per string"],
+    "ignore_completely": "What to completely ignore and why",
+    "common_time_wasters": "The mistakes/wasted time that trip up most people, and how to route around them",
+    "realistic_timeline": "The honest timeline, including what's outside your control vs. what compresses it"
+  },
+  "phases": [
+    {
+      "title": "Phase name (e.g. Research & decisions, Paperwork & logistics, Execution)",
+      "tasks": [
+        {
+          "day": 1,
+          "task": "Short task title",
+          "detail": "Concrete instructions: exactly what to do and what 'done' looks like.",
+          "mentor_note": "Why this matters right now, the mistake most people make at this exact step, and what doing it right looks like.",
+          "category": "research | decision | logistics | execution",
+          "duration_min": 60
+        }
+      ]
+    }
+  ]
+}
+
+Multiple tasks can share the same "day" if they belong together. Use
+"category": "research" for information-gathering, "decision" for
+choices/comparisons to lock in, "logistics" for paperwork/admin/coordination,
+"execution" for the actual doing steps. Keep "detail" to the concrete how-to;
+put the mentor commentary — why it matters right now, the mistake most
+people make at this exact step, what right looks like — in "mentor_note", so
+both are visible together for every task."""
+
+PLAN_GEN_MODES = {
+    "skill": {
+        "label": "🎯 Learn a skill",
+        "template": TEMPLATE_SKILL,
+        "field1_label": "Skill you want to learn",
+        "field1_hint": "e.g. 'Power BI DAX', 'public speaking', 'Spanish conversation'",
+        "field2_hint": "e.g. 'senior data analyst', 'professional speech coach', 'native Spanish tutor'",
+        "field3_hint": "e.g. 'business intelligence', 'executive communication', 'language teaching'",
+    },
+    "goal": {
+        "label": "📌 Achieve a goal",
+        "template": TEMPLATE_GOAL,
+        "field1_label": "Goal you want to achieve",
+        "field1_hint": "e.g. 'move to the Netherlands', 'buy a reliable car', 'become more productive'",
+        "field2_hint": "e.g. 'relocation consultant', 'car-buying advisor', 'productivity coach'",
+        "field3_hint": "e.g. 'EU relocation & visas', 'used-car markets', 'personal productivity systems'",
+    },
 }
 
 C = {
@@ -618,11 +800,21 @@ class MentorApp:
         except Exception as e:
             messagebox.showerror(APP_NAME, f"Could not parse file:\n{e}")
             return
+        self._import_plan_dict(
+            plan,
+            missing_field_hint="(MD plans need: # Title, id: ..., ## Phase, ### Day N — task)",
+        )
+
+    def _import_plan_dict(self, plan: dict, missing_field_hint: str = "") -> bool:
+        """Validate and save a plan dict, then refresh the UI. Shared by the
+        file-based '+ Add Plan' flow and the paste-based Claude plan importer."""
         for field in ("id", "name", "phases"):
             if field not in plan:
-                messagebox.showerror(APP_NAME, f"Plan missing required field: '{field}'\n"
-                                     "(MD plans need: # Title, id: ..., ## Phase, ### Day N — task)")
-                return
+                msg = f"Plan missing required field: '{field}'"
+                if missing_field_hint:
+                    msg += f"\n{missing_field_hint}"
+                messagebox.showerror(APP_NAME, msg)
+                return False
         if not plan.get("start_date"):
             plan["start_date"] = self._ask_start_date_for(plan["name"])
         if not plan.get("color"):
@@ -630,12 +822,251 @@ class MentorApp:
         existing_ids = {p["id"] for p in self.plans}
         if plan["id"] in existing_ids:
             messagebox.showerror(APP_NAME, f"A plan with id '{plan['id']}' is already active.")
-            return
+            return False
         self._save_plan(plan)
         self.plans = self.load_plans()
         self.render_tasks()
         self.tick_status()
+        self._rebuild_plans_sidebar()
         messagebox.showinfo(APP_NAME, f"'{plan['name']}' added successfully!")
+        return True
+
+    def _show_generate_plan_dialog(self):
+        """Wizard: fill in 3 fields -> filled prompt to copy into claude.ai ->
+        paste Claude's JSON reply back here to import it as a new plan."""
+        if len(self.plans) >= MAX_PLANS:
+            messagebox.showinfo(APP_NAME, f"Maximum {MAX_PLANS} active plans. Archive a completed plan first.")
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Generate Plan with Claude")
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        state = {"mode": "skill"}
+        generated = {"prompt": ""}
+
+        step1 = tk.Frame(dlg, bg=C["bg"], padx=24, pady=20)
+        step2 = tk.Frame(dlg, bg=C["bg"], padx=24, pady=20)
+        step1.pack(fill="both", expand=True)
+
+        # ── Step 1: pick mode + fill fields ─────────────────────────────────
+        tk.Label(step1, text="Generate a plan with Claude", font=("Segoe UI", 13, "bold"),
+                 fg=C["text"], bg=C["bg"]).pack(anchor="w")
+        tk.Label(
+            step1,
+            text="1) Fill in the fields below  →  2) Copy the generated prompt  →  "
+                 "3) Paste it into claude.ai and get your plan  →  4) Paste Claude's "
+                 "reply back here to import it.",
+            font=("Segoe UI", 9), fg=C["text_dim"], bg=C["bg"],
+            wraplength=440, justify="left",
+        ).pack(anchor="w", pady=(6, 14))
+
+        mode_row = tk.Frame(step1, bg=C["bg"])
+        mode_row.pack(fill="x", pady=(0, 14))
+
+        field1_label_var = tk.StringVar()
+        field1_hint_var = tk.StringVar()
+        field2_hint_var = tk.StringVar()
+        field3_hint_var = tk.StringVar()
+        mode_buttons = {}
+
+        def _set_mode(mode):
+            state["mode"] = mode
+            for m, btn in mode_buttons.items():
+                btn.configure(bg=C["accent_blue"] if m == mode else C["surface"],
+                              fg="white" if m == mode else C["text_dim"])
+            cfg = PLAN_GEN_MODES[mode]
+            field1_label_var.set(cfg["field1_label"])
+            field1_hint_var.set(cfg["field1_hint"])
+            field2_hint_var.set(cfg["field2_hint"])
+            field3_hint_var.set(cfg["field3_hint"])
+
+        for mode, cfg in PLAN_GEN_MODES.items():
+            b = tk.Button(mode_row, text=cfg["label"], font=("Segoe UI", 9),
+                          relief="flat", padx=10, pady=5, cursor="hand2",
+                          command=lambda m=mode: _set_mode(m))
+            b.pack(side="left", padx=(0, 8))
+            mode_buttons[mode] = b
+
+        tk.Label(step1, textvariable=field1_label_var, font=("Segoe UI", 9, "bold"),
+                 fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
+        field1_var = tk.StringVar()
+        tk.Entry(step1, textvariable=field1_var, font=("Segoe UI", 10),
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat", bd=4, width=46).pack(fill="x")
+        tk.Label(step1, textvariable=field1_hint_var, font=("Segoe UI", 8),
+                 fg=C["text_muted"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 8))
+
+        tk.Label(step1, text="Claude's role", font=("Segoe UI", 9, "bold"),
+                 fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
+        field2_var = tk.StringVar()
+        tk.Entry(step1, textvariable=field2_var, font=("Segoe UI", 10),
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat", bd=4, width=46).pack(fill="x")
+        tk.Label(step1, textvariable=field2_hint_var, font=("Segoe UI", 8),
+                 fg=C["text_muted"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 8))
+
+        tk.Label(step1, text="Area of expertise", font=("Segoe UI", 9, "bold"),
+                 fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
+        field3_var = tk.StringVar()
+        tk.Entry(step1, textvariable=field3_var, font=("Segoe UI", 10),
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat", bd=4, width=46).pack(fill="x")
+        tk.Label(step1, textvariable=field3_hint_var, font=("Segoe UI", 8),
+                 fg=C["text_muted"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 4))
+
+        err1_var = tk.StringVar()
+        tk.Label(step1, textvariable=err1_var, font=("Segoe UI", 9),
+                 fg=C["accent_red"], bg=C["bg"]).pack(anchor="w", pady=(6, 0))
+
+        def _generate():
+            subject = field1_var.get().strip()
+            role = field2_var.get().strip()
+            area = field3_var.get().strip()
+            if not (subject and role and area):
+                err1_var.set("Fill in all 3 fields first.")
+                return
+            tpl = PLAN_GEN_MODES[state["mode"]]["template"]
+            prompt = (tpl.replace("{subject}", subject)
+                         .replace("{claude_role}", role)
+                         .replace("{area_of_interest}", area))
+            generated["prompt"] = prompt
+            prompt_txt.configure(state="normal")
+            prompt_txt.delete("1.0", "end")
+            prompt_txt.insert("1.0", prompt)
+            prompt_txt.configure(state="disabled")
+            step1.pack_forget()
+            step2.pack(fill="both", expand=True)
+
+        btn_row1 = tk.Frame(step1, bg=C["bg"])
+        btn_row1.pack(fill="x", pady=(14, 0))
+        tk.Button(btn_row1, text="Cancel", font=("Segoe UI", 10),
+                  bg=C["surface"], fg=C["text"], relief="flat", padx=12,
+                  command=dlg.destroy).pack(side="right", padx=(8, 0))
+        tk.Button(btn_row1, text="Generate prompt →", font=("Segoe UI", 10),
+                  bg=C["accent_blue"], fg="white", relief="flat", padx=12,
+                  command=_generate).pack(side="right")
+
+        _set_mode("skill")
+
+        # ── Step 2: copy prompt / paste reply / import ──────────────────────
+        tk.Label(step2, text="Copy this prompt into claude.ai", font=("Segoe UI", 12, "bold"),
+                 fg=C["text"], bg=C["bg"]).pack(anchor="w")
+
+        prompt_txt = tk.Text(step2, height=12, width=56, font=("Segoe UI", 9), wrap="word",
+                              bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                              relief="flat", bd=4)
+        prompt_txt.pack(fill="both", expand=True, pady=(8, 4))
+        prompt_txt.configure(state="disabled")
+
+        def _copy_prompt():
+            dlg.clipboard_clear()
+            dlg.clipboard_append(generated["prompt"])
+            copy_btn.config(text="Copied!")
+            dlg.after(2000, lambda: copy_btn.config(text="Copy prompt"))
+
+        copy_btn = tk.Button(step2, text="Copy prompt", font=("Segoe UI", 10),
+                              bg=C["surface"], fg=C["text"], relief="flat", padx=12,
+                              cursor="hand2", command=_copy_prompt)
+        copy_btn.pack(anchor="w")
+
+        tk.Frame(step2, bg=C["separator"], height=1).pack(fill="x", pady=16)
+
+        tk.Label(step2, text="Paste Claude's reply here", font=("Segoe UI", 11, "bold"),
+                 fg=C["text"], bg=C["bg"]).pack(anchor="w")
+
+        reply_txt = tk.Text(step2, height=10, width=56, font=("Segoe UI", 9), wrap="word",
+                             bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                             relief="flat", bd=4)
+        reply_txt.pack(fill="both", expand=True, pady=(8, 4))
+
+        err2_var = tk.StringVar()
+        tk.Label(step2, textvariable=err2_var, font=("Segoe UI", 9),
+                 fg=C["accent_red"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(4, 0))
+
+        def _extract_plan_json(raw: str):
+            import re
+            raw = raw.strip()
+            try:
+                return json.loads(raw)
+            except Exception:
+                pass
+            m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", raw, re.S)
+            if m:
+                try:
+                    return json.loads(m.group(1))
+                except Exception:
+                    return None
+            return None
+
+        def _do_import():
+            plan = _extract_plan_json(reply_txt.get("1.0", "end"))
+            if plan is None:
+                err2_var.set(
+                    "Couldn't find valid JSON in that text — make sure you pasted "
+                    "Claude's whole reply, including the ```json ... ``` block."
+                )
+                return
+            if self._import_plan_dict(plan):
+                dlg.destroy()
+
+        def _back():
+            step2.pack_forget()
+            step1.pack(fill="both", expand=True)
+
+        btn_row2 = tk.Frame(step2, bg=C["bg"])
+        btn_row2.pack(fill="x", pady=(10, 0))
+        tk.Button(btn_row2, text="← Back", font=("Segoe UI", 10),
+                  bg=C["surface"], fg=C["text"], relief="flat", padx=12,
+                  command=_back).pack(side="left")
+        tk.Button(btn_row2, text="Import plan", font=("Segoe UI", 10),
+                  bg=C["accent_green"], fg="white", relief="flat", padx=12,
+                  command=_do_import).pack(side="right")
+
+    def _show_plan_briefing_dialog(self, plan):
+        """Read-only view of the 80/20 strategic briefing Claude generated
+        alongside this plan (see _show_generate_plan_dialog)."""
+        briefing = plan.get("briefing") or {}
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"{plan.get('name', 'Plan')} — Briefing")
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        outer = tk.Frame(dlg, bg=C["bg"], padx=24, pady=20)
+        outer.pack(fill="both", expand=True)
+
+        tk.Label(outer, text=plan.get("name", "Plan"), font=("Segoe UI", 13, "bold"),
+                 fg=C["text"], bg=C["bg"], wraplength=380, justify="left").pack(anchor="w")
+
+        def _section(caption, body):
+            if not body:
+                return
+            tk.Frame(outer, bg=C["separator"], height=1).pack(fill="x", pady=(14, 10))
+            tk.Label(outer, text=caption, font=("Segoe UI", 9, "bold"),
+                     fg=C["text_dim"], bg=C["bg"]).pack(anchor="w")
+            tk.Label(outer, text=body, font=("Segoe UI", 10),
+                     fg=C["text"], bg=C["bg"], wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
+
+        high_leverage = briefing.get("high_leverage") or []
+        if high_leverage:
+            bullets = "\n".join(f"•  {item}" for item in high_leverage)
+            _section("🎯 The 80/20", bullets)
+        _section("🚫 Ignore completely", briefing.get("ignore_completely", ""))
+        _section("⏭️ Skip these time-wasters", briefing.get("common_time_wasters", ""))
+        _section("⏱ Realistic timeline", briefing.get("realistic_timeline", ""))
+
+        if not (high_leverage or briefing.get("ignore_completely")
+                or briefing.get("common_time_wasters") or briefing.get("realistic_timeline")):
+            tk.Label(outer, text="No briefing content on this plan.", font=("Segoe UI", 10),
+                     fg=C["text_muted"], bg=C["bg"]).pack(anchor="w", pady=(14, 0))
+
+        tk.Button(outer, text="Close", font=("Segoe UI", 10),
+                  bg=C["surface"], fg=C["text"], relief="flat", padx=12,
+                  command=dlg.destroy).pack(anchor="e", pady=(18, 0))
 
     # ── database ─────────────────────────────────────────────────────────────
 
@@ -1069,6 +1500,15 @@ class MentorApp:
                 )
                 sched_btn.pack(side="right")
 
+            if plan.get("briefing"):
+                brief_btn = tk.Button(
+                    sub, text="📋 Briefing",
+                    font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
+                    relief="flat", padx=6, pady=1, cursor="hand2",
+                    command=lambda p=plan: self._show_plan_briefing_dialog(p),
+                )
+                brief_btn.pack(side="right", padx=(0, 6))
+
         if len(self.plans) < MAX_PLANS:
             add_btn = tk.Button(
                 self._plans_frame, text="+ Add Plan",
@@ -1078,6 +1518,15 @@ class MentorApp:
                 command=self._add_plan_dialog,
             )
             add_btn.pack(anchor="w", pady=(6, 0))
+
+            gen_btn = tk.Button(
+                self._plans_frame, text="✨ Generate with Claude",
+                font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
+                activebackground=C["surface"], activeforeground=C["text"],
+                relief="flat", padx=8, pady=3, cursor="hand2",
+                command=self._show_generate_plan_dialog,
+            )
+            gen_btn.pack(anchor="w", pady=(4, 0))
 
         if hasattr(self, "_bind_sidebar_wheel"):
             self._bind_sidebar_wheel()
@@ -1421,6 +1870,13 @@ class MentorApp:
             tk.Label(inner, text="No details.", font=("Segoe UI", 10),
                      fg=C["text_muted"], bg=C["bg"]).pack(anchor="w")
 
+        mentor_note = task.get("mentor_note", "")
+        if mentor_note:
+            tk.Label(inner, text="💡 Mentor's note", font=("Segoe UI", 9, "bold"),
+                     fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(14, 2))
+            tk.Label(inner, text=mentor_note, font=("Segoe UI", 10),
+                     fg=C["accent_blue"], bg=C["bg"], wraplength=240, justify="left").pack(anchor="w")
+
         if plan_id:
             tk.Button(
                 inner, text="Edit", font=("Segoe UI", 9),
@@ -1475,6 +1931,13 @@ class MentorApp:
         detail_txt.insert("1.0", target.get("detail", ""))
         detail_txt.pack(fill="x")
 
+        _label("Mentor's note")
+        mentor_note_txt = tk.Text(outer, height=3, font=("Segoe UI", 10), wrap="word",
+                                   bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                                   relief="flat", bd=4)
+        mentor_note_txt.insert("1.0", target.get("mentor_note", ""))
+        mentor_note_txt.pack(fill="x")
+
         row2 = tk.Frame(outer, bg=C["bg"])
         row2.pack(fill="x", pady=(14, 0))
         tk.Label(row2, text="Duration (min)", font=("Segoe UI", 9, "bold"),
@@ -1509,8 +1972,10 @@ class MentorApp:
                     err_var.set("Duration must be a whole number of minutes.")
                     return
             new_detail = detail_txt.get("1.0", "end").strip()
+            new_mentor_note = mentor_note_txt.get("1.0", "end").strip()
             new_cat = cat_var.get().strip()
-            self._apply_task_edit(plan, target, old_text, new_title, new_detail, new_dur, new_cat)
+            self._apply_task_edit(plan, target, old_text, new_title, new_detail,
+                                   new_mentor_note, new_dur, new_cat)
             dlg.destroy()
 
         btn_row = tk.Frame(outer, bg=C["bg"])
@@ -1522,13 +1987,18 @@ class MentorApp:
                   bg=plan.get("color", C["accent_blue"]), fg="white", relief="flat", padx=12,
                   command=_save).pack(side="right")
 
-    def _apply_task_edit(self, plan, target, old_text, new_title, new_detail, new_dur, new_cat):
+    def _apply_task_edit(self, plan, target, old_text, new_title, new_detail,
+                          new_mentor_note, new_dur, new_cat):
         """Mutate the task in-place in the plan JSON and, if the title changed,
         migrate every DB row keyed on the old title so completion history and
         the TickTick mapping stay attached to the (renamed) task."""
         plan_id = plan["id"]
         target["task"] = new_title
         target["detail"] = new_detail
+        if new_mentor_note:
+            target["mentor_note"] = new_mentor_note
+        else:
+            target.pop("mentor_note", None)
         if new_dur is not None:
             target["duration_min"] = new_dur
         else:
