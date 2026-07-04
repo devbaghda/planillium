@@ -1208,6 +1208,15 @@ class MentorApp:
         _render_days()
         canvas.bind("<MouseWheel>", _scroll)
 
+    def _reassign_task_day(self, plan_id, task_text, original_day, old_assigned_day, new_assigned_day):
+        """Move one task to a new assigned day, migrating its completion record
+        (keyed on assigned day) so a done/undone mark isn't lost in the move."""
+        self._save_override(plan_id, task_text, original_day, new_assigned_day)
+        old_key = (plan_id, old_assigned_day, task_text)
+        new_key = (plan_id, new_assigned_day, task_text)
+        if old_key in self.completions:
+            self.completions[new_key] = self.completions.pop(old_key)
+
     def _swap_task_to_today(self, plan, target_task_text, target_original_day):
         """Pull a future task to today; shift everything between forward by +1 day."""
         plan_id  = plan["id"]
@@ -1236,22 +1245,10 @@ class MentorApp:
             if txt == target_task_text:
                 continue
             if today <= assigned < target_assigned:
-                self._save_override(plan_id, txt, orig, assigned + 1)
-                # Also shift completions key so marks are preserved
-                # (completions key uses assigned day — update in-memory dict)
-                old_key = (plan_id, assigned, txt)
-                new_key = (plan_id, assigned + 1, txt)
-                if old_key in self.completions:
-                    val = self.completions.pop(old_key)
-                    self.completions[new_key] = val
+                self._reassign_task_day(plan_id, txt, orig, assigned, assigned + 1)
 
         # Move target to today
-        self._save_override(plan_id, target_task_text, target_original_day, today)
-        old_key = (plan_id, target_assigned, target_task_text)
-        new_key = (plan_id, today, target_task_text)
-        if old_key in self.completions:
-            val = self.completions.pop(old_key)
-            self.completions[new_key] = val
+        self._reassign_task_day(plan_id, target_task_text, target_original_day, target_assigned, today)
 
         self.render_tasks()
         self._rebuild_plans_sidebar()
@@ -1269,12 +1266,7 @@ class MentorApp:
             assigned = t["day"]
             if assigned < day:
                 continue
-            self._save_override(plan_id, txt, orig, assigned + 1)
-            old_key = (plan_id, assigned, txt)
-            new_key = (plan_id, assigned + 1, txt)
-            if old_key in self.completions:
-                val = self.completions.pop(old_key)
-                self.completions[new_key] = val
+            self._reassign_task_day(plan_id, txt, orig, assigned, assigned + 1)
 
         self._mark_day_off_record(plan_id, day)
         self.render_tasks()
@@ -1316,12 +1308,7 @@ class MentorApp:
                 continue
             break
 
-        self._save_override(plan_id, task_text, orig_day, new_day)
-        old_key = (plan_id, old_day, task_text)
-        new_key = (plan_id, new_day, task_text)
-        if old_key in self.completions:
-            val = self.completions.pop(old_key)
-            self.completions[new_key] = val
+        self._reassign_task_day(plan_id, task_text, orig_day, old_day, new_day)
 
         self.render_tasks()
         self._rebuild_plans_sidebar()
@@ -2295,6 +2282,7 @@ class MentorApp:
         btn_row.pack(pady=16)
         tk.Button(btn_row, text="Buy", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda e: _confirm())
 
     def _show_log_expenditure_dialog(self):
         _, rate, symbol = self._score_rates()
@@ -2359,6 +2347,7 @@ class MentorApp:
         btn_row.pack(pady=16)
         tk.Button(btn_row, text="Log spend", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda e: _confirm())
 
     # ── settings dialog ─────────────────────────────────────────────────────
 
@@ -2597,7 +2586,8 @@ class MentorApp:
                             conn=tt_conn,
                         )
                     except Exception:
-                        pass
+                        import logging
+                        logging.error("TickTick push failed for %r", task_text, exc_info=True)
 
                 raw_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
                 tt_by_id = {t["id"]: t for t in raw_tasks}
@@ -2624,7 +2614,8 @@ class MentorApp:
                         try:
                             self.ticktick.complete_task(tt_pid or self.tt_project_id, tt_id)
                         except Exception:
-                            pass
+                            import logging
+                            logging.error("TickTick complete_task failed for %r", task_text, exc_info=True)
                     elif tt_done and not app_done:
                         tt_conn.execute(
                             "INSERT INTO task_completions "
@@ -2810,6 +2801,7 @@ class MentorApp:
         btn_row.pack(pady=10)
         tk.Button(btn_row, text="Save & Connect", command=_save, width=16, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+        dlg.bind("<Return>", lambda e: _save())
 
         dlg.wait_window()
         return saved["ok"]
@@ -2867,6 +2859,7 @@ class MentorApp:
         tk.Button(dlg, text="OK", command=dlg.destroy, width=10,
                   bg=C["surface"], fg=C["text"], relief="flat",
                   activebackground=C["border"], activeforeground=C["text"]).pack()
+        dlg.bind("<Return>", lambda e: dlg.destroy())
         dlg.wait_window()
 
     def _tt_on_authorized(self):
@@ -4202,6 +4195,14 @@ def main():
         sys.exit(0)
 
     start_minimized = "--minimized" in sys.argv
+
+    # Must be set before the first window is created, or Windows bitmap-scales
+    # the whole UI on any display above 100% scaling — blurry text/controls.
+    try:
+        _ctypes.windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE
+    except Exception:
+        pass
+
     root = tk.Tk()
     # Tkinter routes exceptions raised inside widget callbacks (button commands,
     # binds, after()) through this hook instead of sys.excepthook — without this,
