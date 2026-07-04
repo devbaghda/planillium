@@ -722,141 +722,9 @@ class MentorApp:
         self.tick_status()
         messagebox.showinfo(APP_NAME, f"'{plan['name']}' archived. You can now add a new plan.")
 
-    @staticmethod
-    def _parse_md_plan(text: str) -> dict:
-        """Parse a Markdown plan file into the plan-dict format.
-
-        Expected structure:
-          # Plan Name
-          id: some-id
-          color: #0a84ff
-          total_days: 160
-
-          ## Phase 1: Phase Name
-
-          ### Day 1 — Task Title
-          category: research
-          duration: 60
-
-          Optional description lines.
-        """
-        import re
-
-        plan: dict = {}
-        phases: list = []
-        current_phase: dict | None = None
-        current_task:  dict | None = None
-        detail_lines:  list = []
-        in_header = True   # True until first ##
-
-        PLAN_META = {"id", "color", "total_days", "start_date"}
-
-        def flush_task():
-            nonlocal current_task, detail_lines
-            if current_task is not None and current_phase is not None:
-                if detail_lines:
-                    current_task["detail"] = " ".join(detail_lines).strip()
-                current_phase["tasks"].append(current_task)
-                current_task = None
-                detail_lines = []
-
-        def flush_phase():
-            flush_task()
-            nonlocal current_phase
-            if current_phase is not None:
-                phases.append(current_phase)
-                current_phase = None
-
-        kv_re   = re.compile(r"^([a-z_]+)\s*:\s*(.+)$", re.I)
-        phase_re = re.compile(r"(?:phase\s+)?(\d+)[:\s\-–—]+(.+)", re.I)
-        task_re  = re.compile(r"day\s+(\d+)\s*[:\-–—]+\s*(.+)", re.I)
-        task_re2 = re.compile(r"day\s+(\d+)\s+(.+)", re.I)
-
-        for raw in text.splitlines():
-            line = raw.strip()
-
-            if line.startswith("# ") and not line.startswith("## "):
-                plan["name"] = line[2:].strip()
-                continue
-
-            if line.startswith("## "):
-                flush_phase()
-                in_header = False
-                body = line[3:].strip()
-                m = phase_re.match(body)
-                pnum = int(m.group(1)) if m else len(phases) + 1
-                pname = m.group(2).strip() if m else body
-                current_phase = {"phase": pnum, "name": pname, "tasks": []}
-                continue
-
-            if line.startswith("### "):
-                flush_task()
-                body = line[4:].strip()
-                m = task_re.match(body) or task_re2.match(body)
-                day  = int(m.group(1)) if m else 1
-                name = m.group(2).strip() if m else body
-                current_task = {"day": day, "task": name}
-                detail_lines = []
-                continue
-
-            m = kv_re.match(line)
-            if m:
-                key = m.group(1).lower()
-                val = m.group(2).strip()
-                if current_task is not None:
-                    if key in ("category", "cat"):
-                        current_task["category"] = val
-                    elif key in ("duration", "duration_min", "dur"):
-                        try:
-                            current_task["duration_min"] = int(re.sub(r"\D.*", "", val))
-                        except ValueError:
-                            pass
-                elif in_header or current_phase is None:
-                    if key in PLAN_META:
-                        plan[key] = int(val) if key == "total_days" and val.isdigit() else val
-                continue
-
-            if current_task is not None and line:
-                detail_lines.append(line)
-
-        flush_phase()
-        plan["phases"] = phases
-        return plan
-
-    def _add_plan_dialog(self):
-        if len(self.plans) >= MAX_PLANS:
-            messagebox.showinfo(APP_NAME, f"Maximum {MAX_PLANS} active plans. Archive a completed plan first.")
-            return
-        from tkinter import filedialog
-        path = filedialog.askopenfilename(
-            title="Select plan file (.md or .json)",
-            filetypes=[("Plan files", "*.md *.json"), ("Markdown", "*.md"), ("JSON", "*.json")],
-            parent=self.root,
-        )
-        if not path:
-            return
-        try:
-            with open(path, encoding="utf-8") as f:
-                raw = f.read()
-        except Exception as e:
-            messagebox.showerror(APP_NAME, f"Could not read file:\n{e}")
-            return
-        try:
-            if path.lower().endswith(".md"):
-                plan = self._parse_md_plan(raw)
-            else:
-                plan = json.loads(raw)
-        except Exception as e:
-            messagebox.showerror(APP_NAME, f"Could not parse file:\n{e}")
-            return
-        self._import_plan_dict(
-            plan,
-            missing_field_hint="(MD plans need: # Title, id: ..., ## Phase, ### Day N — task)",
-        )
-
     def _import_plan_dict(self, plan: dict, missing_field_hint: str = "") -> bool:
-        """Validate and save a plan dict, then refresh the UI. Shared by the
-        file-based '+ Add Plan' flow and the paste-based Claude plan importer."""
+        """Validate and save a plan dict, then refresh the UI. Used by the
+        paste-based Claude plan importer (see _show_generate_plan_dialog)."""
         for field in ("id", "name", "phases"):
             if field not in plan:
                 msg = f"Plan missing required field: '{field}'"
@@ -888,7 +756,7 @@ class MentorApp:
             return
 
         dlg = tk.Toplevel(self.root)
-        dlg.title("Generate Plan with Claude")
+        dlg.title("Add Plan")
         dlg.configure(bg=C["bg"])
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -901,7 +769,7 @@ class MentorApp:
         step1.pack(fill="both", expand=True)
 
         # ── Step 1: pick mode + fill fields ─────────────────────────────────
-        tk.Label(step1, text="Generate a plan with Claude", font=("Segoe UI", 13, "bold"),
+        tk.Label(step1, text="Add Plan", font=("Segoe UI", 13, "bold"),
                  fg=C["text"], bg=C["bg"]).pack(anchor="w")
         tk.Label(
             step1,
@@ -1594,18 +1462,9 @@ class MentorApp:
                 font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
                 activebackground=C["surface"], activeforeground=C["text"],
                 relief="flat", padx=8, pady=3, cursor="hand2",
-                command=self._add_plan_dialog,
-            )
-            add_btn.pack(anchor="w", pady=(6, 0))
-
-            gen_btn = tk.Button(
-                self._plans_frame, text="✨ Generate with Claude",
-                font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
-                activebackground=C["surface"], activeforeground=C["text"],
-                relief="flat", padx=8, pady=3, cursor="hand2",
                 command=self._show_generate_plan_dialog,
             )
-            gen_btn.pack(anchor="w", pady=(4, 0))
+            add_btn.pack(anchor="w", pady=(6, 0))
 
         if hasattr(self, "_bind_sidebar_wheel"):
             self._bind_sidebar_wheel()
