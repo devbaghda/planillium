@@ -8,7 +8,7 @@ import sys
 import threading
 from datetime import datetime, date, time, timedelta
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 
 _MUTEX_NAME = "MentorOverseerSingleInstance_v1"
 
@@ -684,18 +684,8 @@ class MentorApp:
         return plan
 
     def _ask_start_date_for(self, plan_name):
-        while True:
-            answer = simpledialog.askstring(
-                APP_NAME,
-                f"Enter start date for '{plan_name}' (DD.MM.YYYY):",
-                parent=self.root,
-            )
-            if answer is None:
-                return date.today().isoformat()
-            try:
-                return datetime.strptime(answer.strip(), "%d.%m.%Y").date().isoformat()
-            except ValueError:
-                messagebox.showerror("Bad date", "Use DD.MM.YYYY format, e.g. 28.06.2026")
+        picked = self._pick_date_dialog(f"Start date for '{plan_name}':")
+        return (picked or date.today()).isoformat()
 
     def _save_plan(self, plan):
         out = os.path.join(PLANS_DIR, "active", f"{plan['id']}.json")
