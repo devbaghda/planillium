@@ -154,6 +154,11 @@ class ActivityTracker:
         self._on_plan  = [k.lower() for k in rules.get("on_plan",  [])]
         self._off_plan = [k.lower() for k in rules.get("off_plan", [])]
 
+        idle_rules = config.get("idle_activity_rules", {})
+        self._idle_on_plan  = [k.lower() for k in idle_rules.get("on_plan",  [])]
+        self._idle_off_plan = [k.lower() for k in idle_rules.get("off_plan", [])]
+        self._idle_neutral  = [k.lower() for k in idle_rules.get("neutral",  [])]
+
         wh = config.get("working_hours", {})
         self._work_start  = self._t(wh.get("start", "08:00"))
         self._work_end    = self._t(wh.get("end",   "20:00"))
@@ -169,6 +174,12 @@ class ActivityTracker:
         self._current_window = ""
         self._off_since      = None
         self._last_alert     = None
+
+        # Paid entertainment window (set by the main thread via set_paid_until).
+        # Plain attribute, no lock — same lock-free cross-thread pattern already
+        # used for _off_since/_current_class above; reads/writes of a single
+        # reference are atomic enough under the GIL for this use.
+        self._paid_until = None
 
         # Diary session state
         self._session_start = None
@@ -203,6 +214,37 @@ class ActivityTracker:
             if kw in t:
                 return "off_plan"
         return "neutral"
+
+    def classify_idle_text(self, description):
+        """Match a typed idle-answer description against the idle activity
+        library (substring match, same mechanism as classify() above). Falls
+        back to 'idle' (unclassified) when nothing matches."""
+        if not description:
+            return "idle"
+        t = description.lower()
+        for kw in self._idle_on_plan:
+            if kw in t:
+                return "on_plan"
+        for kw in self._idle_off_plan:
+            if kw in t:
+                return "off_plan"
+        for kw in self._idle_neutral:
+            if kw in t:
+                return "neutral"
+        return "idle"
+
+    def set_paid_until(self, dt):
+        """Called from the main thread when a score-bought entertainment window
+        opens (dt) or is cancelled/expires (None)."""
+        self._paid_until = dt
+
+    def _effective_class(self, cls):
+        """Relabels off_plan as 'paid' while a bought entertainment window is
+        open. On-plan/neutral time is never affected — paid time only ever
+        covers off-plan activity."""
+        if cls == "off_plan" and self._paid_until and datetime.now() < self._paid_until:
+            return "paid"
+        return cls
 
     # ── database ──────────────────────────────────────────────────────────────
 
@@ -263,6 +305,7 @@ class ActivityTracker:
             start = datetime.now() - timedelta(minutes=idle_minutes)
         end = start + timedelta(minutes=idle_minutes)
         duration = max(1, int((end - start).total_seconds() / 60))
+        category = self.classify_idle_text(description)
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 "INSERT INTO time_diary "
@@ -273,7 +316,7 @@ class ActivityTracker:
                     start.strftime("%H:%M"),
                     end.strftime("%H:%M"),
                     duration,
-                    "idle",
+                    category,
                     "idle",
                     description,
                 )
@@ -328,7 +371,7 @@ class ActivityTracker:
         now    = datetime.now()
         title  = _active_window_title()
         idle_s = _idle_seconds()
-        cls    = self.classify(title)
+        cls    = self._effective_class(self.classify(title))
 
         # Sleep detection: if wall-clock gap >> POLL_SECONDS the PC was sleeping
         if self._last_poll_at is not None:

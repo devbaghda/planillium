@@ -155,9 +155,18 @@ class TickTickClient:
         webbrowser.open(url)
 
         def _wait():
-            if not done.wait(timeout=120):
+            # If TickTick's /authorize rejects the request outright (bad client_id,
+            # unregistered redirect_uri, etc.) it renders its own error page in the
+            # browser and never redirects back here — so this timeout is the only way
+            # such failures are ever detected. Kept short so that case surfaces quickly
+            # rather than leaving the UI looking hung for minutes.
+            if not done.wait(timeout=45):
                 if on_error:
-                    on_error("Authorization timed out (2 minutes).")
+                    on_error(
+                        "No response from TickTick after 45s — if a TickTick error "
+                        "page appeared in your browser, that's why; fix it there and "
+                        "reconnect."
+                    )
                 return
             if code_holder["error"]:
                 if on_error:
@@ -190,7 +199,16 @@ class TickTickClient:
             },
             timeout=15,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            # Surface TickTick's actual OAuth error (e.g. "invalid_client" for a bad/
+            # rotated client_id or secret) instead of a bare HTTP status line, so the
+            # UI can tell the user what's actually wrong.
+            try:
+                body = resp.json()
+                detail = body.get("error_description") or body.get("error") or resp.text
+            except ValueError:
+                detail = resp.text or f"HTTP {resp.status_code}"
+            raise RuntimeError(detail)
         data = resp.json()
         self.save_tokens(data["access_token"], data.get("refresh_token", ""))
 
@@ -249,6 +267,21 @@ class TickTickClient:
     def get_project_tasks(self, project_id):
         data = self._request("GET", f"/project/{project_id}/data")
         return data.get("tasks", [])
+
+    def get_all_tasks(self, exclude_project_id=None):
+        """Open tasks across every project except the given one (e.g. the app's
+        own mirror project), tagged with projectId/_projectName for display and
+        for routing completions back to the right project."""
+        tasks = []
+        for p in self.get_projects():
+            pid = p.get("id")
+            if not pid or pid == exclude_project_id:
+                continue
+            for t in self.get_project_tasks(pid):
+                t["projectId"] = pid
+                t["_projectName"] = p.get("name", "")
+                tasks.append(t)
+        return tasks
 
     # ── tasks ────────────────────────────────────────────────────────────────
 

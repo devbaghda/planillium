@@ -58,6 +58,7 @@ _LAST_SEEN_PATH = pathlib.Path(DATA_DIR) / "last_seen.txt"
 PLACEHOLDER_START = "SET_THIS_ON_FIRST_LAUNCH"
 APP_NAME      = "Mentor-Overseer"
 MAX_PLANS     = 2
+TT_AUTOSYNC_INTERVAL_MS = 5 * 60_000   # background push+sync cadence once connected
 
 CATEGORY_COLORS = {
     "profile": "#0a84ff",
@@ -280,7 +281,6 @@ class MentorApp:
         self.ensure_data_store()
         self.plans = self.load_plans()          # list of plan dicts, max 2
 
-        self.today = date.today()
         self.completions = self.load_completions()
         self.task_vars = {}  # (plan_id, day, task_text) -> BooleanVar
         self._early_plans   = set()   # plan IDs where user opted for next-day early start
@@ -304,10 +304,18 @@ class MentorApp:
         self.schedule_eod_summary()
         self.init_ticktick()
         self.init_tracker()
+        self._ensure_score_caught_up()
+        self._refresh_score_sidebar()
         self.start_tray()
         self.register_startup()
 
     # ── plan helpers ─────────────────────────────────────────────────────────
+
+    @property
+    def today(self):
+        # Always live — this app runs continuously in the tray and can stay
+        # open across midnight, so a cached date would silently go stale.
+        return date.today()
 
     def _plan_day_for(self, plan):
         try:
@@ -695,6 +703,16 @@ class MentorApp:
             "  PRIMARY KEY (plan_id, task_text)"
             ")"
         )
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS score_ledger ("
+            "  id     INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  ts     TEXT    NOT NULL,"
+            "  date   TEXT    NOT NULL,"
+            "  delta  INTEGER NOT NULL,"
+            "  reason TEXT    NOT NULL,"
+            "  detail TEXT"
+            ")"
+        )
         self.conn.commit()
 
     def load_completions(self):
@@ -793,6 +811,35 @@ class MentorApp:
         sb.pack_propagate(False)
         self._sidebar = sb
 
+        # Sidebar content can exceed the window height (ACTIVE PLANS + TICKTICK +
+        # ACTIVITY + SCORE sections stack up) — wrap it in a scrollable canvas so
+        # everything stays reachable instead of being silently clipped off the
+        # bottom with no way to scroll to it.
+        sb_canvas = tk.Canvas(sb, bg=C["sidebar"], highlightthickness=0)
+        sb_scroll = tk.Scrollbar(sb, orient="vertical", command=sb_canvas.yview)
+        sb_canvas.configure(yscrollcommand=sb_scroll.set)
+        sb_scroll.pack(side="right", fill="y")
+        sb_canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(sb_canvas, bg=C["sidebar"])
+        sb_win_id = sb_canvas.create_window((0, 0), window=inner, anchor="nw")
+        sb_canvas.bind("<Configure>", lambda e: sb_canvas.itemconfig(sb_win_id, width=e.width))
+        inner.bind("<Configure>", lambda e: sb_canvas.configure(scrollregion=sb_canvas.bbox("all")))
+
+        def _sb_wheel(e):
+            sb_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        def _bind_sb_wheel(widget):
+            widget.bind("<MouseWheel>", _sb_wheel)
+            for child in widget.winfo_children():
+                _bind_sb_wheel(child)
+        sb_canvas.bind("<MouseWheel>", _sb_wheel)
+        # Stashed so sections that rebuild their own children later (plans list,
+        # score balance) can re-bind — a fresh child widget has no listeners of
+        # its own until this runs again.
+        self._bind_sidebar_wheel = lambda: _bind_sb_wheel(inner)
+        self.root.after(500, self._bind_sidebar_wheel)
+
+        sb = inner  # everything below packs into the scrollable inner frame
+
         # App header
         hdr = tk.Frame(sb, bg=C["sidebar"], padx=16, pady=18)
         hdr.pack(fill="x")
@@ -804,6 +851,10 @@ class MentorApp:
                 pass
         tk.Label(hdr, text="Mentor\nOverseer", font=("Segoe UI", 11, "bold"),
                  fg=C["text"], bg=C["sidebar"], justify="left").pack(side="left", padx=(10, 0))
+        tk.Button(hdr, text="⚙", font=("Segoe UI", 12), bg=C["sidebar"], fg=C["text_dim"],
+                  activebackground=C["surface"], activeforeground=C["text"],
+                  relief="flat", bd=0, cursor="hand2",
+                  command=self._show_settings_dialog).pack(side="right", anchor="n")
 
         tk.Frame(sb, bg=C["separator"], height=1).pack(fill="x")
 
@@ -859,9 +910,10 @@ class MentorApp:
         tk.Label(tt, text="TICKTICK", font=("Segoe UI", 8, "bold"),
                  fg=C["text_muted"], bg=C["sidebar"]).pack(anchor="w", pady=(0, 6))
 
+        # Tracks status internally (surfaced via messagebox on real errors) — the
+        # connect button below is the only TickTick state shown in the sidebar;
+        # once connected, push/sync happen automatically with no buttons to press.
         self.tt_status_var = tk.StringVar(value="initialising...")
-        tk.Label(tt, textvariable=self.tt_status_var, font=("Segoe UI", 8),
-                 fg=C["text_dim"], bg=C["sidebar"], wraplength=190, justify="left").pack(anchor="w", pady=(0, 8))
 
         _bs = dict(font=("Segoe UI", 9), bg=C["sidebar"], fg=C["text_dim"],
                    activebackground=C["surface"], activeforeground=C["text"],
@@ -870,12 +922,6 @@ class MentorApp:
         self.tt_connect_btn = tk.Button(tt, text="Connect TickTick",
                                          state="disabled", command=self.on_connect_ticktick, **_bs)
         self.tt_connect_btn.pack(fill="x", ipady=3)
-        self.tt_push_btn = tk.Button(tt, text="Push Today → TickTick",
-                                      state="disabled", command=self.on_push_to_ticktick, **_bs)
-        self.tt_push_btn.pack(fill="x", ipady=3)
-        self.tt_sync_btn = tk.Button(tt, text="Sync Completions",
-                                      state="disabled", command=self.on_sync_ticktick, **_bs)
-        self.tt_sync_btn.pack(fill="x", ipady=3)
 
         # Activity tracker section
         tk.Frame(sb, bg=C["separator"], height=1).pack(fill="x")
@@ -902,6 +948,15 @@ class MentorApp:
         tk.Label(act, textvariable=self._act_window_var, font=("Segoe UI", 8),
                  fg=C["text_dim"], bg=C["sidebar"],
                  wraplength=190, justify="left").pack(anchor="w", pady=(4, 0))
+
+        # Score section
+        tk.Frame(sb, bg=C["separator"], height=1).pack(fill="x")
+        self._score_frame = tk.Frame(sb, bg=C["sidebar"], padx=16, pady=14)
+        self._score_frame.pack(fill="x")
+        tk.Label(self._score_frame, text="SCORE", font=("Segoe UI", 8, "bold"),
+                 fg=C["text_muted"], bg=C["sidebar"]).pack(anchor="w", pady=(0, 6))
+        self._score_body = tk.Frame(self._score_frame, bg=C["sidebar"])
+        self._score_body.pack(fill="x")
 
     def _sb_item(self, parent, label, count_var, dot_color, command=None):
         row = tk.Frame(parent, bg=C["sidebar"], padx=16, pady=6, cursor="hand2")
@@ -997,14 +1052,15 @@ class MentorApp:
             )
             add_btn.pack(anchor="w", pady=(6, 0))
 
+        if hasattr(self, "_bind_sidebar_wheel"):
+            self._bind_sidebar_wheel()
+
     # ── schedule dialog ───────────────────────────────────────────────────────
 
     def _show_schedule_dialog(self, plan):
-        """Show all plan days with tasks; allow picking a future task to do today."""
+        """Show all plan days with tasks; allow picking a future task to do today,
+        or marking a day non-working (its tasks and everything after shift +1 day)."""
         plan_id = plan["id"]
-        pday    = self._plan_day_for(plan)
-        by_day  = self._tasks_by_day_for(plan)
-        total   = self._total_days_for(plan)
 
         dlg = tk.Toplevel(self.root)
         dlg.title(f"Schedule — {plan['name']}")
@@ -1013,12 +1069,13 @@ class MentorApp:
         dlg.grab_set()
 
         # Header
-        tk.Label(dlg, text=f"{plan['name']}  ·  Day {pday} of {total}",
+        hdr_var = tk.StringVar()
+        tk.Label(dlg, textvariable=hdr_var,
                  font=("Segoe UI", 12, "bold"), fg=C["text"], bg=C["bg"],
                  padx=20, pady=14).pack(anchor="w")
         tk.Label(dlg,
                  text='Click "Do today" on any future task to pull it to today.\n'
-                      'Tasks between today and that day shift forward by one day.',
+                      'Click "Day off" to push a day\'s tasks (and everything after) forward by one day.',
                  font=("Segoe UI", 9), fg=C["text_dim"], bg=C["bg"],
                  padx=20, justify="left").pack(anchor="w", pady=(0, 8))
         tk.Frame(dlg, bg=C["separator"], height=1).pack(fill="x")
@@ -1040,54 +1097,6 @@ class MentorApp:
             canvas.configure(scrollregion=canvas.bbox("all"))
         inner.bind("<Configure>", _on_frame_resize)
 
-        def _do_today(p, task_text, task_original_day):
-            self._swap_task_to_today(p, task_text, task_original_day)
-            dlg.destroy()
-
-        # Render days
-        days = sorted(set(by_day.keys()) | {pday})
-        for day in days:
-            tasks = by_day.get(day, [])
-            if not tasks:
-                continue
-            is_today = (day == pday)
-            is_past  = (day < pday)
-
-            hdr_bg = C["surface"] if is_today else C["bg"]
-            hdr_fg = plan.get("color", C["accent_blue"]) if is_today else C["text_dim"]
-            label  = f"Day {day}  {'← TODAY' if is_today else ('(past)' if is_past else '')}"
-
-            hdr_f = tk.Frame(inner, bg=hdr_bg, padx=16, pady=6)
-            hdr_f.pack(fill="x", pady=(8, 0))
-            tk.Label(hdr_f, text=label, font=("Segoe UI", 9, "bold"),
-                     fg=hdr_fg, bg=hdr_bg).pack(side="left")
-
-            for t in tasks:
-                task_text    = t.get("task", "")
-                orig_day     = t.get("original_day", day)
-                is_done      = self.completions.get((plan_id, day, task_text), False)
-
-                row_f = tk.Frame(inner, bg=C["bg"], padx=24, pady=3)
-                row_f.pack(fill="x")
-
-                dur = t.get("duration_min")
-                dur_txt = f" · {dur}m" if dur else ""
-                style = ("Segoe UI", 10)
-                col   = C["text_done"] if is_done else (C["text_muted"] if is_past else C["text"])
-                txt   = f"{'✓ ' if is_done else ''}{task_text}{dur_txt}"
-                tk.Label(row_f, text=txt, font=style, fg=col, bg=C["bg"],
-                         anchor="w", justify="left", wraplength=380).pack(side="left", fill="x", expand=True)
-
-                if not is_done and not is_past and day > pday:
-                    tk.Button(
-                        row_f, text="Do today",
-                        font=("Segoe UI", 8), bg=plan.get("color", C["accent_blue"]),
-                        fg="white", relief="flat", padx=8, pady=2, cursor="hand2",
-                        command=lambda tt=task_text, od=orig_day, p=plan: _do_today(p, tt, od),
-                    ).pack(side="right", padx=(8, 0))
-
-        # Mouse wheel scroll — bind on this dialog's widgets only, not bind_all,
-        # so it doesn't clobber the main window's global mousewheel scroll binding.
         def _scroll(e):
             canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
@@ -1095,7 +1104,78 @@ class MentorApp:
             widget.bind("<MouseWheel>", _scroll)
             for child in widget.winfo_children():
                 _bind_wheel(child)
-        _bind_wheel(inner)
+
+        def _do_today(p, task_text, task_original_day):
+            self._swap_task_to_today(p, task_text, task_original_day)
+            dlg.destroy()
+
+        def _do_day_off(p, day):
+            self._mark_day_off(p, day)
+            _render_days()
+
+        def _render_days():
+            for child in inner.winfo_children():
+                child.destroy()
+
+            pday   = self._plan_day_for(plan)
+            by_day = self._tasks_by_day_for(plan)
+            total  = self._total_days_for(plan)
+            hdr_var.set(f"{plan['name']}  ·  Day {pday} of {total}")
+
+            days = sorted(set(by_day.keys()) | {pday})
+            for day in days:
+                tasks = by_day.get(day, [])
+                if not tasks:
+                    continue
+                is_today = (day == pday)
+                is_past  = (day < pday)
+
+                hdr_bg = C["surface"] if is_today else C["bg"]
+                hdr_fg = plan.get("color", C["accent_blue"]) if is_today else C["text_dim"]
+                label  = f"Day {day}  {'← TODAY' if is_today else ('(past)' if is_past else '')}"
+
+                hdr_f = tk.Frame(inner, bg=hdr_bg, padx=16, pady=6)
+                hdr_f.pack(fill="x", pady=(8, 0))
+                tk.Label(hdr_f, text=label, font=("Segoe UI", 9, "bold"),
+                         fg=hdr_fg, bg=hdr_bg).pack(side="left")
+
+                if not is_past:
+                    tk.Button(
+                        hdr_f, text="Day off",
+                        font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
+                        relief="flat", padx=8, pady=2, cursor="hand2",
+                        command=lambda d=day, p=plan: _do_day_off(p, d),
+                    ).pack(side="right")
+
+                for t in tasks:
+                    task_text    = t.get("task", "")
+                    orig_day     = t.get("original_day", day)
+                    is_done      = self.completions.get((plan_id, day, task_text), False)
+
+                    row_f = tk.Frame(inner, bg=C["bg"], padx=24, pady=3)
+                    row_f.pack(fill="x")
+
+                    dur = t.get("duration_min")
+                    dur_txt = f" · {dur}m" if dur else ""
+                    style = ("Segoe UI", 10)
+                    col   = C["text_done"] if is_done else (C["text_muted"] if is_past else C["text"])
+                    txt   = f"{'✓ ' if is_done else ''}{task_text}{dur_txt}"
+                    tk.Label(row_f, text=txt, font=style, fg=col, bg=C["bg"],
+                             anchor="w", justify="left", wraplength=380).pack(side="left", fill="x", expand=True)
+
+                    if not is_done and not is_past and day > pday:
+                        tk.Button(
+                            row_f, text="Do today",
+                            font=("Segoe UI", 8), bg=plan.get("color", C["accent_blue"]),
+                            fg="white", relief="flat", padx=8, pady=2, cursor="hand2",
+                            command=lambda tt=task_text, od=orig_day, p=plan: _do_today(p, tt, od),
+                        ).pack(side="right", padx=(8, 0))
+
+            # Mouse wheel scroll — bind on this dialog's widgets only, not bind_all,
+            # so it doesn't clobber the main window's global mousewheel scroll binding.
+            _bind_wheel(inner)
+
+        _render_days()
         canvas.bind("<MouseWheel>", _scroll)
 
     def _swap_task_to_today(self, plan, target_task_text, target_original_day):
@@ -1142,6 +1222,29 @@ class MentorApp:
         if old_key in self.completions:
             val = self.completions.pop(old_key)
             self.completions[new_key] = val
+
+        self.render_tasks()
+        self._rebuild_plans_sidebar()
+
+    def _mark_day_off(self, plan, day):
+        """Mark `day` as non-working: every task assigned on or after that day
+        shifts forward by one day, leaving `day` free."""
+        plan_id = plan["id"]
+        by_day  = self._tasks_by_day_for(plan)
+        all_tasks = [t for tasks in by_day.values() for t in tasks]
+
+        for t in all_tasks:
+            txt      = t.get("task", "")
+            orig     = t.get("original_day", t["day"])
+            assigned = t["day"]
+            if assigned < day:
+                continue
+            self._save_override(plan_id, txt, orig, assigned + 1)
+            old_key = (plan_id, assigned, txt)
+            new_key = (plan_id, assigned + 1, txt)
+            if old_key in self.completions:
+                val = self.completions.pop(old_key)
+                self.completions[new_key] = val
 
         self.render_tasks()
         self._rebuild_plans_sidebar()
@@ -1194,6 +1297,7 @@ class MentorApp:
         self._show_detail_empty()
 
     def _show_detail_empty(self):
+        self._detail_task = None
         if self._detail_inner:
             self._detail_inner.destroy()
         self._detail_inner = tk.Frame(self._detail_panel, bg=C["bg"])
@@ -1201,7 +1305,8 @@ class MentorApp:
         tk.Label(self._detail_inner, text="Select a task",
                  font=("Segoe UI", 11), fg=C["text_muted"], bg=C["bg"]).pack(expand=True)
 
-    def _show_task_detail(self, task, task_day):
+    def _show_task_detail(self, task, task_day, plan_id=None):
+        self._detail_task = (task, task_day, plan_id)
         if self._detail_inner:
             self._detail_inner.destroy()
         self._detail_inner = tk.Frame(self._detail_panel, bg=C["bg"])
@@ -1238,6 +1343,146 @@ class MentorApp:
         else:
             tk.Label(inner, text="No details.", font=("Segoe UI", 10),
                      fg=C["text_muted"], bg=C["bg"]).pack(anchor="w")
+
+        if plan_id:
+            tk.Button(
+                inner, text="Edit", font=("Segoe UI", 9),
+                bg=C["surface"], fg=C["text"], relief="flat", padx=10, pady=4,
+                cursor="hand2",
+                command=lambda: self._edit_task_dialog(task, task_day, plan_id),
+            ).pack(anchor="w", pady=(16, 0))
+
+    def _find_plan_task(self, plan, original_day, task_text):
+        """Return a live reference to the task dict inside plan['phases'], so
+        edits persist when the plan is saved back to disk."""
+        for phase in plan.get("phases", []):
+            for t in phase.get("tasks", []):
+                if int(t.get("day", 0)) == original_day and t.get("task", "") == task_text:
+                    return t
+        return None
+
+    def _edit_task_dialog(self, task, task_day, plan_id):
+        plan = next((p for p in self.plans if p["id"] == plan_id), None)
+        if not plan:
+            return
+        orig_day = task.get("original_day", task_day)
+        old_text = task.get("task", "")
+        target = self._find_plan_task(plan, orig_day, old_text)
+        if target is None:
+            messagebox.showerror(APP_NAME, "Could not locate this task in the plan file.", parent=self.root)
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Edit Task")
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        outer = tk.Frame(dlg, bg=C["bg"], padx=24, pady=20)
+        outer.pack(fill="both", expand=True)
+
+        def _label(text):
+            tk.Label(outer, text=text, font=("Segoe UI", 9, "bold"),
+                     fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(10, 3))
+
+        _label("Title")
+        title_var = tk.StringVar(value=target.get("task", ""))
+        tk.Entry(outer, textvariable=title_var, font=("Segoe UI", 10),
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat", bd=4, width=38).pack(fill="x")
+
+        _label("Detail")
+        detail_txt = tk.Text(outer, height=5, font=("Segoe UI", 10), wrap="word",
+                              bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                              relief="flat", bd=4)
+        detail_txt.insert("1.0", target.get("detail", ""))
+        detail_txt.pack(fill="x")
+
+        row2 = tk.Frame(outer, bg=C["bg"])
+        row2.pack(fill="x", pady=(14, 0))
+        tk.Label(row2, text="Duration (min)", font=("Segoe UI", 9, "bold"),
+                 fg=C["text_dim"], bg=C["bg"]).pack(side="left")
+        dur_var = tk.StringVar(value=str(target.get("duration_min") or ""))
+        tk.Entry(row2, textvariable=dur_var, width=8, font=("Segoe UI", 10),
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat", bd=4).pack(side="left", padx=(10, 0))
+
+        _label("Category")
+        cat_var = tk.StringVar(value=target.get("category", ""))
+        cat_dd = tk.OptionMenu(outer, cat_var, "", *CATEGORY_COLORS.keys())
+        cat_dd.configure(bg=C["surface"], fg=C["text"], font=("Segoe UI", 10),
+                         relief="flat", highlightthickness=0)
+        cat_dd.pack(fill="x")
+
+        err_var = tk.StringVar()
+        tk.Label(outer, textvariable=err_var, font=("Segoe UI", 9),
+                 fg=C["accent_red"], bg=C["bg"]).pack(anchor="w", pady=(10, 0))
+
+        def _save():
+            new_title = title_var.get().strip()
+            if not new_title:
+                err_var.set("Title can't be empty.")
+                return
+            dur_raw = dur_var.get().strip()
+            new_dur = None
+            if dur_raw:
+                try:
+                    new_dur = int(dur_raw)
+                except ValueError:
+                    err_var.set("Duration must be a whole number of minutes.")
+                    return
+            new_detail = detail_txt.get("1.0", "end").strip()
+            new_cat = cat_var.get().strip()
+            self._apply_task_edit(plan, target, old_text, new_title, new_detail, new_dur, new_cat)
+            dlg.destroy()
+
+        btn_row = tk.Frame(outer, bg=C["bg"])
+        btn_row.pack(fill="x", pady=(18, 0))
+        tk.Button(btn_row, text="Cancel", font=("Segoe UI", 10),
+                  bg=C["surface"], fg=C["text"], relief="flat", padx=12,
+                  command=dlg.destroy).pack(side="right", padx=(8, 0))
+        tk.Button(btn_row, text="Save", font=("Segoe UI", 10),
+                  bg=plan.get("color", C["accent_blue"]), fg="white", relief="flat", padx=12,
+                  command=_save).pack(side="right")
+
+    def _apply_task_edit(self, plan, target, old_text, new_title, new_detail, new_dur, new_cat):
+        """Mutate the task in-place in the plan JSON and, if the title changed,
+        migrate every DB row keyed on the old title so completion history and
+        the TickTick mapping stay attached to the (renamed) task."""
+        plan_id = plan["id"]
+        target["task"] = new_title
+        target["detail"] = new_detail
+        if new_dur is not None:
+            target["duration_min"] = new_dur
+        else:
+            target.pop("duration_min", None)
+        if new_cat:
+            target["category"] = new_cat
+        else:
+            target.pop("category", None)
+        self._save_plan(plan)
+
+        if new_title != old_text:
+            self.conn.execute(
+                "UPDATE task_completions SET task_text=? WHERE plan_id=? AND task_text=?",
+                (new_title, plan_id, old_text),
+            )
+            self.conn.execute(
+                "UPDATE task_overrides SET task_text=? WHERE plan_id=? AND task_text=?",
+                (new_title, plan_id, old_text),
+            )
+            self.conn.execute(
+                "UPDATE ticktick_sync SET task_text=? WHERE task_text=?",
+                (new_title, old_text),
+            )
+            self.conn.commit()
+            for key in list(self.completions.keys()):
+                if key[0] == plan_id and key[2] == old_text:
+                    self.completions[(key[0], key[1], new_title)] = self.completions.pop(key)
+
+        self._show_detail_empty()
+        self.render_tasks()
+        self._rebuild_plans_sidebar()
 
     # ── plan task rendering ──────────────────────────────────────────────────
 
@@ -1392,7 +1637,7 @@ class MentorApp:
         row.pack(fill="x")
         row.bind("<Enter>", lambda e, r=row: self._row_hover(r, True))
         row.bind("<Leave>", lambda e, r=row: self._row_hover(r, False))
-        row.bind("<Button-1>", lambda e, t=task, d=task_day: self._show_task_detail(t, d))
+        row.bind("<Button-1>", lambda e, t=task, d=task_day, pid=plan_id: self._show_task_detail(t, d, pid))
 
         cb = tk.Checkbutton(
             row, variable=var,
@@ -1404,7 +1649,7 @@ class MentorApp:
 
         text_col = tk.Frame(row, bg=C["bg"])
         text_col.pack(side="left", fill="x", expand=True, pady=10)
-        text_col.bind("<Button-1>", lambda e, t=task, d=task_day: self._show_task_detail(t, d))
+        text_col.bind("<Button-1>", lambda e, t=task, d=task_day, pid=plan_id: self._show_task_detail(t, d, pid))
 
         title_fg = C["text_done"] if is_done else (C["text_overdue"] if is_overdue else C["text"])
         tk.Label(text_col, text=title, font=("Segoe UI", 11),
@@ -1481,7 +1726,7 @@ class MentorApp:
             return
 
         if not self.tt_tasks:
-            tk.Label(self.task_frame, text="No open tasks in Netherlands Plan.",
+            tk.Label(self.task_frame, text="No open personal tasks in TickTick.",
                      font=("Segoe UI", 10), fg=C["text_muted"], bg=C["bg"],
                      padx=24, pady=4).pack(anchor="w")
             return
@@ -1490,9 +1735,11 @@ class MentorApp:
             self._render_ticktick_row(tt_task)
 
     def _render_ticktick_row(self, tt_task):
-        task_id = tt_task.get("id", "")
-        title   = tt_task.get("title", "Untitled")
-        due     = self._fmt_date((tt_task.get("dueDate") or "")[:10])
+        task_id    = tt_task.get("id", "")
+        project_id = tt_task.get("projectId", "")
+        proj_name  = tt_task.get("_projectName", "")
+        title      = tt_task.get("title", "Untitled")
+        due        = self._fmt_date((tt_task.get("dueDate") or "")[:10])
 
         row = tk.Frame(self.task_frame, bg=C["bg"], pady=2, cursor="hand2")
         row.pack(fill="x")
@@ -1504,7 +1751,7 @@ class MentorApp:
             row, variable=var,
             bg=C["bg"], fg=C["text"], selectcolor=C["check_sel"],
             activebackground=C["bg"], activeforeground=C["text"],
-            command=lambda tid=task_id, v=var, r=row: self._on_tt_toggle(tid, v, r),
+            command=lambda tid=task_id, v=var, r=row, pid=project_id: self._on_tt_toggle(tid, v, r, pid),
         ).pack(side="left", padx=(24, 8), pady=10)
 
         tk.Label(row, text=title, font=("Segoe UI", 11),
@@ -1518,9 +1765,13 @@ class MentorApp:
             tk.Label(row, text=due, font=("Segoe UI", 8),
                      fg=C["text_muted"], bg=C["bg"]).pack(side="right", padx=(0, 6))
 
+        if proj_name:
+            tk.Label(row, text=proj_name[:18], font=("Segoe UI", 8),
+                     fg=C["text_muted"], bg=C["bg"]).pack(side="right", padx=(0, 6))
+
         tk.Frame(self.task_frame, bg=C["separator"], height=1).pack(fill="x", padx=24)
 
-    def _on_tt_toggle(self, task_id, var, row):
+    def _on_tt_toggle(self, task_id, var, row, project_id):
         if not var.get():
             return
         # disable checkbox immediately
@@ -1528,14 +1779,18 @@ class MentorApp:
             if isinstance(child, tk.Checkbutton):
                 child.config(state="disabled")
 
-        pid = self.tt_project_id
+        pid = project_id or self.tt_project_id
 
         def _complete():
             try:
                 self.ticktick.complete_task(pid, task_id)
                 self.root.after(0, lambda: self._tt_remove_task(task_id))
             except Exception as exc:
-                self.root.after(0, lambda: self.tt_status_var.set(f"TickTick error: {exc}"))
+                # `except ... as exc` unbinds exc once the block exits, so the
+                # lambda (which runs later via root.after) can't reference exc
+                # itself — capture the message as a plain string now.
+                msg = f"TickTick error: {exc}"
+                self.root.after(0, lambda: self.tt_status_var.set(msg))
 
         threading.Thread(target=_complete, daemon=True).start()
 
@@ -1836,8 +2091,10 @@ class MentorApp:
     def _update_activity_status(self):
         if self.tracker:
             cls, window = self.tracker.status
-            dot_color  = {"on_plan": C["accent_green"], "off_plan": C["accent_red"]}.get(cls, C["text_muted"])
-            status_lbl = {"on_plan": "On Plan", "off_plan": "Off Plan"}.get(cls, "Neutral")
+            dot_color  = {"on_plan": C["accent_green"], "off_plan": C["accent_red"],
+                          "paid": "#bf5af2"}.get(cls, C["text_muted"])
+            status_lbl = {"on_plan": "On Plan", "off_plan": "Off Plan",
+                         "paid": "Paid Time"}.get(cls, "Neutral")
             self._act_dot.itemconfig(self._act_dot_item, fill=dot_color)
             self._act_status_var.set(status_lbl)
             # Show app name from window title (up to first dash or bracket)
@@ -1847,7 +2104,334 @@ class MentorApp:
                 off = self.tracker.off_plan_minutes
                 if off:
                     self._act_window_var.set(f"{app}  ·  {off}m off-plan")
+        self._refresh_score_sidebar()
         self.root.after(30_000, self._update_activity_status)
+
+    # ── score: sidebar, purchase & spend dialogs ────────────────────────────
+
+    def _refresh_score_sidebar(self):
+        for w in self._score_body.winfo_children():
+            w.destroy()
+
+        balance = self._score_balance()
+        paid_until = self.tracker._paid_until if self.tracker else None
+        active = paid_until and datetime.now() < paid_until
+
+        if active:
+            remaining = max(0, int((paid_until - datetime.now()).total_seconds() / 60) + 1)
+            tk.Label(self._score_body, text=f"Paid time: {remaining}m left",
+                     font=("Segoe UI", 10, "bold"), fg="#bf5af2",
+                     bg=C["sidebar"]).pack(anchor="w")
+            # Re-check when the window is due to expire so the sidebar flips
+            # back to normal without waiting for the next 30s activity tick.
+            self.root.after(min(30_000, (remaining + 1) * 60_000), self._refresh_score_sidebar)
+        else:
+            if paid_until:
+                # Window just expired — clear it and let the tracker know.
+                self.tracker.set_paid_until(None)
+                self._notify(APP_NAME, "Paid time ended — back to normal scoring.")
+            tk.Label(self._score_body, text=f"{balance} pts",
+                     font=("Segoe UI", 14, "bold"), fg=C["text"],
+                     bg=C["sidebar"]).pack(anchor="w", pady=(0, 6))
+
+            _bs = dict(font=("Segoe UI", 9), bg=C["sidebar"], fg=C["text_dim"],
+                       activebackground=C["surface"], activeforeground=C["text"],
+                       relief="flat", anchor="w", padx=0, cursor="hand2", bd=0)
+            tk.Button(self._score_body, text="Buy entertainment time",
+                      command=self._show_buy_entertainment_dialog, **_bs).pack(fill="x", ipady=3)
+            tk.Button(self._score_body, text="Log spend (no regrets)",
+                      command=self._show_log_expenditure_dialog, **_bs).pack(fill="x", ipady=3)
+
+        if hasattr(self, "_bind_sidebar_wheel"):
+            self._bind_sidebar_wheel()
+
+    def _show_buy_entertainment_dialog(self):
+        rate, _, _ = self._score_rates()
+        balance = self._score_balance()
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Buy entertainment time")
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        tk.Label(dlg, text=f"Balance: {balance} pts   ·   rate: {rate} pt/min",
+                 font=("Segoe UI", 9), fg=C["text_dim"], bg=C["bg"]
+                 ).pack(padx=20, pady=(16, 8), anchor="w")
+
+        row = tk.Frame(dlg, bg=C["bg"])
+        row.pack(padx=20, fill="x")
+        tk.Label(row, text="Minutes:", width=10, anchor="w",
+                 bg=C["bg"], fg=C["text"]).pack(side="left")
+        minutes_var = tk.StringVar(value="30")
+        tk.Entry(row, textvariable=minutes_var, width=10,
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat").pack(side="left")
+
+        cost_var = tk.StringVar()
+
+        def _update_cost(*_):
+            try:
+                m = float(minutes_var.get())
+                cost_var.set(f"Cost: {int(round(m * rate))} pts")
+            except ValueError:
+                cost_var.set("Cost: —")
+
+        minutes_var.trace_add("write", _update_cost)
+        _update_cost()
+        tk.Label(dlg, textvariable=cost_var, font=("Segoe UI", 9),
+                 fg=C["text_dim"], bg=C["bg"]).pack(padx=20, pady=(6, 0), anchor="w")
+
+        def _confirm():
+            try:
+                minutes = float(minutes_var.get())
+                if minutes <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Invalid amount", "Enter a positive number of minutes.", parent=dlg)
+                return
+            cost = int(round(minutes * rate))
+            if cost > self._score_balance():
+                messagebox.showerror(
+                    "Not enough score",
+                    f"That costs {cost} pts but your balance is only {self._score_balance()} pts.",
+                    parent=dlg,
+                )
+                return
+            self._score_add_ledger(-cost, "entertainment_purchase", detail=f"{minutes:g} min")
+            if self.tracker:
+                self.tracker.set_paid_until(datetime.now() + timedelta(minutes=minutes))
+            self._refresh_score_sidebar()
+            dlg.destroy()
+
+        _dbtn = dict(bg=C["surface"], fg=C["text"], relief="flat",
+                     activebackground=C["border"], activeforeground=C["text"])
+        btn_row = tk.Frame(dlg, bg=C["bg"])
+        btn_row.pack(pady=16)
+        tk.Button(btn_row, text="Buy", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
+        tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+
+    def _show_log_expenditure_dialog(self):
+        _, rate, symbol = self._score_rates()
+        balance = self._score_balance()
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Log spend (no regrets)")
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        tk.Label(dlg, text=f"Balance: {balance} pts   ·   rate: {rate} pt/{symbol}1",
+                 font=("Segoe UI", 9), fg=C["text_dim"], bg=C["bg"]
+                 ).pack(padx=20, pady=(16, 8), anchor="w")
+
+        row = tk.Frame(dlg, bg=C["bg"])
+        row.pack(padx=20, fill="x")
+        tk.Label(row, text=f"Amount ({symbol}):", width=10, anchor="w",
+                 bg=C["bg"], fg=C["text"]).pack(side="left")
+        amount_var = tk.StringVar(value="")
+        tk.Entry(row, textvariable=amount_var, width=10,
+                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                 relief="flat").pack(side="left")
+
+        cost_var = tk.StringVar()
+
+        def _update_cost(*_):
+            try:
+                a = float(amount_var.get())
+                cost_var.set(f"Cost: {int(round(a * rate))} pts")
+            except ValueError:
+                cost_var.set("Cost: —")
+
+        amount_var.trace_add("write", _update_cost)
+        _update_cost()
+        tk.Label(dlg, textvariable=cost_var, font=("Segoe UI", 9),
+                 fg=C["text_dim"], bg=C["bg"]).pack(padx=20, pady=(6, 0), anchor="w")
+
+        def _confirm():
+            try:
+                amount = float(amount_var.get())
+                if amount <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Invalid amount", f"Enter a positive {symbol} amount.", parent=dlg)
+                return
+            cost = int(round(amount * rate))
+            if cost > self._score_balance():
+                messagebox.showerror(
+                    "Not enough score",
+                    f"That costs {cost} pts but your balance is only {self._score_balance()} pts.",
+                    parent=dlg,
+                )
+                return
+            self._score_add_ledger(-cost, "money_expenditure", detail=f"{symbol}{amount:g}")
+            self._refresh_score_sidebar()
+            dlg.destroy()
+
+        _dbtn = dict(bg=C["surface"], fg=C["text"], relief="flat",
+                     activebackground=C["border"], activeforeground=C["text"])
+        btn_row = tk.Frame(dlg, bg=C["bg"])
+        btn_row.pack(pady=16)
+        tk.Button(btn_row, text="Log spend", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
+        tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
+
+    # ── settings dialog ─────────────────────────────────────────────────────
+
+    def _show_settings_dialog(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Settings")
+        dlg.configure(bg=C["bg"])
+        dlg.geometry("480x640")
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Settings", font=("Segoe UI", 14, "bold"),
+                 fg=C["text"], bg=C["bg"], padx=20, pady=14).pack(anchor="w")
+        tk.Frame(dlg, bg=C["separator"], height=1).pack(fill="x")
+
+        canvas = tk.Canvas(dlg, bg=C["bg"], highlightthickness=0)
+        scrollbar = tk.Scrollbar(dlg, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=C["bg"])
+        win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        def _section(title):
+            tk.Label(inner, text=title, font=("Segoe UI", 9, "bold"),
+                     fg=C["text_muted"], bg=C["bg"]).pack(anchor="w", padx=20, pady=(16, 4))
+
+        entry_vars = {}
+
+        def _field(label, cfg_path, default=""):
+            row = tk.Frame(inner, bg=C["bg"])
+            row.pack(fill="x", padx=20, pady=2)
+            tk.Label(row, text=label, width=20, anchor="w",
+                     bg=C["bg"], fg=C["text"]).pack(side="left")
+            node = self.config
+            for key in cfg_path[:-1]:
+                node = node.setdefault(key, {})
+            val = node.get(cfg_path[-1], default)
+            var = tk.StringVar(value=str(val))
+            tk.Entry(row, textvariable=var, width=20,
+                     bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                     relief="flat").pack(side="left")
+            entry_vars[tuple(cfg_path)] = var
+            return var
+
+        _section("GENERAL")
+        _field("Working hours start", ["working_hours", "start"], "08:00")
+        _field("Working hours end",   ["working_hours", "end"],   "20:00")
+        _field("End-of-day time",     ["end_of_day_summary_time"], "20:00")
+
+        _section("REMINDERS")
+        _field("Off-plan grace (min)",   ["reminder_grace_minutes"], 15)
+        _field("Repeat interval (min)",  ["reminder_interval_minutes"], 5)
+        _field("Idle threshold (min)",   ["idle_threshold_minutes"], 10)
+
+        _section("SCORING")
+        _field("Points per completed task",  ["scoring", "task_completed"], 10)
+        _field("Penalty per missed task",    ["scoring", "task_overdue_penalty"], -5)
+        _field("Points per on-plan hour",    ["scoring", "on_plan_hour"], 3)
+        _field("Points per off-plan hour",   ["scoring", "off_plan_hour"], -2)
+        _field("Streak bonus per day",       ["scoring", "streak_bonus_per_day"], 5)
+
+        _section("SCORE ECONOMY")
+        _field("Points per minute (entertainment)", ["score", "points_per_minute"], 1.0)
+        _field("Points per currency unit (spend)",  ["score", "points_per_currency_unit"], 10.0)
+        _field("Currency symbol",                   ["score", "currency_symbol"], "€")
+
+        _section("ACTIVITY KEYWORDS  (one per line)")
+        text_vars = {}
+        for label, key in (("On-plan", "on_plan"), ("Off-plan", "off_plan"), ("Neutral", "neutral")):
+            tk.Label(inner, text=label, font=("Segoe UI", 8, "bold"),
+                     fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", padx=20, pady=(8, 2))
+            txt = tk.Text(inner, height=5, width=40, bg=C["surface"], fg=C["text"],
+                          insertbackground=C["text"], relief="flat")
+            txt.insert("1.0", "\n".join(self.config.get("activity_rules", {}).get(key, [])))
+            txt.pack(padx=20, fill="x")
+            text_vars[key] = txt
+
+        _section("IDLE ANSWER LIBRARY  (one per line)")
+        tk.Label(inner, text='Phrases matched against what you type in the "what were you '
+                              'doing?" idle dialog — a match reclassifies that time '
+                              "instead of leaving it as unclassified idle time.",
+                 font=("Segoe UI", 8), fg=C["text_muted"], bg=C["bg"], wraplength=420,
+                 justify="left").pack(anchor="w", padx=20, pady=(0, 4))
+        idle_text_vars = {}
+        for label, key in (("On-plan", "on_plan"), ("Off-plan", "off_plan"), ("Neutral", "neutral")):
+            tk.Label(inner, text=label, font=("Segoe UI", 8, "bold"),
+                     fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", padx=20, pady=(8, 2))
+            txt = tk.Text(inner, height=3, width=40, bg=C["surface"], fg=C["text"],
+                          insertbackground=C["text"], relief="flat")
+            txt.insert("1.0", "\n".join(self.config.get("idle_activity_rules", {}).get(key, [])))
+            txt.pack(padx=20, fill="x")
+            idle_text_vars[key] = txt
+
+        def _save():
+            # Basic validation before touching config — bail out on the first bad
+            # field rather than partially saving.
+            for path, var in entry_vars.items():
+                raw = var.get().strip()
+                if path[-1] in ("start", "end", "end_of_day_summary_time"):
+                    try:
+                        h, m = (int(x) for x in raw.split(":"))
+                        assert 0 <= h <= 23 and 0 <= m <= 59
+                    except Exception:
+                        messagebox.showerror("Invalid value", f"'{raw}' isn't a valid HH:MM time.", parent=dlg)
+                        return
+                elif path[-1] == "currency_symbol":
+                    if not raw:
+                        messagebox.showerror("Invalid value", "Currency symbol can't be empty.", parent=dlg)
+                        return
+                else:
+                    try:
+                        float(raw)
+                    except ValueError:
+                        messagebox.showerror("Invalid value", f"'{raw}' isn't a number.", parent=dlg)
+                        return
+
+            for path, var in entry_vars.items():
+                raw = var.get().strip()
+                node = self.config
+                for key in path[:-1]:
+                    node = node.setdefault(key, {})
+                if path[-1] in ("start", "end", "end_of_day_summary_time", "currency_symbol"):
+                    node[path[-1]] = raw
+                elif path[-1] in ("points_per_minute", "points_per_currency_unit"):
+                    node[path[-1]] = float(raw)
+                else:
+                    node[path[-1]] = int(float(raw))
+
+            rules = self.config.setdefault("activity_rules", {})
+            for key, txt in text_vars.items():
+                lines = [l.strip() for l in txt.get("1.0", "end").splitlines() if l.strip()]
+                rules[key] = lines
+
+            idle_rules = self.config.setdefault("idle_activity_rules", {})
+            for key, txt in idle_text_vars.items():
+                lines = [l.strip() for l in txt.get("1.0", "end").splitlines() if l.strip()]
+                idle_rules[key] = lines
+
+            self.save_config(self.config)
+
+            # ActivityTracker reads config once at construction — restart it so
+            # reminder/idle/keyword changes actually take effect immediately.
+            if self.tracker:
+                self.tracker.stop()
+                self.init_tracker()
+
+            self.render_tasks()
+            self._refresh_score_sidebar()
+            dlg.destroy()
+
+        btn_row = tk.Frame(dlg, bg=C["bg"], pady=12)
+        btn_row.pack(fill="x")
+        _dbtn = dict(bg=C["surface"], fg=C["text"], relief="flat",
+                     activebackground=C["border"], activeforeground=C["text"])
+        tk.Button(btn_row, text="Save", command=_save, width=12, **_dbtn).pack(side="left", padx=(20, 6))
+        tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left")
 
     # ── TickTick integration ─────────────────────────────────────────────────
 
@@ -1872,10 +2456,7 @@ class MentorApp:
             self.tt_status_var.set("TickTick: credentials saved — click 'Connect TickTick' to authorise")
             return
 
-        self.tt_status_var.set("TickTick: connected · loading tasks...")
-        self.tt_push_btn.config(state="normal")
-        self.tt_sync_btn.config(state="normal")
-        self._tt_fetch_async()
+        self._tt_mark_connected()
 
     def _on_ticktick_tokens_saved(self):
         """Called by TickTickClient.save_tokens after keyring write — just refresh UI."""
@@ -1888,30 +2469,119 @@ class MentorApp:
             tt.pop(key, None)
         self.save_config(self.config)
 
-    def _tt_fetch_async(self):
+    def _tt_mark_connected(self):
+        """Flip the sidebar button to its connected state and start background sync."""
+        self.tt_connect_btn.config(text="TickTick connected", state="disabled")
+        self.tt_status_var.set("TickTick: connected · loading tasks...")
+        self._tt_autosync_cycle()
+
+    def _tt_autosync_cycle(self):
+        """Push today's plan tasks and sync completions both ways, no buttons needed.
+        Reschedules itself every TT_AUTOSYNC_INTERVAL_MS while connected."""
+        if not self.ticktick or not self.ticktick.is_authorized:
+            return
+
         def _run():
             try:
-                pid = self.ticktick.get_or_create_project()
-                tasks = self.ticktick.get_project_tasks(pid)
-                self.root.after(0, lambda: self._tt_on_fetched(pid, tasks))
+                if not self.tt_project_id:
+                    self.tt_project_id = self.ticktick.get_or_create_project()
+
+                today_tasks = self.tasks_by_day.get(self.plan_day, [])
+                for task in today_tasks:
+                    task_text = task.get("task", "")
+                    tt_id, _ = self.get_tt_mapping(self.plan_day, task_text)
+                    if tt_id:
+                        continue
+                    try:
+                        result = self.ticktick.create_task(
+                            self.tt_project_id, task_text,
+                            content=task.get("detail", ""), due_date=date.today(),
+                        )
+                        self.save_tt_mapping(
+                            self.plan_day, task_text,
+                            result.get("id", ""), self.tt_project_id,
+                        )
+                    except Exception:
+                        pass
+
+                raw_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
+                tt_by_id = {t["id"]: t for t in raw_tasks}
+                cur = self.conn.cursor()
+                cur.execute(
+                    "SELECT plan_day, task_text, ticktick_task_id, ticktick_proj_id "
+                    "FROM ticktick_sync WHERE ticktick_task_id IS NOT NULL"
+                )
+                mappings = cur.fetchall()
+                now = datetime.now().isoformat(sep=" ", timespec="seconds")
+
+                for plan_day, task_text, tt_id, tt_pid in mappings:
+                    tt_task = tt_by_id.get(tt_id)
+                    plan_id = next(
+                        (p["id"] for p in self.plans
+                         if self.completions.get((p["id"], plan_day, task_text)) is not None),
+                        self.plans[0]["id"] if self.plans else "netherlands",
+                    )
+                    app_done = self.completions.get((plan_id, plan_day, task_text), False)
+                    # status 2 = completed in TickTick; missing from list also means completed
+                    tt_done = (tt_task is None) or (tt_task.get("status", 0) == 2)
+
+                    if app_done and not tt_done:
+                        try:
+                            self.ticktick.complete_task(tt_pid or self.tt_project_id, tt_id)
+                        except Exception:
+                            pass
+                    elif tt_done and not app_done:
+                        self.conn.execute(
+                            "INSERT INTO task_completions "
+                            "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) "
+                            "VALUES (?, ?, ?, 1, ?, ?) "
+                            "ON CONFLICT(plan_id, plan_day, task_text) DO UPDATE SET "
+                            "  completed=1, completed_at=excluded.completed_at, last_updated=excluded.last_updated",
+                            (plan_id, plan_day, task_text, now, now),
+                        )
+                        self.completions[(plan_id, plan_day, task_text)] = True
+
+                    self.conn.execute(
+                        "UPDATE ticktick_sync SET synced_at=? WHERE plan_day=? AND task_text=?",
+                        (now, plan_day, task_text),
+                    )
+                self.conn.commit()
+
+                # "My Tasks" shows personal tasks from every OTHER TickTick project —
+                # the plan's own project (tt_project_id) is just the app's mirror for
+                # pushed plan tasks and is handled above, not shown here.
+                personal_tasks = self.ticktick.get_all_tasks(exclude_project_id=self.tt_project_id)
+                self.root.after(0, lambda: self._tt_on_autosynced(personal_tasks))
             except Exception as exc:
-                self.root.after(0, lambda: self.tt_status_var.set(f"TickTick error: {exc}"))
+                # Same unbound-free-variable pitfall as _on_tt_toggle above —
+                # capture the string before the closure outlives the except block.
+                msg = str(exc)
+                self.root.after(0, lambda: self._tt_on_autosync_error(msg))
+
         threading.Thread(target=_run, daemon=True).start()
 
-    def _tt_on_fetched(self, project_id, tasks):
-        self.tt_project_id = project_id
+    def _tt_on_autosynced(self, tasks):
         self.tt_tasks = [t for t in tasks if t.get("status", 0) == 0]
         self.render_tasks()
         now = datetime.now().strftime("%H:%M")
-        self.tt_status_var.set(
-            f"TickTick: connected · {len(self.tt_tasks)} open task(s) · synced {now}"
-        )
+        self.tt_status_var.set(f"TickTick: connected · synced {now}")
+        self.root.after(TT_AUTOSYNC_INTERVAL_MS, self._tt_autosync_cycle)
+
+    def _tt_on_autosync_error(self, msg):
+        # Silent retry on the normal schedule — this runs in the background with no
+        # button to click, so a popup on every transient network hiccup would be
+        # more annoying than useful. Status is tracked internally for diagnosis.
+        self.tt_status_var.set(f"TickTick: sync error — {msg[:80]}")
+        self.root.after(TT_AUTOSYNC_INTERVAL_MS, self._tt_autosync_cycle)
 
     def on_connect_ticktick(self):
         if not self.ticktick.is_configured:
             if not self._show_ticktick_setup():
                 return
-        self.tt_status_var.set("TickTick: opening browser for authorisation...")
+        self.tt_status_var.set(
+            "TickTick: opening browser — if TickTick shows an error page there, "
+            "fix it on developer.ticktick.com and click Connect again"
+        )
         self.tt_connect_btn.config(state="disabled")
         self.ticktick.authorize(
             on_success=lambda: self.root.after(0, self._tt_on_authorized),
@@ -1995,6 +2665,18 @@ class MentorApp:
             if not cid or not sec:
                 messagebox.showerror("Missing fields", "Both fields are required.", parent=dlg)
                 return
+            # Catches a mis-paste into the masked secret field silently saving a
+            # near-empty value (e.g. leftover single character) with no visual sign,
+            # since show="*" makes short and long values easy to miscount at a glance.
+            if len(cid) < 8 or len(sec) < 8:
+                messagebox.showerror(
+                    "Value looks too short",
+                    "That Client ID or Secret looks too short to be valid "
+                    "(TickTick's are long alphanumeric strings). Double-check the "
+                    "paste — this field is masked, so a partial paste is easy to miss.",
+                    parent=dlg,
+                )
+                return
             self.config.setdefault("ticktick", {})
             self.config["ticktick"]["client_id"] = cid
             self.save_config(self.config)
@@ -2069,149 +2751,27 @@ class MentorApp:
         dlg.wait_window()
 
     def _tt_on_authorized(self):
-        self.tt_status_var.set("TickTick: authorized · loading tasks...")
-        self.tt_push_btn.config(state="normal")
-        self.tt_sync_btn.config(state="normal")
-        self._tt_fetch_async()
+        self._tt_mark_connected()
 
     def _tt_on_error(self, msg):
         if "redirect_uri" in msg.lower():
             self._show_redirect_uri_fix()
-        else:
-            messagebox.showerror("TickTick Error", msg, parent=self.root)
+            self.tt_status_var.set(f"TickTick: error — {msg[:80]}")
+            self.tt_connect_btn.config(state="normal")
+            return
+        # Any other failure (bad/rotated client_id or secret, expired code, etc.)
+        # is most often fixed by re-entering credentials — but is_configured only
+        # checks that *some* client_id/secret are saved, not that they still work,
+        # so on_connect_ticktick() would otherwise keep silently retrying the same
+        # stale pair with no way back into the setup dialog to overwrite them.
+        messagebox.showerror("TickTick Error", msg, parent=self.root)
+        if self._show_ticktick_setup():
+            # Credentials were just saved — actually retry the connection instead
+            # of leaving the dialog's "Save & Connect" label as an empty promise.
+            self.on_connect_ticktick()
+            return
         self.tt_status_var.set(f"TickTick: error — {msg[:80]}")
         self.tt_connect_btn.config(state="normal")
-
-    def on_push_to_ticktick(self):
-        today_tasks = self.tasks_by_day.get(self.plan_day, [])
-        if not today_tasks:
-            messagebox.showinfo("Push to TickTick", "No plan tasks for today.", parent=self.root)
-            return
-        if not self.tt_project_id:
-            self.tt_status_var.set("TickTick: fetching project...")
-            self._tt_fetch_async()
-            return
-
-        self.tt_push_btn.config(state="disabled")
-        self.tt_status_var.set("TickTick: pushing today's plan tasks...")
-
-        def _run():
-            pushed, skipped = 0, 0
-            for task in today_tasks:
-                task_text = task.get("task", "")
-                tt_id, _ = self.get_tt_mapping(self.plan_day, task_text)
-                if tt_id:
-                    skipped += 1
-                    continue
-                try:
-                    result = self.ticktick.create_task(
-                        self.tt_project_id,
-                        task_text,
-                        content=task.get("detail", ""),
-                        due_date=date.today(),
-                    )
-                    self.save_tt_mapping(
-                        self.plan_day, task_text,
-                        result.get("id", ""), self.tt_project_id,
-                    )
-                    pushed += 1
-                except Exception:
-                    pass
-            self.root.after(0, lambda: self._tt_on_pushed(pushed, skipped))
-
-        threading.Thread(target=_run, daemon=True).start()
-
-    def _tt_on_pushed(self, pushed, skipped):
-        self.tt_push_btn.config(state="normal")
-        now = datetime.now().strftime("%H:%M")
-        self.tt_status_var.set(
-            f"TickTick: pushed {pushed} new · {skipped} already existed · {now}"
-        )
-        self._tt_fetch_async()
-
-    def on_sync_ticktick(self):
-        if not self.tt_project_id:
-            self._tt_fetch_async()
-            return
-        self.tt_sync_btn.config(state="disabled")
-        self.tt_status_var.set("TickTick: syncing completions...")
-
-        def _run():
-            try:
-                raw_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
-                tt_by_id = {t["id"]: t for t in raw_tasks}
-
-                cur = self.conn.cursor()
-                cur.execute(
-                    "SELECT plan_day, task_text, ticktick_task_id, ticktick_proj_id "
-                    "FROM ticktick_sync WHERE ticktick_task_id IS NOT NULL"
-                )
-                mappings = cur.fetchall()
-
-                to_tt, to_app = [], []
-                now = datetime.now().isoformat(sep=" ", timespec="seconds")
-
-                for plan_day, task_text, tt_id, tt_pid in mappings:
-                    tt_task = tt_by_id.get(tt_id)
-                    # Resolve which plan owns this (plan_day, task_text) pair
-                    plan_id = next(
-                        (p["id"] for p in self.plans
-                         if self.completions.get((p["id"], plan_day, task_text)) is not None),
-                        self.plans[0]["id"] if self.plans else "netherlands",
-                    )
-                    app_done = self.completions.get((plan_id, plan_day, task_text), False)
-                    # status 2 = completed in TickTick; missing from list also means completed
-                    tt_done = (tt_task is None) or (tt_task.get("status", 0) == 2)
-
-                    if app_done and not tt_done:
-                        to_tt.append((tt_pid or self.tt_project_id, tt_id))
-                    elif tt_done and not app_done:
-                        to_app.append((plan_id, plan_day, task_text, now))
-
-                    self.conn.execute(
-                        "UPDATE ticktick_sync SET synced_at=? WHERE plan_day=? AND task_text=?",
-                        (now, plan_day, task_text),
-                    )
-
-                for pid, tid in to_tt:
-                    try:
-                        self.ticktick.complete_task(pid, tid)
-                    except Exception:
-                        pass
-
-                for plan_id, plan_day, task_text, ts in to_app:
-                    self.conn.execute(
-                        "INSERT INTO task_completions "
-                        "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) "
-                        "VALUES (?, ?, ?, 1, ?, ?) "
-                        "ON CONFLICT(plan_id, plan_day, task_text) DO UPDATE SET "
-                        "  completed=1, completed_at=excluded.completed_at, last_updated=excluded.last_updated",
-                        (plan_id, plan_day, task_text, ts, ts),
-                    )
-                    self.completions[(plan_id, plan_day, task_text)] = True
-
-                self.conn.commit()
-                new_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
-                self.root.after(
-                    0, lambda: self._tt_on_synced(len(to_tt), len(to_app), new_tasks)
-                )
-            except Exception as exc:
-                self.root.after(0, lambda: self._tt_on_error(f"Sync failed: {exc}"))
-
-        threading.Thread(target=_run, daemon=True).start()
-
-    def _tt_on_synced(self, pushed_to_tt, pushed_to_app, new_tasks):
-        self.tt_tasks = [t for t in new_tasks if t.get("status", 0) == 0]
-        self.tt_sync_btn.config(state="normal")
-        now = datetime.now().strftime("%H:%M")
-        parts = []
-        if pushed_to_tt:
-            parts.append(f"{pushed_to_tt} sent → TickTick")
-        if pushed_to_app:
-            parts.append(f"{pushed_to_app} pulled → app")
-        summary = " · ".join(parts) if parts else "already in sync"
-        self.tt_status_var.set(f"TickTick: synced {now} · {summary}")
-        self.render_tasks()
 
     # ── status bar ───────────────────────────────────────────────────────────
 
@@ -2282,49 +2842,137 @@ class MentorApp:
 
     # ── data queries ─────────────────────────────────────────────────────────
 
-    def _week_stats(self):
-        stats = []
-        for i in range(6, -1, -1):
-            d = date.today() - timedelta(days=i)
-            cur = self.conn.cursor()
-
-            # aggregate tasks across all plans for this calendar date
-            tasks_total = 0
-            tasks_done  = 0
-            for plan in self.plans:
-                pid = plan["id"]
-                try:
-                    start = datetime.strptime(plan["start_date"], "%Y-%m-%d").date()
-                    day_num = (d - start).days + 1
-                except Exception:
-                    continue
-                by_day = self._tasks_by_day_for(plan)
-                tasks_total += len(by_day.get(day_num, []))
-                cur.execute(
-                    "SELECT COUNT(*) FROM task_completions WHERE plan_id=? AND plan_day=? AND completed=1",
-                    (pid, day_num)
-                )
-                tasks_done += cur.fetchone()[0]
-
-            # time from diary sessions (same source as the diary bar in the report)
+    def _day_task_counts(self, d):
+        """(tasks_total, tasks_done) across all plans for a given calendar date."""
+        tasks_total = 0
+        tasks_done  = 0
+        cur = self.conn.cursor()
+        for plan in self.plans:
+            pid = plan["id"]
+            try:
+                start = datetime.strptime(plan["start_date"], "%Y-%m-%d").date()
+                day_num = (d - start).days + 1
+            except Exception:
+                continue
+            by_day = self._tasks_by_day_for(plan)
+            tasks_total += len(by_day.get(day_num, []))
             cur.execute(
-                "SELECT category, SUM(duration_min) FROM time_diary "
-                "WHERE date=? GROUP BY category",
-                (d.isoformat(),)
+                "SELECT COUNT(*) FROM task_completions WHERE plan_id=? AND plan_day=? AND completed=1",
+                (pid, day_num)
             )
-            act = {r[0]: r[1] for r in cur.fetchall()}
-            on_min  = act.get("on_plan",  0)
-            off_min = act.get("off_plan", 0)
+            tasks_done += cur.fetchone()[0]
+        return tasks_total, tasks_done
 
-            score = (tasks_done * 10
-                     - max(0, tasks_total - tasks_done) * 5
-                     + int(on_min  / 60 * 3)
-                     - int(off_min / 60 * 2))
+    def _day_diary_minutes(self, d):
+        """(on_plan_minutes, off_plan_minutes) from time_diary for a given calendar date.
+        Deliberately excludes the 'paid' category — time bought with score isn't
+        counted toward the off-plan penalty."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT category, SUM(duration_min) FROM time_diary "
+            "WHERE date=? GROUP BY category",
+            (d.isoformat(),)
+        )
+        act = {r[0]: r[1] for r in cur.fetchall()}
+        return act.get("on_plan", 0), act.get("off_plan", 0)
 
+    def _day_score(self, tasks_done, tasks_total, on_min, off_min, streak=0):
+        """Score formula, reading rates from config.json's 'scoring' block (falling
+        back to the original hardcoded defaults if a key is missing). streak is the
+        number of consecutive fully-completed prior days — only meaningful for
+        today's score, callers pass 0 for past days."""
+        sc = self.config.get("scoring", {})
+        task_pt    = sc.get("task_completed", 10)
+        overdue_pt = sc.get("task_overdue_penalty", -5)
+        on_hr_pt   = sc.get("on_plan_hour", 3)
+        off_hr_pt  = sc.get("off_plan_hour", -2)
+        streak_pt  = sc.get("streak_bonus_per_day", 5)
+        return (
+            tasks_done * task_pt
+            + max(0, tasks_total - tasks_done) * overdue_pt
+            + int(on_min  / 60 * on_hr_pt)
+            + int(off_min / 60 * off_hr_pt)
+            + streak_pt * streak
+        )
+
+    def _current_streak(self):
+        """Consecutive fully-completed days immediately before today, most recent
+        first, capped at 7 (matches the week-stats window)."""
+        streak = 0
+        for i in range(1, 8):
+            d = date.today() - timedelta(days=i)
+            tasks_total, tasks_done = self._day_task_counts(d)
+            if tasks_total > 0 and tasks_done == tasks_total:
+                streak += 1
+            else:
+                break
+        return streak
+
+    def _week_stats(self):
+        stats  = []
+        streak = self._current_streak()
+        today  = date.today()
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            tasks_total, tasks_done = self._day_task_counts(d)
+            on_min, off_min = self._day_diary_minutes(d)
+            score = self._day_score(tasks_done, tasks_total, on_min, off_min,
+                                     streak=streak if d == today else 0)
             stats.append(dict(date=d,
                               tasks_done=tasks_done, tasks_total=tasks_total,
                               on_min=on_min, off_min=off_min, score=score))
         return stats
+
+    # ── score ledger (spendable balance) ────────────────────────────────────
+
+    def _score_balance(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT COALESCE(SUM(delta), 0) FROM score_ledger")
+        return cur.fetchone()[0]
+
+    def _score_add_ledger(self, delta, reason, detail=None, for_date=None):
+        now = datetime.now()
+        self.conn.execute(
+            "INSERT INTO score_ledger (ts, date, delta, reason, detail) VALUES (?, ?, ?, ?, ?)",
+            (now.isoformat(sep=" ", timespec="seconds"),
+             (for_date or now.date()).isoformat(),
+             delta, reason, detail),
+        )
+        self.conn.commit()
+
+    def _score_rates(self):
+        s = self.config.get("score", {})
+        return (
+            s.get("points_per_minute", 1.0),
+            s.get("points_per_currency_unit", 10.0),
+            s.get("currency_symbol", "€"),
+        )
+
+    def _credit_day_score_if_missing(self, d):
+        """Insert a 'daily_score' ledger row for date d if one doesn't already
+        exist. Returns the credited amount, or None if already credited."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM score_ledger WHERE reason='daily_score' AND date=?",
+            (d.isoformat(),),
+        )
+        if cur.fetchone():
+            return None
+        tasks_total, tasks_done = self._day_task_counts(d)
+        on_min, off_min = self._day_diary_minutes(d)
+        streak = self._current_streak() if d == date.today() else 0
+        score = self._day_score(tasks_done, tasks_total, on_min, off_min, streak=streak)
+        self._score_add_ledger(score, "daily_score", detail=f"day score {score}", for_date=d)
+        return score
+
+    def _ensure_score_caught_up(self):
+        """Startup catch-up: credit any of the last 7 days (bounded — same window
+        as _week_stats) that ended without the app running at EOD to record it.
+        Never touches today (not over yet) or anything older than 7 days, so this
+        can't retroactively credit the whole plan history."""
+        today = date.today()
+        for i in range(7, 0, -1):
+            self._credit_day_score_if_missing(today - timedelta(days=i))
 
     def _waste_patterns(self, period="week"):
         _cutoffs = {
@@ -2749,12 +3397,14 @@ class MentorApp:
             "off_plan": C["accent_red"],
             "neutral":  C["accent_blue"],
             "idle":     "#ff9f0a",
+            "paid":     "#bf5af2",
         }
         cat_labels = {
             "on_plan":  "On-plan",
             "off_plan": "Off-plan",
             "neutral":  "Neutral",
             "idle":     "Away / Idle",
+            "paid":     "Paid (entertainment)",
         }
 
         breakdown = tk.Frame(self.task_frame, bg=C["surface"])
@@ -2772,7 +3422,7 @@ class MentorApp:
         bar_canvas.update_idletasks()
         bw = bar_canvas.winfo_width() or 500
         x = 0
-        for cat in ("on_plan", "off_plan", "neutral", "idle"):
+        for cat in ("on_plan", "off_plan", "paid", "neutral", "idle"):
             if cat in totals:
                 w = int(bw * totals[cat] / DIARY_MIN)
                 if w > 0:
@@ -2783,7 +3433,7 @@ class MentorApp:
         # Legend
         leg = tk.Frame(inner, bg=C["surface"])
         leg.pack(fill="x")
-        for cat in ("on_plan", "off_plan", "neutral", "idle"):
+        for cat in ("on_plan", "off_plan", "paid", "neutral", "idle"):
             if cat not in totals:
                 continue
             mins = totals[cat]
@@ -2828,9 +3478,13 @@ class MentorApp:
             dot.create_oval(1, 1, 7, 7, fill=cat_colors.get(cat, C["text_muted"]), outline="")
             dot.pack(side="left", padx=(4, 8))
 
-            if cat == "idle" and description:
+            if description:
+                # Idle-answer text — shown for any category, since a description
+                # matched against the idle library can reclassify it away from
+                # 'idle' but "window" is still just the literal string "idle".
                 tk.Label(row_f, text=f'"{description}"',
-                         font=("Segoe UI", 10, "italic"), fg="#ff9f0a",
+                         font=("Segoe UI", 10, "italic"),
+                         fg=cat_colors.get(cat, "#ff9f0a"),
                          bg=C["bg"]).pack(side="left")
             else:
                 app = self._extract_app_name(window, 55)
@@ -2882,7 +3536,7 @@ class MentorApp:
         _lbl("Duration (min)", 2); dur_v   = _entry(str(dur0), 2, width=6)
         _lbl("Category",      3)
         cat_v = tk.StringVar(value=cat0)
-        cat_dd = tk.OptionMenu(outer, cat_v, "on_plan", "off_plan", "neutral", "idle")
+        cat_dd = tk.OptionMenu(outer, cat_v, "on_plan", "off_plan", "paid", "neutral", "idle")
         cat_dd.configure(bg=C["surface"], fg=C["text"], font=("Segoe UI", 10),
                          relief="flat", highlightthickness=0)
         cat_dd.grid(row=3, column=1, sticky="ew", pady=4, padx=(12, 0))
@@ -3012,19 +3666,21 @@ class MentorApp:
             "off_plan": "#ff453a",
             "neutral":  "#0a84ff",
             "idle":     "#ff9f0a",
+            "paid":     "#bf5af2",
         }
         cat_labels_html = {
             "on_plan":  "On-plan",
             "off_plan": "Off-plan",
             "neutral":  "Neutral",
             "idle":     "Away / Idle",
+            "paid":     "Paid (entertainment)",
         }
         diary_rows = ""
         for start, end, dur, cat, window, description in diary_entries:
             col = cat_colors_hex.get(cat, "#8e8e93")
             lbl = cat_labels_html.get(cat, cat)
-            if cat == "idle" and description:
-                content = f'<em style="color:#ff9f0a">"{_html.escape(description)}"</em>'
+            if description:
+                content = f'<em style="color:{col}">"{_html.escape(description)}"</em>'
             else:
                 content = _html.escape(self._extract_app_name(window, 70))
             diary_rows += (
@@ -3161,6 +3817,11 @@ class MentorApp:
         dismissed = self._count_dismissed_idle_today()
         if dismissed:
             body += f"\n\n⏱ {dismissed} idle session(s) were dismissed — open the report to fill them in."
+
+        credited = self._credit_day_score_if_missing(date.today())
+        if credited is not None:
+            body += f"\n\n+{credited} score today · balance {self._score_balance()} pts"
+        self._refresh_score_sidebar()
 
         self._notify(f"{APP_NAME} — Daily Summary", body)
         if self.root.state() != "withdrawn":
@@ -3337,11 +3998,18 @@ def _acquire_instance_mutex():
     Returns the handle if this is the first instance.
     If another instance already holds the mutex, bring its window to the
     foreground and return None so the caller can exit immediately.
+
+    Uses use_last_error=True + ctypes.get_last_error(): the plain
+    `windll.kernel32.GetLastError()` call is unreliable here because ctypes
+    doesn't guarantee the real Win32 last-error code survives from one
+    foreign call to the next unless you opt into ctypes' own tracked copy —
+    without it this check could silently read a stale/zero error code and
+    let a second instance through.
     """
-    k32 = _ctypes.windll.kernel32
-    u32 = _ctypes.windll.user32
+    k32 = _ctypes.WinDLL("kernel32", use_last_error=True)
+    u32 = _ctypes.WinDLL("user32", use_last_error=True)
     handle = k32.CreateMutexW(None, True, _MUTEX_NAME)
-    if k32.GetLastError() == 183:          # ERROR_ALREADY_EXISTS
+    if _ctypes.get_last_error() == 183:    # ERROR_ALREADY_EXISTS
         hwnd = u32.FindWindowW(None, APP_NAME)
         if hwnd:
             u32.ShowWindow(hwnd, 9)        # SW_RESTORE (un-minimise)
