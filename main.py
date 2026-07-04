@@ -1526,10 +1526,32 @@ class MentorApp:
         dlg.grab_set()
 
         # Header
+        hdr_row = tk.Frame(dlg, bg=C["bg"])
+        hdr_row.pack(fill="x")
         hdr_var = tk.StringVar()
-        tk.Label(dlg, textvariable=hdr_var,
+        tk.Label(hdr_row, textvariable=hdr_var,
                  font=("Segoe UI", 12, "bold"), fg=C["text"], bg=C["bg"],
-                 padx=20, pady=14).pack(anchor="w")
+                 padx=20, pady=14).pack(side="left")
+
+        def _edit_start_date():
+            try:
+                current = datetime.strptime(plan["start_date"], "%Y-%m-%d").date()
+            except Exception:
+                current = date.today()
+            picked = self._pick_date_dialog(f"Start date for '{plan['name']}':", initial_date=current)
+            if picked is None:
+                return
+            plan["start_date"] = picked.isoformat()
+            self._save_plan(plan)
+            self.render_tasks()
+            self.tick_status()
+            self._rebuild_plans_sidebar()
+            _render_days()
+
+        tk.Button(hdr_row, text="✏️ Edit start date", font=("Segoe UI", 8),
+                  bg=C["surface"], fg=C["text_dim"], relief="flat", padx=8, pady=3,
+                  cursor="hand2", command=_edit_start_date).pack(side="right", padx=20)
+
         tk.Label(dlg,
                  text='Click "Do today" on any future task to pull it to today.\n'
                       'Click "Day off" to push a day\'s tasks (and everything after) forward by one day.',
@@ -1702,15 +1724,19 @@ class MentorApp:
         self.render_tasks()
         self._rebuild_plans_sidebar()
 
-    def _pick_date_dialog(self, title, min_date=None):
+    def _pick_date_dialog(self, title, min_date=None, initial_date=None):
         """Modal month-grid calendar picker. Returns a date, or None if cancelled.
-        Days before min_date (if given) are shown disabled."""
+        Days before min_date (if given) are shown disabled. If initial_date is
+        given, the calendar opens on that month and highlights that date
+        (e.g. an existing value being edited) distinctly from today."""
         import calendar as _calendar_mod
 
         result = {"date": None}
         today = date.today()
         view = {"year": today.year, "month": today.month}
-        if min_date and (min_date.year, min_date.month) > (today.year, today.month):
+        if initial_date:
+            view["year"], view["month"] = initial_date.year, initial_date.month
+        elif min_date and (min_date.year, min_date.month) > (today.year, today.month):
             view["year"], view["month"] = min_date.year, min_date.month
 
         dlg = tk.Toplevel(self.root)
@@ -1751,10 +1777,12 @@ class MentorApp:
                         continue
                     d = date(y, m, day_num)
                     disabled = min_date is not None and d < min_date
+                    is_current_value = initial_date is not None and d == initial_date
+                    bg = C["accent_blue"] if is_current_value else (C["surface"] if d == today else C["bg"])
+                    fg = "white" if is_current_value else (C["text_muted"] if disabled else C["text"])
                     tk.Button(
                         grid_frame, text=str(day_num), font=("Segoe UI", 9), width=4,
-                        fg=C["text_muted"] if disabled else C["text"],
-                        bg=C["surface"] if d == today else C["bg"],
+                        fg=fg, bg=bg,
                         relief="flat", activebackground=C["accent_blue"], activeforeground="white",
                         state="disabled" if disabled else "normal",
                         command=None if disabled else (lambda dd=d: _pick(dd)),
