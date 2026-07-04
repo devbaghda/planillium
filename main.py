@@ -346,6 +346,20 @@ class MentorApp:
         )
         self.conn.commit()
 
+    def _days_off_for(self, plan_id):
+        cur = self.conn.cursor()
+        cur.execute("SELECT day FROM plan_days_off WHERE plan_id=?", (plan_id,))
+        return {r[0] for r in cur.fetchall()}
+
+    def _mark_day_off_record(self, plan_id, day):
+        now = datetime.now().isoformat(sep=" ", timespec="seconds")
+        self.conn.execute(
+            "INSERT INTO plan_days_off (plan_id, day, marked_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(plan_id, day) DO UPDATE SET marked_at=excluded.marked_at",
+            (plan_id, day, now),
+        )
+        self.conn.commit()
+
     def _tasks_by_day_for(self, plan):
         overrides = self._load_overrides(plan["id"])
         by_day: dict = {}
@@ -704,6 +718,14 @@ class MentorApp:
             ")"
         )
         self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS plan_days_off ("
+            "  plan_id   TEXT    NOT NULL,"
+            "  day       INTEGER NOT NULL,"
+            "  marked_at TEXT,"
+            "  PRIMARY KEY (plan_id, day)"
+            ")"
+        )
+        self.conn.execute(
             "CREATE TABLE IF NOT EXISTS score_ledger ("
             "  id     INTEGER PRIMARY KEY AUTOINCREMENT,"
             "  ts     TEXT    NOT NULL,"
@@ -735,8 +757,12 @@ class MentorApp:
         self.conn.commit()
         self.completions[(plan_id, plan_day, task_text)] = is_done
 
-    def get_tt_mapping(self, plan_day, task_text):
-        cur = self.conn.cursor()
+    def get_tt_mapping(self, plan_day, task_text, conn=None):
+        # Accepts an explicit connection because _tt_autosync_cycle calls this
+        # from a background thread — self.conn is bound to the main thread
+        # (sqlite3's default check_same_thread) and using it here would raise.
+        conn = conn or self.conn
+        cur = conn.cursor()
         cur.execute(
             "SELECT ticktick_task_id, ticktick_proj_id FROM ticktick_sync "
             "WHERE plan_day=? AND task_text=?",
@@ -745,9 +771,10 @@ class MentorApp:
         row = cur.fetchone()
         return (row[0], row[1]) if row else (None, None)
 
-    def save_tt_mapping(self, plan_day, task_text, task_id, proj_id):
+    def save_tt_mapping(self, plan_day, task_text, task_id, proj_id, conn=None):
+        conn = conn or self.conn
         now = datetime.now().isoformat(sep=" ", timespec="seconds")
-        self.conn.execute(
+        conn.execute(
             "INSERT INTO ticktick_sync "
             "  (plan_day, task_text, ticktick_task_id, ticktick_proj_id, pushed_at, synced_at) "
             "VALUES (?, ?, ?, ?, ?, ?) "
@@ -758,7 +785,7 @@ class MentorApp:
             "  synced_at=excluded.synced_at",
             (plan_day, task_text, task_id, proj_id, now, now),
         )
-        self.conn.commit()
+        conn.commit()
 
     # ── utils ────────────────────────────────────────────────────────────────
 
@@ -1117,29 +1144,32 @@ class MentorApp:
             for child in inner.winfo_children():
                 child.destroy()
 
-            pday   = self._plan_day_for(plan)
-            by_day = self._tasks_by_day_for(plan)
-            total  = self._total_days_for(plan)
+            pday      = self._plan_day_for(plan)
+            by_day    = self._tasks_by_day_for(plan)
+            total     = self._total_days_for(plan)
+            days_off  = self._days_off_for(plan_id)
             hdr_var.set(f"{plan['name']}  ·  Day {pday} of {total}")
 
-            days = sorted(set(by_day.keys()) | {pday})
+            days = sorted(set(by_day.keys()) | {pday} | days_off)
             for day in days:
                 tasks = by_day.get(day, [])
-                if not tasks:
+                is_off = day in days_off
+                if not tasks and not is_off:
                     continue
                 is_today = (day == pday)
                 is_past  = (day < pday)
 
                 hdr_bg = C["surface"] if is_today else C["bg"]
                 hdr_fg = plan.get("color", C["accent_blue"]) if is_today else C["text_dim"]
-                label  = f"Day {day}  {'← TODAY' if is_today else ('(past)' if is_past else '')}"
+                suffix = " · DAY OFF" if is_off else (" ← TODAY" if is_today else (" (past)" if is_past else ""))
+                label  = f"Day {day}{suffix}"
 
                 hdr_f = tk.Frame(inner, bg=hdr_bg, padx=16, pady=6)
                 hdr_f.pack(fill="x", pady=(8, 0))
                 tk.Label(hdr_f, text=label, font=("Segoe UI", 9, "bold"),
-                         fg=hdr_fg, bg=hdr_bg).pack(side="left")
+                         fg=("#bf5af2" if is_off else hdr_fg), bg=hdr_bg).pack(side="left")
 
-                if not is_past:
+                if not is_past and not is_off:
                     tk.Button(
                         hdr_f, text="Day off",
                         font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
@@ -1246,6 +1276,7 @@ class MentorApp:
                 val = self.completions.pop(old_key)
                 self.completions[new_key] = val
 
+        self._mark_day_off_record(plan_id, day)
         self.render_tasks()
         self._rebuild_plans_sidebar()
 
@@ -2536,6 +2567,15 @@ class MentorApp:
             return
 
         def _run():
+            # This whole cycle runs on a background thread every 5 minutes, so it
+            # needs its own SQLite connection — self.conn is bound to the main
+            # thread (sqlite3's default check_same_thread=True) and touching it
+            # here raises sqlite3.ProgrammingError on first use. That exception
+            # was previously swallowed by the except-block below and only ever
+            # surfaced as a status-bar string, so autosync had been silently
+            # failing on every single cycle (push AND pull) since check_same_
+            # thread=False was removed from self.conn in the reliability audit.
+            tt_conn = sqlite3.connect(DB_PATH)
             try:
                 if not self.tt_project_id:
                     self.tt_project_id = self.ticktick.get_or_create_project()
@@ -2543,7 +2583,7 @@ class MentorApp:
                 today_tasks = self.tasks_by_day.get(self.plan_day, [])
                 for task in today_tasks:
                     task_text = task.get("task", "")
-                    tt_id, _ = self.get_tt_mapping(self.plan_day, task_text)
+                    tt_id, _ = self.get_tt_mapping(self.plan_day, task_text, conn=tt_conn)
                     if tt_id:
                         continue
                     try:
@@ -2554,13 +2594,14 @@ class MentorApp:
                         self.save_tt_mapping(
                             self.plan_day, task_text,
                             result.get("id", ""), self.tt_project_id,
+                            conn=tt_conn,
                         )
                     except Exception:
                         pass
 
                 raw_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
                 tt_by_id = {t["id"]: t for t in raw_tasks}
-                cur = self.conn.cursor()
+                cur = tt_conn.cursor()
                 cur.execute(
                     "SELECT plan_day, task_text, ticktick_task_id, ticktick_proj_id "
                     "FROM ticktick_sync WHERE ticktick_task_id IS NOT NULL"
@@ -2585,7 +2626,7 @@ class MentorApp:
                         except Exception:
                             pass
                     elif tt_done and not app_done:
-                        self.conn.execute(
+                        tt_conn.execute(
                             "INSERT INTO task_completions "
                             "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) "
                             "VALUES (?, ?, ?, 1, ?, ?) "
@@ -2595,11 +2636,11 @@ class MentorApp:
                         )
                         self.completions[(plan_id, plan_day, task_text)] = True
 
-                    self.conn.execute(
+                    tt_conn.execute(
                         "UPDATE ticktick_sync SET synced_at=? WHERE plan_day=? AND task_text=?",
                         (now, plan_day, task_text),
                     )
-                self.conn.commit()
+                tt_conn.commit()
 
                 # "My Tasks" shows personal tasks from every OTHER TickTick project —
                 # the plan's own project (tt_project_id) is just the app's mirror for
@@ -2611,6 +2652,8 @@ class MentorApp:
                 # capture the string before the closure outlives the except block.
                 msg = str(exc)
                 self.root.after(0, lambda: self._tt_on_autosync_error(msg))
+            finally:
+                tt_conn.close()
 
         threading.Thread(target=_run, daemon=True).start()
 

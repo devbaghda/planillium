@@ -206,7 +206,40 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-04 (second pass same day)
+- Last session: 2026-07-04 (third pass same day)
+- What was built:
+  - **Root-caused why TickTick never actually synced.** Every `_tt_autosync_
+    cycle` run (push + pull + completion sync, every 5 min) crashed on its very
+    first `self.conn` access — `get_tt_mapping`/`save_tt_mapping`/raw SQL calls
+    all used the *main-thread* connection from inside the background autosync
+    thread, raising `sqlite3.ProgrammingError: SQLite objects created in a
+    thread can only be used in that same thread`. This has been broken since
+    the reliability audit removed `check_same_thread=False` from `self.conn`
+    (correctly, for the main thread) without noticing autosync also runs off-
+    thread. The exception was swallowed by `_run()`'s own except-block and only
+    ever surfaced as a sidebar status string nobody was watching — so this was
+    the *real* reason "My Tasks" was empty; the earlier same-day fix (querying
+    every project instead of just the plan's own) was correct but never got a
+    chance to run because the push loop died before reaching it. Fixed by
+    giving `_tt_autosync_cycle` its own `sqlite3.connect(DB_PATH)` inside the
+    thread (same pattern as the tracker's poll thread from the original audit)
+    and adding an optional `conn=` param to `get_tt_mapping`/`save_tt_mapping`.
+    Verified live end-to-end, unmocked: the real threaded autosync now
+    completes ("TickTick: connected · synced HH:MM"), pulled 181 open personal
+    tasks, and — as a real, correct side effect of finally working — pushed one
+    genuinely new task ("Rewrite all job experience bullets") to the user's real
+    "Netherlands Plan" TickTick project during the test. Flagged to the user since
+    it'll appear in his TickTick app without him having clicked anything.
+  - **Day-off is now visible.** New `plan_days_off` table (`plan_id`, `day`)
+    written by `_mark_day_off`; Schedule dialog's day list now includes marked-
+    off days even though they have zero tasks, rendered as "Day N · DAY OFF" in
+    purple, with the "Day off" button hidden for days already marked (can't
+    double-apply). Previously the day just vanished from the dialog once its
+    tasks were shifted away, with nothing indicating it had been marked off.
+  - Both re-verified with the existing task-edit/day-off/TickTick and reschedule/
+    overdue-accrual test harnesses from earlier today — all 40 checks across
+    three isolated-copy runs still pass, nothing regressed.
+- Previous session: 2026-07-04 (second pass same day)
 - What was built:
   - **Overdue tasks now cost score every day they stay undone, and can be
     rescheduled to a specific date.** Each overdue task's row in the main Today
