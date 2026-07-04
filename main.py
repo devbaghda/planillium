@@ -1272,6 +1272,90 @@ class MentorApp:
         self.render_tasks()
         self._rebuild_plans_sidebar()
 
+    def _pick_date_dialog(self, title, min_date=None):
+        """Modal month-grid calendar picker. Returns a date, or None if cancelled.
+        Days before min_date (if given) are shown disabled."""
+        import calendar as _calendar_mod
+
+        result = {"date": None}
+        today = date.today()
+        view = {"year": today.year, "month": today.month}
+        if min_date and (min_date.year, min_date.month) > (today.year, today.month):
+            view["year"], view["month"] = min_date.year, min_date.month
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title)
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        tk.Label(dlg, text=title, font=("Segoe UI", 10, "bold"),
+                 fg=C["text"], bg=C["bg"], wraplength=260,
+                 justify="left").pack(padx=16, pady=(14, 6), anchor="w")
+
+        hdr = tk.Frame(dlg, bg=C["bg"], padx=16)
+        hdr.pack(fill="x")
+        month_var = tk.StringVar()
+
+        grid_frame = tk.Frame(dlg, bg=C["bg"], padx=16)
+        grid_frame.pack(pady=(6, 4))
+
+        def _pick(d):
+            result["date"] = d
+            dlg.destroy()
+
+        def _render_month():
+            for w in grid_frame.winfo_children():
+                w.destroy()
+            y, m = view["year"], view["month"]
+            month_var.set(f"{_calendar_mod.month_name[m]} {y}")
+
+            for i, wd in enumerate(("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")):
+                tk.Label(grid_frame, text=wd, font=("Segoe UI", 8, "bold"),
+                         fg=C["text_muted"], bg=C["bg"], width=4).grid(row=0, column=i, pady=(0, 4))
+
+            for r, week in enumerate(_calendar_mod.Calendar(firstweekday=0).monthdayscalendar(y, m), start=1):
+                for c, day_num in enumerate(week):
+                    if day_num == 0:
+                        tk.Label(grid_frame, text="", bg=C["bg"], width=4).grid(row=r, column=c, pady=1, padx=1)
+                        continue
+                    d = date(y, m, day_num)
+                    disabled = min_date is not None and d < min_date
+                    tk.Button(
+                        grid_frame, text=str(day_num), font=("Segoe UI", 9), width=4,
+                        fg=C["text_muted"] if disabled else C["text"],
+                        bg=C["surface"] if d == today else C["bg"],
+                        relief="flat", activebackground=C["accent_blue"], activeforeground="white",
+                        state="disabled" if disabled else "normal",
+                        command=None if disabled else (lambda dd=d: _pick(dd)),
+                    ).grid(row=r, column=c, pady=1, padx=1)
+
+        def _shift_month(delta):
+            m = view["month"] + delta
+            y = view["year"]
+            if m < 1:
+                m, y = 12, y - 1
+            elif m > 12:
+                m, y = 1, y + 1
+            view["month"], view["year"] = m, y
+            _render_month()
+
+        tk.Button(hdr, text="<", font=("Segoe UI", 10), width=3, relief="flat",
+                  bg=C["surface"], fg=C["text"], command=lambda: _shift_month(-1)).pack(side="left")
+        tk.Label(hdr, textvariable=month_var, font=("Segoe UI", 11, "bold"),
+                 fg=C["text"], bg=C["bg"], width=16, anchor="center").pack(side="left", expand=True)
+        tk.Button(hdr, text=">", font=("Segoe UI", 10), width=3, relief="flat",
+                  bg=C["surface"], fg=C["text"], command=lambda: _shift_month(1)).pack(side="left")
+
+        _render_month()
+
+        tk.Button(dlg, text="Cancel", font=("Segoe UI", 9), relief="flat",
+                  bg=C["surface"], fg=C["text"], padx=12,
+                  command=dlg.destroy).pack(pady=(4, 14))
+
+        dlg.wait_window()
+        return result["date"]
+
     def _reschedule_task_dialog(self, task, plan_id):
         """Pick a specific future date for one overdue task. Unlike 'Day off' or
         'Do today', this moves only this task and doesn't shift anything else —
@@ -1288,25 +1372,12 @@ class MentorApp:
         except Exception:
             return
         pday = self._plan_day_for(plan)
+        min_date = start + timedelta(days=pday)  # tomorrow (day pday+1)
 
-        while True:
-            answer = simpledialog.askstring(
-                APP_NAME,
-                f"Reschedule '{task_text}' to (DD.MM.YYYY):",
-                parent=self.root,
-            )
-            if answer is None:
-                return
-            try:
-                new_date = datetime.strptime(answer.strip(), "%d.%m.%Y").date()
-            except ValueError:
-                messagebox.showerror("Bad date", "Use DD.MM.YYYY format, e.g. 28.06.2026", parent=self.root)
-                continue
-            new_day = (new_date - start).days + 1
-            if new_day <= pday:
-                messagebox.showerror(APP_NAME, "Pick a date after today.", parent=self.root)
-                continue
-            break
+        new_date = self._pick_date_dialog(f"Reschedule '{task_text}' to:", min_date=min_date)
+        if new_date is None:
+            return
+        new_day = (new_date - start).days + 1
 
         self._reassign_task_day(plan_id, task_text, orig_day, old_day, new_day)
 
