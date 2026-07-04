@@ -748,6 +748,21 @@ class MentorApp:
         messagebox.showinfo(APP_NAME, f"'{plan['name']}' added successfully!")
         return True
 
+    @staticmethod
+    def _extract_docx_text(path: str) -> str:
+        """Pull plain paragraph text out of a .docx (OOXML) file using only the
+        standard library — no python-docx dependency needed for this one use."""
+        import zipfile
+        import xml.etree.ElementTree as ET
+
+        w_ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        with zipfile.ZipFile(path) as z, z.open("word/document.xml") as f:
+            tree = ET.parse(f)
+        paragraphs = []
+        for p in tree.getroot().iter(f"{w_ns}p"):
+            paragraphs.append("".join(node.text or "" for node in p.iter(f"{w_ns}t")))
+        return "\n".join(paragraphs)
+
     def _show_generate_plan_dialog(self):
         """Wizard: fill in 3 fields -> filled prompt to copy into claude.ai ->
         paste Claude's JSON reply back here to import it as a new plan."""
@@ -846,14 +861,52 @@ class MentorApp:
 
         # ── field for "reformat" mode: paste your own plan ──────────────────
         reformat_fields = tk.Frame(step1, bg=C["bg"])
-        tk.Label(reformat_fields, text="Your plan", font=("Segoe UI", 9, "bold"),
-                 fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
+        own_plan_hdr = tk.Frame(reformat_fields, bg=C["bg"])
+        own_plan_hdr.pack(fill="x", pady=(4, 2))
+        tk.Label(own_plan_hdr, text="Your plan", font=("Segoe UI", 9, "bold"),
+                 fg=C["text_dim"], bg=C["bg"]).pack(side="left")
+
         own_plan_txt = tk.Text(reformat_fields, height=8, font=("Segoe UI", 9), wrap="word",
                                 bg=C["surface"], fg=C["text"], insertbackground=C["text"],
                                 relief="flat", bd=4)
+
+        load_err_var = tk.StringVar()
+
+        def _load_own_plan_file():
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(
+                title="Select your plan file",
+                filetypes=[
+                    ("Plan files", "*.docx *.txt *.md *.json"),
+                    ("Word", "*.docx"), ("Text", "*.txt"),
+                    ("Markdown", "*.md"), ("JSON", "*.json"),
+                ],
+                parent=dlg,
+            )
+            if not path:
+                return
+            load_err_var.set("")
+            try:
+                if path.lower().endswith(".docx"):
+                    content = self._extract_docx_text(path)
+                else:
+                    with open(path, encoding="utf-8") as f:
+                        content = f.read()
+            except Exception as e:
+                load_err_var.set(f"Could not read that file: {e}")
+                return
+            own_plan_txt.delete("1.0", "end")
+            own_plan_txt.insert("1.0", content)
+
+        tk.Button(own_plan_hdr, text="📁 Load from file...", font=("Segoe UI", 8),
+                  bg=C["surface"], fg=C["text"], relief="flat", padx=8, pady=2,
+                  cursor="hand2", command=_load_own_plan_file).pack(side="right")
+
         own_plan_txt.pack(fill="both", expand=True)
-        tk.Label(reformat_fields, text="Paste your plan in whatever format you already have it "
-                                        "(notes, a list, a doc dump) — Claude will restructure it, not rewrite it.",
+        tk.Label(reformat_fields, textvariable=load_err_var, font=("Segoe UI", 8),
+                 fg=C["accent_red"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(reformat_fields, text="Paste your plan below, or load it from a Word (.docx), "
+                                        ".txt, .md, or .json file — Claude will restructure it, not rewrite it.",
                  font=("Segoe UI", 8), fg=C["text_muted"], bg=C["bg"],
                  wraplength=440, justify="left").pack(anchor="w", pady=(2, 4))
 
