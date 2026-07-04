@@ -1811,7 +1811,7 @@ class MentorApp:
             return
 
         if not self.tt_tasks:
-            tk.Label(self.task_frame, text="No open personal tasks in TickTick.",
+            tk.Label(self.task_frame, text="No personal TickTick tasks due today.",
                      font=("Segoe UI", 10), fg=C["text_muted"], bg=C["bg"],
                      padx=24, pady=4).pack(anchor="w")
             return
@@ -2657,8 +2657,30 @@ class MentorApp:
 
         threading.Thread(target=_run, daemon=True).start()
 
+    @staticmethod
+    def _tt_task_local_date(tt_task):
+        """The calendar date (in this machine's local timezone) a TickTick task
+        is due on, or None if it has no due date. TickTick returns all-day due
+        dates as local midnight *converted to UTC* (e.g. a task due 04.07 in
+        CEST comes back as '2026-07-03T22:00:00.000+0000') — slicing the raw
+        string would silently be off by one day, so this parses the offset and
+        converts back to local time before reading the date."""
+        due = tt_task.get("dueDate") or ""
+        if not due:
+            return None
+        for fmt in ("%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"):
+            try:
+                return datetime.strptime(due, fmt).astimezone().date()
+            except ValueError:
+                continue
+        return None
+
     def _tt_on_autosynced(self, tasks):
-        self.tt_tasks = [t for t in tasks if t.get("status", 0) == 0]
+        today = date.today()
+        self.tt_tasks = [
+            t for t in tasks
+            if t.get("status", 0) == 0 and self._tt_task_local_date(t) == today
+        ]
         self.render_tasks()
         now = datetime.now().strftime("%H:%M")
         self.tt_status_var.set(f"TickTick: connected · synced {now}")

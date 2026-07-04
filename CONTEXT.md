@@ -206,7 +206,26 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-04 (third pass same day)
+- Last session: 2026-07-04 (fourth pass same day)
+- What was built:
+  - **"My Tasks (TickTick)" now shows only tasks due today**, not every open
+    task across all personal projects. New `_tt_task_local_date(tt_task)`
+    static helper parses `dueDate` and converts to this machine's local
+    timezone before extracting the date — necessary because TickTick returns
+    all-day due dates as local midnight *converted to UTC*, e.g. a task due
+    04.07 in CEST (UTC+2) comes back as `"2026-07-03T22:00:00.000+0000"`.
+    Slicing the raw string (`[:10]`) would have silently read that as due on
+    the 3rd, off by one day, and hidden every genuinely-due-today all-day
+    task. `_tt_on_autosynced` now filters on `_tt_task_local_date(t) ==
+    date.today()` in addition to the existing open-status check. Tasks with no
+    due date at all no longer show up here either — matches the user's ask
+    literally ("only the task for today").
+  - Verified live against the real account: 181 open personal tasks across 7
+    projects narrowed to exactly 1 due-today task, cross-checked against an
+    independent manual recount using the same timezone conversion. Confirmed
+    the run created no new duplicate TickTick tasks (today's plan task was
+    already mapped from the previous session's push).
+- Previous session: 2026-07-04 (third pass same day)
 - What was built:
   - **Root-caused why TickTick never actually synced.** Every `_tt_autosync_
     cycle` run (push + pull + completion sync, every 5 min) crashed on its very
