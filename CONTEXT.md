@@ -26,8 +26,6 @@ mentor-overseer/
 ├── plans/
 │   ├── active/             ← up to 2 active plan JSONs (e.g. netherlands.json)
 │   └── archive/            ← completed plans moved here; frees a slot for a new plan
-├── plan/
-│   └── roadmap.json        ← legacy source (auto-migrated to plans/active/ on first run)
 ├── tracker/
 │   ├── __init__.py
 │   └── activity.py         ← window monitor, diary session tracking, idle detection
@@ -36,10 +34,14 @@ mentor-overseer/
 │   └── sync.py             ← TickTick OAuth2 REST client
 ├── data/
 │   └── progress.db         ← SQLite: task_completions, activity_log, time_diary, ticktick_sync
-├── MentorOverseer.exe      ← PyInstaller single-file build
-├── build.bat               ← PyInstaller build script
-└── run.bat                 ← dev launcher
+├── icon.ico                ← app/exe icon (only icon file actually used by build.bat)
+├── requirements.txt        ← pip dependencies
+├── MentorOverseer.exe      ← PyInstaller single-file build (rebuild with build.bat, not auto-updated)
+└── build.bat               ← PyInstaller build script (no run.bat — use `python main.py` for dev runs)
 ```
+Legacy `plan/roadmap.json` (pre-multi-plan migration source) and icon design exploration
+files (`icon_options/`, `gen_*.py`, alternate `.ico`/`.png` variants) were removed
+2026-07-04 — fully superseded / unused, still recoverable from git history if ever needed.
 
 ---
 
@@ -206,7 +208,23 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-04 (fourth pass same day)
+- Last session: 2026-07-04 (fifth pass same day)
+- What was built:
+  - **Project cleanup** — removed everything unused/stale from the repo root:
+    build cruft not worth tracking in the first place (`dist/`, `build/`,
+    `__pycache__/`, the old pre-rename `NetherlandsMentor.exe`, the auto-
+    regenerated `MentorOverseer.spec`) and, with the user's confirmation, content
+    that had been deliberately committed earlier but was fully superseded:
+    `icon_options/` (93 icon design candidates) + the 4 `gen_*.py` scripts that
+    produced them, unused icon variants (`icon_round.ico`, `mentor-overseer.ico`,
+    `icon_source.png` — only `icon.ico` is actually referenced by `build.bat`),
+    and `plan/roadmap.json` + `plan/Claude_Code_Mastery_Guide.md` (the roadmap
+    migration source is fully superseded by `plans/active/netherlands.json`;
+    the guide was an unrelated personal doc parked in that folder). All still
+    recoverable from git history if ever needed. Updated the architecture
+    diagram above to match current reality (also dropped the long-stale
+    `run.bat` reference, which never existed on disk).
+- Previous session: 2026-07-04 (fourth pass same day)
 - What was built:
   - **"My Tasks (TickTick)" now shows only tasks due today**, not every open
     task across all personal projects. New `_tt_task_local_date(tt_task)`
