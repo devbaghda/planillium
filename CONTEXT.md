@@ -244,6 +244,23 @@ _Update this section at the end of each Claude Code session:_
     - Added 8 generic `CATEGORY_COLORS` entries (`theory`/`practice`/`project`/
       `review` for skill plans, `research`/`decision`/`logistics`/`execution`
       for goal plans) alongside the existing Netherlands-specific ones.
+  - **Third wizard mode: "📝 Format my own plan"** (`TEMPLATE_REFORMAT`) — for
+    plans the user writes himself and just needs reformatted into the app's JSON
+    schema. Step 1's field layout is now conditional per mode: `gen_fields23`
+    (Claude's role + Area of expertise, used by skill/goal modes) and
+    `reformat_fields` (a big "paste your plan" `Text` box) are two sibling
+    frames under a shared `field1_block`, toggled via `pack()`/`pack_forget()`
+    in `_set_mode` — `field1` itself is reused across all 3 modes (relabeled
+    "Title for this plan" here). Unlike the other two templates, this one
+    explicitly tells Claude not to invent new content — restructure only —
+    and that `mentor_note`/`briefing` are optional, not required padding.
+  - **Merged `code-refinement` into `audit-remediation`** (commit `fb38e65`,
+    clean auto-merge) — brings the 5 audit-fix refactors and the calendar-
+    picker reschedule dialog (built/tested separately earlier this session)
+    together with the new plan-generation feature into one branch. The test
+    worktree (`mentor-overseer-test/`, still on `code-refinement`) was fast-
+    forwarded to match and its 4 local-only isolation tweaks (test mutex
+    name, window title, disabled registry writes) re-applied on top.
 - Previous session: 2026-07-04 (fifth pass same day)
 - What was built:
   - **Project cleanup** — removed everything unused/stale from the repo root:

@@ -232,6 +232,49 @@ put the mentor commentary — why it matters right now, the mistake most
 people make at this exact step, what right looks like — in "mentor_note", so
 both are visible together for every task."""
 
+TEMPLATE_REFORMAT = """I already have a plan for "{subject}" that I wrote myself. I want you to
+reformat it into a specific JSON structure so I can import it straight into
+my personal tracking app — don't rewrite my content, don't add new tasks,
+don't change my sequencing or timeline. Just restructure what I give you.
+Where something is ambiguous (a missing day number, a missing duration),
+make the most reasonable inference from context rather than inventing new
+content that wasn't there.
+
+Here is my plan, exactly as I wrote it:
+---
+{user_plan}
+---
+
+Output ONLY the result as a single JSON code block (```json ... ```), with
+nothing else inside the fence, matching this exact schema:
+
+{
+  "id": "kebab-case-slug",
+  "name": "{subject}",
+  "color": "#3b82f6",
+  "total_days": 14,
+  "phases": [
+    {
+      "title": "Use my own phase/section names if I had them, otherwise group logically",
+      "tasks": [
+        {
+          "day": 1,
+          "task": "Short task title, using my own wording",
+          "detail": "The concrete instructions, from what I wrote — expand only for clarity, don't invent new steps.",
+          "category": "pick the closest fit: theory | practice | project | review | research | decision | logistics | execution — or omit the field if nothing fits",
+          "duration_min": 60
+        }
+      ]
+    }
+  ]
+}
+
+Only include a per-task "mentor_note" or a plan-level "briefing" block (same
+shape as those used elsewhere in this app: high_leverage, ignore_completely,
+common_time_wasters, realistic_timeline) if you genuinely have something
+useful to add beyond what I already wrote — don't pad either one out just to
+fill the field."""
+
 PLAN_GEN_MODES = {
     "skill": {
         "label": "🎯 Learn a skill",
@@ -248,6 +291,12 @@ PLAN_GEN_MODES = {
         "field1_hint": "e.g. 'move to the Netherlands', 'buy a reliable car', 'become more productive'",
         "field2_hint": "e.g. 'relocation consultant', 'car-buying advisor', 'productivity coach'",
         "field3_hint": "e.g. 'EU relocation & visas', 'used-car markets', 'personal productivity systems'",
+    },
+    "reformat": {
+        "label": "📝 Format my own plan",
+        "template": TEMPLATE_REFORMAT,
+        "field1_label": "Title for this plan",
+        "field1_hint": "e.g. 'My Spanish Plan' — just a short name to identify it in the app",
     },
 }
 
@@ -880,8 +929,14 @@ class MentorApp:
             cfg = PLAN_GEN_MODES[mode]
             field1_label_var.set(cfg["field1_label"])
             field1_hint_var.set(cfg["field1_hint"])
-            field2_hint_var.set(cfg["field2_hint"])
-            field3_hint_var.set(cfg["field3_hint"])
+            if mode == "reformat":
+                gen_fields23.pack_forget()
+                reformat_fields.pack(fill="both", expand=True, after=field1_block)
+            else:
+                field2_hint_var.set(cfg["field2_hint"])
+                field3_hint_var.set(cfg["field3_hint"])
+                reformat_fields.pack_forget()
+                gen_fields23.pack(fill="x", after=field1_block)
 
         for mode, cfg in PLAN_GEN_MODES.items():
             b = tk.Button(mode_row, text=cfg["label"], font=("Segoe UI", 9),
@@ -890,32 +945,49 @@ class MentorApp:
             b.pack(side="left", padx=(0, 8))
             mode_buttons[mode] = b
 
-        tk.Label(step1, textvariable=field1_label_var, font=("Segoe UI", 9, "bold"),
+        field1_block = tk.Frame(step1, bg=C["bg"])
+        field1_block.pack(fill="x")
+        tk.Label(field1_block, textvariable=field1_label_var, font=("Segoe UI", 9, "bold"),
                  fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
         field1_var = tk.StringVar()
-        tk.Entry(step1, textvariable=field1_var, font=("Segoe UI", 10),
+        tk.Entry(field1_block, textvariable=field1_var, font=("Segoe UI", 10),
                  bg=C["surface"], fg=C["text"], insertbackground=C["text"],
                  relief="flat", bd=4, width=46).pack(fill="x")
-        tk.Label(step1, textvariable=field1_hint_var, font=("Segoe UI", 8),
+        tk.Label(field1_block, textvariable=field1_hint_var, font=("Segoe UI", 8),
                  fg=C["text_muted"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 8))
 
-        tk.Label(step1, text="Claude's role", font=("Segoe UI", 9, "bold"),
+        # ── fields for "skill"/"goal" modes: Claude's role + Area of expertise ──
+        gen_fields23 = tk.Frame(step1, bg=C["bg"])
+        tk.Label(gen_fields23, text="Claude's role", font=("Segoe UI", 9, "bold"),
                  fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
         field2_var = tk.StringVar()
-        tk.Entry(step1, textvariable=field2_var, font=("Segoe UI", 10),
+        tk.Entry(gen_fields23, textvariable=field2_var, font=("Segoe UI", 10),
                  bg=C["surface"], fg=C["text"], insertbackground=C["text"],
                  relief="flat", bd=4, width=46).pack(fill="x")
-        tk.Label(step1, textvariable=field2_hint_var, font=("Segoe UI", 8),
+        tk.Label(gen_fields23, textvariable=field2_hint_var, font=("Segoe UI", 8),
                  fg=C["text_muted"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 8))
 
-        tk.Label(step1, text="Area of expertise", font=("Segoe UI", 9, "bold"),
+        tk.Label(gen_fields23, text="Area of expertise", font=("Segoe UI", 9, "bold"),
                  fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
         field3_var = tk.StringVar()
-        tk.Entry(step1, textvariable=field3_var, font=("Segoe UI", 10),
+        tk.Entry(gen_fields23, textvariable=field3_var, font=("Segoe UI", 10),
                  bg=C["surface"], fg=C["text"], insertbackground=C["text"],
                  relief="flat", bd=4, width=46).pack(fill="x")
-        tk.Label(step1, textvariable=field3_hint_var, font=("Segoe UI", 8),
+        tk.Label(gen_fields23, textvariable=field3_hint_var, font=("Segoe UI", 8),
                  fg=C["text_muted"], bg=C["bg"], wraplength=440, justify="left").pack(anchor="w", pady=(2, 4))
+
+        # ── field for "reformat" mode: paste your own plan ──────────────────
+        reformat_fields = tk.Frame(step1, bg=C["bg"])
+        tk.Label(reformat_fields, text="Your plan", font=("Segoe UI", 9, "bold"),
+                 fg=C["text_dim"], bg=C["bg"]).pack(anchor="w", pady=(4, 2))
+        own_plan_txt = tk.Text(reformat_fields, height=8, font=("Segoe UI", 9), wrap="word",
+                                bg=C["surface"], fg=C["text"], insertbackground=C["text"],
+                                relief="flat", bd=4)
+        own_plan_txt.pack(fill="both", expand=True)
+        tk.Label(reformat_fields, text="Paste your plan in whatever format you already have it "
+                                        "(notes, a list, a doc dump) — Claude will restructure it, not rewrite it.",
+                 font=("Segoe UI", 8), fg=C["text_muted"], bg=C["bg"],
+                 wraplength=440, justify="left").pack(anchor="w", pady=(2, 4))
 
         err1_var = tk.StringVar()
         tk.Label(step1, textvariable=err1_var, font=("Segoe UI", 9),
@@ -923,15 +995,22 @@ class MentorApp:
 
         def _generate():
             subject = field1_var.get().strip()
-            role = field2_var.get().strip()
-            area = field3_var.get().strip()
-            if not (subject and role and area):
-                err1_var.set("Fill in all 3 fields first.")
-                return
             tpl = PLAN_GEN_MODES[state["mode"]]["template"]
-            prompt = (tpl.replace("{subject}", subject)
-                         .replace("{claude_role}", role)
-                         .replace("{area_of_interest}", area))
+            if state["mode"] == "reformat":
+                own_plan = own_plan_txt.get("1.0", "end").strip()
+                if not (subject and own_plan):
+                    err1_var.set("Fill in the title and paste your plan first.")
+                    return
+                prompt = tpl.replace("{subject}", subject).replace("{user_plan}", own_plan)
+            else:
+                role = field2_var.get().strip()
+                area = field3_var.get().strip()
+                if not (subject and role and area):
+                    err1_var.set("Fill in all 3 fields first.")
+                    return
+                prompt = (tpl.replace("{subject}", subject)
+                             .replace("{claude_role}", role)
+                             .replace("{area_of_interest}", area))
             generated["prompt"] = prompt
             prompt_txt.configure(state="normal")
             prompt_txt.delete("1.0", "end")
