@@ -1249,6 +1249,52 @@ class MentorApp:
         self.render_tasks()
         self._rebuild_plans_sidebar()
 
+    def _reschedule_task_dialog(self, task, plan_id):
+        """Pick a specific future date for one overdue task. Unlike 'Day off' or
+        'Do today', this moves only this task and doesn't shift anything else —
+        the overdue penalty already accrued for the days it was late stands."""
+        plan = next((p for p in self.plans if p["id"] == plan_id), None)
+        if not plan:
+            return
+        task_text = task.get("task", "")
+        orig_day  = task.get("original_day", task.get("day"))
+        old_day   = task.get("day")
+
+        try:
+            start = datetime.strptime(plan["start_date"], "%Y-%m-%d").date()
+        except Exception:
+            return
+        pday = self._plan_day_for(plan)
+
+        while True:
+            answer = simpledialog.askstring(
+                APP_NAME,
+                f"Reschedule '{task_text}' to (DD.MM.YYYY):",
+                parent=self.root,
+            )
+            if answer is None:
+                return
+            try:
+                new_date = datetime.strptime(answer.strip(), "%d.%m.%Y").date()
+            except ValueError:
+                messagebox.showerror("Bad date", "Use DD.MM.YYYY format, e.g. 28.06.2026", parent=self.root)
+                continue
+            new_day = (new_date - start).days + 1
+            if new_day <= pday:
+                messagebox.showerror(APP_NAME, "Pick a date after today.", parent=self.root)
+                continue
+            break
+
+        self._save_override(plan_id, task_text, orig_day, new_day)
+        old_key = (plan_id, old_day, task_text)
+        new_key = (plan_id, new_day, task_text)
+        if old_key in self.completions:
+            val = self.completions.pop(old_key)
+            self.completions[new_key] = val
+
+        self.render_tasks()
+        self._rebuild_plans_sidebar()
+
     # ── task list area ────────────────────────────────────────────────────────
 
     def _build_task_list_area(self, parent):
@@ -1663,6 +1709,14 @@ class MentorApp:
         if duration and not is_done:
             tk.Label(row, text=f"{duration}m", font=("Segoe UI", 8),
                      fg=C["text_muted"], bg=C["bg"]).pack(side="right", padx=(0, 6))
+
+        if is_overdue:
+            tk.Button(
+                row, text="Reschedule", font=("Segoe UI", 8),
+                bg=C["surface"], fg=C["text_dim"], relief="flat", padx=8, pady=2,
+                cursor="hand2",
+                command=lambda t=task, pid=plan_id: self._reschedule_task_dialog(t, pid),
+            ).pack(side="right", padx=(0, 6))
 
         tk.Frame(self.task_frame, bg=C["separator"], height=1).pack(fill="x", padx=24)
 
@@ -2965,6 +3019,41 @@ class MentorApp:
         self._score_add_ledger(score, "daily_score", detail=f"day score {score}", for_date=d)
         return score
 
+    def _credit_overdue_accrual_if_missing(self, d):
+        """Deduct points for every task still overdue as of date d — one ledger
+        row per calendar date, so a task left undone keeps costing points every
+        day it stays outstanding, on top of the one-time miss already folded
+        into its original day's daily_score. Guarded like _credit_day_score_if_
+        missing so it never double-charges the same date."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM score_ledger WHERE reason='overdue_accrual' AND date=?",
+            (d.isoformat(),),
+        )
+        if cur.fetchone():
+            return None
+        overdue_pt = self.config.get("scoring", {}).get("task_overdue_penalty", -5)
+        count = 0
+        for plan in self.plans:
+            pid = plan["id"]
+            try:
+                start = datetime.strptime(plan["start_date"], "%Y-%m-%d").date()
+                day_num = (d - start).days + 1
+            except Exception:
+                continue
+            by_day = self._tasks_by_day_for(plan)
+            for day, tasks in by_day.items():
+                if day >= day_num:
+                    continue
+                for t in tasks:
+                    if not self.completions.get((pid, day, t.get("task", "")), False):
+                        count += 1
+        if count == 0:
+            return 0
+        delta = count * overdue_pt
+        self._score_add_ledger(delta, "overdue_accrual", detail=f"{count} task(s) still overdue", for_date=d)
+        return delta
+
     def _ensure_score_caught_up(self):
         """Startup catch-up: credit any of the last 7 days (bounded — same window
         as _week_stats) that ended without the app running at EOD to record it.
@@ -2972,7 +3061,9 @@ class MentorApp:
         can't retroactively credit the whole plan history."""
         today = date.today()
         for i in range(7, 0, -1):
-            self._credit_day_score_if_missing(today - timedelta(days=i))
+            d = today - timedelta(days=i)
+            self._credit_day_score_if_missing(d)
+            self._credit_overdue_accrual_if_missing(d)
 
     def _waste_patterns(self, period="week"):
         _cutoffs = {
@@ -3819,8 +3910,12 @@ class MentorApp:
             body += f"\n\n⏱ {dismissed} idle session(s) were dismissed — open the report to fill them in."
 
         credited = self._credit_day_score_if_missing(date.today())
+        overdue_delta = self._credit_overdue_accrual_if_missing(date.today())
         if credited is not None:
-            body += f"\n\n+{credited} score today · balance {self._score_balance()} pts"
+            body += f"\n\n+{credited} score today"
+            if overdue_delta:
+                body += f" · {overdue_delta} for tasks still overdue"
+            body += f" · balance {self._score_balance()} pts"
         self._refresh_score_sidebar()
 
         self._notify(f"{APP_NAME} — Daily Summary", body)

@@ -169,6 +169,11 @@ ticktick_sync (id, plan_day, task_text, ticktick_task_id,
 9. Overdue: any incomplete task from a past day surfaces again with [OVERDUE] style
 10. Archive: plan moves to `plans/archive/` when ALL tasks done; slot freed for new plan
 11. Completions key: `(plan_id, plan_day, task_text)` — both in-memory dict and DB
+12. Overdue scoring: `task_overdue_penalty` applies once per day *for every day a task
+    stays overdue* (not just the day it was first missed) — the "day-of" miss is folded
+    into that day's `daily_score` ledger entry as before; each subsequent day it's still
+    outstanding adds a further `overdue_accrual` ledger entry. Rescheduling a task (see
+    below) doesn't refund penalties already taken.
 
 ---
 
@@ -201,7 +206,31 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-04
+- Last session: 2026-07-04 (second pass same day)
+- What was built:
+  - **Overdue tasks now cost score every day they stay undone, and can be
+    rescheduled to a specific date.** Each overdue task's row in the main Today
+    list has a "Reschedule" button (`_reschedule_task_dialog`) asking for a
+    DD.MM.YYYY date (same input convention as `_ask_start_date_for`); it moves
+    just that one task via `_save_override` — no cascading shift like "Do
+    today"/"Day off". New `_credit_overdue_accrual_if_missing(d)` adds a further
+    `overdue_accrual` score_ledger deduction (`task_overdue_penalty` rate) for
+    every task still overdue on calendar date `d`, once per date (guarded like
+    `_credit_day_score_if_missing`) — wired into both `fire_eod_summary` and the
+    7-day startup catch-up in `_ensure_score_caught_up`. The one-time "day-of"
+    miss already folded into that day's `daily_score` is untouched; this is
+    strictly additional. Rescheduling doesn't refund anything already deducted
+    (by design, per the user).
+  - Verified end-to-end against an isolated copy of the app (same harness as
+    the task-edit/day-off/TickTick session earlier today): drove the real
+    reschedule flow (with `simpledialog.askstring`/`messagebox.showerror`
+    monkeypatched to feed answers and capture validation errors — confirmed it
+    rejects a bad date format and an invalid calendar date like Feb 31, then
+    correctly moves the task off its overdue day onto the exact chosen date's
+    plan-day), confirmed the accrual ledger entry amount matches an independent
+    manual recount of overdue tasks and is idempotent per calendar date, and
+    ran `fire_eod_summary` for real.
+- Previous session: 2026-07-04 (first pass same day)
 - What was built:
   - **Task editing**: detail panel now has an "Edit" button (`_edit_task_dialog`)
     for title/detail/duration/category. Saving (`_apply_task_edit`) rewrites the
