@@ -18,10 +18,11 @@ except ImportError:
     plyer_notification = None
 
 try:
-    from ticktick.sync import TickTickClient
+    from ticktick.sync import TickTickClient, PROJECT_NAME as TICKTICK_MIRROR_PROJECT_NAME
     HAS_TICKTICK = True
 except ImportError:
     TickTickClient = None
+    TICKTICK_MIRROR_PROJECT_NAME = "Netherlands Plan"
     HAS_TICKTICK = False
 
 try:
@@ -1239,36 +1240,6 @@ class MentorApp:
         self.conn.commit()
         self.completions[(plan_id, plan_day, task_text)] = is_done
 
-    def get_tt_mapping(self, plan_day, task_text, conn=None):
-        # Accepts an explicit connection because _tt_autosync_cycle calls this
-        # from a background thread — self.conn is bound to the main thread
-        # (sqlite3's default check_same_thread) and using it here would raise.
-        conn = conn or self.conn
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT ticktick_task_id, ticktick_proj_id FROM ticktick_sync "
-            "WHERE plan_day=? AND task_text=?",
-            (plan_day, task_text),
-        )
-        row = cur.fetchone()
-        return (row[0], row[1]) if row else (None, None)
-
-    def save_tt_mapping(self, plan_day, task_text, task_id, proj_id, conn=None):
-        conn = conn or self.conn
-        now = datetime.now().isoformat(sep=" ", timespec="seconds")
-        conn.execute(
-            "INSERT INTO ticktick_sync "
-            "  (plan_day, task_text, ticktick_task_id, ticktick_proj_id, pushed_at, synced_at) "
-            "VALUES (?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(plan_day, task_text) DO UPDATE SET "
-            "  ticktick_task_id=excluded.ticktick_task_id,"
-            "  ticktick_proj_id=excluded.ticktick_proj_id,"
-            "  pushed_at=excluded.pushed_at,"
-            "  synced_at=excluded.synced_at",
-            (plan_day, task_text, task_id, proj_id, now, now),
-        )
-        conn.commit()
-
     # ── utils ────────────────────────────────────────────────────────────────
 
     @staticmethod
@@ -2261,7 +2232,6 @@ class MentorApp:
             pid    = plan["id"]
             pday   = self._plan_day_for(plan)
             ptotal = self._total_days_for(plan)
-            pcolor = plan.get("color", C["accent_blue"])
             pname  = plan["name"]
 
             tasks   = self._display_tasks_for(plan)
@@ -2275,7 +2245,7 @@ class MentorApp:
 
             if pday <= 0:
                 days_away = abs(pday - 1)
-                self._render_section_header(pname, pcolor)
+                self._render_section_header(pname, C["text"])
                 tk.Label(self.task_frame,
                          text=f"Starts {self._fmt_date(plan['start_date'])} — {days_away} day(s) to go.",
                          font=("Segoe UI", 10), bg=C["bg"], fg=C["text_dim"],
@@ -2283,7 +2253,7 @@ class MentorApp:
                 continue
 
             header = f"{pname}  ·  Day {pday} of {ptotal}"
-            self._render_section_header(header, pcolor)
+            self._render_section_header(header, C["text"])
 
             if overdue:
                 self._render_subsection_label(f"Overdue · {len(overdue)}", C["accent_red"])
@@ -2401,25 +2371,11 @@ class MentorApp:
         self._rebuild_plans_sidebar()
         if is_done:
             self._check_early_prompt(plan_id, plan_day)
-        if is_done and self.ticktick and self.ticktick.is_authorized:
-            tt_id, tt_pid = self.get_tt_mapping(plan_day, task_text)
-            if tt_id:
-                threading.Thread(
-                    target=self._tt_complete_quietly,
-                    args=(tt_pid or self.tt_project_id, tt_id),
-                    daemon=True,
-                ).start()
-
-    def _tt_complete_quietly(self, project_id, task_id):
-        try:
-            self.ticktick.complete_task(project_id, task_id)
-        except Exception:
-            pass
 
     # ── TickTick section in scroll area ─────────────────────────────────────
 
     def _render_ticktick_section(self):
-        self._render_section_header("My Tasks  (TickTick)", C["tt_badge"])
+        self._render_section_header("My Tasks  (TickTick)", C["text"])
 
         if not self.ticktick or not self.ticktick.is_authorized:
             tk.Label(self.task_frame, text="Connect TickTick in the sidebar.",
@@ -3211,101 +3167,31 @@ class MentorApp:
         self._tt_autosync_cycle()
 
     def _tt_autosync_cycle(self):
-        """Push today's plan tasks and sync completions both ways, no buttons needed.
-        Reschedules itself every TT_AUTOSYNC_INTERVAL_MS while connected."""
+        """Pull-only: personal TickTick tasks flow into 'My Tasks', nothing
+        flows back. The app never creates or completes tasks in TickTick on
+        its own — plan tasks are never pushed there. Reschedules itself every
+        TT_AUTOSYNC_INTERVAL_MS while connected."""
         if not self.ticktick or not self.ticktick.is_authorized:
             return
 
         def _run():
-            # This whole cycle runs on a background thread every 5 minutes, so it
-            # needs its own SQLite connection — self.conn is bound to the main
-            # thread (sqlite3's default check_same_thread=True) and touching it
-            # here raises sqlite3.ProgrammingError on first use. That exception
-            # was previously swallowed by the except-block below and only ever
-            # surfaced as a status-bar string, so autosync had been silently
-            # failing on every single cycle (push AND pull) since check_same_
-            # thread=False was removed from self.conn in the reliability audit.
-            tt_conn = sqlite3.connect(DB_PATH)
             try:
-                if not self.tt_project_id:
-                    self.tt_project_id = self.ticktick.get_or_create_project()
-
-                today_tasks = self.tasks_by_day.get(self.plan_day, [])
-                for task in today_tasks:
-                    task_text = task.get("task", "")
-                    tt_id, _ = self.get_tt_mapping(self.plan_day, task_text, conn=tt_conn)
-                    if tt_id:
-                        continue
-                    try:
-                        result = self.ticktick.create_task(
-                            self.tt_project_id, task_text,
-                            content=task.get("detail", ""), due_date=date.today(),
-                        )
-                        self.save_tt_mapping(
-                            self.plan_day, task_text,
-                            result.get("id", ""), self.tt_project_id,
-                            conn=tt_conn,
-                        )
-                    except Exception:
-                        import logging
-                        logging.error("TickTick push failed for %r", task_text, exc_info=True)
-
-                raw_tasks = self.ticktick.get_project_tasks(self.tt_project_id)
-                tt_by_id = {t["id"]: t for t in raw_tasks}
-                cur = tt_conn.cursor()
-                cur.execute(
-                    "SELECT plan_day, task_text, ticktick_task_id, ticktick_proj_id "
-                    "FROM ticktick_sync WHERE ticktick_task_id IS NOT NULL"
+                # Exclude the app's old "Netherlands Plan" mirror project, if
+                # it still exists from before syncing became pull-only, so
+                # previously-pushed duplicate tasks don't reappear as
+                # "personal" ones. Looked up by name, never created.
+                exclude_id = next(
+                    (p.get("id") for p in self.ticktick.get_projects()
+                     if p.get("name") == TICKTICK_MIRROR_PROJECT_NAME),
+                    None,
                 )
-                mappings = cur.fetchall()
-                now = datetime.now().isoformat(sep=" ", timespec="seconds")
-
-                for plan_day, task_text, tt_id, tt_pid in mappings:
-                    tt_task = tt_by_id.get(tt_id)
-                    plan_id = next(
-                        (p["id"] for p in self.plans
-                         if self.completions.get((p["id"], plan_day, task_text)) is not None),
-                        self.plans[0]["id"] if self.plans else "netherlands",
-                    )
-                    app_done = self.completions.get((plan_id, plan_day, task_text), False)
-                    # status 2 = completed in TickTick; missing from list also means completed
-                    tt_done = (tt_task is None) or (tt_task.get("status", 0) == 2)
-
-                    if app_done and not tt_done:
-                        try:
-                            self.ticktick.complete_task(tt_pid or self.tt_project_id, tt_id)
-                        except Exception:
-                            import logging
-                            logging.error("TickTick complete_task failed for %r", task_text, exc_info=True)
-                    elif tt_done and not app_done:
-                        tt_conn.execute(
-                            "INSERT INTO task_completions "
-                            "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) "
-                            "VALUES (?, ?, ?, 1, ?, ?) "
-                            "ON CONFLICT(plan_id, plan_day, task_text) DO UPDATE SET "
-                            "  completed=1, completed_at=excluded.completed_at, last_updated=excluded.last_updated",
-                            (plan_id, plan_day, task_text, now, now),
-                        )
-                        self.completions[(plan_id, plan_day, task_text)] = True
-
-                    tt_conn.execute(
-                        "UPDATE ticktick_sync SET synced_at=? WHERE plan_day=? AND task_text=?",
-                        (now, plan_day, task_text),
-                    )
-                tt_conn.commit()
-
-                # "My Tasks" shows personal tasks from every OTHER TickTick project —
-                # the plan's own project (tt_project_id) is just the app's mirror for
-                # pushed plan tasks and is handled above, not shown here.
-                personal_tasks = self.ticktick.get_all_tasks(exclude_project_id=self.tt_project_id)
+                personal_tasks = self.ticktick.get_all_tasks(exclude_project_id=exclude_id)
                 self.root.after(0, lambda: self._tt_on_autosynced(personal_tasks))
             except Exception as exc:
                 # Same unbound-free-variable pitfall as _on_tt_toggle above —
                 # capture the string before the closure outlives the except block.
                 msg = str(exc)
                 self.root.after(0, lambda: self._tt_on_autosync_error(msg))
-            finally:
-                tt_conn.close()
 
         threading.Thread(target=_run, daemon=True).start()
 

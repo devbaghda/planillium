@@ -259,6 +259,36 @@ _Update this section at the end of each Claude Code session:_
     of this session's test harnesses already do) and only screenshot after
     positively confirming the target window's title via a read-only
     `Get-Process | Select MainWindowTitle` check immediately beforehand.
+  - **Feedback from live-testing the theme**, fixed same pass:
+    - Plan header ("{name} · Day X of Y") and "My Tasks (TickTick)" section
+      header now render in plain `C["text"]` (grayscale) instead of the
+      plan's accent color / `C["tt_badge"]` — the user found the indigo/purple
+      too colorful for these two specific headers. `_render_section_header`
+      itself is unchanged (still supports an accent color); only these 3
+      call sites (main.py, plan header ×2 states + TickTick header) now pass
+      `C["text"]`.
+    - **TickTick sync made pull-only.** `_tt_autosync_cycle` no longer pushes
+      plan tasks into TickTick or pushes completion status there — it now
+      only reads personal tasks in (`get_all_tasks`), same as before, minus
+      everything upstream of that. Removed as dead weight along with it:
+      `get_tt_mapping`/`save_tt_mapping` (main.py), `_tt_complete_quietly`,
+      and the push-on-checkbox-toggle branch in `_on_plan_toggle`. The old
+      "Netherlands Plan" mirror TickTick project (from before this fix) is
+      still looked up by name and excluded from "My Tasks" so previously-
+      pushed duplicates don't resurface — but it's never created or written
+      to again. `_on_tt_toggle` (completing a *pulled* personal TickTick task
+      from inside the app) is intentionally untouched — that's still a
+      legitimate one-directional action on data that originated in TickTick,
+      not the app pushing its own plan data outward.
+    - Investigated "today's TickTick task is missing" via a read-only
+      diagnostic against the real account: confirmed the account genuinely
+      has 0 personal tasks due today (134 of 180 open tasks have no due date
+      at all, which the app intentionally excludes per an earlier session's
+      explicit ask) — not a bug, just an accurate empty state.
+    - This fix logically belongs on `audit-remediation` (unrelated to
+      theming) but was applied directly on `ui-theme-light-dark` since that's
+      where the user was actively testing — flagged as cherry-pick-able to
+      `audit-remediation` separately if wanted before the theme branch merges.
 - Previous session: 2026-07-04 (sixth pass same day)
 - What was built:
   - **"✨ Generate with Claude" plan-generation wizard** — no live Anthropic API
