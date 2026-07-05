@@ -208,7 +208,58 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-04 (sixth pass same day)
+- Last session: 2026-07-05, branch `ui-theme-light-dark` (off `audit-remediation`
+  at commit `4884eda` — kept separate per the user's request, not merged back yet)
+- What was built:
+  - **Light/Dark/Automatic theme system.** The `C` dict (was a static
+    hardcoded dark palette, ~389 references across the file) is now populated
+    from a new `THEMES = {"light": {...}, "dark": {...}}` dict at startup and
+    whenever the user changes the appearance setting — every existing
+    `C["some_key"]` reference keeps working unchanged since only the *values*
+    swap, not the 389 call sites. Light (soft off-white `#f4f5fa`/white cards,
+    indigo `#6366f1` accent, emerald/rose semantic colors) is the new default;
+    dark keeps the same design language on a soft-charcoal `#111318` base.
+  - `_detect_system_theme()` reads the Windows registry
+    (`...\Themes\Personalize\AppsUseLightTheme`) for "Automatic"; defaults to
+    light on any failure (non-Windows, key missing). `_resolve_theme(mode)`
+    maps `"light"/"dark"/"auto"` → an actual theme name.
+  - `_apply_theme(mode)` (new method) resolves the mode and does
+    `C.clear(); C.update(THEMES[resolved])` in place.
+  - `build_interface()` (main.py) is now idempotent — destroys its previous
+    `self._main_container` before rebuilding, so a theme change can call it
+    again for a **live** re-render with zero restart needed (leans on
+    `render_tasks()`/`_rebuild_plans_sidebar()` already being destroy-and-
+    rebuild internally).
+  - New "APPEARANCE" section in `_show_settings_dialog` — 3 toggle buttons
+    ("☀ Light" / "🌙 Dark" / "🖥 Automatic"), same mode-toggle idiom as the
+    plan-generation wizard's mode picker. Saving with a changed theme calls
+    `_apply_theme()` + `build_interface()` immediately.
+  - New config key `appearance.theme_mode` (default `"light"`, not written to
+    disk until first Settings save — `self.config.get("appearance", {})`
+    degrades gracefully otherwise).
+  - Found and fixed one real stale-callback edge case during testing: the
+    sidebar's mousewheel-rebind (`self.root.after(500, self._bind_sidebar_wheel)`)
+    could fire after a theme-triggered rebuild destroyed the old sidebar,
+    raising a `TclError` trying to `.bind()` a dead widget — guarded with a
+    `winfo_exists()` check.
+  - Verified with a 22-check automated widget-level suite (theme resolution,
+    default-light on fresh config, Settings toggle rendering/selection, live
+    Dark switch + persistence + rebuild + continued interactivity, Automatic
+    resolution, persisted-value read-back) — all passing, `data/mentor.log`
+    stays empty throughout. One screenshot of the live light theme confirmed
+    visually. (Two follow-up attempts to screenshot the dark theme
+    misfired — see the "screen automation" lesson below — so dark/auto are
+    verified via the automated color-value checks, not a visual capture.)
+  - **Lesson learned, worth remembering**: do NOT use PowerShell to simulate
+    real mouse input (`SetCursorPos`/`mouse_event`) or blindly screenshot "the
+    active window" to inspect a Tkinter test app — it can act on the user's
+    actual desktop/cursor instead of the intended process (confirmed twice:
+    once actually clicked into a YouTube tab, once just mis-captured one).
+    Prefer driving Tkinter widgets in-process (`widget.invoke()`, as the rest
+    of this session's test harnesses already do) and only screenshot after
+    positively confirming the target window's title via a read-only
+    `Get-Process | Select MainWindowTitle` check immediately beforehand.
+- Previous session: 2026-07-04 (sixth pass same day)
 - What was built:
   - **"✨ Generate with Claude" plan-generation wizard** — no live Anthropic API
     integration (deliberately cancelled: needs a paid API key separate from a

@@ -300,39 +300,99 @@ PLAN_GEN_MODES = {
     },
 }
 
-C = {
-    "bg":           "#1c1c1e",
-    "sidebar":      "#141416",
-    "surface":      "#2c2c2e",
-    "separator":    "#2c2c2e",
-    "text":         "#e5e5e7",
-    "text_dim":     "#8e8e93",
-    "text_muted":   "#48484a",
-    "text_done":    "#48484a",
-    "text_overdue": "#ff453a",
-    "accent_green": "#30d158",
-    "accent_red":   "#ff453a",
-    "accent_blue":  "#0a84ff",
-    "tt_badge":     "#0a84ff",
-    "check_sel":    "#3a3a3c",
-    # aliases kept for dialog compat
-    "header":       "#141416",
-    "header_sub":   "#8e8e93",
-    "header_sub2":  "#48484a",
-    "border":       "#2c2c2e",
-    "border_done":  "#2c2c2e",
-    "border_ov":    "#2c2c2e",
-    "surface_done": "#1c1c1e",
-    "surface_ov":   "#1c1c1e",
-    "tt_surface":   "#1c1c1e",
-    "tt_border":    "#2c2c2e",
-    "tt_text":      "#8e8e93",
-    "panel":        "#141416",
-    "panel_text":   "#8e8e93",
-    "panel_border": "#2c2c2e",
-    "sep":          "#2c2c2e",
-    "sep_text":     "#48484a",
+THEMES = {
+    "light": {
+        "bg":           "#f4f5fa",
+        "sidebar":      "#ffffff",
+        "surface":      "#ffffff",
+        "separator":    "#e6e8f0",
+        "text":         "#1f2430",
+        "text_dim":     "#6b7280",
+        "text_muted":   "#9ca3af",
+        "text_done":    "#c7cad1",
+        "text_overdue": "#e11d48",
+        "accent_green": "#10b981",
+        "accent_red":   "#f43f5e",
+        "accent_blue":  "#6366f1",
+        "tt_badge":     "#6366f1",
+        "check_sel":    "#c7d2fe",
+        # aliases kept for dialog compat
+        "header":       "#ffffff",
+        "header_sub":   "#6b7280",
+        "header_sub2":  "#9ca3af",
+        "border":       "#e6e8f0",
+        "border_done":  "#e6e8f0",
+        "border_ov":    "#e6e8f0",
+        "surface_done": "#f4f5fa",
+        "surface_ov":   "#f4f5fa",
+        "tt_surface":   "#f4f5fa",
+        "tt_border":    "#e6e8f0",
+        "tt_text":      "#6b7280",
+        "panel":        "#ffffff",
+        "panel_text":   "#6b7280",
+        "panel_border": "#e6e8f0",
+        "sep":          "#e6e8f0",
+        "sep_text":     "#9ca3af",
+    },
+    "dark": {
+        "bg":           "#111318",
+        "sidebar":      "#0b0d11",
+        "surface":      "#1c1f26",
+        "separator":    "#262a33",
+        "text":         "#e8eaed",
+        "text_dim":     "#9096a3",
+        "text_muted":   "#565c68",
+        "text_done":    "#4a4f59",
+        "text_overdue": "#fb7185",
+        "accent_green": "#34d399",
+        "accent_red":   "#fb7185",
+        "accent_blue":  "#818cf8",
+        "tt_badge":     "#818cf8",
+        "check_sel":    "#3d4354",
+        "header":       "#0b0d11",
+        "header_sub":   "#9096a3",
+        "header_sub2":  "#565c68",
+        "border":       "#262a33",
+        "border_done":  "#262a33",
+        "border_ov":    "#262a33",
+        "surface_done": "#111318",
+        "surface_ov":   "#111318",
+        "tt_surface":   "#111318",
+        "tt_border":    "#262a33",
+        "tt_text":      "#9096a3",
+        "panel":        "#0b0d11",
+        "panel_text":   "#9096a3",
+        "panel_border": "#262a33",
+        "sep":          "#262a33",
+        "sep_text":     "#565c68",
+    },
 }
+
+
+def _detect_system_theme() -> str:
+    """Read the Windows 'AppsUseLightTheme' registry value. Defaults to
+    'light' on any failure (non-Windows, key missing, etc)."""
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        )
+        value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+        winreg.CloseKey(key)
+        return "light" if value else "dark"
+    except Exception:
+        return "light"
+
+
+def _resolve_theme(mode: str) -> str:
+    if mode == "auto":
+        return _detect_system_theme()
+    return mode if mode in THEMES else "light"
+
+
+C = {}
+C.update(THEMES["light"])
 
 
 class MentorApp:
@@ -509,6 +569,7 @@ class MentorApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.config = self.load_config()
+        self._apply_theme(self.config.get("appearance", {}).get("theme_mode", "light"))
         self.ensure_data_store()
         self.plans = self.load_plans()          # list of plan dicts, max 2
 
@@ -1221,7 +1282,20 @@ class MentorApp:
 
     # ── UI ───────────────────────────────────────────────────────────────────
 
+    def _apply_theme(self, mode: str):
+        """Resolve 'light'/'dark'/'auto' to a real theme and load its colors
+        into the shared C dict in place, so every existing C["..."] lookup
+        picks up the new values the next time its widget is (re)built."""
+        resolved = _resolve_theme(mode)
+        C.clear()
+        C.update(THEMES[resolved])
+
     def build_interface(self):
+        # Idempotent: a theme change calls this again to rebuild the whole
+        # window with the new colors, so any previous container must go first.
+        if getattr(self, "_main_container", None) is not None:
+            self._main_container.destroy()
+
         self.root.configure(bg=C["bg"])
         self._selected_task_key = None
 
@@ -1241,6 +1315,7 @@ class MentorApp:
 
         container = tk.Frame(self.root, bg=C["bg"])
         container.pack(fill="both", expand=True)
+        self._main_container = container
 
         self._build_sidebar(container)
         tk.Frame(container, bg=C["separator"], width=1).pack(side="left", fill="y")
@@ -1276,6 +1351,11 @@ class MentorApp:
         def _sb_wheel(e):
             sb_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
         def _bind_sb_wheel(widget):
+            # A theme change can rebuild the whole sidebar before this
+            # scheduled call fires; skip it instead of binding on a
+            # destroyed widget (would raise TclError).
+            if not widget.winfo_exists():
+                return
             widget.bind("<MouseWheel>", _sb_wheel)
             for child in widget.winfo_children():
                 _bind_sb_wheel(child)
@@ -2944,6 +3024,29 @@ class MentorApp:
             entry_vars[tuple(cfg_path)] = var
             return var
 
+        _section("APPEARANCE")
+        theme_row = tk.Frame(inner, bg=C["bg"])
+        theme_row.pack(fill="x", padx=20, pady=(2, 4))
+
+        theme_choice = tk.StringVar(
+            value=self.config.get("appearance", {}).get("theme_mode", "light")
+        )
+        theme_buttons = {}
+
+        def _select_theme(mode):
+            theme_choice.set(mode)
+            for m, btn in theme_buttons.items():
+                btn.configure(bg=C["accent_blue"] if m == mode else C["surface"],
+                              fg="white" if m == mode else C["text_dim"])
+
+        for mode, label in (("light", "☀ Light"), ("dark", "🌙 Dark"), ("auto", "🖥 Automatic")):
+            b = tk.Button(theme_row, text=label, font=("Segoe UI", 9),
+                          relief="flat", padx=10, pady=5, cursor="hand2",
+                          command=lambda m=mode: _select_theme(m))
+            b.pack(side="left", padx=(0, 8))
+            theme_buttons[mode] = b
+        _select_theme(theme_choice.get())
+
         _section("GENERAL")
         _field("Working hours start", ["working_hours", "start"], "08:00")
         _field("Working hours end",   ["working_hours", "end"],   "20:00")
@@ -3038,6 +3141,10 @@ class MentorApp:
                 lines = [l.strip() for l in txt.get("1.0", "end").splitlines() if l.strip()]
                 idle_rules[key] = lines
 
+            new_theme_mode = theme_choice.get()
+            theme_changed = new_theme_mode != self.config.get("appearance", {}).get("theme_mode", "light")
+            self.config.setdefault("appearance", {})["theme_mode"] = new_theme_mode
+
             self.save_config(self.config)
 
             # ActivityTracker reads config once at construction — restart it so
@@ -3046,9 +3153,13 @@ class MentorApp:
                 self.tracker.stop()
                 self.init_tracker()
 
-            self.render_tasks()
-            self._refresh_score_sidebar()
             dlg.destroy()
+            if theme_changed:
+                self._apply_theme(new_theme_mode)
+                self.build_interface()
+            else:
+                self.render_tasks()
+                self._refresh_score_sidebar()
 
         btn_row = tk.Frame(dlg, bg=C["bg"], pady=12)
         btn_row.pack(fill="x")
