@@ -61,22 +61,45 @@ APP_NAME      = "Mentor-Overseer"
 MAX_PLANS     = 2
 TT_AUTOSYNC_INTERVAL_MS = 5 * 60_000   # background push+sync cadence once connected
 
-CATEGORY_COLORS = {
-    "profile": "#0a84ff",
-    "cert":    "#bf5af2",
-    "network": "#30d158",
-    "admin":   "#ff9f0a",
-    "apply":   "#ff453a",
-    "visa":    "#64d2ff",
-    # generic categories used by Claude-generated plans (see _show_generate_plan_dialog)
-    "theory":    "#5e5ce6",
-    "practice":  "#ffd60a",
-    "project":   "#00c7be",
-    "review":    "#8e8e93",
-    "research":  "#ac8e68",
-    "decision":  "#ff375f",
-    "logistics": "#5ac8fa",
-    "execution": "#34c759",
+# Populated in place by _apply_theme() from CATEGORY_COLORS_THEMES, same
+# mechanism as the C dict — the original values were tuned for a near-black
+# background and wash out (practice-yellow all but vanishes) on the light theme.
+CATEGORY_COLORS = {}
+
+CATEGORY_COLORS_THEMES = {
+    "light": {
+        "profile": "#0969da",
+        "cert":    "#9333ea",
+        "network": "#059669",
+        "admin":   "#d97706",
+        "apply":   "#dc2626",
+        "visa":    "#0284c7",
+        # generic categories used by Claude-generated plans (see _show_generate_plan_dialog)
+        "theory":    "#4f46e5",
+        "practice":  "#ca8a04",
+        "project":   "#0d9488",
+        "review":    "#6b7280",
+        "research":  "#8c6d46",
+        "decision":  "#e11d48",
+        "logistics": "#0369a1",
+        "execution": "#16a34a",
+    },
+    "dark": {
+        "profile": "#0a84ff",
+        "cert":    "#bf5af2",
+        "network": "#30d158",
+        "admin":   "#ff9f0a",
+        "apply":   "#ff453a",
+        "visa":    "#64d2ff",
+        "theory":    "#5e5ce6",
+        "practice":  "#ffd60a",
+        "project":   "#00c7be",
+        "review":    "#8e8e93",
+        "research":  "#ac8e68",
+        "decision":  "#ff375f",
+        "logistics": "#5ac8fa",
+        "execution": "#34c759",
+    },
 }
 
 # ── Claude plan-generation prompt templates (see _show_generate_plan_dialog) ──
@@ -309,18 +332,22 @@ THEMES = {
         "separator":    "#e6e8f0",
         "text":         "#1f2430",
         "text_dim":     "#6b7280",
-        "text_muted":   "#9ca3af",
+        "text_muted":   "#6e7480",
         "text_done":    "#c7cad1",
         "text_overdue": "#e11d48",
         "accent_green": "#10b981",
         "accent_red":   "#f43f5e",
         "accent_blue":  "#6366f1",
+        "accent_blue_active": "#4f46e5",
+        "accent_amber": "#d97706",
+        "accent_purple": "#9333ea",
+        "hover":        "#eef0f7",
         "tt_badge":     "#6366f1",
         "check_sel":    "#c7d2fe",
         # aliases kept for dialog compat
         "header":       "#ffffff",
         "header_sub":   "#6b7280",
-        "header_sub2":  "#9ca3af",
+        "header_sub2":  "#6e7480",
         "border":       "#e6e8f0",
         "border_done":  "#e6e8f0",
         "border_ov":    "#e6e8f0",
@@ -333,7 +360,7 @@ THEMES = {
         "panel_text":   "#6b7280",
         "panel_border": "#e6e8f0",
         "sep":          "#e6e8f0",
-        "sep_text":     "#9ca3af",
+        "sep_text":     "#6e7480",
     },
     "dark": {
         "bg":           "#111318",
@@ -348,6 +375,10 @@ THEMES = {
         "accent_green": "#34d399",
         "accent_red":   "#fb7185",
         "accent_blue":  "#818cf8",
+        "accent_blue_active": "#6366f1",
+        "accent_amber": "#ff9f0a",
+        "accent_purple": "#bf5af2",
+        "hover":        "#1c1f26",
         "tt_badge":     "#818cf8",
         "check_sel":    "#3d4354",
         "header":       "#0b0d11",
@@ -1260,6 +1291,9 @@ class MentorApp:
         resolved = _resolve_theme(mode)
         C.clear()
         C.update(THEMES[resolved])
+        CATEGORY_COLORS.clear()
+        CATEGORY_COLORS.update(CATEGORY_COLORS_THEMES[resolved])
+        self._resolved_theme = resolved
 
     def build_interface(self):
         # Idempotent: a theme change calls this again to rebuild the whole
@@ -1471,9 +1505,9 @@ class MentorApp:
                  fg=C["text_dim"], bg=C["sidebar"]).pack(side="right")
 
         def _in(e):
-            row.config(bg=C["surface"])
+            row.config(bg=C["hover"])
             for w in row.winfo_children():
-                try: w.config(bg=C["surface"])
+                try: w.config(bg=C["hover"])
                 except Exception: pass
         def _out(e):
             row.config(bg=C["sidebar"])
@@ -1670,7 +1704,7 @@ class MentorApp:
                 hdr_f = tk.Frame(inner, bg=hdr_bg, padx=16, pady=6)
                 hdr_f.pack(fill="x", pady=(8, 0))
                 tk.Label(hdr_f, text=label, font=("Segoe UI", 9, "bold"),
-                         fg=("#bf5af2" if is_off else hdr_fg), bg=hdr_bg).pack(side="left")
+                         fg=(C["accent_purple"] if is_off else hdr_fg), bg=hdr_bg).pack(side="left")
 
                 if not is_past and not is_off:
                     tk.Button(
@@ -2271,7 +2305,7 @@ class MentorApp:
 
             if early:
                 self._render_subsection_label(
-                    f"Early start · Day {pday + 1}  ({len(early)} tasks)", "#bf5af2"
+                    f"Early start · Day {pday + 1}  ({len(early)} tasks)", C["accent_purple"]
                 )
                 for task in early:
                     self._render_plan_row(task, pid)
@@ -2279,7 +2313,7 @@ class MentorApp:
         self._render_ticktick_section()
 
     def _row_hover(self, row, enter):
-        bg = C["surface"] if enter else C["bg"]
+        bg = C["hover"] if enter else C["bg"]
         row.config(bg=bg)
         for w in row.winfo_children():
             try: w.config(bg=bg)
@@ -2323,6 +2357,9 @@ class MentorApp:
             dot = tk.Canvas(row, width=8, height=8, bg=C["bg"], highlightthickness=0)
             dot.create_oval(1, 1, 7, 7, fill=CATEGORY_COLORS.get(category, C["text_muted"]), outline="")
             dot.pack(side="right", padx=(4, 8))
+            # Color must never be the only signal — name the category too.
+            tk.Label(row, text=category, font=("Segoe UI", 8),
+                     fg=C["text_muted"], bg=C["bg"]).pack(side="right")
 
         if duration and not is_done:
             tk.Label(row, text=f"{duration}m", font=("Segoe UI", 8),
@@ -2587,13 +2624,13 @@ class MentorApp:
 
         counter_var = tk.StringVar(value="Fill in description")
         counter_lbl = tk.Label(btm, textvariable=counter_var, font=("Segoe UI", 9),
-                               fg="#ff9f0a", bg=C["bg"])
+                               fg=C["accent_amber"], bg=C["bg"])
         counter_lbl.pack(side="left")
 
         submit_btn = tk.Button(btm, text="Submit",
                                font=("Segoe UI", 10, "bold"),
                                bg=C["accent_blue"], fg="white",
-                               activebackground="#0060cc", activeforeground="white",
+                               activebackground=C["accent_blue_active"], activeforeground="white",
                                relief="flat", padx=16, pady=5, state="disabled")
         submit_btn.pack(side="right", padx=(8, 0))
 
@@ -2631,10 +2668,10 @@ class MentorApp:
                 counter_lbl.config(fg=C["accent_red"])
             elif rem > 0 and all_dur_ok and all_desc_ok:
                 counter_var.set(f"{rem} min unaccounted — OK to save")
-                counter_lbl.config(fg="#ff9f0a")
+                counter_lbl.config(fg=C["accent_amber"])
             elif not all_desc_ok:
                 counter_var.set("Fill in all descriptions")
-                counter_lbl.config(fg="#ff9f0a")
+                counter_lbl.config(fg=C["accent_amber"])
             else:
                 counter_var.set("All time accounted ✓")
                 counter_lbl.config(fg=C["accent_green"])
@@ -2750,7 +2787,7 @@ class MentorApp:
         if self.tracker:
             cls, window = self.tracker.status
             dot_color  = {"on_plan": C["accent_green"], "off_plan": C["accent_red"],
-                          "paid": "#bf5af2"}.get(cls, C["text_muted"])
+                          "paid": C["accent_purple"]}.get(cls, C["text_muted"])
             status_lbl = {"on_plan": "On Plan", "off_plan": "Off Plan",
                          "paid": "Paid Time"}.get(cls, "Neutral")
             self._act_dot.itemconfig(self._act_dot_item, fill=dot_color)
@@ -2778,7 +2815,7 @@ class MentorApp:
         if active:
             remaining = max(0, int((paid_until - datetime.now()).total_seconds() / 60) + 1)
             tk.Label(self._score_body, text=f"Paid time: {remaining}m left",
-                     font=("Segoe UI", 10, "bold"), fg="#bf5af2",
+                     font=("Segoe UI", 10, "bold"), fg=C["accent_purple"],
                      bg=C["sidebar"]).pack(anchor="w")
             # Re-check when the window is due to expire so the sidebar flips
             # back to normal without waiting for the next 30s activity tick.
@@ -3889,7 +3926,7 @@ class MentorApp:
         # ── Score card (always today) ─────────────────────────────────────────
         score     = today_s["score"]
         score_col = (C["accent_green"] if score >= 20
-                     else C["accent_red"] if score < 0 else "#ff9f0a")
+                     else C["accent_red"] if score < 0 else C["accent_amber"])
         card  = tk.Frame(self.task_frame, bg=C["surface"])
         card.pack(fill="x", padx=24, pady=(0, 0))
         inner = tk.Frame(card, bg=C["surface"], padx=24, pady=16)
@@ -3928,7 +3965,7 @@ class MentorApp:
                     if ci == 4:
                         v = s["score"]
                         sfg = (C["accent_green"] if v >= 20
-                               else C["accent_red"] if v < 0 else "#ff9f0a")
+                               else C["accent_red"] if v < 0 else C["accent_amber"])
                     tk.Label(tbl, text=val, font=("Segoe UI", 10, fw),
                              fg=sfg, bg=C["bg"], width=10, anchor="w").grid(
                                  row=ri, column=ci, padx=(0, 8), pady=2)
@@ -4055,7 +4092,7 @@ class MentorApp:
         tk.Button(
             btn_row, text="Export HTML Report",
             font=("Segoe UI", 10), bg=C["accent_blue"], fg="white",
-            activebackground="#0060cc", activeforeground="white",
+            activebackground=C["accent_blue_active"], activeforeground="white",
             relief="flat", padx=16, pady=6,
             command=self._export_html_report,
         ).pack(side="left")
@@ -4092,8 +4129,8 @@ class MentorApp:
             "on_plan":  C["accent_green"],
             "off_plan": C["accent_red"],
             "neutral":  C["accent_blue"],
-            "idle":     "#ff9f0a",
-            "paid":     "#bf5af2",
+            "idle":     C["accent_amber"],
+            "paid":     C["accent_purple"],
         }
         cat_labels = {
             "on_plan":  "On-plan",
@@ -4180,7 +4217,7 @@ class MentorApp:
                 # 'idle' but "window" is still just the literal string "idle".
                 tk.Label(row_f, text=f'"{description}"',
                          font=("Segoe UI", 10, "italic"),
-                         fg=cat_colors.get(cat, "#ff9f0a"),
+                         fg=cat_colors.get(cat, C["accent_amber"]),
                          bg=C["bg"]).pack(side="left")
             else:
                 app = self._extract_app_name(window, 55)
