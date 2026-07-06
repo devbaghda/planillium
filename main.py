@@ -795,6 +795,14 @@ class MentorApp:
         return bool(by_day)
 
     def _archive_plan(self, plan):
+        if not messagebox.askyesno(
+            APP_NAME,
+            f"Archive '{plan['name']}'?\n\n"
+            f"It disappears from the sidebar and frees a plan slot. "
+            f"You can restore it any time from Settings → Archived plans.",
+            parent=self.root,
+        ):
+            return
         pid = plan["id"]
         src = os.path.join(PLANS_DIR, "active", f"{pid}.json")
         dst = os.path.join(PLANS_DIR, "archive", f"{pid}.json")
@@ -803,7 +811,40 @@ class MentorApp:
         self.plans = [p for p in self.plans if p["id"] != pid]
         self.render_tasks()
         self.tick_status()
+        self._rebuild_plans_sidebar()
         messagebox.showinfo(APP_NAME, f"'{plan['name']}' archived. You can now add a new plan.")
+
+    def _restore_archived_plan(self, fname, parent_dlg=None):
+        """Move plans/archive/<fname> back to active (Settings → Archived plans)."""
+        parent = parent_dlg or self.root
+        if len(self.plans) >= MAX_PLANS:
+            messagebox.showinfo(
+                APP_NAME, f"Maximum {MAX_PLANS} active plans. Archive one first.",
+                parent=parent)
+            return False
+        src = os.path.join(PLANS_DIR, "archive", fname)
+        dst = os.path.join(PLANS_DIR, "active", fname)
+        try:
+            with open(src, encoding="utf-8") as f:
+                plan = json.load(f)
+        except Exception:
+            messagebox.showerror(
+                APP_NAME, f"Couldn't read '{fname}' — the file may be damaged.",
+                parent=parent)
+            return False
+        if plan.get("id") in {p["id"] for p in self.plans}:
+            messagebox.showerror(
+                APP_NAME, f"A plan with id '{plan.get('id')}' is already active.",
+                parent=parent)
+            return False
+        os.rename(src, dst)
+        self.plans = self.load_plans()
+        self.render_tasks()
+        self.tick_status()
+        self._rebuild_plans_sidebar()
+        messagebox.showinfo(APP_NAME, f"'{plan.get('name', fname)}' restored.",
+                            parent=parent)
+        return True
 
     def _import_plan_dict(self, plan: dict, missing_field_hint: str = "") -> bool:
         """Validate and save a plan dict, then refresh the UI. Used by the
@@ -1674,7 +1715,31 @@ class MentorApp:
             dlg.destroy()
 
         def _do_day_off(p, day):
+            # One click reflows the whole plan tail — spell out the consequences
+            # and get a yes before touching anything.
+            by_day  = self._tasks_by_day_for(p)
+            n_day   = len(by_day.get(day, []))
+            n_after = sum(len(ts) for d, ts in by_day.items() if d > day)
+            try:
+                start = datetime.strptime(p["start_date"], "%Y-%m-%d").date()
+                cal   = (start + timedelta(days=day - 1)).strftime("%d.%m.%Y")
+                day_lbl = f"Day {day} ({cal})"
+            except Exception:
+                day_lbl = f"Day {day}"
+            if not messagebox.askyesno(
+                APP_NAME,
+                f"Mark {day_lbl} as a day off?\n\n"
+                f"{n_day} task(s) that day and {n_after} task(s) after it "
+                f"will all shift one day later.\n\n"
+                f"You can undo this from the same row.",
+                parent=dlg,
+            ):
+                return
             self._mark_day_off(p, day)
+            _render_days()
+
+        def _undo_day_off(p, day):
+            self._unmark_day_off(p, day)
             _render_days()
 
         def _render_days():
@@ -1712,6 +1777,13 @@ class MentorApp:
                         font=("Segoe UI", 8), bg=C["surface"], fg=C["text_dim"],
                         relief="flat", padx=8, pady=2, cursor="hand2",
                         command=lambda d=day, p=plan: _do_day_off(p, d),
+                    ).pack(side="right")
+                elif is_off and not is_past:
+                    tk.Button(
+                        hdr_f, text="Undo day off",
+                        font=("Segoe UI", 8), bg=C["surface"], fg=C["accent_purple"],
+                        relief="flat", padx=8, pady=2, cursor="hand2",
+                        command=lambda d=day, p=plan: _undo_day_off(p, d),
                     ).pack(side="right")
 
                 for t in tasks:
@@ -1806,6 +1878,28 @@ class MentorApp:
             self._reassign_task_day(plan_id, txt, orig, assigned, assigned + 1)
 
         self._mark_day_off_record(plan_id, day)
+        self.render_tasks()
+        self._rebuild_plans_sidebar()
+
+    def _unmark_day_off(self, plan, day):
+        """Inverse of _mark_day_off: shift every task assigned after `day` back
+        by one day and clear the day-off record."""
+        plan_id = plan["id"]
+        by_day  = self._tasks_by_day_for(plan)
+        all_tasks = [t for tasks in by_day.values() for t in tasks]
+
+        for t in all_tasks:
+            txt      = t.get("task", "")
+            orig     = t.get("original_day", t["day"])
+            assigned = t["day"]
+            if assigned <= day:
+                continue
+            self._reassign_task_day(plan_id, txt, orig, assigned, assigned - 1)
+
+        self.conn.execute(
+            "DELETE FROM plan_days_off WHERE plan_id=? AND day=?", (plan_id, day)
+        )
+        self.conn.commit()
         self.render_tasks()
         self._rebuild_plans_sidebar()
 
@@ -3088,6 +3182,39 @@ class MentorApp:
             txt.insert("1.0", "\n".join(self.config.get("idle_activity_rules", {}).get(key, [])))
             txt.pack(padx=20, fill="x")
             idle_text_vars[key] = txt
+
+        _section("ARCHIVED PLANS")
+        arch_frame = tk.Frame(inner, bg=C["bg"])
+        arch_frame.pack(fill="x", padx=20)
+
+        def _render_archived():
+            for w in arch_frame.winfo_children():
+                w.destroy()
+            arch_dir = os.path.join(PLANS_DIR, "archive")
+            files = sorted(f for f in os.listdir(arch_dir)) if os.path.isdir(arch_dir) else []
+            files = [f for f in files if f.endswith(".json")]
+            if not files:
+                tk.Label(arch_frame, text="No archived plans.",
+                         font=("Segoe UI", 9), fg=C["text_muted"], bg=C["bg"]).pack(anchor="w")
+                return
+            for fname in files:
+                try:
+                    with open(os.path.join(arch_dir, fname), encoding="utf-8") as f:
+                        pname = json.load(f).get("name", fname)
+                except Exception:
+                    pname = fname
+                row = tk.Frame(arch_frame, bg=C["bg"])
+                row.pack(fill="x", pady=2)
+                tk.Label(row, text=pname, font=("Segoe UI", 9),
+                         fg=C["text"], bg=C["bg"], anchor="w").pack(side="left")
+                tk.Button(row, text="Restore", font=("Segoe UI", 8),
+                          bg=C["surface"], fg=C["text_dim"], relief="flat",
+                          padx=8, pady=1, cursor="hand2",
+                          command=lambda fn=fname: (
+                              self._restore_archived_plan(fn, parent_dlg=dlg)
+                              and _render_archived())).pack(side="right")
+
+        _render_archived()
 
         def _save():
             # Basic validation before touching config — bail out on the first bad
