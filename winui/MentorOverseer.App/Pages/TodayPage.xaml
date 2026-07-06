@@ -5,7 +5,15 @@
 
     <ScrollViewer Padding="28,8,28,28">
         <StackPanel MaxWidth="880" HorizontalAlignment="Stretch" Spacing="0">
-            <TextBlock Text="Today" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,2"/>
+            <Grid Margin="0,8,0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Today" Style="{StaticResource TitleTextBlockStyle}"/>
+                <Button Grid.Column="1" Content="Evening review" Click="Review_Click"
+                        VerticalAlignment="Center"/>
+            </Grid>
             <TextBlock x:Name="Subtitle"
                        Style="{StaticResource BodyTextBlockStyle}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -17,11 +25,12 @@
                      IsClosable="False"
                      Margin="0,0,0,8">
                 <InfoBar.ActionButton>
-                    <Button x:Name="ReplanButton" Content="Replan all overdue…" IsEnabled="False"/>
+                    <Button x:Name="ReplanButton" Content="Replan all overdue…" Click="Replan_Click"/>
                 </InfoBar.ActionButton>
             </InfoBar>
 
             <StackPanel x:Name="Sections" Spacing="0"/>
+            <StackPanel x:Name="TickTickHost" Spacing="0"/>
         </StackPanel>
     </ScrollViewer>
 </Page>
