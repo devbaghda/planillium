@@ -427,6 +427,59 @@ C = {}
 C.update(THEMES["light"])
 
 
+def _ellipsize(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+class Hovertip:
+    """Minimal tooltip: shows `text` in a small borderless window after a short
+    hover delay. Reads theme colors at show time, so it follows theme changes."""
+
+    def __init__(self, widget, text, delay_ms=600):
+        self.widget, self.text, self.delay = widget, text, delay_ms
+        self._after = None
+        self._tip = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<Button>", self._hide, add="+")
+
+    def _schedule(self, _e=None):
+        self._cancel()
+        self._after = self.widget.after(self.delay, self._show)
+
+    def _cancel(self):
+        if self._after is not None:
+            try:
+                self.widget.after_cancel(self._after)
+            except Exception:
+                pass
+            self._after = None
+
+    def _show(self):
+        if self._tip is not None or not self.widget.winfo_exists():
+            return
+        x = self.widget.winfo_rootx() + 10
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        tip = tk.Toplevel(self.widget)
+        tip.wm_overrideredirect(True)
+        tip.attributes("-topmost", True)
+        tk.Label(tip, text=self.text, font=("Segoe UI", 8),
+                 bg=C["surface"], fg=C["text"],
+                 highlightthickness=1, highlightbackground=C["separator"],
+                 padx=6, pady=3).pack()
+        tip.geometry(f"+{x}+{y}")
+        self._tip = tip
+
+    def _hide(self, _e=None):
+        self._cancel()
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
+
 class MentorApp:
     _BROWSERS = frozenset({
         "google chrome", "chrome", "mozilla firefox", "firefox",
@@ -1371,6 +1424,7 @@ class MentorApp:
 
         self.root.configure(bg=C["bg"])
         self._selected_task_key = None
+        self._active_view = "today"  # a rebuild always lands on the Today view
 
         # Set window + dialog icon.  iconbitmap propagates to messageboxes on Windows;
         # iconphoto is the fallback for non-.ico environments (Linux/Mac dev runs).
@@ -1458,10 +1512,12 @@ class MentorApp:
                 pass
         tk.Label(hdr, text="Mentor\nOverseer", font=("Segoe UI", 11, "bold"),
                  fg=C["text"], bg=C["sidebar"], justify="left").pack(side="left", padx=(10, 0))
-        tk.Button(hdr, text="⚙", font=("Segoe UI", 12), bg=C["sidebar"], fg=C["text_dim"],
-                  activebackground=C["surface"], activeforeground=C["text"],
-                  relief="flat", bd=0, cursor="hand2",
-                  command=self._show_settings_dialog).pack(side="right", anchor="n")
+        gear_btn = tk.Button(hdr, text="⚙", font=("Segoe UI", 12), bg=C["sidebar"], fg=C["text_dim"],
+                             activebackground=C["surface"], activeforeground=C["text"],
+                             relief="flat", bd=0, cursor="hand2",
+                             command=self._show_settings_dialog)
+        gear_btn.pack(side="right", anchor="n")
+        Hovertip(gear_btn, "Settings  (Ctrl+,)")
 
         tk.Frame(sb, bg=C["separator"], height=1).pack(fill="x")
 
@@ -1499,14 +1555,16 @@ class MentorApp:
         # Navigation
         nav = tk.Frame(sb, bg=C["sidebar"], pady=6)
         nav.pack(fill="x")
+        self._nav_restyles = {}
         self._today_count_var   = tk.StringVar()
         self._overdue_count_var = tk.StringVar()
         self._sb_item(nav, "Today",   self._today_count_var,   C["accent_blue"],
-                      command=self._show_today_view)
+                      command=self._show_today_view, nav_key="today")
         self._sb_item(nav, "Overdue", self._overdue_count_var, C["accent_red"],
-                      command=self._show_today_view)
+                      command=lambda: self._show_today_view(scroll_to_overdue=True),
+                      nav_key="overdue")
         self._sb_item(nav, "Weekly Report", tk.StringVar(),    C["accent_green"],
-                      command=self._show_report_view)
+                      command=self._show_report_view, nav_key="report")
 
         tk.Frame(sb, bg=C["separator"], height=1).pack(fill="x")
 
@@ -1565,35 +1623,58 @@ class MentorApp:
         self._score_body = tk.Frame(self._score_frame, bg=C["sidebar"])
         self._score_body.pack(fill="x")
 
-    def _sb_item(self, parent, label, count_var, dot_color, command=None):
+    def _sb_item(self, parent, label, count_var, dot_color, command=None, nav_key=None):
         row = tk.Frame(parent, bg=C["sidebar"], padx=16, pady=6, cursor="hand2")
         row.pack(fill="x")
+
+        # Thin accent bar on the left — the persistent "you are here" marker
+        # for the active view (invisible sidebar-on-sidebar otherwise).
+        bar = tk.Frame(row, bg=C["sidebar"], width=3, height=18)
+        bar.pack(side="left", padx=(0, 7))
+        bar.pack_propagate(False)
 
         dot = tk.Canvas(row, width=8, height=8, bg=C["sidebar"], highlightthickness=0)
         dot.create_oval(1, 1, 7, 7, fill=dot_color, outline="")
         dot.pack(side="left", padx=(0, 10))
 
-        tk.Label(row, text=label, font=("Segoe UI", 10),
-                 fg=C["text"], bg=C["sidebar"]).pack(side="left")
+        lbl = tk.Label(row, text=label, font=("Segoe UI", 10),
+                       fg=C["text"], bg=C["sidebar"])
+        lbl.pack(side="left")
         tk.Label(row, textvariable=count_var, font=("Segoe UI", 9),
                  fg=C["text_dim"], bg=C["sidebar"]).pack(side="right")
 
-        def _in(e):
-            row.config(bg=C["hover"])
+        def _is_active():
+            return nav_key is not None and getattr(self, "_active_view", None) == nav_key
+
+        def _bg(color):
+            row.config(bg=color)
             for w in row.winfo_children():
-                try: w.config(bg=C["hover"])
+                try: w.config(bg=color)
                 except Exception: pass
-        def _out(e):
-            row.config(bg=C["sidebar"])
-            for w in row.winfo_children():
-                try: w.config(bg=C["sidebar"])
-                except Exception: pass
-        row.bind("<Enter>", _in)
-        row.bind("<Leave>", _out)
+            if _is_active():
+                bar.config(bg=C["accent_blue"])
+
+        def _restyle():
+            if _is_active():
+                _bg(C["hover"])
+                lbl.config(font=("Segoe UI", 10, "bold"))
+            else:
+                _bg(C["sidebar"])
+                lbl.config(font=("Segoe UI", 10))
+
+        row.bind("<Enter>", lambda e: _bg(C["hover"]))
+        row.bind("<Leave>", lambda e: _restyle())
         if command:
             row.bind("<Button-1>", lambda e: command())
             for w in row.winfo_children():
                 w.bind("<Button-1>", lambda e: command())
+        if nav_key is not None:
+            self._nav_restyles[nav_key] = _restyle
+            _restyle()
+
+    def _set_active_nav(self):
+        for restyle in getattr(self, "_nav_restyles", {}).values():
+            restyle()
 
     def _rebuild_plans_sidebar(self):
         for w in self._plans_frame.winfo_children():
@@ -1619,9 +1700,11 @@ class MentorApp:
             dot.create_oval(1, 1, 7, 7, fill=pcolor, outline="")
             dot.pack(side="left", padx=(0, 6))
 
-            name_lbl = tk.Label(row, text=pname[:22], font=("Segoe UI", 9, "bold"),
+            name_lbl = tk.Label(row, text=_ellipsize(pname, 22), font=("Segoe UI", 9, "bold"),
                                 fg=C["text"], bg=C["sidebar"], anchor="w")
             name_lbl.pack(side="left", fill="x", expand=True)
+            if len(pname) > 22:
+                Hovertip(name_lbl, pname)
 
             day_lbl = tk.Label(row, text=f"d{pday}", font=("Segoe UI", 8),
                                fg=C["text_muted"], bg=C["sidebar"])
@@ -2011,12 +2094,16 @@ class MentorApp:
             view["month"], view["year"] = m, y
             _render_month()
 
-        tk.Button(hdr, text="<", font=("Segoe UI", 10), width=3, relief="flat",
-                  bg=C["surface"], fg=C["text"], command=lambda: _shift_month(-1)).pack(side="left")
+        prev_btn = tk.Button(hdr, text="<", font=("Segoe UI", 10), width=3, relief="flat",
+                             bg=C["surface"], fg=C["text"], command=lambda: _shift_month(-1))
+        prev_btn.pack(side="left")
         tk.Label(hdr, textvariable=month_var, font=("Segoe UI", 11, "bold"),
                  fg=C["text"], bg=C["bg"], width=16, anchor="center").pack(side="left", expand=True)
-        tk.Button(hdr, text=">", font=("Segoe UI", 10), width=3, relief="flat",
-                  bg=C["surface"], fg=C["text"], command=lambda: _shift_month(1)).pack(side="left")
+        next_btn = tk.Button(hdr, text=">", font=("Segoe UI", 10), width=3, relief="flat",
+                             bg=C["surface"], fg=C["text"], command=lambda: _shift_month(1))
+        next_btn.pack(side="left")
+        Hovertip(prev_btn, "Previous month")
+        Hovertip(next_btn, "Next month")
 
         _render_month()
 
@@ -2358,8 +2445,10 @@ class MentorApp:
                  fg=accent, bg=C["bg"]).pack(anchor="w", pady=(4, 2))
 
     def _render_subsection_label(self, label, color):
-        tk.Label(self.task_frame, text=label, font=("Segoe UI", 8, "bold"),
-                 fg=color, bg=C["bg"], padx=24).pack(anchor="w", pady=(6, 2))
+        lbl = tk.Label(self.task_frame, text=label, font=("Segoe UI", 8, "bold"),
+                       fg=color, bg=C["bg"], padx=24)
+        lbl.pack(anchor="w", pady=(6, 2))
+        return lbl
 
     def render_tasks(self):
         try:
@@ -2385,11 +2474,21 @@ class MentorApp:
         for child in self.task_frame.winfo_children():
             child.destroy()
         self.task_vars.clear()
+        self._first_overdue_widget = None  # scroll anchor for the Overdue nav item
 
         if not self.plans:
-            tk.Label(self.task_frame, text="No active plans. Add a plan to get started.",
-                     font=("Segoe UI", 12), bg=C["bg"], fg=C["text_muted"],
-                     padx=24, pady=24).pack(anchor="w")
+            empty = tk.Frame(self.task_frame, bg=C["bg"])
+            empty.pack(anchor="w", padx=24, pady=24)
+            tk.Label(empty, text="No active plans yet.",
+                     font=("Segoe UI", 12), bg=C["bg"], fg=C["text"]).pack(anchor="w")
+            tk.Label(empty,
+                     text="Generate one with Claude, paste your own, or load a plan file.",
+                     font=("Segoe UI", 10), bg=C["bg"], fg=C["text_dim"]).pack(anchor="w", pady=(4, 0))
+            tk.Button(empty, text="+ Add Plan", font=("Segoe UI", 10),
+                      bg=C["accent_blue"], fg="white",
+                      activebackground=C["accent_blue_active"], activeforeground="white",
+                      relief="flat", padx=14, pady=5, cursor="hand2",
+                      command=self._show_generate_plan_dialog).pack(anchor="w", pady=(12, 0))
             self._render_ticktick_section()
             return
 
@@ -2421,7 +2520,9 @@ class MentorApp:
             self._render_section_header(header, C["text"])
 
             if overdue:
-                self._render_subsection_label(f"Overdue · {len(overdue)}", C["accent_red"])
+                ov_lbl = self._render_subsection_label(f"Overdue · {len(overdue)}", C["accent_red"])
+                if self._first_overdue_widget is None:
+                    self._first_overdue_widget = ov_lbl
                 for task in overdue:
                     self._render_plan_row(task, pid)
 
@@ -2554,9 +2655,16 @@ class MentorApp:
         self._render_section_header("My Tasks  (TickTick)", C["text"])
 
         if not self.ticktick or not self.ticktick.is_authorized:
-            tk.Label(self.task_frame, text="Connect TickTick in the sidebar.",
-                     font=("Segoe UI", 10), fg=C["text_muted"], bg=C["bg"],
-                     padx=24, pady=4).pack(anchor="w")
+            wrap = tk.Frame(self.task_frame, bg=C["bg"])
+            wrap.pack(anchor="w", padx=24, pady=4)
+            tk.Label(wrap, text="Pull in your personal TickTick tasks due today.",
+                     font=("Segoe UI", 10), fg=C["text_muted"], bg=C["bg"]).pack(anchor="w")
+            if self.ticktick:  # still None while the client initialises
+                tk.Button(wrap, text="Connect TickTick", font=("Segoe UI", 9),
+                          bg=C["surface"], fg=C["text_dim"],
+                          activebackground=C["hover"], activeforeground=C["text"],
+                          relief="flat", padx=10, pady=3, cursor="hand2",
+                          command=self.on_connect_ticktick).pack(anchor="w", pady=(6, 0))
             return
 
         if not self.tt_tasks:
@@ -2723,7 +2831,7 @@ class MentorApp:
             dlg.grab_release()
             dlg.destroy()
             if self.root.state() != "withdrawn":
-                self._show_report_view() if self.list_title_var.get() == "Weekly Report" else None
+                self._show_report_view() if getattr(self, "_active_view", "") == "report" else None
 
         dlg.protocol("WM_DELETE_WINDOW", _dismiss)
         dlg.grab_set()
@@ -2854,6 +2962,7 @@ class MentorApp:
                                    bg=C["bg"], fg=C["text_muted"], relief="flat",
                                    cursor="hand2", bd=0, command=_remove)
             remove_btn.pack(side="right", padx=(6, 0))
+            Hovertip(remove_btn, "Remove this activity row")
 
             def _focus_in(e):
                 if desc_entry.get() == PLACEHOLDER:
@@ -2916,7 +3025,7 @@ class MentorApp:
             dlg.grab_release()
             dlg.destroy()
             # Refresh report page if it was already open
-            if self.list_title_var.get() == "Weekly Report":
+            if getattr(self, "_active_view", "") == "report":
                 self._show_report_view()
 
         submit_btn.config(command=_submit)
@@ -3685,7 +3794,8 @@ class MentorApp:
             self.status_var.set(f"{done_today}/{total_today} done today")
             self._today_count_var.set(str(remaining) if remaining else "")
             self._overdue_count_var.set(str(overdue_n) if overdue_n else "")
-        self.list_title_var.set("Today")
+        # (deliberately NOT resetting list_title_var here — this tick fires
+        # every 60s and used to clobber the "Weekly Report" title mid-view)
 
         self._pb_canvas.update_idletasks()
         w = self._pb_canvas.winfo_width() or 1
@@ -3719,12 +3829,22 @@ class MentorApp:
 
     # ── Phase 4 — reports ────────────────────────────────────────────────────
 
-    def _show_today_view(self):
+    def _show_today_view(self, scroll_to_overdue=False):
+        self._active_view = "overdue" if scroll_to_overdue else "today"
+        self._set_active_nav()
         self.list_title_var.set("Today")
         self.render_tasks()
-        self.canvas.yview_moveto(0)
+        first_ov = getattr(self, "_first_overdue_widget", None)
+        if scroll_to_overdue and first_ov is not None and first_ov.winfo_exists():
+            self.task_frame.update_idletasks()
+            self.canvas.yview_moveto(
+                first_ov.winfo_y() / max(1, self.task_frame.winfo_height()))
+        else:
+            self.canvas.yview_moveto(0)
 
     def _show_report_view(self):
+        self._active_view = "report"
+        self._set_active_nav()
         self.list_title_var.set("Weekly Report")
         for w in self.task_frame.winfo_children():
             w.destroy()
@@ -4978,10 +5098,20 @@ def main():
 
     # Must be set before the first window is created, or Windows bitmap-scales
     # the whole UI on any display above 100% scaling — blurry text/controls.
+    # Per-Monitor v2 first (stays sharp when dragged between mixed-DPI
+    # monitors); system-DPI aware as the fallback on older Windows.
+    _dpi_ok = False
     try:
-        _ctypes.windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE
+        # Returns 0 (no exception) on failure — check the result.
+        _dpi_ok = bool(_ctypes.windll.user32.SetProcessDpiAwarenessContext(
+            _ctypes.c_void_p(-4)))  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
     except Exception:
         pass
+    if not _dpi_ok:
+        try:
+            _ctypes.windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE
+        except Exception:
+            pass
 
     root = tk.Tk()
     # Tkinter routes exceptions raised inside widget callbacks (button commands,
