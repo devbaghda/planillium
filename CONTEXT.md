@@ -208,7 +208,42 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-05, branch `ui-theme-light-dark` (off `audit-remediation`
+- Last session: 2026-07-06, branch `ux-audit-fixes` (off `ui-theme-light-dark`)
+- What was built: **UX/UI audit + all-12-findings remediation loop** (4 commits,
+  `753cd50`..`2ed5c24`). Highlights:
+  - Theme system hardened: new `hover`/`accent_amber`/`accent_purple`/
+    `accent_blue_active` keys in `THEMES`; `CATEGORY_COLORS` is now per-theme
+    (populated by `_apply_theme` like `C`); light `text_muted` darkened to
+    `#6e7480` for WCAG contrast; ~13 in-app hardcoded dark-era hex colors
+    replaced with theme keys (HTML export deliberately untouched — that page
+    is fixed dark). Task rows now show the category *name* next to the dot.
+  - Destructive-action safety: "Day off" asks for confirmation with exact
+    task counts and has a full **Undo day off** (`_unmark_day_off` inverse
+    shift + record delete); Archive asks first; Settings has a new
+    "Archived plans" section with per-plan Restore.
+  - Keyboard: Esc closes all 12 dialogs (`_finalize_dialog` helper — also
+    centers every dialog over the main window); Ctrl+1/Ctrl+2/Ctrl+,/Ctrl+N
+    global shortcuts; task rows are Tab-focusable with visible focus ring,
+    Return opens detail, Space toggles done.
+  - Nav: active view gets an accent left-bar + bold label (`_sb_item` grew
+    `nav_key`; `self._active_view`); "Overdue" now scrolls the Today view to
+    the first overdue section instead of duplicating "Today".
+  - "Automatic" theme re-checks the OS setting on the 60s tick — live
+    light/dark switching without restart.
+  - Per-Monitor-v2 DPI awareness (fallback to the old system-aware call).
+  - Empty states got CTA buttons (+ Add Plan / Connect TickTick); tooltips
+    (`Hovertip` class) on ⚙, calendar </>, idle-row ✕, truncated plan names
+    (now ellipsized via `_ellipsize`, not hard-cut).
+  - **Two latent bugs found & fixed during the loop**: `tick_status` reset
+    the list title to "Today" every 60s (clobbered the Weekly Report header;
+    view checks now use `_active_view`, not the title string), and rebuilds
+    could stack parallel 60s tick loops (now guarded with `after_cancel` via
+    `_tick_after_id`).
+  - Verified: 42/43 automated widget-level checks on an isolated copy (the
+    1 "failure" was a withdrawn-root key-event artifact, re-verified green
+    with a focused window) + in-process screenshots of light/dark/report.
+  - NOT yet rebuilt into `MentorOverseer.exe` — run `build.bat` when ready.
+- Previous session: 2026-07-05, branch `ui-theme-light-dark` (off `audit-remediation`
   at commit `4884eda` — kept separate per the user's request, not merged back yet)
 - What was built:
   - **Light/Dark/Automatic theme system.** The `C` dict (was a static
