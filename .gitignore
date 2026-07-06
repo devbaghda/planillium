@@ -14,3 +14,5 @@ __pycache__/
 # Editor/tooling
 .vscode/
 .claude/
+winui/**/bin/
+winui/**/obj/

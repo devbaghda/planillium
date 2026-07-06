@@ -1,0 +1,40 @@
+namespace MentorOverseer.App.Services;
+
+/// <summary>
+/// Locates the shared data root — the existing Python app's folder holding
+/// config.json / plans/ / data/progress.db. The WinUI app reads and writes the
+/// SAME files, so both apps can run side by side during the migration.
+/// Resolution order: MENTOR_ROOT env var, then walking up from the exe
+/// directory looking for a folder that has both "plans" and "config.json".
+/// </summary>
+public static class AppPaths
+{
+    private static string? _root;
+
+    public static string Root
+    {
+        get
+        {
+            if (_root != null) return _root;
+
+            var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
+            if (!string.IsNullOrEmpty(env) && Directory.Exists(env))
+                return _root = env;
+
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                if (File.Exists(Path.Combine(dir.FullName, "config.json")) &&
+                    Directory.Exists(Path.Combine(dir.FullName, "plans")))
+                    return _root = dir.FullName;
+                dir = dir.Parent;
+            }
+            throw new DirectoryNotFoundException(
+                "Couldn't find the Mentor-Overseer data folder (config.json + plans/). " +
+                "Set the MENTOR_ROOT environment variable to point at it.");
+        }
+    }
+
+    public static string ActivePlansDir => Path.Combine(Root, "plans", "active");
+    public static string DbPath => Path.Combine(Root, "data", "progress.db");
+}
