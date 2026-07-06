@@ -1149,6 +1149,8 @@ class MentorApp:
                   bg=C["accent_green"], fg="white", relief="flat", padx=12,
                   command=_do_import).pack(side="right")
 
+        self._finalize_dialog(dlg)
+
     def _show_plan_briefing_dialog(self, plan):
         """Read-only view of the 80/20 strategic briefing Claude generated
         alongside this plan (see _show_generate_plan_dialog)."""
@@ -1191,6 +1193,8 @@ class MentorApp:
         tk.Button(outer, text="Close", font=("Segoe UI", 10),
                   bg=C["surface"], fg=C["text"], relief="flat", padx=12,
                   command=dlg.destroy).pack(anchor="e", pady=(18, 0))
+
+        self._finalize_dialog(dlg)
 
     # ── database ─────────────────────────────────────────────────────────────
 
@@ -1336,6 +1340,29 @@ class MentorApp:
         CATEGORY_COLORS.update(CATEGORY_COLORS_THEMES[resolved])
         self._resolved_theme = resolved
 
+    def _finalize_dialog(self, dlg, on_escape=None):
+        """Shared dialog behaviour, called once a dialog's widgets are built:
+        Esc cancels (same as the window X), and the dialog opens centered over
+        the main window — clamped to the screen — instead of wherever the
+        window manager happens to drop it."""
+        dlg.bind("<Escape>", lambda e: (on_escape or dlg.destroy)())
+        dlg.update_idletasks()
+        w = dlg.winfo_width()
+        h = dlg.winfo_height()
+        if w <= 1 or h <= 1:
+            w, h = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        try:
+            if self.root.state() == "withdrawn":
+                raise tk.TclError  # minimized to tray — center on screen instead
+            x = self.root.winfo_rootx() + (self.root.winfo_width()  - w) // 2
+            y = self.root.winfo_rooty() + (self.root.winfo_height() - h) // 2
+        except Exception:
+            x, y = (sw - w) // 2, (sh - h) // 2
+        x = max(0, min(x, sw - w))
+        y = max(0, min(y, sh - h))
+        dlg.geometry(f"+{x}+{y}")
+
     def build_interface(self):
         # Idempotent: a theme change calls this again to rebuild the whole
         # window with the new colors, so any previous container must go first.
@@ -1368,6 +1395,12 @@ class MentorApp:
         self._build_task_list_area(container)
         tk.Frame(container, bg=C["separator"], width=1).pack(side="left", fill="y")
         self._build_detail_panel(container)
+
+        # Global shortcuts — rebinding on rebuild is harmless (bind replaces).
+        self.root.bind("<Control-Key-1>", lambda e: self._show_today_view())
+        self.root.bind("<Control-Key-2>", lambda e: self._show_report_view())
+        self.root.bind("<Control-comma>", lambda e: self._show_settings_dialog())
+        self.root.bind("<Control-n>",     lambda e: self._show_generate_plan_dialog())
 
         self.render_tasks()
         self.tick_status()
@@ -1816,6 +1849,7 @@ class MentorApp:
 
         _render_days()
         canvas.bind("<MouseWheel>", _scroll)
+        self._finalize_dialog(dlg)
 
     def _reassign_task_day(self, plan_id, task_text, original_day, old_assigned_day, new_assigned_day):
         """Move one task to a new assigned day, migrating its completion record
@@ -1990,6 +2024,7 @@ class MentorApp:
                   bg=C["surface"], fg=C["text"], padx=12,
                   command=dlg.destroy).pack(pady=(4, 14))
 
+        self._finalize_dialog(dlg)
         dlg.wait_window()
         return result["date"]
 
@@ -2233,6 +2268,8 @@ class MentorApp:
                   bg=plan.get("color", C["accent_blue"]), fg="white", relief="flat", padx=12,
                   command=_save).pack(side="right")
 
+        self._finalize_dialog(dlg)
+
     def _apply_task_edit(self, plan, target, old_text, new_title, new_detail,
                           new_mentor_note, new_dur, new_cat):
         """Mutate the task in-place in the plan JSON and, if the title changed,
@@ -2425,11 +2462,19 @@ class MentorApp:
         var = tk.BooleanVar(value=is_done)
         self.task_vars[key] = var
 
-        row = tk.Frame(self.task_frame, bg=C["bg"], pady=2, cursor="hand2")
+        # takefocus puts the row in the Tab order; the highlight ring doubles as
+        # the visible focus state (invisible until focused — bg-on-bg).
+        row = tk.Frame(self.task_frame, bg=C["bg"], pady=2, cursor="hand2",
+                       takefocus=1, highlightthickness=1,
+                       highlightbackground=C["bg"], highlightcolor=C["accent_blue"])
         row.pack(fill="x")
         row.bind("<Enter>", lambda e, r=row: self._row_hover(r, True))
         row.bind("<Leave>", lambda e, r=row: self._row_hover(r, False))
         row.bind("<Button-1>", lambda e, t=task, d=task_day, pid=plan_id: self._show_task_detail(t, d, pid))
+        row.bind("<Return>", lambda e, t=task, d=task_day, pid=plan_id: self._show_task_detail(t, d, pid))
+        row.bind("<space>",
+                 lambda e, k=key, v=var, pid=plan_id: (v.set(not v.get()),
+                                                       self._on_plan_toggle(k, v, pid)))
 
         cb = tk.Checkbutton(
             row, variable=var,
@@ -2876,6 +2921,7 @@ class MentorApp:
 
         submit_btn.config(command=_submit)
         dlg.bind("<Return>", lambda e: _submit())
+        dlg.bind("<Escape>", lambda e: _dismiss())
 
     def _update_activity_status(self):
         if self.tracker:
@@ -3000,6 +3046,7 @@ class MentorApp:
         tk.Button(btn_row, text="Buy", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
         dlg.bind("<Return>", lambda e: _confirm())
+        self._finalize_dialog(dlg)
 
     def _show_log_expenditure_dialog(self):
         _, rate, symbol = self._score_rates()
@@ -3065,6 +3112,7 @@ class MentorApp:
         tk.Button(btn_row, text="Log spend", command=_confirm, width=12, **_dbtn).pack(side="left", padx=6)
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
         dlg.bind("<Return>", lambda e: _confirm())
+        self._finalize_dialog(dlg)
 
     # ── settings dialog ─────────────────────────────────────────────────────
 
@@ -3287,6 +3335,8 @@ class MentorApp:
                      activebackground=C["border"], activeforeground=C["text"])
         tk.Button(btn_row, text="Save", command=_save, width=12, **_dbtn).pack(side="left", padx=(20, 6))
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left")
+
+        self._finalize_dialog(dlg)
 
     # ── TickTick integration ─────────────────────────────────────────────────
 
@@ -3514,6 +3564,7 @@ class MentorApp:
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10, **_dbtn).pack(side="left", padx=6)
         dlg.bind("<Return>", lambda e: _save())
 
+        self._finalize_dialog(dlg)
         dlg.wait_window()
         return saved["ok"]
 
@@ -3571,6 +3622,7 @@ class MentorApp:
                   bg=C["surface"], fg=C["text"], relief="flat",
                   activebackground=C["border"], activeforeground=C["text"]).pack()
         dlg.bind("<Return>", lambda e: dlg.destroy())
+        self._finalize_dialog(dlg)
         dlg.wait_window()
 
     def _tt_on_authorized(self):
@@ -3647,7 +3699,23 @@ class MentorApp:
             self.eod_var.set(f"EOD summary in {h}h {m}m")
         else:
             self.eod_var.set("EOD summary due now")
-        self.root.after(60_000, self.tick_status)
+
+        # "Automatic" theme: follow a live OS light/dark switch without a
+        # restart — cheap registry read, only rebuilds when the answer changes.
+        mode = self.config.get("appearance", {}).get("theme_mode", "light")
+        if mode == "auto" and _resolve_theme(mode) != getattr(self, "_resolved_theme", None):
+            self._apply_theme(mode)
+            self.build_interface()
+
+        # tick_status is re-entered by build_interface (theme rebuilds) as well
+        # as by its own timer — cancel any still-pending tick first so rebuilds
+        # can't stack parallel 60s loops.
+        if getattr(self, "_tick_after_id", None) is not None:
+            try:
+                self.root.after_cancel(self._tick_after_id)
+            except Exception:
+                pass
+        self._tick_after_id = self.root.after(60_000, self.tick_status)
 
     # ── Phase 4 — reports ────────────────────────────────────────────────────
 
@@ -4455,6 +4523,7 @@ class MentorApp:
                   bg=C["accent_blue"], fg="white", relief="flat", padx=12,
                   command=_save).pack(side="left")
         dlg.bind("<Return>", lambda e: _save())
+        self._finalize_dialog(dlg)
 
     # ── HTML export ──────────────────────────────────────────────────────────
 
