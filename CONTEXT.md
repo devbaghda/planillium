@@ -208,7 +208,30 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-06, branch `ux-audit-fixes` (off `ui-theme-light-dark`)
+- Last session: 2026-07-06 (second pass), branch `winui-rebuild` (off `ux-audit-fixes`)
+- **WinUI rebuild phase 1 shipped** (`e44b6f9`): the user approved the Fluent redesign
+  (mockup: https://claude.ai/code/artifact/a3ab9082-83c6-4bb5-8dac-5f696bdc12c0 —
+  full design direction in memory `project-design-direction`). New `winui/
+  MentorOverseer.App` — WinUI 3 / .NET 8 / WASDK 1.5, unpackaged + self-contained,
+  builds with plain `dotnet build -p:Platform=x64` (no Visual Studio). .NET 8 SDK
+  was installed **user-scope** at `%LOCALAPPDATA%\Microsoft\dotnet` (on user PATH).
+  Shell: Mica + custom title bar + NavigationView + score chip. Today page reads
+  the REAL plans/db (same files as the Python app, found by walking up from the
+  exe or via MENTOR_ROOT) and toggles completions with byte-identical SQL.
+  Verified live: built, launched, PrintWindow screenshot — real plan, real
+  overdue meta, real score. Polish backlog: date header uses system locale
+  (showed Russian day names), Replan button disabled (score v2 phase), stub
+  pages for Schedule/Reports/Plans/Settings.
+  **Screenshot lesson v2:** even after confirming the window title,
+  `CopyFromScreen` grabs whatever is visually on top (captured the user's live
+  Tanki Online game once, and `SetForegroundWindow` yanked his fullscreen
+  focus). Use `PrintWindow` with flag `PW_RENDERFULLCONTENT` (2) instead —
+  renders the target window's own surface, no focus theft, works while covered.
+- Remaining rebuild phases (in order): tracker service → morning kickoff +
+  evening review → score economy v2 (floor −10, 3-day accrual cap, replan-all
+  for flat −10) → reports → TickTick → plan wizard. Keep SQLite schema, plan
+  JSON, and config.json formats frozen — that's the Python↔C# contract.
+- Previous session: 2026-07-06, branch `ux-audit-fixes` (off `ui-theme-light-dark`)
 - What was built: **UX/UI audit + all-12-findings remediation loop** (4 commits,
   `753cd50`..`2ed5c24`). Highlights:
   - Theme system hardened: new `hover`/`accent_amber`/`accent_purple`/
