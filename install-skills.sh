@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 set -e
-# Installs windows-app-auditor and windows-code-refiner as Claude Code skills.
+# Installs the Windows app launch-team skills for Claude Code:
+#   windows-app-auditor  — find defects (5 passes incl. privacy & compliance) + remediation loop
+#   windows-code-refiner — behavior-preserving cleanup & documentation
+#   windows-app-tester   — test suites, smoke harness, soak/runtime QA
+#   windows-app-releaser — installers, signing, versioning, update path, crash reporting
+#   launch-readiness     — go/no-go gate + beta program playbook
 # Run from your project root. Defaults to project-local .claude/skills.
 # Pass --global to install into ~/.claude/skills instead (available in every project).
-# Regenerated 2026-07-07 from mentor-overseer/.claude/skills — includes the lessons
-# learned during the Python + WinUI audit/remediation sessions (product/design pass,
-# runtime verification safety, timer reentrancy, locale, shared-data contracts, etc.)
+# Regenerated 2026-07-07 from mentor-overseer/.claude/skills.
 
 TARGET=".claude/skills"
 if [ "$1" = "--global" ]; then TARGET="$HOME/.claude/skills"; fi
 echo "Installing skills into: $TARGET"
 mkdir -p "$TARGET/windows-app-auditor/references"
 mkdir -p "$TARGET/windows-code-refiner/references"
+mkdir -p "$TARGET/windows-app-tester/references"
+mkdir -p "$TARGET/windows-app-releaser/references"
+mkdir -p "$TARGET/launch-readiness/references"
 
 cat > "$TARGET/windows-app-auditor/SKILL.md" << 'SKILL_EOF'
 ---
@@ -19,8 +25,8 @@ name: windows-app-auditor
 description: >-
   Audit a Windows desktop application for production-readiness across architecture/back-end health,
   security, product & UX/UI quality (including audience fit, design language, and application-logic
-  sanity), and code quality, and produce a prioritized findings report with file:line evidence and
-  concrete fixes. Use this whenever the user wants to review, audit, harden, "check," or "is this ready
+  sanity), code quality, and privacy & compliance (data inventory, consent, retention, licenses),
+  and produce a prioritized findings report with file:line evidence and concrete fixes. Use this whenever the user wants to review, audit, harden, "check," or "is this ready
   to ship" a Windows app (.NET / WPF / WinForms / MAUI / WinUI / packaged or unpackaged), or asks for a
   code review, security review, design review, pre-release check, or quality pass on a desktop
   application we are building together. Trigger even when the user just says "review the app," "is this
@@ -67,12 +73,15 @@ A report that says "I couldn't verify X, here's how you test it" is worth more t
    ask the user up to three short questions first. "The design is wrong" is only a finding relative to
    a stated target; without one, record design observations as questions, not defects.
 
-3. **Run the four category passes.** Read the matching reference file and work through it against the
+3. **Run the five category passes.** Read the matching reference file and work through it against the
    real source. Don't load a reference until you're auditing that category.
    - Architecture & back-end health → `references/architecture.md`
    - Security → `references/security.md`
    - Product, UX/UI & accessibility → `references/ux.md`
    - Code quality & maintainability → `references/code-quality.md`
+   - Privacy & compliance → `references/privacy-compliance.md` — mandatory (not optional polish) for
+     any app that records user behavior (trackers, monitors, diaries) or is headed for users beyond
+     its author; for a pure solo dev-tool it may be run lightly, but say so.
 
 4. **Collect findings with evidence.** For each issue: `path:line`, what's wrong, why it matters
    (consequence, not theory), severity, and a concrete fix. Skip anything you can't ground in the code.
@@ -191,6 +200,9 @@ to something you actually found in their code.
 - `references/code-quality.md` — God Objects, swallowed exceptions, function length, magic numbers,
   dead code, duplication, naming consistency (incl. shadowing), import hygiene, constants discipline,
   docs, and tooling.
+- `references/privacy-compliance.md` — data inventory (window titles are content, not metadata),
+  consent & first-run disclosure for monitoring features, retention/export/delete, telemetry
+  redaction, third-party license hygiene, claims honesty. Engineering review, not legal advice.
 - `references/remediation-loop.md` — the audit → fix → re-audit cycle: triage buckets, the loop, safe
   editing discipline, the exit condition, and anti-thrash guards. Read this when the user asks to fix
   findings, not just report.
@@ -791,6 +803,94 @@ one of: break up the God Object, add a logging infrastructure, or add a test har
 logic. Be specific — name the file, the class, and the first module to extract.
 SKILL_EOF
 
+cat > "$TARGET/windows-app-auditor/references/privacy-compliance.md" << 'SKILL_EOF'
+# Privacy & Compliance
+
+This pass exists because an app can be secure, stable, and beautiful — and still be a liability the
+day someone other than its author runs it. It matters *most* for monitoring-class apps (activity
+trackers, time diaries, screenshot tools): their core feature is recording personal behavior.
+
+Scope honesty: this is an engineering compliance review — data inventory, consent mechanics, license
+hygiene. It is **not legal advice**; before a real commercial launch in the EU (GDPR) or similar
+jurisdictions, tell the user plainly to have a professional review the final posture.
+
+## 1. Data inventory — know what you collect before judging anything
+
+Build the actual list from code (grep every DB INSERT, file write, and network send):
+
+- What personal data exists? For a tracker: window titles (which contain chat names, document
+  titles, medical/financial page titles), app usage timelines, idle-time answers typed by the user,
+  task texts, scores. Window titles are the sleeper — they look like metadata and are content.
+- Where does each item go — local DB, log file, export, network? A "local-only" app with an HTML
+  export or a sync feature is no longer local-only for that data.
+- Sensitivity-rank the list. Anything revealing health, finances, beliefs, or relationships is
+  special-category-adjacent: minimize, don't just protect.
+
+Findings format: "X is collected at `path:line`, stored in Y, retained forever, user cannot see/
+delete it" — each clause that's wrong is a finding.
+
+## 2. Consent & transparency (for anything that monitors)
+
+- **First-run disclosure**: before the first byte of tracking, the app says what it records, where
+  it's stored, and how to pause it. A tracker that starts recording silently on install fails this
+  pass — even for a solo-use app, because "others eventually" is the stated trajectory.
+- **Pause/stop control** reachable in ≤2 clicks, and it visibly works (pill/status change).
+- **Multi-user machines**: does the tracker record other Windows accounts' sessions, or the lock
+  screen? It must not record when the session is locked or when another user is active.
+- If the audience ever includes employees (a team lead installs it for a team), the game changes
+  entirely — workplace-monitoring law. Flag that boundary if the roadmap points there.
+
+## 3. Retention & user rights (GDPR-shaped, good practice everywhere)
+
+- **Retention limit**: does anything prune old rows, or does the activity log grow forever? Forever
+  is both a privacy finding and (eventually) a performance one. A configurable "keep N days/months,
+  then delete" with a sane default is the fix.
+- **Export**: user can get their data out in a usable format (CSV/JSON). Check it exists and
+  actually includes the sensitive tables, not just tasks.
+- **Delete**: user can wipe history (all, or a date range) from inside the app — not by hunting for
+  a .db file. Verify the wipe includes logs and exports, and consider `VACUUM` after (deleted
+  SQLite rows linger in the file until vacuumed).
+- **View**: the user can see what's been recorded about them (the diary/report views usually cover
+  this — check the *raw* store doesn't contain fields no view ever shows).
+
+## 4. Telemetry & crash reports
+
+- Opt-in, not opt-out, for a personal-tool audience. Off by default on first run.
+- **Redaction at source**: window titles, task texts, idle answers, and file paths containing the
+  username must never leave the machine in a crash bundle. Check what the report actually contains,
+  not what the intent was — build one and read it.
+- The user sees the exact payload before it's sent.
+
+## 5. Third-party licenses & attribution
+
+- Inventory every runtime dependency (`pip freeze` / the lockfile / csproj PackageReferences) and its
+  license. Watch for: GPL/AGPL in a distributed closed app (copyleft obligations), "non-commercial
+  only" clauses, and abandoned packages with no license at all (undistributable in theory).
+  PyInstaller itself is GPL *with a bootloader exception* — fine to ship frozen apps commercially;
+  cite the exception, don't just vibe it.
+- Ship a `THIRD-PARTY-NOTICES` file (or About-dialog section) with the attributions the licenses
+  require (MIT/BSD/Apache all require notice preservation).
+- Fonts, icons, sounds: assets have licenses too. An icon pack lifted from a search result is a
+  finding.
+
+## 6. Claims honesty
+
+Whatever the README/UI *says* about privacy must match the code: "your data never leaves your
+device" is falsified by one telemetry call or cloud sync. Grep the claims, then grep the sockets.
+A false privacy claim is worse than no claim — severity High.
+
+## Severity calibration for this pass
+
+- **Critical**: sensitive data leaves the machine without consent; false "local-only" claim with
+  actual network egress; monitoring continues while the session is locked/another user is active.
+- **High**: no first-run disclosure for a monitoring feature; crash reports containing window
+  titles/personal content; copyleft violation in a distributed binary.
+- **Medium**: no retention limit; no in-app delete/export; missing attribution file.
+- **Low**: attribution incomplete; retention exists but isn't configurable.
+- **Info**: recommendations for a future multi-user/commercial posture; "get legal review before
+  charging money in the EU."
+SKILL_EOF
+
 cat > "$TARGET/windows-app-auditor/references/remediation-loop.md" << 'SKILL_EOF'
 # Remediation Loop (audit → fix → re-audit → repeat)
 
@@ -1262,5 +1362,727 @@ nothing else. When you finish, a competent developer should be able to read any 
 never have to reverse-engineer *why* — while never wading through comments that just echo the code.
 SKILL_EOF
 
+cat > "$TARGET/windows-app-tester/SKILL.md" << 'SKILL_EOF'
+---
+name: windows-app-tester
+description: >-
+  Build and maintain automated test suites and runtime QA for Windows desktop apps (Python/Tkinter and
+  .NET/WPF/WinForms/WinUI): unit tests for core logic, DB-layer tests against throwaway databases,
+  characterization tests before refactors, a scripted smoke harness, and soak/performance measurement
+  (memory over hours, startup time). Use whenever the user wants to "write tests," "add a test suite,"
+  "cover this with tests," "characterization tests," "smoke test," "soak test," "measure startup/memory,"
+  or asks how to stop regressions — and proactively after any remediation or refactor that currently has
+  no persistent tests protecting it. This is the PROTECT step: the auditor finds defects, the refiner
+  cleans code, this skill makes sure neither has to be re-done by hand next month. Do NOT use for web
+  apps or mobile-only apps.
+---
+
+# Windows App Tester
+
+Manual verification dies with the session that ran it. This skill converts "I launched it and it looked
+fine" into a suite that anyone — including a future Claude session — can run in one command and trust.
+Tests are the launch team's memory.
+
+## What to test, in priority order
+
+1. **Core logic that silently corrupts** — date/culture formatting, score/money math, SQL
+   parameter-to-column mapping, idempotency guards. These are the bugs that never crash and are
+   discovered months later in the data. One unit test each is cheap insurance.
+2. **The data layer** — schema creation, writes land in the right columns, reads round-trip, the
+   "database is locked" path does what the app promises (logs + surfaces, not swallows).
+3. **Characterization tests** — before any refactor or rewrite of untested code, pin current behavior
+   (including its quirks) so accidental change shows up as a red test. Mandatory partner to the
+   refiner skill.
+4. **A smoke harness** — scripted launch → window title check → responsiveness → log-file check →
+   clean close. This is the same smoke run the remediation loop does by hand, made repeatable.
+5. **Runtime QA** — soak (memory/handles over hours), startup time. See `references/runtime-qa.md`.
+
+Don't chase coverage percentages. Cover the logic whose failure is silent or expensive; skip trivial
+getters and UI layout.
+
+## Making desktop code testable
+
+Most desktop apps start with logic buried in UI classes. The order of operations:
+
+- **Extract before you test, when extraction is cheap.** A `today_key()` or score formula inside a
+  window class can usually be pulled to module level (or a plain class) in minutes — coordinate with
+  the refiner's rules (behavior-preserving, characterization first if risky).
+- **When extraction is not cheap, test through the seam you have:** import the module without starting
+  the UI (guard `mainloop()`/`Application.Run` behind `main()` / `if __name__ == "__main__"` — add the
+  guard if missing, it's a two-line behavior-preserving change), instantiate logic classes directly,
+  point them at a temp data directory.
+- **UI-widget testing is last resort on Windows desktop** — Tkinter needs a real display, WinUI needs
+  the app packaged/running. Prefer moving logic out of widgets over automating clicks. If click-level
+  automation is truly required (.NET), FlaUI/WinAppDriver exist — treat as expensive integration
+  tests, few in number.
+
+## Stack specifics
+
+**Python:** `pytest`, tests in `tests/`, run with `python -m pytest tests/ -q`. Use `tmp_path` for
+every file/DB the code writes. Freeze time by injecting a clock or monkeypatching `datetime` where
+logic depends on "now". Import the app module with its UI entry guarded.
+
+**.NET:** xUnit (or MSTest) in a sibling `*.Tests` project targeting the same TFM; run with
+`dotnet test`. Extract logic into testable services (the app's `Services/` classes should be
+constructible without a window). SQLite tests against a temp file via the same `Database` class.
+
+## Hard rules
+
+- **Never point a test at the user's real data.** Tests create their own temp DB/config and delete it.
+  A test that "just reads" the live database will eventually be joined by one that writes. (The
+  Mentor-Overseer live DB is production data — treat it that way.)
+- **Deterministic or deleted.** No `sleep`-and-hope, no time-of-day dependence (a test that fails only
+  after 20:00 because of an EOD rule is a real historical failure mode — inject the clock), no
+  dependence on OS locale (set/pin it in the test, both ways: the invariant path AND a hostile-locale
+  path).
+- **Never weaken a test to make it pass.** If a test goes red, either the code regressed (fix the
+  code) or the test asserted an implementation detail (change the test *deliberately, in its own
+  commit, saying so*). Deleting/skipping a failing test to ship is a Critical-severity act.
+- **One command, green, fast.** The whole unit suite must run in seconds and exit non-zero on failure
+  so scripts and future sessions can gate on it. Slow soak/integration tests live behind a marker
+  (`-m soak`), not in the default run.
+- **Runtime tests follow the auditor's runtime-safety rules** — no focus stealing, no screen capture;
+  `PrintWindow` flag 2 only, if visual evidence is needed at all.
+
+## Workflow
+
+1. Inventory: what logic exists, what's silently-corrupting-class, what's already covered.
+2. Make the module importable without UI (add the `main()` guard if absent).
+3. Write the priority-1/2 unit tests against temp resources; run; green.
+4. Add the smoke harness script (see `references/test-recipes.md`).
+5. Wire a one-command entry point (`run-tests.bat` / `dotnet test`) and document it in the README.
+6. Report: what's covered, what deliberately isn't and why, and the command to run it all.
+
+## Reference files
+
+- `references/test-recipes.md` — concrete, copy-adaptable patterns: pytest + temp SQLite, frozen
+  clock, hostile-locale test, characterization harness, Tkinter-without-display, xUnit + temp DB,
+  smoke harness script (PowerShell), test entry-point scripts.
+- `references/runtime-qa.md` — soak testing (memory/handle growth over hours), startup-time
+  measurement, thresholds and how to read them, safe evidence capture.
+SKILL_EOF
+
+cat > "$TARGET/windows-app-tester/references/test-recipes.md" << 'SKILL_EOF'
+# Test Recipes — copy, adapt, keep green
+
+Concrete patterns for the situations Windows desktop apps actually present. Every recipe uses
+throwaway resources — none touches real user data.
+
+## 1. Pytest + temp SQLite (the workhorse)
+
+```python
+# tests/test_store.py
+import sqlite3
+import pytest
+import focus_diary as app  # module must import without starting the UI
+
+
+@pytest.fixture
+def temp_base(tmp_path, monkeypatch):
+    """Point every file the app writes at a throwaway directory."""
+    monkeypatch.setattr(app, "BASE", tmp_path)
+    monkeypatch.setattr(app, "DB", tmp_path / "data" / "diary.db")
+    monkeypatch.setattr(app, "LOG", tmp_path / "data" / "test.log")
+    return tmp_path
+
+
+def test_activity_columns_mean_what_they_say(temp_base):
+    """Regression guard for the classic bound-to-wrong-column bug."""
+    conn = app.db()
+    conn.execute("INSERT INTO activity(logged_at, category, note) VALUES (?, ?, ?)",
+                 ("2026-01-01 00:00:00", "focus", "auto"))
+    conn.commit()
+    row = conn.execute("SELECT logged_at, category, note FROM activity").fetchone()
+    conn.close()
+    assert row == ("2026-01-01 00:00:00", "focus", "auto")
+```
+
+The `monkeypatch.setattr` on module-level path constants is the cheapest seam when the app wasn't
+built with dependency injection. If paths are computed inside functions, extract them to module level
+first (behavior-preserving, tiny diff).
+
+## 2. Frozen clock
+
+Logic that depends on "now" (EOD rules, day keys, streaks) must be tested at controlled times —
+including the boundaries (23:59:59, exactly EOD, midnight rollover):
+
+```python
+class FakeDateTime:
+    fixed = None
+    @classmethod
+    def now(cls):
+        return cls.fixed
+
+def test_day_key_at_midnight_boundary(monkeypatch):
+    import datetime as real_dt
+    FakeDateTime.fixed = real_dt.datetime(2026, 12, 31, 23, 59, 59)
+    monkeypatch.setattr(app, "datetime", FakeDateTime)
+    assert app.App.today_key(None) == "2026-12-31"
+```
+
+(If `today_key` is an instance method that doesn't use `self`, it can be called with `None` — better:
+extract it to a module function while you're here.)
+
+## 3. Hostile-locale test
+
+The invariant-culture bug class only shows up under a non-default locale — so create one on purpose:
+
+```python
+def test_persisted_dates_ignore_locale(monkeypatch):
+    import locale
+    try:
+        locale.setlocale(locale.LC_ALL, "ru_RU.UTF-8")   # or "Russian_Russia.1251" on Windows
+    except locale.Error:
+        pytest.skip("Russian locale not available on this machine")
+    try:
+        key = app.App.today_key(None)
+        assert key == __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+        assert all(ch.isascii() for ch in key)
+    finally:
+        locale.setlocale(locale.LC_ALL, "C")
+```
+
+In .NET the equivalent: set `CultureInfo.CurrentCulture = new CultureInfo("ru-RU")` in the test and
+assert the persisted string is invariant-shaped.
+
+## 4. Characterization harness (before refactors)
+
+Pin what the code does *today*, quirks included — the point is detecting change, not asserting
+correctness:
+
+```python
+@pytest.mark.parametrize("done,total,expected", [
+    (0, 0, 0), (1, 3, 10), (3, 3, 30),   # captured from current behavior, verified by running it
+])
+def test_score_formula_characterization(done, total, expected):
+    assert app.score_for(done, total) == expected
+```
+
+Generate the expected values by *running the current code once* and recording outputs — never by
+reasoning about what it "should" do. If a captured value looks wrong, file it as a finding; don't fix
+it inside the characterization commit.
+
+## 5. Tkinter without a display
+
+Unit tests must not need a window. Two rules make that true:
+
+- The module's last lines are `if __name__ == "__main__": main()` — importing runs nothing.
+- Logic methods don't touch `self.root`/widgets. Where one does both (computes AND renders), split it
+  (`compute_score()` + `refresh_labels()`), then test the compute half.
+
+Widget-level Tk tests are possible (`root = tk.Tk(); root.withdraw()`) on a machine with a desktop
+session — mark them `@pytest.mark.gui` and exclude from the default run; they're flaky headless.
+
+## 6. xUnit + temp DB (.NET)
+
+```csharp
+public class DatabaseTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+    public DatabaseTests()
+    {
+        Directory.CreateDirectory(_dir);
+        Environment.SetEnvironmentVariable("MENTOR_ROOT", _dir);  // app's own root override hook
+    }
+
+    [Fact]
+    public void SaveCompletion_RoundTrips()
+    {
+        using var db = new Database();
+        db.SaveCompletion("plan-a", 3, "Read chapter 1", done: true);
+        Assert.True(db.LoadCompletions()[("plan-a", 3, "Read chapter 1")]);
+    }
+
+    public void Dispose() { Directory.Delete(_dir, recursive: true); }
+}
+```
+
+An env-var root override (like `MENTOR_ROOT`) is the ideal seam — if the app has one, use it; if not,
+adding one is a small, safe change that pays off everywhere (tests, debugging, portable installs).
+
+## 7. Smoke harness (PowerShell, scripted version of the manual smoke run)
+
+```powershell
+# smoke.ps1 -- exit 0 = pass. Follows runtime-safety rules: no focus theft, no screen capture.
+param([string]$Exe = ".\FocusDiary.exe")
+$before = (Get-Content .\data\*.log -ErrorAction SilentlyContinue | Measure-Object -Line).Lines
+$p = Start-Process $Exe -PassThru
+Start-Sleep -Seconds 6
+$proc = Get-Process ($p.Name) -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle }
+if (-not $proc -or -not $proc.Responding) { Write-Error "window missing or hung"; exit 1 }
+if ($proc.MainWindowTitle -ne "Focus Diary") { Write-Error "wrong title: $($proc.MainWindowTitle)"; exit 1 }
+$proc.CloseMainWindow() | Out-Null; Start-Sleep -Seconds 3
+if (Get-Process ($p.Name) -ErrorAction SilentlyContinue) { Write-Error "did not close cleanly"; exit 1 }
+$after = Get-Content .\data\*.log -ErrorAction SilentlyContinue | Select-Object -Skip $before
+if ($after -match "\[ERROR\]") { Write-Error "errors logged during smoke: $after"; exit 1 }
+"SMOKE PASS"
+```
+
+Adapt titles/paths per app. For apps with page-navigation debug hooks (env var), loop the hook values
+to smoke every page.
+
+## 8. One-command entry points
+
+- Python: `run-tests.bat` → `python -m pytest tests/ -q --tb=short` (unit) and
+  `powershell -File smoke.ps1` as a second line or separate script.
+- .NET: `dotnet test` already is the command; add `--filter Category!=Gui` if GUI-marked tests exist.
+
+Document the command in the project README. A suite nobody knows how to run does not exist.
+SKILL_EOF
+
+cat > "$TARGET/windows-app-tester/references/runtime-qa.md" << 'SKILL_EOF'
+# Runtime QA — soak, startup, and reading the numbers
+
+The static passes explicitly defer "memory over hours" and "actual startup time" to runtime — this is
+where they get owned instead of forgotten. All procedures follow the runtime-safety rules: no focus
+stealing, no screen capture (PrintWindow flag 2 only if visual evidence is needed).
+
+## 1. Soak test (the one that matters for always-on apps)
+
+An app meant to run all day (a tracker, a monitor) must be tested *running all day*. The failure
+modes it catches — event-handler leaks, stacked timers, unbounded caches, handle leaks — are invisible
+in a 30-second smoke run by construction.
+
+```powershell
+# soak.ps1 — sample every 5 min for N hours; writes soak.csv
+param([string]$ProcName = "MentorOverseer.App", [int]$Hours = 8)
+"time,workingset_mb,private_mb,handles,threads" | Out-File soak.csv
+$end = (Get-Date).AddHours($Hours)
+while ((Get-Date) -lt $end) {
+    $p = Get-Process $ProcName -ErrorAction SilentlyContinue
+    if (-not $p) { "$(Get-Date -F s),PROCESS_GONE,,," | Add-Content soak.csv; break }
+    "$(Get-Date -F s),$([math]::Round($p.WorkingSet64/1MB,1)),$([math]::Round($p.PrivateMemorySize64/1MB,1)),$($p.HandleCount),$($p.Threads.Count)" |
+        Add-Content soak.csv
+    Start-Sleep -Seconds 300
+}
+```
+
+Run it in the background during a normal day of real use — synthetic idling misses the interactions
+(view rebuilds, dialogs, reconnects) that actually leak.
+
+**Reading the CSV:**
+- **Healthy:** working set rises early, then plateaus with sawtooth (GC/caching). Handles and threads
+  flat after warmup.
+- **Leak:** any counter with a steady positive slope across the whole run. Handles creeping by even
+  ~10/hour = a handle leak that kills the app in days. Thread count growing = something spawns
+  without joining (look at timers and reconnect paths).
+- Exercise the suspicious feature repeatedly (open/close the dialog 50×, rebuild the view 50×) and
+  re-sample — a per-use leak becomes obvious in minutes this way.
+
+## 2. Startup time
+
+Measure cold-ish start to interactive window, 5 runs, report median (first run after boot is the
+honest "cold" number; note it separately):
+
+```powershell
+1..5 | ForEach-Object {
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $p = Start-Process $exe -PassThru
+    while (-not $p.MainWindowHandle -or $p.MainWindowHandle -eq 0) { Start-Sleep -Milliseconds 50; $p.Refresh() }
+    $sw.Stop(); $p.CloseMainWindow() | Out-Null; Start-Sleep -Seconds 2
+    $sw.ElapsedMilliseconds
+}
+```
+
+Rules of thumb for a small desktop utility: **< 1.5 s** to window feels instant, **1.5–4 s**
+acceptable, **> 4 s** find and defer the expensive startup work (the auditor's architecture pass
+lists the usual suspects). PyInstaller onefile adds ~1–2 s self-extraction — that's a packaging
+choice (onedir is faster) — and self-contained .NET first-run JIT is real; measure, don't guess.
+
+## 3. When to run which
+
+- **Every release candidate:** startup measurement + at least a 2-hour soak during real use.
+- **After fixing anything timer/event/cache related:** targeted repeat-the-action soak (50× loop).
+- **Before first public release:** one full-workday soak on the machine class users actually have,
+  not just the dev box.
+
+## 4. Recording results
+
+Keep a `qa/` folder in the repo: `soak-YYYY-MM-DD.csv` + a three-line verdict in the release notes
+("8h soak 2026-07-07: WS 84→91 MB plateau, handles flat at 412, verdict PASS"). Numbers without a
+recorded baseline are unreadable next release.
+SKILL_EOF
+
+cat > "$TARGET/windows-app-releaser/SKILL.md" << 'SKILL_EOF'
+---
+name: windows-app-releaser
+description: >-
+  Take a Windows desktop app from "builds on my machine" to "installs cleanly on a stranger's machine":
+  versioned one-command builds, installers (Inno Setup / MSIX / portable zip), code signing strategy,
+  changelogs and git tags, a safe update path, crash reporting that respects privacy, and
+  install/upgrade/uninstall verification. Use whenever the user wants to "make an installer," "ship it,"
+  "release," "package," "distribute," "sign the app," "version bump," "publish a build," "auto-update,"
+  or asks how someone else can install their app. Covers Python (PyInstaller) and .NET
+  (dotnet publish) apps. This is the SHIP step — the gate between a working build and the market. Do NOT
+  use for web deployment or app-store submissions for mobile.
+---
+
+# Windows App Releaser
+
+A release is not an exe — it's a versioned, signed, installable, upgradeable, uninstallable,
+diagnosable artifact plus the paper trail (tag, changelog, checksums) to reproduce it. This skill
+builds that pipeline and refuses to pretend a loose Debug exe is a release.
+
+## The pipeline (every release walks these stages, scripted)
+
+1. **Version stamp** — one source of truth (`__version__` / `<Version>` in the csproj), bumped
+   deliberately (semver: breaking.feature.fix), surfaced in the app's About/Settings and its log
+   header (support will ask "what version?" — the app must know).
+2. **Clean build, Release configuration** — one committed script (`release.bat` / `release.ps1`)
+   from a clean tree. Never ship Debug: it's slower, larger, and leaks assert/diagnostic behavior.
+   - Python: `pyinstaller --noconsole --name App --distpath dist ...` (onedir starts faster;
+     onefile is tidier but adds 1–2 s self-extraction — pick per app, document why).
+   - .NET: `dotnet publish -c Release -p:Platform=x64` (self-contained for no-runtime-install UX,
+     framework-dependent for small downloads — pick and document).
+3. **Package** — see `references/packaging-recipes.md` for the decision matrix and skeletons:
+   - **Inno Setup** — the pragmatic default for indie distribution outside the Store.
+   - **MSIX** — for Microsoft Store or managed environments; brings auto-update but sandbox
+     constraints (an app that reads a sibling app's files or walks up from the exe may break —
+     verify the app's file-access pattern *first*).
+   - **Portable zip** — legitimate for tool-savvy audiences; still versioned and checksummed.
+4. **Sign** — see signing reality below.
+5. **Verify** — the non-negotiable checklist:
+   - Fresh install on a machine/profile that has never seen the app (a new Windows user account is
+     the cheap approximation of a clean machine).
+   - **Upgrade-in-place over the previous version with real user data present — data must survive.**
+     This is where frozen-contract/migration promises are actually tested.
+   - Uninstall: user data handling is a deliberate, documented choice (default: keep data, say so);
+     no orphaned autostart entries, services, or protocol handlers.
+   - Smoke run of the *installed* copy (not the build-tree copy) — installed apps run from
+     `Program Files` with different permissions and working directory than the dev tree.
+6. **Record** — git tag `vX.Y.Z`, changelog entry (user-language, not commit messages), SHA-256
+   checksums next to the artifacts. Artifacts do NOT get committed to the repo.
+
+## Code signing reality (decide, don't drift)
+
+- Unsigned executables get SmartScreen's "unrecognized app" wall and a scary blue banner — for a
+  general audience that is a launch blocker, full stop. For a private beta of trusted users it's
+  survivable, but say so out loud in the release notes.
+- Signing requires an Authenticode certificate with a **hardware-backed key** (current CA/B rules):
+  a token/HSM cert from a CA, or **Azure Trusted Signing** (subscription service — the practical
+  indie option). Always timestamp (`/tr`) so signatures outlive cert expiry.
+- Even signed, *new* certs build SmartScreen reputation over downloads — early users may still see
+  warnings. That's expected; don't burn days "fixing" it.
+- MSIX must be signed with a cert the target machine trusts (Store signing handles this for Store
+  distribution; sideloading needs your cert installed or Trusted Signing).
+
+## The update path (highest-trust component — design it boring)
+
+The safest v1 update mechanism is **notify-and-link**: check a version endpoint over HTTPS, tell the
+user "1.4 is available", link to the download. No code execution, tiny attack surface. Only build
+silent auto-update when there's a real need, and then the auditor's security rules apply in full:
+TLS with validation, signature verified before execution, downgrade refusal, atomic swap with
+rollback. An unsigned auto-executing update is the single worst security decision a desktop app can
+make — the audit will flag it Critical, so don't build it.
+
+## Crash reporting & field diagnostics (opt-in, minimal, honest)
+
+You cannot fix what you cannot see, and post-launch you can't see anything without telemetry — but a
+desktop app that phones home by default torches trust (and for monitoring-class apps, may leak the
+user's private data into your inbox).
+
+- The app already logs locally (auditor requirement). Add a **"Report a problem"** action that
+  bundles: app version, OS version, the last N KB of the log, the stack trace — shows the user the
+  exact bundle, and lets *them* send it (mailto / upload button). Opt-in per event beats silent
+  streaming for a personal-tool audience.
+- **Redact before bundling**: window titles, task texts, and anything personal have no place in a
+  crash report (privacy pass rules apply to telemetry too).
+- Automatic crash-report streaming (Sentry-class) is for later scale; if added, it's opt-in at
+  first run, documented in the privacy notes, and scrubbed at the source.
+
+## Hard rules
+
+- Never ship Debug. Never ship uncommitted code (tag = exact tree). Never ship without the verify
+  checklist — "it worked in the dev tree" is not evidence for the installed artifact.
+- Unsigned distribution to a general audience is a decision the *user* makes after being told the
+  SmartScreen consequence — not a silent default.
+- The release script is committed and is the only way releases get built. A release nobody can
+  rebuild is a liability.
+- Upgrade must preserve user data, proven by actually doing it in verification — not by reading the
+  code and nodding.
+
+## Reference files
+
+- `references/packaging-recipes.md` — packaging decision matrix; Inno Setup script skeleton;
+  PyInstaller and dotnet-publish command sets; signtool/Trusted Signing usage; versioning and
+  changelog conventions; the verification checklist in runnable form.
+SKILL_EOF
+
+cat > "$TARGET/windows-app-releaser/references/packaging-recipes.md" << 'SKILL_EOF'
+# Packaging Recipes
+
+## Decision matrix
+
+| Route | Pick when | Cost / catch |
+|---|---|---|
+| **Inno Setup** | Direct download distribution, indie/prosumer audience | Learn one `.iss` file; unsigned installers still hit SmartScreen |
+| **MSIX** | Microsoft Store, or managed/enterprise fleets | Sandbox: virtualized filesystem/registry — apps that share files with a sibling app, walk up from the exe, or write next to themselves need rework first; signing mandatory |
+| **Portable zip** | Tech-savvy users, USB-stick portability, zero-install policy | No Start-menu/uninstall integration; users lose it in Downloads; still version + checksum it |
+| **Bare exe** | Never for the public. Dev/beta-of-one only | No version trail, no upgrade story |
+
+Store-vs-direct is a *distribution* choice, not just packaging: the Store brings discovery, silent
+updates, and its own certification pass; direct download brings control and no revenue share.
+
+## Inno Setup skeleton (the 90% case)
+
+```ini
+; app.iss — compile with: iscc app.iss
+#define AppName "Focus Diary"
+#define AppVersion "1.0.0"          ; single source of truth — stamp from the build script
+#define AppExe "FocusDiary.exe"
+
+[Setup]
+AppId={{8E1B2A34-YOUR-GUID-HERE}}   ; generate ONCE, never change — it's the upgrade identity
+AppName={#AppName}
+AppVersion={#AppVersion}
+DefaultDirName={autopf}\{#AppName}  ; per-machine; use {userpf} for per-user, no-elevation installs
+PrivilegesRequired=lowest            ; per-user default — matches least-privilege audit rule
+OutputBaseFilename={#AppName}-{#AppVersion}-setup
+Compression=lzma2
+SolidCompression=yes
+; SignTool=mysign $f                ; wire to signtool when a cert exists
+
+[Files]
+Source: "dist\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+
+[Icons]
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+
+[Tasks]
+Name: desktopicon; Description: "Create a desktop icon"; Flags: unchecked
+
+[UninstallDelete]
+; Deliberately EMPTY for user data — uninstall keeps the user's database/config.
+; Document this choice. If offering data wipe, make it an explicit checked-by-user page.
+```
+
+Key points: the `AppId` GUID is the upgrade identity (same GUID → installs over the old version);
+`PrivilegesRequired=lowest` keeps the least-privilege promise; user data is *not* under `{app}` —
+apps should write to `%APPDATA%\AppName` (auditor architecture rule) so `Program Files` stays
+read-only and uninstall/upgrade can't eat data.
+
+**App data location note:** dev-tree apps often write next to the exe. Under `Program Files` that
+*fails* for non-elevated users. Before packaging, verify the app resolves its data dir to
+`%APPDATA%` (or supports an override env var) — this is the #1 "works in dev, broken installed" bug.
+
+## Build commands
+
+**Python / PyInstaller:**
+```powershell
+# onedir (faster startup, folder output) — preferred for installers:
+python -m PyInstaller --noconsole --name FocusDiary --distpath dist --workpath build `
+    --specpath build focus_diary.py
+# onefile (single exe, +1-2s self-extract) — for portable/zip distribution:
+python -m PyInstaller --onefile --noconsole --name FocusDiary focus_diary.py
+```
+Remember the frozen-path rule: `sys.executable`'s dir when `getattr(sys, "frozen", False)`, else
+`__file__`'s — and installed apps should prefer `%APPDATA%` for writes (see above).
+
+**.NET:**
+```powershell
+# self-contained (no runtime prerequisite, ~80MB+):
+dotnet publish -c Release -p:Platform=x64 --self-contained true -r win-x64
+# framework-dependent (small, needs .NET runtime installed):
+dotnet publish -c Release -p:Platform=x64 --self-contained false
+```
+WinUI 3 unpackaged: keep `WindowsAppSDKSelfContained=true` unless you want users installing the
+WASDK runtime themselves.
+
+## Signing commands
+
+```powershell
+# Classic signtool with a token/HSM cert:
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /n "Cert Subject" path\to\artifact
+# Azure Trusted Signing: same signtool, /dlib + metadata JSON per their docs (practical indie route).
+# Verify:
+signtool verify /pa /v path\to\artifact
+```
+Sign the exe AND the installer. Always timestamp — an untimestamped signature dies with the cert.
+
+## Version & changelog conventions
+
+- Semver: MAJOR breaking (incl. data-format changes!), MINOR features, PATCH fixes.
+- Stamp once, read everywhere: Python `__version__ = "1.2.0"` used by the About dialog, log header,
+  and the build script (injected into the `.iss` via `/D` or a generated include).
+- `CHANGELOG.md`, newest first, written for users ("Fixed: score no longer says 'Final' before the
+  day ends"), not for git archaeologists.
+- Tag after verification passes: `git tag -a v1.2.0 -m "..."`. Checksums:
+  `Get-FileHash *.exe,*-setup.exe -Algorithm SHA256 > SHA256SUMS.txt`.
+
+## Verification checklist (runnable form)
+
+```text
+[ ] Release build from clean tree via the committed script (no local edits — git status clean)
+[ ] Fresh install on a never-seen profile: installs without elevation surprises, launches, smoke passes
+[ ] Installed-copy smoke (from Program Files, not the dev tree)
+[ ] Upgrade test: install PREVIOUS version, create real data, install NEW over it → data intact,
+    version shows new
+[ ] Uninstall: app gone, Start-menu entries gone, autostart/protocol entries gone, user data kept
+    (and that choice documented)
+[ ] Tag pushed, changelog updated, checksums generated
+[ ] SmartScreen behavior checked on a machine that never saw the cert (know what users will see)
+```
+SKILL_EOF
+
+cat > "$TARGET/launch-readiness/SKILL.md" << 'SKILL_EOF'
+---
+name: launch-readiness
+description: >-
+  Run a go/no-go launch gate for a Windows desktop app: score every readiness category (audit health,
+  test coverage, release pipeline, privacy posture, runtime QA, beta feedback, docs & support) against
+  hard evidence and produce a scorecard with a clear GO / NO-GO recommendation and the shortest path to
+  GO. Also owns the beta program playbook (recruiting testers, the 2-week protocol, feedback triage).
+  Use whenever the user asks "are we ready to launch/ship/release," "what's missing before launch,"
+  "run the launch checklist," "go/no-go," "can I give this to other people now," or wants to plan or
+  evaluate a beta. This skill GATES; it does not fix — it dispatches to windows-app-auditor,
+  windows-app-tester, windows-app-releaser, or windows-code-refiner for the actual work. Do NOT use
+  for web or mobile launches.
+---
+
+# Launch Readiness
+
+The gate between "works for me" and "in strangers' hands." Every category below gets a verdict —
+**READY / AT RISK / BLOCKED** — backed by evidence that exists *outside this conversation* (a file, a
+commit, a CSV, a tag). "I remember it being fine" scores as AT RISK by definition.
+
+This skill never rubber-stamps. If the honest answer is NO-GO, say NO-GO and give the shortest path
+to GO. And never inflate: "100% sure" does not exist in shipping software — the professional target
+is: every *known* risk class has an owner and evidence; the unknown ones have instrumentation (logs,
+crash reporting) so they'll be seen when they happen.
+
+## The seven categories
+
+Score each; the report is the scorecard plus the path to GO.
+
+1. **Audit health** — most recent full audit (all five passes, incl. privacy) on the *current* code:
+   no Critical/High open; Mediums fixed or explicitly accepted with rationale. Evidence: the audit
+   report + remediation record. Audit older than the last significant code change = AT RISK (stale).
+2. **Test protection** — suite exists, green, runnable in one documented command; covers the
+   silently-corrupting logic (dates/culture, money/score math, DB mapping); smoke harness scripted.
+   Evidence: the passing run output + the command in the README.
+3. **Release pipeline** — versioned Release build from a committed script; installer verified on a
+   clean profile; **upgrade-over-previous-with-data test passed**; uninstall clean; signing decision
+   made *consciously* (signed, or unsigned-with-documented-SmartScreen-consequence for a limited
+   beta). Evidence: the verification checklist filled in, tag + changelog + checksums.
+4. **Privacy posture** — privacy pass run; first-run disclosure exists for monitoring features;
+   pause control; export/delete present; retention decided; license notices shipped. For an app that
+   records behavior, this category BLOCKS on disclosure/consent — no exceptions.
+5. **Runtime QA** — startup time measured and acceptable; soak run on a realistic day (memory/handles
+   plateau); results recorded in `qa/`. Evidence: the CSV + the three-line verdict.
+6. **Beta signal** — real non-author humans used a release-built install; feedback triaged through
+   the severity model; no open Critical/High from the field; the top friction items consciously
+   accepted or fixed. See `references/beta-program.md`. For a first public step, 3–5 testers over
+   2 weeks is the floor — zero external users = AT RISK at best.
+7. **Docs & support** — a user-facing README/quick-start (what it does, install, first run, where
+   data lives, how to uninstall); a way to report problems (email/issues link, ideally the in-app
+   "Report a problem" bundle); the changelog current.
+
+## Verdict rules
+
+- Any category **BLOCKED** → **NO-GO**. More than two **AT RISK** → **NO-GO** for a public launch
+  (may still be GO for a *closed beta*, whose whole purpose is converting AT RISK to evidence — say
+  which launch tier the verdict applies to: closed beta / open beta / public).
+- The recommendation always ends with the **shortest path to GO**: the minimum ordered list of
+  actions, each mapped to the skill that does it.
+
+## Report template
+
+```
+# Launch Readiness — [app] [version] — [date]
+
+Target tier: [closed beta / open beta / public]
+
+| # | Category | Verdict | Evidence | Gap (if any) |
+|---|----------|---------|----------|---------------|
+| 1 | Audit health | READY/AT RISK/BLOCKED | [link/file/commit] | ... |
+| ... |
+
+## Verdict: GO / NO-GO for [tier]
+[2-4 sentences of honest reasoning.]
+
+## Shortest path to GO
+1. [action] → [skill/owner]
+2. ...
+
+## Accepted risks going in
+[Every AT RISK item consciously carried into launch, one line each, so nobody discovers them as surprises.]
+```
+
+## Reference files
+
+- `references/beta-program.md` — recruiting, the 2-week protocol, the feedback form, triage into the
+  severity model, exit criteria.
+SKILL_EOF
+
+cat > "$TARGET/launch-readiness/references/beta-program.md" << 'SKILL_EOF'
+# Beta Program Playbook
+
+Static passes can verify everything except the one thing that decides adoption: what real humans do
+with the app on machines you've never seen. A beta converts guesses into evidence. Small and
+structured beats big and vague — 3 engaged testers with a protocol outperform 30 silent downloads.
+
+## 1. Recruiting
+
+- **3–10 people matching the intended audience** (the ux.md §0 answer — not just fellow developers,
+  unless developers ARE the audience). Friends are fine for wave one *if* they'll be honest; add at
+  least one person who owes you nothing.
+- Machine diversity on purpose: at least one laptop with display scaling ≥150%, one non-English
+  Windows locale, one modest/older machine. These three surface the DPI, culture, and performance
+  bug classes respectively — the exact classes static audits flag as "needs runtime check."
+- What they get: the versioned installer (release-built, from the pipeline — never a dev-tree exe),
+  the quick-start doc, and the known-issues list (honesty up front makes feedback honest).
+
+## 2. The 2-week protocol
+
+- **Day 0** — install unassisted. The tester writes down every moment of confusion from download to
+  first successful use. You say *nothing* during this; the silence is the test. First-run confusion
+  is the highest-value data a beta produces and it can only be harvested once per tester.
+- **Days 1–13** — normal use, no reminders beyond one mid-point nudge. A daily-use app that testers
+  quietly stop opening by day 4 has told you the most important finding of the whole program —
+  instrument for it (ask for the app's log or a screenshot of their week view at the end, with
+  their consent).
+- **Day 14** — the structured form (below) plus a 15-minute conversation if they'll give it. Collect
+  log files (with consent — logs may contain personal data; the privacy pass rules apply to *your
+  own beta collection* too).
+
+## 3. The feedback form (short enough to actually get answered)
+
+```
+1. Setup: did anything confuse or stop you between download and first use? What exactly?
+2. In one sentence: what does this app do? (Tests whether the product concept landed.)
+3. How many days did you actually use it? What made you open it — or stop opening it?
+4. The single most annoying thing?
+5. The single most valuable thing?
+6. Anything that looked wrong/broken/ugly on your machine? (screenshot welcome)
+7. Would you keep using it after today? Would you pay [price] for it? (blunt on purpose)
+8. Machine: Windows version, display scaling, system language.
+```
+
+## 4. Triage — feedback becomes findings, not vibes
+
+Run every report through the auditor's severity model, same as code findings:
+
+- Crash/data loss/"it recorded something it shouldn't" → **Critical/High**, fix before wider release.
+- "I stopped using it because…" → treat as **High** product finding — retention failure is launch
+  failure for a daily-use app, even though no code is "broken."
+- Friction/confusion items → Medium/Low, batch into the normal remediation loop.
+- Every item gets a verdict: **fixed / accepted (with reason) / deferred (to when)** — reported back
+  to testers ("you said X, we did Y"). Testers who see their feedback land will test your next wave;
+  testers who hear silence won't.
+
+## 5. Exit criteria (the beta is done when…)
+
+- No open Critical/High from the field.
+- ≥ half the testers completed setup with zero assistance.
+- ≥ half still *voluntarily* using it in week 2 (for a daily-use app; adjust for occasional-use).
+- The "would you keep using it" answers are mostly yes — or the noes share one fixable reason.
+- Every piece of feedback has a triage verdict recorded.
+
+Results feed category 6 of the launch scorecard. A failed beta is a *successful* program — it bought
+the truth for ten users instead of a thousand.
+SKILL_EOF
+
 echo "Done. Installed files:"
-find "$TARGET/windows-app-auditor" "$TARGET/windows-code-refiner" -type f | sort
+find "$TARGET" -path "*windows-app-*" -o -path "*windows-code-*" -o -path "*launch-readiness*" -type f | sort
