@@ -28,6 +28,11 @@ public sealed class ActivityTracker : IDisposable
     [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
     [StructLayout(LayoutKind.Sequential)]
     private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr OpenMutexW(uint desiredAccess, bool inheritHandle, string name);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+    private const uint Synchronize = 0x00100000;
+    private const string PythonAppMutex = "MentorOverseerSingleInstance_v1";
 
     private static readonly Dictionary<string, string> ExeAppNames = new()
     {
@@ -335,12 +340,29 @@ public sealed class ActivityTracker : IDisposable
 
     // ── poll (port of _poll_once) ─────────────────────────────────────────
 
+    /// <summary>
+    /// True while the Python app is alive. Probes the named mutex the Python
+    /// app holds for its whole lifetime — that covers the frozen exe AND
+    /// dev-mode `python main.py` runs, which a process-name check misses
+    /// (they run as python.exe). The name check stays as a fallback for any
+    /// Python build predating the mutex.
+    /// </summary>
+    private static bool PythonAppRunning()
+    {
+        var h = OpenMutexW(Synchronize, false, PythonAppMutex);
+        if (h != IntPtr.Zero) { CloseHandle(h); return true; }
+        var procs = Process.GetProcessesByName("MentorOverseer");
+        var running = procs.Length > 0;
+        foreach (var p in procs) p.Dispose();
+        return running;
+    }
+
     private void PollOnce()
     {
         // The Python app runs the same tracker against the same database.
         // Checked every poll (not just at launch) so whichever order the two
         // apps start in, only one ever writes the diary at a time.
-        if (Process.GetProcessesByName("MentorOverseer").Length > 0)
+        if (PythonAppRunning())
         {
             if (_sessionStart is DateTime openStart && _sessionApp != null)
             {

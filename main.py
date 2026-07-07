@@ -61,6 +61,16 @@ APP_NAME      = "Mentor-Overseer"
 MAX_PLANS     = 2
 TT_AUTOSYNC_INTERVAL_MS = 5 * 60_000   # background push+sync cadence once connected
 
+# Score economy v2 ("balanced coach", approved 2026-07-06). MUST stay in sync
+# with the WinUI app's ScoreService constants — both apps write the same
+# score_ledger rows, and the shared ledger is a contract.
+DAILY_SCORE_FLOOR        = -10   # a bad day is a setback, not a spiral
+OVERDUE_ACCRUAL_CAP_DAYS = 3     # a task bleeds points for 3 days, then goes stale
+
+# Retention — raw window titles are content; don't keep them forever.
+ACTIVITY_LOG_RETENTION_DAYS = 90
+TIME_DIARY_RETENTION_DAYS   = 365
+
 # Populated in place by _apply_theme() from CATEGORY_COLORS_THEMES, same
 # mechanism as the C dict — the original values were tuned for a near-black
 # background and wash out (practice-yellow all but vanishes) on the light theme.
@@ -1347,7 +1357,40 @@ class MentorApp:
             "  detail TEXT"
             ")"
         )
+        # One row per (reason, date) for the guarded credits — enforced in the
+        # DB itself so a cross-process race (this app and the WinUI app both
+        # crediting the same date) can't double-credit. The SELECT-first guards
+        # in _credit_*_if_missing stay as the fast path; the index is the net.
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date "
+            "ON score_ledger(reason, date) "
+            "WHERE reason IN ('daily_score', 'overdue_accrual')"
+        )
         self.conn.commit()
+
+        # Retention: activity_log holds raw window titles (that's content —
+        # chat names, document titles); time_diary only aggregated sessions.
+        # Both tables belong to the tracker and don't exist until its first
+        # run — on a fresh data folder there is nothing to prune yet.
+        def _table_exists(name):
+            return self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+            ).fetchone() is not None
+
+        pruned = 0
+        if _table_exists("activity_log"):
+            pruned += self.conn.execute(
+                "DELETE FROM activity_log WHERE logged_at < datetime('now', 'localtime', ?)",
+                (f"-{ACTIVITY_LOG_RETENTION_DAYS} days",),
+            ).rowcount
+        if _table_exists("time_diary"):
+            pruned += self.conn.execute(
+                "DELETE FROM time_diary WHERE date < date('now', 'localtime', ?)",
+                (f"-{TIME_DIARY_RETENTION_DAYS} days",),
+            ).rowcount
+        self.conn.commit()
+        if pruned > 0:
+            self.conn.execute("VACUUM")   # reclaim the pruned pages on disk
 
     def load_completions(self):
         cur = self.conn.cursor()
@@ -3898,13 +3941,14 @@ class MentorApp:
         on_hr_pt   = sc.get("on_plan_hour", 3)
         off_hr_pt  = sc.get("off_plan_hour", -2)
         streak_pt  = sc.get("streak_bonus_per_day", 5)
-        return (
+        raw = (
             tasks_done * task_pt
             + max(0, tasks_total - tasks_done) * overdue_pt
             + int(on_min  / 60 * on_hr_pt)
             + int(off_min / 60 * off_hr_pt)
             + streak_pt * streak
         )
+        return max(raw, DAILY_SCORE_FLOOR)
 
     def _current_streak(self):
         """Consecutive fully-completed days immediately before today, most recent
@@ -3973,7 +4017,10 @@ class MentorApp:
         on_min, off_min = self._day_diary_minutes(d)
         streak = self._current_streak() if d == date.today() else 0
         score = self._day_score(tasks_done, tasks_total, on_min, off_min, streak=streak)
-        self._score_add_ledger(score, "daily_score", detail=f"day score {score}", for_date=d)
+        try:
+            self._score_add_ledger(score, "daily_score", detail=f"day score {score}", for_date=d)
+        except sqlite3.IntegrityError:
+            return None   # another process credited this date between check and insert
         return score
 
     def _credit_overdue_accrual_if_missing(self, d):
@@ -4002,13 +4049,25 @@ class MentorApp:
             for day, tasks in by_day.items():
                 if day >= day_num:
                     continue
+                # v2 rule (matches WinUI ScoreService): a task only bleeds
+                # points for its first OVERDUE_ACCRUAL_CAP_DAYS overdue days,
+                # then it's stale — replanning is the way out, not a spiral.
+                if day_num - day > OVERDUE_ACCRUAL_CAP_DAYS:
+                    continue
                 for t in tasks:
                     if not self.completions.get((pid, day, t.get("task", "")), False):
                         count += 1
         if count == 0:
             return 0
         delta = count * overdue_pt
-        self._score_add_ledger(delta, "overdue_accrual", detail=f"{count} task(s) still overdue", for_date=d)
+        try:
+            self._score_add_ledger(
+                delta, "overdue_accrual",
+                detail=f"{count} task(s) still overdue ({OVERDUE_ACCRUAL_CAP_DAYS}-day cap)",
+                for_date=d,
+            )
+        except sqlite3.IntegrityError:
+            return None   # another process credited this date between check and insert
         return delta
 
     def _ensure_score_caught_up(self):
@@ -4669,7 +4728,10 @@ class MentorApp:
             for app, m in patterns
         ) or "<tr><td colspan='2'>No distractions logged.</td></tr>"
 
-        hint_items = "".join(f"<li>{h}</li>" for h in hints)
+        # Hints can embed the top-distraction app name, which comes from
+        # foreground window titles — attacker-controlled text (any webpage can
+        # set document.title). Escape like every other cell in this report.
+        hint_items = "".join(f"<li>{_html.escape(h)}</li>" for h in hints)
         today_s = stats[-1]
         today_score = today_s["score"]
         score_col = "#30d158" if today_score >= 20 else "#ff453a" if today_score < 0 else "#ff9f0a"
@@ -5006,6 +5068,15 @@ class MentorApp:
                 r"Software\Microsoft\Windows\CurrentVersion\Run",
                 0, winreg.KEY_SET_VALUE,
             )
+            # Drop the pre-rename autostart value if it's still around — with
+            # both values present, every boot launched the exe twice (the
+            # mutex killed the twin, but the double launch flashed the window
+            # and made the Settings toggle a lie: turning autostart off left
+            # the legacy value still starting the app).
+            try:
+                winreg.DeleteValue(key, "NetherlandsMentor")
+            except FileNotFoundError:
+                pass
             if enable:
                 winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, self._startup_exe_value())
             else:
@@ -5078,6 +5149,9 @@ def _setup_logging():
         filename=os.path.join(DATA_DIR, "mentor.log"),
         level=_logging.ERROR,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        # Without this the log opens in the ANSI codepage (cp1251 on this OS)
+        # and Cyrillic/emoji window titles inside tracebacks turn to mojibake.
+        encoding="utf-8",
     )
     def _excepthook(exc_type, value, tb):
         _logging.critical("Uncaught exception", exc_info=(exc_type, value, tb))

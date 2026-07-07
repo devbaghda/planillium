@@ -38,6 +38,15 @@ public sealed class ScoreService : IDisposable
                 "  date TEXT NOT NULL UNIQUE," +
                 "  text TEXT NOT NULL)")
             .ExecuteNonQuery();
+        // Same definition as main.py's ensure_data_store — the DB-level net
+        // under the SELECT-first guards, so a cross-process race between the
+        // two apps can't double-credit a date.
+        _conn.CreateCommand()
+            .Also(c => c.CommandText =
+                "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
+                "ON score_ledger(reason, date) " +
+                "WHERE reason IN ('daily_score', 'overdue_accrual')")
+            .ExecuteNonQuery();
     }
 
     public void Dispose() => _conn.Dispose();
@@ -137,7 +146,14 @@ public sealed class ScoreService : IDisposable
         var (on, off) = DayDiaryMinutes(d);
         var streak = d == DateOnly.FromDateTime(DateTime.Today) ? CurrentStreak() : 0;
         var score = DayScore(done, total, on, off, streak);
-        AddLedger(score, "daily_score", $"day score {score}", d);
+        try
+        {
+            AddLedger(score, "daily_score", $"day score {score}", d);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return null;  // the other app credited this date between check and insert
+        }
         return score;
     }
 
@@ -177,7 +193,14 @@ public sealed class ScoreService : IDisposable
         var count = OverdueAsOf(d).Count(x => x.DaysOverdue <= OverdueAccrualCapDays);
         if (count == 0) return 0;
         var delta = count * ConfigService.ScoringRate("task_overdue_penalty", -5);
-        AddLedger(delta, "overdue_accrual", $"{count} task(s) still overdue (3-day cap)", d);
+        try
+        {
+            AddLedger(delta, "overdue_accrual", $"{count} task(s) still overdue (3-day cap)", d);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return null;  // the other app credited this date between check and insert
+        }
         return delta;
     }
 

@@ -1,5 +1,6 @@
 """TickTick Open API v1 client — OAuth2 + task management."""
 import base64
+import html
 import http.server
 import secrets
 import threading
@@ -55,16 +56,27 @@ class TickTickClient:
         self.client_secret = _kr_get("ticktick_client_secret") or tt.get("client_secret", "").strip()
         self.access_token = _kr_get("ticktick_access_token") or tt.get("access_token", "").strip()
         self.refresh_token_val = _kr_get("ticktick_refresh_token") or tt.get("refresh_token", "").strip()
-        # Migrate plaintext values found in config into keyring
+        # Migrate plaintext values found in config into keyring. Only report
+        # the config as safe to clean when EVERY value was verifiably written
+        # (read back and matching) — _kr_set silently no-ops when keyring is
+        # missing or broken, and stripping config then would destroy the only
+        # copy of the credentials.
         self.needs_config_cleanup = False
-        for kr_key, cfg_key, val in (
-            ("ticktick_client_secret", "client_secret", self.client_secret),
-            ("ticktick_access_token",  "access_token",  self.access_token),
-            ("ticktick_refresh_token", "refresh_token", self.refresh_token_val),
-        ):
-            if tt.get(cfg_key, ""):
+        pending = [
+            (kr_key, val)
+            for kr_key, cfg_key, val in (
+                ("ticktick_client_secret", "client_secret", self.client_secret),
+                ("ticktick_access_token",  "access_token",  self.access_token),
+                ("ticktick_refresh_token", "refresh_token", self.refresh_token_val),
+            )
+            if tt.get(cfg_key, "")
+        ]
+        if pending:
+            for kr_key, val in pending:
                 _kr_set(kr_key, val)
-                self.needs_config_cleanup = True
+            self.needs_config_cleanup = all(
+                _kr_get(kr_key) == (val or "").strip() for kr_key, val in pending
+            )
         self.on_tokens_updated = None  # callable(access_token, refresh_token)
 
     def save_client_secret(self, client_secret: str) -> None:
@@ -107,25 +119,43 @@ class TickTickClient:
         csrf_state = secrets.token_hex(16)
 
         class _Handler(http.server.BaseHTTPRequestHandler):
+            def _respond(self, status: int, heading: str, detail: str):
+                self.send_response(status)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(
+                    ("<html><body style='font-family:sans-serif;padding:40px'>"
+                     f"<h2>{html.escape(heading)}</h2>"
+                     f"<p>{html.escape(detail)}</p>"
+                     "</body></html>").encode("utf-8")
+                )
+
             def do_GET(self):
+                # The page must tell the truth: "Authorized!" on an error
+                # redirect (or a hung tab on a state mismatch) sends the user
+                # back to the app expecting a connection that never happened.
                 qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                if "code" not in qs and "error" not in qs:
+                    # Stray request (favicon, port probe) — answer it but keep
+                    # waiting for the real callback.
+                    self._respond(404, "Not the callback",
+                                  "Waiting for TickTick authorization…")
+                    return
                 if qs.get("state", [None])[0] != csrf_state:
                     code_holder["error"] = "State mismatch — possible CSRF; please retry."
+                    self._respond(400, "Authorization failed",
+                                  "State mismatch — close this tab and retry from the app.")
                     done.set()
                     return
                 if "code" in qs:
                     code_holder["code"] = qs["code"][0]
-                elif "error" in qs:
+                    self._respond(200, "Authorized!",
+                                  "Return to the Netherlands Mentor app.")
+                else:
                     code_holder["error"] = qs.get("error_description", ["Unknown error"])[0]
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(
-                    b"<html><body style='font-family:sans-serif;padding:40px'>"
-                    b"<h2>Authorized!</h2>"
-                    b"<p>Return to the Netherlands Mentor app.</p>"
-                    b"</body></html>"
-                )
+                    self._respond(200, "Authorization failed",
+                                  f"TickTick said: {code_holder['error']} — "
+                                  "close this tab and retry from the app.")
                 done.set()
 
             def log_message(self, *_):

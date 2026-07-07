@@ -735,3 +735,34 @@ _Update this section at the end of each Claude Code session:_
 - Exe: `MentorOverseer.exe` (next to config.json / plans/ / data/) — rebuild with
   `build.bat` after any source change; the compiled exe does NOT auto-update.
 - Desktop shortcut: `C:\Users\devba\Desktop\Mentor-Overseer.lnk`
+
+## Full-toolset audit + remediation (2026-07-07)
+
+Full 5-pass audit of BOTH apps + coexistence/tester/releaser/launch-readiness lenses.
+13 findings; everything fixable was fixed, built, and deployed the same day:
+
+- **Scoring unified to v2** ("balanced coach", approved 2026-07-06): main.py now has
+  `DAILY_SCORE_FLOOR = -10` and `OVERDUE_ACCRUAL_CAP_DAYS = 3`, matching
+  ScoreService.cs. The shared score_ledger is no longer written with two formulas.
+- **DB net under the score guards:** partial UNIQUE index `sl_reason_date` on
+  score_ledger(reason, date) for daily_score/overdue_accrual, created by both apps;
+  both catch the constraint hit (Python IntegrityError / C# SqliteErrorCode 19) as
+  "other app credited first". Verified on a scratch DB and present on the live DB.
+- **WinUI pause guard now probes the Python app's mutex** (`MentorOverseerSingleInstance_v1`)
+  instead of only matching the frozen exe's process name — dev-mode `python main.py`
+  no longer double-tracks. Probe verified cross-process.
+- **Retention:** activity_log pruned to 90 days, time_diary to 365, VACUUM after
+  pruning; skips tables that don't exist yet (fresh-DB first launch — caught by test).
+- mentor.log now `encoding="utf-8"`; stale `NetherlandsMentor` autostart value deleted
+  live AND cleaned by `_set_startup_key` forever; HTML report hints now escaped;
+  keyring migration only strips config secrets after read-back verification; OAuth
+  callback page tells the truth on error/CSRF and ignores stray requests.
+- **WinUI v0.2.0 Release build** produced; desktop shortcut "Mentor Overseer (New
+  Design).lnk" now points at bin\x64\Release (was Debug).
+
+**Still owed (the user's side):** rotate the TickTick client secret — commit eb22f8c
+(pushed, on origin/master) contains the old client_secret + access_token in
+config.json. Private repo, but rotation at the TickTick developer console is the
+real fix. Optional afterwards: history rewrite + force-push (needs the user's go-ahead).
+**Known accepted gaps:** no test suite for this repo yet (tester skill unapplied),
+nothing code-signed, migration-limbo between the two apps (primary app undecided).
