@@ -228,7 +228,6 @@ public sealed partial class TodayPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var check = new CheckBox
         {
@@ -270,26 +269,6 @@ public sealed partial class TodayPage : Page
         Grid.SetColumn(textCol, 1);
         grid.Children.Add(textCol);
 
-        if (item.Task.Category is { Length: > 0 } cat)
-        {
-            var chip = new Border
-            {
-                CornerRadius = new CornerRadius(999),
-                Padding = new Thickness(10, 3, 10, 4),
-                VerticalAlignment = VerticalAlignment.Center,
-                Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
-                Child = new TextBlock
-                {
-                    Text = cat,
-                    FontSize = 11,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                },
-            };
-            Grid.SetColumn(chip, 2);
-            grid.Children.Add(chip);
-        }
-
         if (item.Task.DurationMin is int mins && !item.Completed)
         {
             var dur = new TextBlock
@@ -299,7 +278,7 @@ public sealed partial class TodayPage : Page
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             };
-            Grid.SetColumn(dur, 3);
+            Grid.SetColumn(dur, 2);
             grid.Children.Add(dur);
         }
 
