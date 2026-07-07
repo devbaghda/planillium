@@ -204,6 +204,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void BuyTime_Click(object sender, RoutedEventArgs e) =>
+        await Dialogs.SpendDialog.ShowBuyAsync(this);
+
+    private async void LogSpend_Click(object sender, RoutedEventArgs e) =>
+        await Dialogs.SpendDialog.ShowLogSpendAsync(this);
+
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         if (args.IsSettingsSelected)
@@ -215,7 +221,7 @@ public sealed partial class MainWindow : Window
         switch (tag)
         {
             case "today":    ContentFrame.Navigate(typeof(TodayPage)); break;
-            case "schedule": ContentFrame.Navigate(typeof(StubPage), "Schedule"); break;
+            case "schedule": ContentFrame.Navigate(typeof(SchedulePage)); break;
             case "reports":  ContentFrame.Navigate(typeof(ReportsPage)); break;
             case "plans":    ContentFrame.Navigate(typeof(PlansPage)); break;
         }

@@ -1,0 +1,280 @@
+using System.Globalization;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using MentorOverseer.App.Models;
+using MentorOverseer.App.Services;
+
+namespace MentorOverseer.App.Pages;
+
+/// <summary>
+/// Day-by-day plan timeline — the WinUI counterpart of the Python app's
+/// schedule dialog. Same operations, same DB semantics: "Move to today"
+/// (swap + shift the days between), "Day off" (shift everything from that
+/// day forward), both via ScoreService so the shared contract stays in one place.
+/// </summary>
+public sealed partial class SchedulePage : Page
+{
+    private FrameworkElement? _todayCard;
+
+    public SchedulePage()
+    {
+        InitializeComponent();
+        Loaded += (_, _) =>
+        {
+            Render();
+            // Land the viewport on today, not on Day 1 of a 90-day plan.
+            _todayCard?.StartBringIntoView(new BringIntoViewOptions
+            {
+                VerticalAlignmentRatio = 0.12,
+            });
+        };
+    }
+
+    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+
+    private void Render()
+    {
+        Sections.Children.Clear();
+        _todayCard = null;
+
+        List<Plan> plans;
+        try
+        {
+            plans = PlanStore.LoadActivePlans();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SchedulePage.Render (plans)", ex);
+            Sections.Children.Add(new TextBlock { Text = "Couldn't load plans: " + ex.Message });
+            return;
+        }
+
+        if (plans.Count == 0)
+        {
+            Subtitle.Text = "No active plans.";
+            return;
+        }
+        Subtitle.Text = "Move tasks, take days off — the plan flexes, the goal doesn't.";
+
+        try
+        {
+            using var db = new Database();
+            using var score = new ScoreService(plans, db);
+            var completions = db.LoadCompletions();
+
+            foreach (var plan in plans)
+                RenderPlan(plan, db, score, completions);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SchedulePage.Render", ex);
+            Sections.Children.Add(new TextBlock { Text = "Couldn't load the schedule: " + ex.Message });
+        }
+    }
+
+    private void RenderPlan(Plan plan, Database db, ScoreService score,
+        Dictionary<(string, int, string), bool> completions)
+    {
+        var planDay = plan.PlanDay;
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+        var daysOff = score.DaysOff(plan.Id);
+        var byDay = tasks.GroupBy(t => t.AssignedDay)
+                         .ToDictionary(g => g.Key, g => g.ToList());
+        var lastDay = Math.Max(plan.TotalDaysComputed,
+                               tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : 1);
+
+        Sections.Children.Add(new TextBlock
+        {
+            Text = $"{plan.Name} — day {planDay} of {lastDay}",
+            Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
+            Margin = new Thickness(0, 8, 0, 4),
+        });
+
+        for (var day = 1; day <= lastDay; day++)
+        {
+            var isToday = day == planDay;
+            var isOff = daysOff.Contains(day);
+            var dayTasks = byDay.TryGetValue(day, out var list) ? list : new List<AssignedTask>();
+            // The past is history: skip empty days that are already gone.
+            if (day < planDay && dayTasks.Count == 0 && !isOff) continue;
+
+            var card = DayCard(plan, day, isToday, isOff, dayTasks);
+            Sections.Children.Add(card);
+            if (isToday) _todayCard = card;
+        }
+    }
+
+    private FrameworkElement DayCard(Plan plan, int day, bool isToday, bool isOff,
+        List<AssignedTask> dayTasks)
+    {
+        var planDay = plan.PlanDay;
+        var date = plan.StartDateParsed.AddDays(day - 1);
+        var overdueCount = dayTasks.Count(t => t.Overdue);
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var left = new StackPanel { Spacing = 6 };
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        header.Children.Add(new TextBlock
+        {
+            Text = $"Day {day}",
+            Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+        });
+        header.Children.Add(new TextBlock
+        {
+            // English day names regardless of OS locale — same rule as everywhere.
+            Text = date.ToString("ddd dd.MM", CultureInfo.InvariantCulture),
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            Foreground = Res("TextFillColorTertiaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        if (isToday) header.Children.Add(Chip("Today", "AccentFillColorDefaultBrush", onAccent: true));
+        if (isOff) header.Children.Add(Chip("Day off", "SubtleFillColorSecondaryBrush"));
+        if (overdueCount > 0)
+            header.Children.Add(Chip($"{overdueCount} overdue", "SystemFillColorCriticalBackgroundBrush"));
+        left.Children.Add(header);
+
+        if (dayTasks.Count == 0 && !isOff)
+            left.Children.Add(new TextBlock
+            {
+                Text = "No tasks",
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = Res("TextFillColorTertiaryBrush"),
+            });
+
+        foreach (var t in dayTasks.OrderBy(t => t.Completed))
+            left.Children.Add(TaskRow(plan, t, planDay));
+
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
+        // Day-off toggle: only meaningful from today onward.
+        if (day >= planDay)
+        {
+            var toggle = new HyperlinkButton
+            {
+                Content = isOff ? "Undo day off" : "Day off",
+                FontSize = 12,
+                Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            var d = day;
+            toggle.Click += (_, _) =>
+            {
+                try
+                {
+                    var plans = PlanStore.LoadActivePlans();
+                    var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
+                    using var db = new Database();
+                    using var score = new ScoreService(plans, db);
+                    if (isOff) score.UnmarkDayOff(p, d);
+                    else score.MarkDayOff(p, d);
+                }
+                catch (Exception ex) { Log.Error("SchedulePage.DayOff", ex); }
+                Render();
+            };
+            Grid.SetColumn(toggle, 1);
+            grid.Children.Add(toggle);
+        }
+
+        return new Border
+        {
+            Background = Res("CardBackgroundFillColorDefaultBrush"),
+            BorderBrush = isToday ? Res("AccentFillColorDefaultBrush")
+                                  : Res("CardStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 12, 16, 12),
+            Child = grid,
+        };
+    }
+
+    private FrameworkElement TaskRow(Plan plan, AssignedTask t, int planDay)
+    {
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new FontIcon
+        {
+            FontSize = 12,
+            Margin = new Thickness(0, 2, 10, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            Glyph = t.Completed ? "\uE73E" : t.Overdue ? "\uE7BA" : "\uEA3A",  // CheckMark / Warning / CircleRing
+            Foreground = t.Completed ? Res("SystemFillColorSuccessBrush")
+                       : t.Overdue ? Res("SystemFillColorCriticalBrush")
+                       : Res("TextFillColorTertiaryBrush"),
+        };
+        Grid.SetColumn(icon, 0);
+        row.Children.Add(icon);
+
+        var textPanel = new StackPanel();
+        var title = new TextBlock
+        {
+            Text = t.Task.Text,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = t.Completed ? Res("TextFillColorTertiaryBrush") : Res("TextFillColorPrimaryBrush"),
+        };
+        textPanel.Children.Add(title);
+        var meta = new List<string>();
+        if (t.Task.DurationMin is int dur) meta.Add($"{dur} min");
+        if (t.AssignedDay != t.OriginalDay) meta.Add($"moved from day {t.OriginalDay}");
+        if (meta.Count > 0)
+            textPanel.Children.Add(new TextBlock
+            {
+                Text = string.Join(" · ", meta),
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = Res("TextFillColorTertiaryBrush"),
+            });
+        Grid.SetColumn(textPanel, 1);
+        row.Children.Add(textPanel);
+
+        if (!t.Completed && t.AssignedDay > planDay)
+        {
+            var move = new HyperlinkButton
+            {
+                Content = "Move to today",
+                FontSize = 12,
+                Padding = new Thickness(6, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            move.Click += (_, _) =>
+            {
+                try
+                {
+                    var plans = PlanStore.LoadActivePlans();
+                    var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
+                    using var db = new Database();
+                    using var score = new ScoreService(plans, db);
+                    score.MoveTaskToToday(p, t.Task.Text);
+                }
+                catch (Exception ex) { Log.Error("SchedulePage.MoveToToday", ex); }
+                Render();
+            };
+            Grid.SetColumn(move, 2);
+            row.Children.Add(move);
+        }
+
+        return row;
+    }
+
+    private static Border Chip(string text, string brushKey, bool onAccent = false) => new()
+    {
+        Background = (Brush)Application.Current.Resources[brushKey],
+        CornerRadius = new CornerRadius(999),
+        Padding = new Thickness(8, 1, 8, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock
+        {
+            Text = text,
+            FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.Resources[
+                onAccent ? "TextOnAccentFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"],
+        },
+    };
+}

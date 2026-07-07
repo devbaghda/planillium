@@ -1,0 +1,133 @@
+using System.Globalization;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using MentorOverseer.App.Services;
+
+namespace MentorOverseer.App.Dialogs;
+
+/// <summary>
+/// The two ways to spend the balance — ports of the Python app's sidebar
+/// dialogs, writing the same ledger reasons so both apps read one economy:
+///   • Buy entertainment time  → 'entertainment_purchase' + tracker paid window
+///   • Log spend (no regrets)  → 'money_expenditure'
+/// </summary>
+public static class SpendDialog
+{
+    public static Task ShowBuyAsync(MainWindow window)
+    {
+        var (rate, _, _) = ConfigService.SpendRates();
+        return ShowAsync(window,
+            title: "Buy entertainment time",
+            unitLabel: "Minutes",
+            rateLabel: $"rate: {rate:0.##} pt/min",
+            initialValue: 30,
+            cost: amount => (int)Math.Round(amount * rate),
+            confirmLabel: "Buy",
+            onConfirm: (score, amount, cost) =>
+            {
+                score.AddLedger(-cost, "entertainment_purchase",
+                    amount.ToString("0.#", CultureInfo.InvariantCulture) + " min");
+                if (window.Tracker is { } tracker)
+                    tracker.PaidUntil = DateTime.Now.AddMinutes(amount);
+            });
+    }
+
+    public static Task ShowLogSpendAsync(MainWindow window)
+    {
+        var (_, rate, symbol) = ConfigService.SpendRates();
+        return ShowAsync(window,
+            title: "Log spend (no regrets)",
+            unitLabel: $"Amount ({symbol})",
+            rateLabel: $"rate: {rate:0.##} pt/{symbol}1",
+            initialValue: double.NaN,   // NumberBox: empty until typed
+            cost: amount => (int)Math.Round(amount * rate),
+            confirmLabel: "Log spend",
+            onConfirm: (score, amount, cost) =>
+                score.AddLedger(-cost, "money_expenditure",
+                    symbol + amount.ToString("0.##", CultureInfo.InvariantCulture)));
+    }
+
+    private static async Task ShowAsync(MainWindow window, string title, string unitLabel,
+        string rateLabel, double initialValue, Func<double, int> cost, string confirmLabel,
+        Action<ScoreService, double, int> onConfirm)
+    {
+        long balance;
+        try
+        {
+            using var db = new Database();
+            balance = db.ScoreBalance();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SpendDialog (balance)", ex);
+            return;
+        }
+
+        var panel = new StackPanel { Spacing = 10, MinWidth = 360 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Balance: {balance} pts   ·   {rateLabel}",
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+        var input = new NumberBox
+        {
+            Header = unitLabel,
+            Value = initialValue,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+            SmallChange = unitLabel.StartsWith("Min") ? 15 : 5,
+        };
+        panel.Children.Add(input);
+        var costText = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        panel.Children.Add(costText);
+
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = panel,
+            PrimaryButtonText = confirmLabel,
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = window.Content.XamlRoot,
+        };
+
+        void Update()
+        {
+            var amount = input.Value;
+            if (double.IsNaN(amount) || amount <= 0)
+            {
+                costText.Text = "Cost: —";
+                dialog.IsPrimaryButtonEnabled = false;
+                return;
+            }
+            var c = cost(amount);
+            var affordable = c <= balance;
+            costText.Text = affordable
+                ? $"Cost: {c} pts"
+                : $"Cost: {c} pts — over your {balance} pts balance";
+            costText.Foreground = (Brush)Application.Current.Resources[
+                affordable ? "TextFillColorSecondaryBrush" : "SystemFillColorCriticalBrush"];
+            dialog.IsPrimaryButtonEnabled = affordable && c > 0;
+        }
+        input.ValueChanged += (_, _) => Update();
+        Update();
+
+        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return;
+
+        try
+        {
+            using var db = new Database();
+            using var score = new ScoreService(new List<Models.Plan>(), db);
+            onConfirm(score, input.Value, cost(input.Value));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SpendDialog (confirm)", ex);
+        }
+        window.RefreshScore();
+    }
+}

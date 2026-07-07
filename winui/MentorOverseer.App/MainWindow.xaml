@@ -75,6 +75,14 @@
                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                         </StackPanel>
                     </Border>
+                    <StackPanel Spacing="0" Margin="2,0,0,0">
+                        <HyperlinkButton Content="Buy entertainment time"
+                                         FontSize="12" Padding="4,2"
+                                         Click="BuyTime_Click"/>
+                        <HyperlinkButton Content="Log spend (no regrets)"
+                                         FontSize="12" Padding="4,2"
+                                         Click="LogSpend_Click"/>
+                    </StackPanel>
                 </StackPanel>
             </NavigationView.PaneFooter>
 

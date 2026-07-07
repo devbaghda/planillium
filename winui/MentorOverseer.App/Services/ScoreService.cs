@@ -251,6 +251,70 @@ public sealed class ScoreService : IDisposable
         return overdue.Count;
     }
 
+    // ── schedule operations (ports of _swap_task_to_today / _mark_day_off) ──
+
+    /// <summary>
+    /// Pull a future task to today; shift everything between today and its
+    /// old slot forward by one day (same semantics as the Python app's
+    /// _swap_task_to_today). No-op if the task is already due or overdue.
+    /// </summary>
+    public void MoveTaskToToday(Plan plan, string taskText)
+    {
+        var planDay = plan.PlanDay;
+        var tasks = PlanStore.TasksFor(plan, _db, _completions);
+        var target = tasks.FirstOrDefault(t => t.Task.Text == taskText);
+        if (target is null || target.AssignedDay <= planDay) return;
+
+        foreach (var t in tasks)
+        {
+            if (t.Task.Text == taskText) continue;
+            if (t.AssignedDay >= planDay && t.AssignedDay < target.AssignedDay)
+                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+        }
+        SaveOverride(plan.Id, taskText, target.OriginalDay, planDay);
+    }
+
+    public HashSet<int> DaysOff(string planId)
+    {
+        var result = new HashSet<int>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT day FROM plan_days_off WHERE plan_id=$pid";
+        cmd.Parameters.AddWithValue("$pid", planId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) result.Add(r.GetInt32(0));
+        return result;
+    }
+
+    /// <summary>Mark a day as non-working: tasks on or after it shift +1.</summary>
+    public void MarkDayOff(Plan plan, int day)
+    {
+        foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
+            if (t.AssignedDay >= day)
+                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO plan_days_off (plan_id, day, marked_at) VALUES ($pid, $day, $ts) " +
+            "ON CONFLICT(plan_id, day) DO NOTHING";
+        cmd.Parameters.AddWithValue("$pid", plan.Id);
+        cmd.Parameters.AddWithValue("$day", day);
+        cmd.Parameters.AddWithValue("$ts",
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Inverse of MarkDayOff: tasks after the day shift back −1.</summary>
+    public void UnmarkDayOff(Plan plan, int day)
+    {
+        foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
+            if (t.AssignedDay > day)
+                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM plan_days_off WHERE plan_id=$pid AND day=$day";
+        cmd.Parameters.AddWithValue("$pid", plan.Id);
+        cmd.Parameters.AddWithValue("$day", day);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Same upsert as main.py _save_override.</summary>
     private void SaveOverride(string planId, string taskText, int originalDay, int assignedDay)
     {
