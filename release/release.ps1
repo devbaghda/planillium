@@ -6,7 +6,7 @@
 
 .PARAMETER Force
   Proceed even if the git working tree isn't clean. Without it, a dirty tree
-  aborts before building — a release should be reproducible from a tagged
+  aborts before building - a release should be reproducible from a tagged
   commit, not from whatever happens to be on disk.
 
 .PARAMETER SkipPublish
@@ -35,22 +35,22 @@ $DefaultConfig = Join-Path $ReleaseDir "installer\config.default.json"
 function Step($msg) { Write-Host "`n== $msg ==" -ForegroundColor Cyan }
 function Fail($msg) { Write-Host "FAILED: $msg" -ForegroundColor Red; exit 1 }
 
-# ── 1. version (single source of truth: the csproj) ──────────────────────
+# -- 1. version (single source of truth: the csproj) -----------------------
 $csprojText = Get-Content $ProjectPath -Raw
 if ($csprojText -notmatch '<Version>([^<]+)</Version>') { Fail "No <Version> in $ProjectPath" }
 $Version = $Matches[1]
 Step "Mentor Overseer v$Version"
 
-# ── 2. clean tree check ───────────────────────────────────────────────────
+# -- 2. clean tree check -----------------------------------------------------
 Step "Checking git tree"
 Push-Location $RepoRoot
 try {
     $status = git status --porcelain
     if ($status -and -not $Force) {
         Write-Host $status
-        Fail "Working tree isn't clean (commit/stash first, or pass -Force to override) — a release should be reproducible from a tagged commit."
+        Fail "Working tree isn't clean (commit/stash first, or pass -Force to override) - a release should be reproducible from a tagged commit."
     } elseif ($status) {
-        Write-Host "Working tree is dirty — proceeding anyway (-Force)." -ForegroundColor Yellow
+        Write-Host "Working tree is dirty - proceeding anyway (-Force)." -ForegroundColor Yellow
     } else {
         Write-Host "Clean."
     }
@@ -58,9 +58,9 @@ try {
     Pop-Location
 }
 
-# ── 3. publish (self-contained, no runtime install required) ─────────────
+# -- 3. publish (self-contained, no runtime install required) --------------
 if (-not $SkipPublish) {
-    Step "dotnet publish (self-contained win-x64) — this takes a minute"
+    Step "dotnet publish (self-contained win-x64) - this takes a minute"
     $dotnetDir = Join-Path $env:LOCALAPPDATA "Microsoft\dotnet"
     if (Test-Path $dotnetDir) { $env:PATH = "$dotnetDir;$env:PATH" }
 
@@ -79,21 +79,21 @@ if (-not $SkipPublish) {
 
     # First-run data: config.json + an empty plans/data tree. AppPaths.Root
     # walks up from the exe looking for a folder with BOTH config.json and a
-    # "plans" subfolder — without these the very first launch throws.
+    # "plans" subfolder - without these the very first launch throws.
     Copy-Item $DefaultConfig (Join-Path $DistDir "config.json")
     New-Item -ItemType Directory -Force -Path (Join-Path $DistDir "plans\active")   | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DistDir "plans\archive")  | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DistDir "data")           | Out-Null
 } else {
-    Step "Skipping publish (-SkipPublish) — reusing existing dist\"
+    Step "Skipping publish (-SkipPublish) - reusing existing dist\"
     if (-not (Test-Path $DistDir)) { Fail "dist\ doesn't exist; run without -SkipPublish first" }
 }
 
-# ── 4. compile the installer ──────────────────────────────────────────────
+# -- 4. compile the installer ------------------------------------------------
 Step "Compiling installer (Inno Setup)"
 $iscc = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs","C:\Program Files*" `
     -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-if (-not $iscc) { Fail "ISCC.exe not found — install Inno Setup 6 (winget install JRSoftware.InnoSetup)" }
+if (-not $iscc) { Fail "ISCC.exe not found - install Inno Setup 6 (winget install JRSoftware.InnoSetup)" }
 
 if (Test-Path $OutputDir) { Remove-Item $OutputDir -Recurse -Force }
 New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -101,7 +101,7 @@ New-Item -ItemType Directory -Path $OutputDir | Out-Null
 & $iscc "/DAppVersion=$Version" $InstallerIss
 if ($LASTEXITCODE -ne 0) { Fail "ISCC compile failed" }
 
-# ── 5. checksums ──────────────────────────────────────────────────────────
+# -- 5. checksums -------------------------------------------------------------
 Step "Checksums"
 $setupExe = Get-ChildItem $OutputDir -Filter "*-setup.exe" | Select-Object -First 1
 if (-not $setupExe) { Fail "No setup exe produced in $OutputDir" }
@@ -110,5 +110,5 @@ $hash = Get-FileHash $setupExe.FullName -Algorithm SHA256
 Write-Host "$($setupExe.Name)"
 Write-Host "SHA256: $($hash.Hash)"
 
-Step "Done — release\output\$($setupExe.Name)"
+Step "Done - release\output\$($setupExe.Name)"
 Write-Host "Next: run the verification checklist in release\README.md before calling this v$Version done." -ForegroundColor Yellow
