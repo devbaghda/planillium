@@ -31,6 +31,8 @@ public sealed partial class MainWindow : Window
 
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 780));
 
+        ApplyOpacity(StateService.Load().Opacity);
+
         // Theme override saved in Settings (default = follow Windows).
         if (Content is FrameworkElement root)
             root.RequestedTheme = StateService.Load().Theme switch
@@ -115,6 +117,43 @@ public sealed partial class MainWindow : Window
     }
 
     public void HideToTray() => AppWindow.Hide();
+
+    // ── window opacity ────────────────────────────────────────────────────
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtrW(IntPtr hWnd, int nIndex);
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtrW(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+    private const int GwlExstyle = -20;
+    private const long WsExLayered = 0x00080000;
+    private const uint LwaAlpha = 0x2;
+
+    /// <summary>Whole-window opacity (Settings slider), 40–100 %. At 100 the
+    /// layered style is removed so DWM effects (Mica) run untouched.</summary>
+    public void ApplyOpacity(int percent)
+    {
+        try
+        {
+            percent = Math.Clamp(percent, 40, 100);
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var exStyle = GetWindowLongPtrW(hwnd, GwlExstyle).ToInt64();
+            if (percent >= 100)
+            {
+                if ((exStyle & WsExLayered) != 0)
+                    SetWindowLongPtrW(hwnd, GwlExstyle, new IntPtr(exStyle & ~WsExLayered));
+                return;
+            }
+            if ((exStyle & WsExLayered) == 0)
+                SetWindowLongPtrW(hwnd, GwlExstyle, new IntPtr(exStyle | WsExLayered));
+            SetLayeredWindowAttributes(hwnd, 0, (byte)(percent * 255 / 100), LwaAlpha);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ApplyOpacity", ex);
+        }
+    }
 
     private void ShowFromTray()
     {

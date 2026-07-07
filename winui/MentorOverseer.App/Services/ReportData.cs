@@ -1,0 +1,214 @@
+using System.Globalization;
+using Microsoft.Data.Sqlite;
+
+namespace MentorOverseer.App.Services;
+
+public enum ReportPeriod { Day, Week, Month, Year }
+
+/// <summary>
+/// Period-aware report queries — port of main.py's _week_stats /
+/// _period_table_rows / _waste_patterns / _app_time_breakdown. Shared by
+/// ReportsPage and the HTML/CSV exports so all three agree on the numbers.
+/// Distractions and the app breakdown group by AppNames labels, so ten
+/// YouTube tabs read as one "Chrome - YouTube" row.
+/// </summary>
+public static class ReportData
+{
+    public sealed record DayStat(DateOnly Date, int Done, int Total, int OnMin, int OffMin, int Score);
+    public sealed record BucketStat(string Label, int OnMin, int OffMin);
+
+    public sealed class AppUsage
+    {
+        public int Total, On, Off, Neutral;
+        public SortedDictionary<string, AppUsage>? Subs;
+
+        public void Add(string category, int mins)
+        {
+            Total += mins;
+            switch (category)
+            {
+                case "on_plan": On += mins; break;
+                case "off_plan": Off += mins; break;
+                case "neutral": Neutral += mins; break;
+            }
+        }
+    }
+
+    public static string PeriodName(ReportPeriod p) => p switch
+    {
+        ReportPeriod.Day => "TODAY",
+        ReportPeriod.Month => "THIS MONTH",
+        ReportPeriod.Year => "THIS YEAR",
+        _ => "THIS WEEK",
+    };
+
+    /// <summary>Last 7 days, oldest first — the day/week summary table.</summary>
+    public static List<DayStat> WeekStats(ScoreService score)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var streak = score.CurrentStreak();
+        var rows = new List<DayStat>();
+        for (var i = 6; i >= 0; i--)
+        {
+            var d = today.AddDays(-i);
+            var (total, done) = score.DayTaskCounts(d);
+            var (on, off) = score.DayDiaryMinutes(d);
+            var s = score.DayScore(done, total, on, off, d == today ? streak : 0);
+            rows.Add(new DayStat(d, done, total, on, off, s));
+        }
+        return rows;
+    }
+
+    /// <summary>Month → week buckets (last 30 days); Year → calendar months (last 365).</summary>
+    public static List<BucketStat> Buckets(ReportPeriod period)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+
+        if (period == ReportPeriod.Month)
+        {
+            var start = today.AddDays(-29);
+            // Ordered week buckets keyed by the Monday of each week.
+            var weeks = new SortedDictionary<string, (DateOnly WeekStart, int On, int Off)>();
+            for (var d = start; d <= today; d = d.AddDays(1))
+            {
+                var ws = d.AddDays(-(((int)d.DayOfWeek + 6) % 7));  // Monday
+                weeks.TryAdd(ws.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), (ws, 0, 0));
+            }
+            cmd.CommandText =
+                "SELECT date, category, SUM(duration_min) FROM time_diary " +
+                "WHERE date >= $from GROUP BY date, category";
+            cmd.Parameters.AddWithValue("$from", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", out var d)) continue;
+                var cat = r.GetString(1);
+                if (cat != "on_plan" && cat != "off_plan") continue;
+                var ws = d.AddDays(-(((int)d.DayOfWeek + 6) % 7));
+                var key = ws.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                if (!weeks.TryGetValue(key, out var w)) continue;
+                var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                weeks[key] = cat == "on_plan" ? (w.WeekStart, w.On + mins, w.Off)
+                                              : (w.WeekStart, w.On, w.Off + mins);
+            }
+            return weeks.Values.Select(w => new BucketStat(
+                $"{w.WeekStart.ToString("dd MMM", CultureInfo.InvariantCulture)} – " +
+                $"{w.WeekStart.AddDays(6).ToString("dd MMM", CultureInfo.InvariantCulture)}",
+                w.On, w.Off)).ToList();
+        }
+
+        // Year — group by calendar month.
+        cmd.CommandText =
+            "SELECT strftime('%Y-%m', date) AS mo, category, SUM(duration_min) " +
+            "FROM time_diary WHERE date >= $from GROUP BY mo, category ORDER BY mo";
+        cmd.Parameters.AddWithValue("$from",
+            today.AddDays(-364).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        var months = new SortedDictionary<string, (int On, int Off)>();
+        using (var r = cmd.ExecuteReader())
+            while (r.Read())
+            {
+                var mo = r.IsDBNull(0) ? "" : r.GetString(0);
+                if (mo.Length == 0) continue;
+                var cat = r.GetString(1);
+                if (cat != "on_plan" && cat != "off_plan") continue;
+                var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                months.TryGetValue(mo, out var m);
+                months[mo] = cat == "on_plan" ? (m.On + mins, m.Off) : (m.On, m.Off + mins);
+            }
+        return months.Select(kv => new BucketStat(MonthLabel(kv.Key), kv.Value.On, kv.Value.Off))
+                     .ToList();
+    }
+
+    private static string MonthLabel(string yyyyMm) =>
+        DateTime.TryParseExact(yyyyMm, "yyyy-MM", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var d)
+            ? d.ToString("MMMM yyyy", CultureInfo.InvariantCulture) : yyyyMm;
+
+    /// <summary>Off-plan minutes grouped by "App - sub" label, biggest first.</summary>
+    public static List<(string Label, int Minutes)> TopDistractions(ReportPeriod period, int limit = 8)
+    {
+        var aggregated = new Dictionary<string, int>();
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT window, SUM(duration_min) FROM time_diary " +
+            "WHERE category='off_plan' AND " + DateFilter(period, cmd) +
+            " GROUP BY window";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var label = AppNames.Label(r.GetString(0));
+            var mins = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+            aggregated[label] = aggregated.GetValueOrDefault(label) + mins;
+        }
+        return aggregated.OrderByDescending(kv => kv.Value)
+                         .Take(limit)
+                         .Select(kv => (kv.Key, kv.Value))
+                         .ToList();
+    }
+
+    /// <summary>All time grouped app → sub-item, biggest app first.</summary>
+    public static List<(string App, AppUsage Usage)> AppBreakdown(ReportPeriod period, int limit = 12)
+    {
+        var groups = new Dictionary<string, AppUsage>();
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT window, category, SUM(duration_min) FROM time_diary " +
+            "WHERE " + DateFilter(period, cmd) + " GROUP BY window, category";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var window = r.GetString(0);
+            var cat = r.GetString(1);
+            var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+            var grp = AppNames.Group(window);
+            if (!groups.TryGetValue(grp, out var g))
+                groups[grp] = g = new AppUsage { Subs = new SortedDictionary<string, AppUsage>() };
+            g.Add(cat, mins);
+            if (AppNames.Sub(window) is { Length: > 0 } sub)
+            {
+                if (!g.Subs!.TryGetValue(sub, out var s))
+                    g.Subs[sub] = s = new AppUsage();
+                s.Add(cat, mins);
+            }
+        }
+        return groups.OrderByDescending(kv => kv.Value.Total)
+                     .Take(limit)
+                     .Select(kv => (kv.Key, kv.Value))
+                     .ToList();
+    }
+
+    public static string FmtMins(int mins) =>
+        mins >= 60 ? $"{mins / 60}h {mins % 60:00}m" : $"{mins}m";
+
+    private static SqliteConnection Open()
+    {
+        var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
+        conn.Open();
+        return conn;
+    }
+
+    /// <summary>SQL date predicate for the period; adds its parameter to cmd.</summary>
+    private static string DateFilter(ReportPeriod period, SqliteCommand cmd)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (period == ReportPeriod.Day)
+        {
+            cmd.Parameters.AddWithValue("$pd",
+                today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            return "date = $pd";
+        }
+        var days = period switch
+        {
+            ReportPeriod.Month => 30,
+            ReportPeriod.Year => 365,
+            _ => 7,
+        };
+        cmd.Parameters.AddWithValue("$pd",
+            today.AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        return "date >= $pd";
+    }
+}

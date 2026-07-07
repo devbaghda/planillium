@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Services;
 
@@ -10,139 +11,132 @@ namespace MentorOverseer.App.Pages;
 
 public sealed partial class ReportsPage : Page
 {
+    // Survives navigation: come back to Reports and it's still on your period.
+    private static ReportPeriod _period = ReportPeriod.Week;
+
+    private static readonly (string Label, ReportPeriod Period)[] PeriodOpts =
+    {
+        ("Day", ReportPeriod.Day), ("Week", ReportPeriod.Week),
+        ("Month", ReportPeriod.Month), ("Year", ReportPeriod.Year),
+    };
+
     public ReportsPage()
     {
         InitializeComponent();
+        BuildPeriodBar();
         Loaded += (_, _) => Render();
     }
 
-    private void Export_Click(object sender, RoutedEventArgs e)
+    private void ExportHtml_Click(object sender, RoutedEventArgs e)
     {
         try { ReportExport.ExportWeek(); }
-        catch (Exception ex) { Log.Error("ReportsPage.Export", ex); }
+        catch (Exception ex) { Log.Error("ReportsPage.ExportHtml", ex); }
+    }
+
+    private void ExportCsv_Click(object sender, RoutedEventArgs e)
+    {
+        try { ReportExport.ExportCsv(_period); }
+        catch (Exception ex) { Log.Error("ReportsPage.ExportCsv", ex); }
+    }
+
+    // ── period selector ───────────────────────────────────────────────────
+
+    private void BuildPeriodBar()
+    {
+        foreach (var (label, period) in PeriodOpts)
+        {
+            var btn = new ToggleButton
+            {
+                Content = label,
+                Tag = period,
+                IsChecked = period == _period,
+                MinWidth = 72,
+            };
+            btn.Click += (s, _) =>
+            {
+                _period = (ReportPeriod)((ToggleButton)s).Tag;
+                foreach (var child in PeriodBar.Children.OfType<ToggleButton>())
+                    child.IsChecked = (ReportPeriod)child.Tag == _period;
+                Render();
+            };
+            PeriodBar.Children.Add(btn);
+        }
     }
 
     private void Render()
     {
         Body.Children.Clear();
+        ExportCsvItem.Text = $"CSV ({ReportData.PeriodName(_period).ToLowerInvariant()})";
         try
         {
             var plans = PlanStore.LoadActivePlans();
             using var db = new Database();
             using var score = new ScoreService(plans, db);
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            var periodName = ReportData.PeriodName(_period);
+            var weekStats = ReportData.WeekStats(score);
+            var todayStat = weekStats[^1];
 
-            // ── today's score card ────────────────────────────────────────
-            var (tTotal, tDone) = score.DayTaskCounts(today);
-            var (tOn, tOff) = score.DayDiaryMinutes(today);
-            var todayScore = score.DayScore(tDone, tTotal, tOn, tOff, score.CurrentStreak());
-
+            // ── today's score card (always today, whatever the period) ────
             var card = new StackPanel { Spacing = 2 };
             card.Children.Add(Caption("TODAY'S SCORE"));
             card.Children.Add(new TextBlock
             {
-                Text = todayScore.ToString(),
+                Text = todayStat.Score.ToString(),
                 FontSize = 44,
                 FontWeight = FontWeights.Bold,
-                Foreground = (Brush)Application.Current.Resources[
-                    todayScore >= 20 ? "SystemFillColorSuccessBrush"
-                    : todayScore < 0 ? "SystemFillColorCriticalBrush"
-                    : "SystemFillColorCautionBrush"],
+                Foreground = ScoreBrush(todayStat.Score),
             });
-            card.Children.Add(Dim($"{tDone}/{tTotal} tasks · {tOn}m on-plan · {tOff}m off-plan"));
+            card.Children.Add(Dim($"{todayStat.Done}/{todayStat.Total} tasks · " +
+                                  $"{todayStat.OnMin}m on-plan · {todayStat.OffMin}m off-plan"));
             Body.Children.Add(Card(card));
 
-            // ── 7-day table ───────────────────────────────────────────────
-            Body.Children.Add(Section("THIS WEEK"));
-            var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
-            for (var c = 0; c < 5; c++)
-                grid.ColumnDefinitions.Add(new ColumnDefinition
-                    { Width = c == 0 ? new GridLength(110) : GridLength.Auto });
-            var headers = new[] { "Day", "Tasks", "On-plan", "Off-plan", "Score" };
-            for (var c = 0; c < headers.Length; c++)
-            {
-                var h = Caption(headers[c]);
-                Grid.SetColumn(h, c); Grid.SetRow(h, 0);
-                grid.Children.Add(h);
-            }
-            grid.RowDefinitions.Add(new RowDefinition());
-            var streak = score.CurrentStreak();
-            for (var i = 6; i >= 0; i--)
-            {
-                var d = today.AddDays(-i);
-                var (total, done) = score.DayTaskCounts(d);
-                var (on, off) = score.DayDiaryMinutes(d);
-                var s = score.DayScore(done, total, on, off, d == today ? streak : 0);
-                var row = grid.RowDefinitions.Count;
-                grid.RowDefinitions.Add(new RowDefinition());
-                var isToday = d == today;
-                var cells = new[]
-                {
-                    d.ToString("ddd dd.MM", CultureInfo.InvariantCulture),
-                    $"{done}/{total}", Fmt(on), Fmt(off), s.ToString(),
-                };
-                for (var c = 0; c < cells.Length; c++)
-                {
-                    var tb = new TextBlock
-                    {
-                        Text = cells[c],
-                        FontWeight = isToday ? FontWeights.SemiBold : FontWeights.Normal,
-                    };
-                    if (c == 4)
-                        tb.Foreground = (Brush)Application.Current.Resources[
-                            s >= 20 ? "SystemFillColorSuccessBrush"
-                            : s < 0 ? "SystemFillColorCriticalBrush"
-                            : "SystemFillColorCautionBrush"];
-                    else if (!isToday)
-                        tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
-                    Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
-                    grid.Children.Add(tb);
-                }
-            }
-            Body.Children.Add(Card(grid));
+            // ── summary table ─────────────────────────────────────────────
+            Body.Children.Add(Section(periodName));
+            Body.Children.Add(Card(_period is ReportPeriod.Day or ReportPeriod.Week
+                ? DayTable(weekStats)
+                : BucketTable(ReportData.Buckets(_period))));
 
-            // ── top distractions (last 7 days) ────────────────────────────
-            Body.Children.Add(Section("TOP DISTRACTIONS · 7 DAYS"));
-            var distractions = TopDistractions(7);
+            // ── top distractions (grouped: "Chrome - YouTube") ────────────
+            Body.Children.Add(Section($"TOP DISTRACTIONS — {periodName}"));
+            var distractions = ReportData.TopDistractions(_period);
             if (distractions.Count == 0)
                 Body.Children.Add(Dim("No off-plan time logged. Impressive."));
             else
+                Body.Children.Add(Card(DistractionList(distractions)));
+
+            // ── time by app (expandable groups) ───────────────────────────
+            Body.Children.Add(Section($"TIME BY APP — {periodName}"));
+            var breakdown = ReportData.AppBreakdown(_period);
+            if (breakdown.Count == 0)
+                Body.Children.Add(Dim("No activity logged yet."));
+            else
+                Body.Children.Add(AppBreakdownPanel(breakdown));
+
+            // ── insights (week-based, like the score card) ────────────────
+            Body.Children.Add(Section("INSIGHTS"));
+            var hints = ReportExport.Suggestions(
+                weekStats.Sum(s => s.OnMin), weekStats.Sum(s => s.OffMin),
+                ReportData.TopDistractions(ReportPeriod.Week));
+            var hintPanel = new StackPanel { Spacing = 6 };
+            foreach (var hint in hints)
             {
-                var maxMin = distractions[0].Minutes;
-                var list = new StackPanel { Spacing = 8 };
-                foreach (var (app, minutes) in distractions)
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+                row.Children.Add(new TextBlock
                 {
-                    var row = new Grid { ColumnSpacing = 12 };
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var name = new TextBlock { Text = app, TextTrimming = TextTrimming.CharacterEllipsis };
-                    var track = new Border
-                    {
-                        Height = 8, CornerRadius = new CornerRadius(4),
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
-                    };
-                    var fill = new Border
-                    {
-                        Height = 8, CornerRadius = new CornerRadius(4),
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        Width = Math.Max(8, 320.0 * minutes / maxMin),
-                        Background = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
-                    };
-                    var overlay = new Grid();
-                    overlay.Children.Add(track);
-                    overlay.Children.Add(fill);
-                    var mins = Dim(Fmt(minutes));
-                    Grid.SetColumn(overlay, 1);
-                    Grid.SetColumn(mins, 2);
-                    row.Children.Add(name);
-                    row.Children.Add(overlay);
-                    row.Children.Add(mins);
-                    list.Children.Add(row);
-                }
-                Body.Children.Add(Card(list));
+                    Text = "→",
+                    FontWeight = FontWeights.Bold,
+                    Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
+                });
+                row.Children.Add(new TextBlock
+                {
+                    Text = hint,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 720,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                });
+                hintPanel.Children.Add(row);
             }
+            Body.Children.Add(Card(hintPanel));
 
             // ── today's diary ─────────────────────────────────────────────
             Body.Children.Add(Section("TIME DIARY · TODAY"));
@@ -150,46 +144,7 @@ public sealed partial class ReportsPage : Page
             if (diary.Count == 0)
                 Body.Children.Add(Dim("No diary entries yet today. Tracking runs 06:00–20:00."));
             else
-            {
-                var list = new StackPanel { Spacing = 4 };
-                foreach (var (start, end, dur, cat, window, desc) in diary)
-                {
-                    var row = new Grid { ColumnSpacing = 12 };
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    var time = Dim($"{start} → {end}");
-                    var catText = new TextBlock
-                    {
-                        Text = cat.Replace('_', '-'),
-                        FontSize = 12,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = (Brush)Application.Current.Resources[cat switch
-                        {
-                            "on_plan" => "SystemFillColorSuccessBrush",
-                            "off_plan" => "SystemFillColorCriticalBrush",
-                            "idle" => "SystemFillColorCautionBrush",
-                            "paid" => "AccentTextFillColorPrimaryBrush",
-                            _ => "TextFillColorSecondaryBrush",
-                        }],
-                        VerticalAlignment = VerticalAlignment.Center,
-                    };
-                    var what = new TextBlock
-                    {
-                        Text = desc is { Length: > 0 } ? $"“{desc}” ({dur}m)" : $"{window} ({dur}m)",
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        FontStyle = desc is { Length: > 0 }
-                            ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
-                    };
-                    Grid.SetColumn(catText, 1);
-                    Grid.SetColumn(what, 2);
-                    row.Children.Add(time);
-                    row.Children.Add(catText);
-                    row.Children.Add(what);
-                    list.Children.Add(row);
-                }
-                Body.Children.Add(Card(list));
-            }
+                Body.Children.Add(Card(DiaryList(diary)));
         }
         catch (Exception ex)
         {
@@ -202,25 +157,274 @@ public sealed partial class ReportsPage : Page
         }
     }
 
-    private static List<(string App, int Minutes)> TopDistractions(int days)
+    // ── summary tables ───────────────────────────────────────────────────
+
+    private static Grid DayTable(List<ReportData.DayStat> weekStats)
     {
-        using var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-        conn.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "SELECT window, SUM(duration_min) AS m FROM time_diary " +
-            "WHERE category='off_plan' AND date >= $from " +
-            "GROUP BY window ORDER BY m DESC LIMIT 5";
-        cmd.Parameters.AddWithValue("$from",
-            DateOnly.FromDateTime(DateTime.Today).AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        var result = new List<(string, int)>();
-        using var r = cmd.ExecuteReader();
-        while (r.Read())
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var rows = _period == ReportPeriod.Day
+            ? weekStats.Where(s => s.Date == today).ToList()
+            : weekStats;
+
+        var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
+        for (var c = 0; c < 5; c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+                { Width = c == 0 ? new GridLength(110) : GridLength.Auto });
+        AddHeaderRow(grid, "Day", "Tasks", "On-plan", "Off-plan", "Score");
+
+        foreach (var s in rows)
         {
-            var window = r.GetString(0);
-            result.Add((window.Length > 48 ? window[..48] : window, r.GetInt32(1)));
+            var row = grid.RowDefinitions.Count;
+            grid.RowDefinitions.Add(new RowDefinition());
+            var isToday = s.Date == today;
+            var cells = new[]
+            {
+                s.Date.ToString("ddd dd.MM", CultureInfo.InvariantCulture),
+                $"{s.Done}/{s.Total}",
+                ReportData.FmtMins(s.OnMin), ReportData.FmtMins(s.OffMin),
+                s.Score.ToString(),
+            };
+            for (var c = 0; c < cells.Length; c++)
+            {
+                var tb = new TextBlock
+                {
+                    Text = cells[c],
+                    FontWeight = isToday ? FontWeights.SemiBold : FontWeights.Normal,
+                };
+                if (c == 4)
+                    tb.Foreground = ScoreBrush(s.Score);
+                else if (!isToday)
+                    tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
+                grid.Children.Add(tb);
+            }
         }
-        return result;
+        return grid;
+    }
+
+    private static Grid BucketTable(List<ReportData.BucketStat> buckets)
+    {
+        var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
+        for (var c = 0; c < 4; c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+                { Width = c == 0 ? new GridLength(170) : GridLength.Auto });
+        AddHeaderRow(grid, "Period", "On-plan", "Off-plan", "Total");
+
+        foreach (var b in buckets)
+        {
+            var row = grid.RowDefinitions.Count;
+            grid.RowDefinitions.Add(new RowDefinition());
+            var cells = new[]
+            {
+                b.Label, ReportData.FmtMins(b.OnMin), ReportData.FmtMins(b.OffMin),
+                ReportData.FmtMins(b.OnMin + b.OffMin),
+            };
+            for (var c = 0; c < cells.Length; c++)
+            {
+                var tb = new TextBlock
+                {
+                    Text = cells[c],
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                };
+                Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
+                grid.Children.Add(tb);
+            }
+        }
+        return grid;
+    }
+
+    private static void AddHeaderRow(Grid grid, params string[] headers)
+    {
+        grid.RowDefinitions.Add(new RowDefinition());
+        for (var c = 0; c < headers.Length; c++)
+        {
+            var h = Caption(headers[c]);
+            Grid.SetColumn(h, c); Grid.SetRow(h, 0);
+            grid.Children.Add(h);
+        }
+    }
+
+    // ── distractions ─────────────────────────────────────────────────────
+
+    private static StackPanel DistractionList(List<(string Label, int Minutes)> distractions)
+    {
+        var maxMin = distractions[0].Minutes;
+        var list = new StackPanel { Spacing = 8 };
+        foreach (var (label, minutes) in distractions)
+        {
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var name = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis };
+            var track = new Border
+            {
+                Height = 8, CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+            };
+            var fill = new Border
+            {
+                Height = 8, CornerRadius = new CornerRadius(4),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Width = Math.Max(8, 300.0 * minutes / Math.Max(maxMin, 1)),
+                Background = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+            };
+            var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            overlay.Children.Add(track);
+            overlay.Children.Add(fill);
+            var mins = Dim(ReportData.FmtMins(minutes));
+            Grid.SetColumn(overlay, 1);
+            Grid.SetColumn(mins, 2);
+            row.Children.Add(name);
+            row.Children.Add(overlay);
+            row.Children.Add(mins);
+            list.Children.Add(row);
+        }
+        return list;
+    }
+
+    // ── time by app ──────────────────────────────────────────────────────
+
+    private static StackPanel AppBreakdownPanel(List<(string App, ReportData.AppUsage Usage)> breakdown)
+    {
+        var maxTotal = Math.Max(breakdown[0].Usage.Total, 1);
+        var panel = new StackPanel { Spacing = 4 };
+        foreach (var (app, usage) in breakdown)
+        {
+            var header = AppUsageRow(app, usage, maxTotal, bold: true);
+            var subs = usage.Subs?
+                .OrderByDescending(kv => kv.Value.Total)
+                .Take(10).ToList() ?? new();
+
+            if (subs.Count == 0)
+            {
+                header.Margin = new Thickness(44, 6, 12, 6);
+                panel.Children.Add(header);
+                continue;
+            }
+
+            var subPanel = new StackPanel { Spacing = 4, Margin = new Thickness(28, 4, 0, 4) };
+            foreach (var (sub, su) in subs)
+                subPanel.Children.Add(AppUsageRow(sub, su, maxTotal, bold: false));
+
+            panel.Children.Add(new Expander
+            {
+                Header = header,
+                Content = subPanel,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            });
+        }
+        return panel;
+    }
+
+    /// <summary>Name + stacked on/off/neutral bar + total minutes.</summary>
+    private static Grid AppUsageRow(string name, ReportData.AppUsage u, int maxTotal, bool bold)
+    {
+        var row = new Grid { ColumnSpacing = 12 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(bold ? 230 : 220) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = name,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        if (!bold)
+            label.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        row.Children.Add(label);
+
+        const double barWidth = 260.0;
+        var track = new Border
+        {
+            Height = 8, CornerRadius = new CornerRadius(4),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+        };
+        var segments = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Height = 8,
+        };
+        foreach (var (mins, brushKey) in new[]
+        {
+            (u.On, "SystemFillColorSuccessBrush"),
+            (u.Off, "SystemFillColorCriticalBrush"),
+            (u.Neutral, "AccentFillColorDefaultBrush"),
+        })
+        {
+            var w = barWidth * mins / maxTotal;
+            if (w >= 1)
+                segments.Children.Add(new Border
+                {
+                    Width = w, Height = 8,
+                    Background = (Brush)Application.Current.Resources[brushKey],
+                });
+        }
+        var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        overlay.Children.Add(track);
+        overlay.Children.Add(segments);
+        Grid.SetColumn(overlay, 1);
+        row.Children.Add(overlay);
+
+        var total = Dim(ReportData.FmtMins(u.Total));
+        total.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(total, 2);
+        row.Children.Add(total);
+        return row;
+    }
+
+    // ── today's diary ────────────────────────────────────────────────────
+
+    private static StackPanel DiaryList(
+        List<(string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary)
+    {
+        var list = new StackPanel { Spacing = 4 };
+        foreach (var (start, end, dur, cat, window, desc) in diary)
+        {
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var time = Dim($"{start} → {end}");
+            var catText = new TextBlock
+            {
+                Text = cat.Replace('_', '-'),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources[cat switch
+                {
+                    "on_plan" => "SystemFillColorSuccessBrush",
+                    "off_plan" => "SystemFillColorCriticalBrush",
+                    "idle" => "SystemFillColorCautionBrush",
+                    "paid" => "AccentTextFillColorPrimaryBrush",
+                    _ => "TextFillColorSecondaryBrush",
+                }],
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            // "Application - name" display, same grouping labels as above.
+            var windowLabel = AppNames.Label(window);
+            var what = new TextBlock
+            {
+                Text = desc is { Length: > 0 } ? $"“{desc}” ({dur}m)" : $"{windowLabel} ({dur}m)",
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                FontStyle = desc is { Length: > 0 }
+                    ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+            };
+            Grid.SetColumn(catText, 1);
+            Grid.SetColumn(what, 2);
+            row.Children.Add(time);
+            row.Children.Add(catText);
+            row.Children.Add(what);
+            list.Children.Add(row);
+        }
+        return list;
     }
 
     private static List<(string Start, string End, int Dur, string Cat, string Window, string? Desc)> TodayDiary()
@@ -242,8 +446,11 @@ public sealed partial class ReportsPage : Page
 
     // ── styling helpers ───────────────────────────────────────────────────
 
-    private static string Fmt(int mins) =>
-        mins >= 60 ? $"{mins / 60}h {mins % 60:00}m" : $"{mins}m";
+    private static Brush ScoreBrush(int score) =>
+        (Brush)Application.Current.Resources[
+            score >= 20 ? "SystemFillColorSuccessBrush"
+            : score < 0 ? "SystemFillColorCriticalBrush"
+            : "SystemFillColorCautionBrush"];
 
     private static TextBlock Section(string text) => new()
     {

@@ -199,25 +199,31 @@ public sealed partial class SchedulePage : Page
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var icon = new FontIcon
+        // A real checkbox, not a status glyph \u2014 marking done by mistake must
+        // be reversible right here, not only on the Today page.
+        var check = new CheckBox
         {
-            FontSize = 12,
-            Margin = new Thickness(0, 2, 10, 0),
+            IsChecked = t.Completed,
+            MinWidth = 0,
+            Margin = new Thickness(0, -4, 2, 0),
             VerticalAlignment = VerticalAlignment.Top,
-            Glyph = t.Completed ? "\uE73E" : t.Overdue ? "\uE7BA" : "\uEA3A",  // CheckMark / Warning / CircleRing
-            Foreground = t.Completed ? Res("SystemFillColorSuccessBrush")
-                       : t.Overdue ? Res("SystemFillColorCriticalBrush")
-                       : Res("TextFillColorTertiaryBrush"),
         };
-        Grid.SetColumn(icon, 0);
-        row.Children.Add(icon);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(check, t.Task.Text);
+        check.Checked += (_, _) => ToggleDone(plan, t, true);
+        check.Unchecked += (_, _) => ToggleDone(plan, t, false);
+        Grid.SetColumn(check, 0);
+        row.Children.Add(check);
 
         var textPanel = new StackPanel();
         var title = new TextBlock
         {
             Text = t.Task.Text,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = t.Completed ? Res("TextFillColorTertiaryBrush") : Res("TextFillColorPrimaryBrush"),
+            // Overdue reads red here now that the warning glyph gave way to
+            // the checkbox.
+            Foreground = t.Completed ? Res("TextFillColorTertiaryBrush")
+                       : t.Overdue ? Res("SystemFillColorCriticalBrush")
+                       : Res("TextFillColorPrimaryBrush"),
         };
         textPanel.Children.Add(title);
         var meta = new List<string>();
@@ -260,6 +266,22 @@ public sealed partial class SchedulePage : Page
         }
 
         return row;
+    }
+
+    private void ToggleDone(Plan plan, AssignedTask t, bool done)
+    {
+        try
+        {
+            using var db = new Database();
+            db.SaveCompletion(plan.Id, t.AssignedDay, t.Task.Text, done);
+            t.Completed = done;
+            (App.MainWindow as MainWindow)?.RefreshScore();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"SchedulePage.ToggleDone '{t.Task.Text}'", ex);
+        }
+        Render();
     }
 
     private static Border Chip(string text, string brushKey, bool onAccent = false) => new()

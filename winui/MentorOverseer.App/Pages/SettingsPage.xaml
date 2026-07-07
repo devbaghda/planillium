@@ -14,6 +14,10 @@
                 <RadioButton Content="Light" Tag="light"/>
                 <RadioButton Content="Dark" Tag="dark"/>
             </RadioButtons>
+            <Slider x:Name="OpacitySlider" Header="Window opacity (%)" Width="260"
+                    HorizontalAlignment="Left" Minimum="40" Maximum="100"
+                    StepFrequency="5" TickFrequency="10" TickPlacement="Outside"
+                    ValueChanged="Opacity_Changed"/>
 
             <TextBlock Text="STARTUP" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>

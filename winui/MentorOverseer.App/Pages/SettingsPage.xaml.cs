@@ -18,6 +18,7 @@ public sealed partial class SettingsPage : Page
             {
                 "light" => 1, "dark" => 2, _ => 0,
             };
+            OpacitySlider.Value = StateService.Load().Opacity;
             StartupToggle.IsOn = StartupService.IsEnabled;
             RefreshTickTickStatus();
             LoadRules();
@@ -134,6 +135,18 @@ public sealed partial class SettingsPage : Page
     {
         if (_initialising) return;
         StartupService.SetEnabled(StartupToggle.IsOn);
+    }
+
+    private void Opacity_Changed(object sender,
+        Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_initialising) return;
+        var value = (int)e.NewValue;
+        (App.MainWindow as MainWindow)?.ApplyOpacity(value);
+
+        var state = StateService.Load();
+        state.Opacity = value;
+        StateService.Save(state);
     }
 
     private async void TickTickConnect_Click(object sender, RoutedEventArgs e)
