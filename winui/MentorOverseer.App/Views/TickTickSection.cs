@@ -20,8 +20,14 @@ public static class TickTickSection
 
         if (!TickTickService.IsAuthorized)
         {
-            host.Children.Add(Muted(
-                "Not connected. Connect once in the Python app — this app reuses the same token."));
+            host.Children.Add(Muted("Not connected."));
+            var connect = new HyperlinkButton { Content = "Connect TickTick…", FontSize = 13 };
+            connect.Click += async (_, _) =>
+            {
+                if (await Dialogs.TickTickConnectDialog.ShowAsync(host.XamlRoot))
+                    await LoadAsync(host);
+            };
+            host.Children.Add(connect);
             return;
         }
 
@@ -62,8 +68,14 @@ public static class TickTickSection
             Log.Error("TickTickSection.Load", ex);
             host.Children.Remove(loading);
             host.Children.Add(Muted(
-                "TickTick sync failed — the token may have expired. Reconnect once in the " +
-                "Python app and this section comes back. (" + ex.Message + ")"));
+                "TickTick sync failed. (" + ex.Message + ")"));
+            var reconnect = new HyperlinkButton { Content = "Reconnect TickTick…", FontSize = 13 };
+            reconnect.Click += async (_, _) =>
+            {
+                if (await Dialogs.TickTickConnectDialog.ShowAsync(host.XamlRoot))
+                    await LoadAsync(host);
+            };
+            host.Children.Add(reconnect);
         }
     }
 

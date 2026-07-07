@@ -1,10 +1,32 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace MentorOverseer.App.Services;
 
-/// <summary>Read-only view of the shared config.json (same file the Python app owns).</summary>
+/// <summary>
+/// View of the shared config.json. Reads are cached; targeted writes go
+/// through Mutate(), which round-trips the whole file as JSON so keys this
+/// app doesn't know about survive untouched.
+/// </summary>
 public static class ConfigService
 {
+    private static string ConfigPath => Path.Combine(AppPaths.Root, "config.json");
+
+    /// <summary>Load-mutate-save the config; invalidates the read cache.</summary>
+    public static void Mutate(Action<JsonObject> change)
+    {
+        var node = File.Exists(ConfigPath)
+            ? JsonNode.Parse(File.ReadAllText(ConfigPath)) as JsonObject ?? new JsonObject()
+            : new JsonObject();
+        change(node);
+        File.WriteAllText(ConfigPath, node.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }));
+        Invalidate();
+    }
+
     private static JsonDocument? _doc;
 
     public static JsonElement Root
