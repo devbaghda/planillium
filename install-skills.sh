@@ -266,6 +266,10 @@ Read the actual source; cite `path:line` for every finding.
 - **Structured logging** (Serilog / NLog / `ILogger`) vs `Console.WriteLine`/`Debug.WriteLine`/nothing.
   Do logs carry context (operation, IDs) or just "error occurred"? Are exceptions logged with stack
   traces, or only `.Message`?
+- **Log file encoding.** On Windows, a log file opened without an explicit encoding gets the ANSI
+  codepage and mangles every non-ASCII character (em-dashes, localized window titles, user text) into
+  `?`/`�` — exactly the evidence you need, destroyed. Python: `logging.basicConfig(...,
+  encoding="utf-8")`; any direct `open()` for logs likewise. Flag log writers with no explicit UTF-8.
 - **Recoverability:** does a failed operation leave the app usable, or wedged?
 
 ## 5. Configuration & environment
@@ -1122,6 +1126,9 @@ Every transformation is behaviour-preserving; if one wouldn't be, flag it as a d
   silently.
 - Introduce **structured logging** with context (operation, ids) and full stack traces — not
   `print`/`Console.WriteLine`. This is often the single highest-leverage improvement.
+- **Open log files as UTF-8 explicitly** (`logging.basicConfig(..., encoding="utf-8")`; explicit
+  encoding on any `open()` for logs). On Windows the default is the ANSI codepage, which corrupts
+  non-ASCII log content — window titles, user text, even em-dashes in your own messages.
 
 ## G. Performance (measured, never guessed)
 
