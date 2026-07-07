@@ -1,0 +1,98 @@
+{
+  "working_hours": {
+    "start": "08:00",
+    "end": "20:00"
+  },
+  "reminder_grace_minutes": 5,
+  "reminder_interval_minutes": 5,
+  "idle_threshold_minutes": 10,
+  "end_of_day_summary_time": "20:00",
+  "ticktick": {
+    "client_id": "MaG1F9KpgmuPB81UmX"
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": true,
+    "escalating": true
+  },
+  "activity_rules": {
+    "on_plan": [
+      "Power BI",
+      "PowerPoint",
+      "LinkedIn",
+      "Visual Studio",
+      "Excel",
+      "Notion",
+      "Claude",
+      "Microsoft Learn",
+      "Power Apps",
+      "SharePoint",
+      "Outlook",
+      "Gmail",
+      "Word",
+      "OneNote",
+      "Teams"
+    ],
+    "off_plan": [
+      "Netflix",
+      "YouTube",
+      "Instagram",
+      "Facebook",
+      "Steam",
+      "Twitch",
+      "Reddit",
+      "Twitter",
+      "TikTok",
+      "Spotify",
+      "Tanki Online",
+      "Besiege",
+      "Minecraft",
+      "Fortnite",
+      "Valorant",
+      "Counter-Strike",
+      "CS:GO",
+      "Dota",
+      "League of Legends",
+      "Roblox",
+      "GTA",
+      "Cyberpunk",
+      "Elden Ring",
+      "Among Us",
+      "Clash of Clans",
+      "Candy Crush",
+      "Epic Games"
+    ],
+    "neutral": [
+      "Chrome",
+      "Firefox",
+      "Edge",
+      "Slack",
+      "WhatsApp",
+      "Telegram",
+      "File Explorer",
+      "Settings",
+      "Terminal"
+    ]
+  },
+  "scoring": {
+    "task_completed": 10,
+    "task_overdue_penalty": -5,
+    "on_plan_hour": 3,
+    "off_plan_hour": -2,
+    "streak_bonus_per_day": 5
+  },
+  "score": {
+    "points_per_minute": 1.0,
+    "points_per_currency_unit": 10.0,
+    "currency_symbol": "€"
+  },
+  "idle_activity_rules": {
+    "on_plan": [],
+    "off_plan": [],
+    "neutral": []
+  },
+  "start_with_windows": false,
+  "appearance": {
+    "theme_mode": "light"
+  }
+}
