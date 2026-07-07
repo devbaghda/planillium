@@ -452,7 +452,7 @@ public sealed partial class ReportsPage : Page
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT id, start_time, end_time, duration_min, category, window, description " +
-            "FROM time_diary WHERE date=$d ORDER BY start_time";
+            "FROM time_diary WHERE date=$d ORDER BY start_time DESC";
         cmd.Parameters.AddWithValue("$d", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         var result = new List<(long, string, string, int, string, string, string?)>();
         using var r = cmd.ExecuteReader();
