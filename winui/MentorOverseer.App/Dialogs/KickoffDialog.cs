@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -17,7 +18,8 @@ public static class KickoffDialog
     public static bool ShouldShow()
     {
         if (DateTime.Now.Hour < 6) return false;
-        return StateService.Load().LastKickoff != DateTime.Today.ToString("yyyy-MM-dd");
+        return StateService.Load().LastKickoff !=
+               DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     public static async Task ShowAsync(MainWindow window)
@@ -39,10 +41,14 @@ public static class KickoffDialog
         var budget = todayTasks.Sum(x => x.Task.Task.DurationMin ?? 30);
 
         var panel = new StackPanel { Spacing = 14, MinWidth = 460 };
+        var dateText = DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
         panel.Children.Add(new TextBlock
         {
-            Text = DateTime.Today.ToString("dddd dd.MM") +
-                   $" — {todayTasks.Count} task(s), about {budget / 60}h {budget % 60:00}m of focused work.",
+            // "0 tasks, 0h 00m of focused work" is a demotivating way to
+            // describe a free day — say what it actually is.
+            Text = todayTasks.Count > 0
+                ? $"{dateText} — {todayTasks.Count} task(s), about {budget / 60}h {budget % 60:00}m of focused work."
+                : $"{dateText} — nothing scheduled today. A rest day, or a chance to clear the overdue list.",
             TextWrapping = TextWrapping.Wrap,
         });
 
@@ -112,10 +118,10 @@ public static class KickoffDialog
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = window.Content.XamlRoot,
         };
-        await dialog.ShowAsync();
+        await DialogGate.ShowAsync(dialog);
 
         var state = StateService.Load();
-        state.LastKickoff = DateTime.Today.ToString("yyyy-MM-dd");
+        state.LastKickoff = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         StateService.Save(state);
     }
 }

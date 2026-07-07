@@ -45,6 +45,7 @@ public sealed partial class PlansPage : Page
         }
         catch (Exception ex)
         {
+            Log.Error("PlansPage.Render", ex);
             ActiveList.Children.Add(new TextBlock { Text = "Couldn't load plans: " + ex.Message });
             return;
         }
@@ -123,7 +124,7 @@ public sealed partial class PlansPage : Page
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
         };
-        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         var src = Path.Combine(AppPaths.ActivePlansDir, $"{plan.Id}.json");
         var dstDir = Path.Combine(AppPaths.Root, "plans", "archive");

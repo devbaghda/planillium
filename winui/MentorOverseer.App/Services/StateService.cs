@@ -27,7 +27,8 @@ public static class StateService
         {
             _cached = JsonSerializer.Deserialize<AppState>(File.ReadAllText(PathOf));
         }
-        catch { /* missing/corrupt → defaults */ }
+        catch (FileNotFoundException) { /* first run — defaults are correct */ }
+        catch (Exception ex) { Log.Error("StateService.Load (falling back to defaults)", ex); }
         return _cached ??= new AppState();
     }
 

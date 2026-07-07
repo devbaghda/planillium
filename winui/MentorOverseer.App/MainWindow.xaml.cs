@@ -57,8 +57,35 @@ public sealed partial class MainWindow : Window
         CatchUpScores();
         StartEodWatcher();
 
+        // Closing the window stops tracking (no tray yet) — make that an
+        // informed decision instead of a silent end to the diary.
+        AppWindow.Closing += (_, e) =>
+        {
+            if (_reallyClose || Tracker is not { Running: true }) return;
+            e.Cancel = true;
+            _dq.TryEnqueue(async () =>
+            {
+                var confirm = new ContentDialog
+                {
+                    Title = "Close Mentor Overseer?",
+                    Content = "Activity tracking and focus alerts stop until you open it again.",
+                    PrimaryButtonText = "Close anyway",
+                    CloseButtonText = "Stay open",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = Content.XamlRoot,
+                };
+                if (await DialogGate.ShowAsync(confirm) == ContentDialogResult.Primary)
+                {
+                    _reallyClose = true;
+                    Close();
+                }
+            });
+        };
         Closed += (_, _) => Tracker?.Stop();
     }
+
+    private bool _reallyClose;
+    private string? _eodOfferedOn;
 
     private static void CatchUpScores()
     {
@@ -69,7 +96,10 @@ public sealed partial class MainWindow : Window
             using var score = new ScoreService(plans, db);
             score.EnsureScoreCaughtUp();
         }
-        catch { /* db briefly locked — next launch catches up */ }
+        catch (Exception ex)
+        {
+            Log.Error("CatchUpScores (db likely locked — next launch retries)", ex);
+        }
     }
 
     /// <summary>At the configured end-of-day time, offer the evening review once.</summary>
@@ -79,17 +109,27 @@ public sealed partial class MainWindow : Window
         timer.Interval = TimeSpan.FromMinutes(1);
         timer.Tick += async (_, _) =>
         {
-            var eod = "20:00";
-            if (ConfigService.Root.TryGetProperty("end_of_day_summary_time", out var v) &&
-                v.GetString() is { Length: > 0 } s) eod = s;
-            var today = DateTime.Today.ToString("yyyy-MM-dd");
-            if (DateTime.Now.ToString("HH:mm") == eod &&
+            // ">=" not "==": an exact-minute match on a drifting 1-minute
+            // timer can skip the minute and never offer the review that day.
+            var today = DateTime.Today.ToString("yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (DateTime.Now.TimeOfDay >= EodTime() &&
+                _eodOfferedOn != today &&
                 StateService.Load().LastReview != today)
             {
+                _eodOfferedOn = today;  // offer once per day; "Later" means later by choice
                 await Dialogs.ReviewDialog.ShowAsync(this);
             }
         };
         timer.Start();
+    }
+
+    public static TimeSpan EodTime()
+    {
+        var eod = "20:00";
+        if (ConfigService.Root.TryGetProperty("end_of_day_summary_time", out var v) &&
+            v.GetString() is { Length: > 0 } s) eod = s;
+        return TimeSpan.TryParse(eod, out var t) ? t : new TimeSpan(20, 0, 0);
     }
 
     public void RefreshScore()
@@ -99,8 +139,9 @@ public sealed partial class MainWindow : Window
             using var db = new Database();
             ScoreValue.Text = db.ScoreBalance().ToString();
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Error("RefreshScore", ex);
             ScoreValue.Text = "—";
         }
     }
@@ -109,14 +150,8 @@ public sealed partial class MainWindow : Window
 
     private void StartTracker()
     {
-        // The Python app runs the same tracker against the same database —
-        // never track twice in parallel.
-        if (Process.GetProcessesByName("MentorOverseer").Length > 0)
-        {
-            ActivityText.Text = "Python app is tracking";
-            return;
-        }
-
+        // Always start — the tracker itself pauses per-poll whenever the
+        // Python app is running, whichever order the two were launched in.
         try
         {
             Tracker = new ActivityTracker(ConfigService.Root);
@@ -126,8 +161,9 @@ public sealed partial class MainWindow : Window
                 _dq.TryEnqueue(() => _ = IdleReturnDialog.ShowAsync(this, mins, start));
             Tracker.Start();
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Error("StartTracker", ex);
             ActivityText.Text = "Tracker unavailable";
         }
     }
@@ -139,6 +175,7 @@ public sealed partial class MainWindow : Window
             "on_plan" => ("On plan", "SystemFillColorSuccessBrush"),
             "off_plan" => ("Off plan", "SystemFillColorCriticalBrush"),
             "paid" => ("Paid time", "AccentFillColorDefaultBrush"),
+            "paused" => ("Python app is tracking", "TextFillColorTertiaryBrush"),
             _ => ("Neutral", "TextFillColorTertiaryBrush"),
         };
         ActivityText.Text = Tracker?.OffPlanMinutes is int m and > 0
@@ -159,10 +196,11 @@ public sealed partial class MainWindow : Window
                 .BuildNotification();
             AppNotificationManager.Default.Show(toast);
         }
-        catch
+        catch (Exception ex)
         {
-            // Toasts can fail for unpackaged apps on older OS builds — the
-            // status pill still shows the off-plan state, so stay silent.
+            // Pill still shows the off-plan state, but a broken toast path is
+            // a broken core feature — leave a trace.
+            Log.Error("Notify (toast)", ex);
         }
     }
 

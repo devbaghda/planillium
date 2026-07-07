@@ -52,7 +52,7 @@ public static class IdleReturnDialog
             XamlRoot = window.Content.XamlRoot,
         };
 
-        var result = await dialog.ShowAsync();
+        var result = await DialogGate.ShowAsync(dialog);
         var text = chosen ?? (result == ContentDialogResult.Primary ? input.Text.Trim() : "");
         tracker.LogIdleAnswer(idleStart, idleMinutes,
             text.Length > 0 ? text : "dismissed");

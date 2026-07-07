@@ -146,7 +146,7 @@ public static class AddPlanDialog
             }
         };
 
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        return await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
     }
 
     private static void Show(TextBlock error, string message)
@@ -180,6 +180,10 @@ public static class AddPlanDialog
                     return $"Plan is missing the required field '{field}'.";
 
             var id = root.GetProperty("id").GetString() ?? "";
+            // The id becomes a filename — never let pasted JSON smuggle path
+            // separators or reserved characters into plans/active.
+            if (!Regex.IsMatch(id, "^[a-z0-9][a-z0-9_-]{0,63}$"))
+                return "Plan 'id' must be a short kebab-case slug (a-z, 0-9, '-' or '_').";
             if (PlanStore.LoadActivePlans().Any(p => p.Id == id))
                 return $"A plan with id '{id}' is already active.";
 
@@ -188,7 +192,7 @@ public static class AddPlanDialog
             var output = new Dictionary<string, object?>();
             foreach (var (k, v) in dict) output[k] = v;
             if (!dict.ContainsKey("start_date"))
-                output["start_date"] = DateTime.Today.ToString("yyyy-MM-dd");
+                output["start_date"] = DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
             if (!dict.ContainsKey("color"))
                 output["color"] = "#bf5af2";
 
@@ -202,12 +206,13 @@ public static class AddPlanDialog
 
     private static async Task Message(Page host, string title, string body)
     {
-        await new ContentDialog
+        var msg = new ContentDialog
         {
             Title = title,
             Content = body,
             CloseButtonText = "OK",
             XamlRoot = host.XamlRoot,
-        }.ShowAsync();
+        };
+        await DialogGate.ShowAsync(msg);
     }
 }

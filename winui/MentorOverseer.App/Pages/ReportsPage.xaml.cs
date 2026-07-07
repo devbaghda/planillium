@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -71,7 +72,8 @@ public sealed partial class ReportsPage : Page
                 var isToday = d == today;
                 var cells = new[]
                 {
-                    d.ToString("ddd dd.MM"), $"{done}/{total}", Fmt(on), Fmt(off), s.ToString(),
+                    d.ToString("ddd dd.MM", CultureInfo.InvariantCulture),
+                    $"{done}/{total}", Fmt(on), Fmt(off), s.ToString(),
                 };
                 for (var c = 0; c < cells.Length; c++)
                 {
@@ -185,6 +187,7 @@ public sealed partial class ReportsPage : Page
         }
         catch (Exception ex)
         {
+            Log.Error("ReportsPage.Render", ex);
             Body.Children.Add(new TextBlock
             {
                 Text = "Couldn't load report data: " + ex.Message,
@@ -203,7 +206,7 @@ public sealed partial class ReportsPage : Page
             "WHERE category='off_plan' AND date >= $from " +
             "GROUP BY window ORDER BY m DESC LIMIT 5";
         cmd.Parameters.AddWithValue("$from",
-            DateOnly.FromDateTime(DateTime.Today).AddDays(-days).ToString("yyyy-MM-dd"));
+            DateOnly.FromDateTime(DateTime.Today).AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         var result = new List<(string, int)>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -222,7 +225,7 @@ public sealed partial class ReportsPage : Page
         cmd.CommandText =
             "SELECT start_time, end_time, duration_min, category, window, description " +
             "FROM time_diary WHERE date=$d ORDER BY start_time";
-        cmd.Parameters.AddWithValue("$d", DateTime.Today.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$d", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         var result = new List<(string, string, int, string, string, string?)>();
         using var r = cmd.ExecuteReader();
         while (r.Read())

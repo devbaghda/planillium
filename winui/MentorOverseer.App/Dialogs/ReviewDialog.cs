@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -30,7 +31,9 @@ public static class ReviewDialog
         var offPt = (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2));
         var missPt = Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5);
         var streakPt = streak * ConfigService.ScoringRate("streak_bonus_per_day", 5);
-        var dayTotal = Math.Max(taskPt + onPt + offPt + missPt + streakPt, ScoreService.DailyFloor);
+        var rawTotal = taskPt + onPt + offPt + missPt + streakPt;
+        var dayTotal = Math.Max(rawTotal, ScoreService.DailyFloor);
+        var floored = dayTotal != rawTotal;
 
         var overdueCapped = score.OverdueAsOf(today)
             .Count(x => x.DaysOverdue <= ScoreService.OverdueAccrualCapDays);
@@ -86,7 +89,8 @@ public static class ReviewDialog
         Row($"{streak}-day streak bonus", streakPt);
         Row($"{Math.Max(0, total - done)} task(s) missed today", missPt);
         Row($"Overdue carry ({overdueCapped} task(s), 3-day cap)", accrual);
-        Row("Day total (floor −10)", dayTotal + accrual, always: true);
+        Row(floored ? "Day total — floored at −10, it can't get worse" : "Day total",
+            dayTotal + accrual, always: true);
         panel.Children.Add(new Border
         {
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
@@ -103,24 +107,39 @@ public static class ReviewDialog
         };
         panel.Children.Add(reflection);
 
+        // "Close the day" locks the daily_score ledger row — before the
+        // configured end-of-day this is a preview only, otherwise an early
+        // click would freeze the score and later work would never count.
+        var beforeEod = DateTime.Now.TimeOfDay < MainWindow.EodTime();
+        if (beforeEod)
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"Preview — the day can be closed after " +
+                       $"{MainWindow.EodTime():hh\\:mm}, so work until then still counts.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+
         var dialog = new ContentDialog
         {
-            Title = $"Day closed — {DateTime.Today:dddd dd.MM}",
+            Title = $"{DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture)} — day review",
             Content = panel,
             PrimaryButtonText = $"Close the day · {(dayTotal + accrual >= 0 ? "+" : "")}{dayTotal + accrual} pts",
-            CloseButtonText = "Later",
+            CloseButtonText = beforeEod ? "Close" : "Later",
+            IsPrimaryButtonEnabled = !beforeEod,
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = window.Content.XamlRoot,
         };
 
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary)
         {
             score.CreditDayScoreIfMissing(today);
             score.CreditOverdueAccrualIfMissing(today);
             if (reflection.Text.Trim() is { Length: > 0 } text)
                 score.SaveReflection(today, text);
             var state = StateService.Load();
-            state.LastReview = DateTime.Today.ToString("yyyy-MM-dd");
+            state.LastReview = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             StateService.Save(state);
             window.RefreshScore();
         }

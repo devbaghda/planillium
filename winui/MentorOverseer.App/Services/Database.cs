@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 namespace MentorOverseer.App.Services;
@@ -30,12 +31,14 @@ public sealed class Database : IDisposable
     /// <summary>Same upsert as main.py save_completion().</summary>
     public void SaveCompletion(string planId, int planDay, string taskText, bool done)
     {
-        var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        // Invariant culture: these strings live in the SQLite file shared with
+        // the Python app — a non-Gregorian OS calendar must never leak in.
+        var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         using var cmd = _conn.CreateCommand();
         cmd.CommandText =
             "INSERT INTO task_completions " +
             "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) " +
-            "VALUES ($pid, $day, $text, $done, $cat, $now) " +
+            "VALUES ($pid, $day, $text, $done, $done_at, $now) " +
             "ON CONFLICT(plan_id, plan_day, task_text) DO UPDATE SET " +
             "  completed=excluded.completed," +
             "  completed_at=excluded.completed_at," +
@@ -44,7 +47,7 @@ public sealed class Database : IDisposable
         cmd.Parameters.AddWithValue("$day", planDay);
         cmd.Parameters.AddWithValue("$text", taskText);
         cmd.Parameters.AddWithValue("$done", done ? 1 : 0);
-        cmd.Parameters.AddWithValue("$cat", done ? now : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("$done_at", done ? now : (object)DBNull.Value);
         cmd.Parameters.AddWithValue("$now", now);
         cmd.ExecuteNonQuery();
     }

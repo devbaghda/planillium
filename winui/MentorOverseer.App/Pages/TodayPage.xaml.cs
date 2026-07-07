@@ -16,7 +16,7 @@ public sealed partial class TodayPage : Page
         Loaded += async (_, _) =>
         {
             Render();
-            _ = LoadTickTickAsync();
+            _ = Views.TickTickSection.LoadAsync(TickTickHost);
             if (KickoffDialog.ShouldShow() && App.MainWindow is MainWindow win)
                 await KickoffDialog.ShowAsync(win);
         };
@@ -51,113 +51,23 @@ public sealed partial class TodayPage : Page
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
         };
-        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         score.ReplanAllOverdue();
         (App.MainWindow as MainWindow)?.RefreshScore();
         Render();
     }
 
-    // ── TickTick section (async, never blocks the plan list) ─────────────
-
-    private async Task LoadTickTickAsync()
-    {
-        TickTickHost.Children.Clear();
-        TickTickHost.Children.Add(SectionHeader("My Tasks  ·  TickTick"));
-
-        if (!TickTickService.IsAuthorized)
-        {
-            TickTickHost.Children.Add(Muted(
-                "Not connected. Connect once in the Python app — this app reuses the same token."));
-            return;
-        }
-
-        var loading = Muted("Loading…");
-        TickTickHost.Children.Add(loading);
-        try
-        {
-            var tasks = await TickTickService.TasksDueTodayAsync();
-            TickTickHost.Children.Remove(loading);
-            if (tasks.Count == 0)
-            {
-                TickTickHost.Children.Add(Muted("No personal TickTick tasks due today."));
-                return;
-            }
-
-            var list = new StackPanel();
-            foreach (var t in tasks)
-            {
-                var grid = new Grid { Padding = new Thickness(16, 10, 16, 10), ColumnSpacing = 12 };
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-                var check = new CheckBox { MinWidth = 0 };
-                check.Checked += async (_, _) =>
-                {
-                    try
-                    {
-                        await TickTickService.CompleteTaskAsync(t.ProjectId, t.Id);
-                        await LoadTickTickAsync();
-                    }
-                    catch { check.IsChecked = false; }
-                };
-                grid.Children.Add(check);
-
-                var name = new TextBlock
-                {
-                    Text = t.Title, TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                Grid.SetColumn(name, 1);
-                grid.Children.Add(name);
-
-                var proj = new Border
-                {
-                    CornerRadius = new CornerRadius(999),
-                    Padding = new Thickness(10, 3, 10, 4),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
-                    Child = new TextBlock
-                    {
-                        Text = t.ProjectName, FontSize = 11,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                    },
-                };
-                Grid.SetColumn(proj, 2);
-                grid.Children.Add(proj);
-
-                if (list.Children.Count > 0)
-                    list.Children.Insert(list.Children.Count, new Border
-                    {
-                        Height = 1,
-                        Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
-                    });
-                list.Children.Add(grid);
-            }
-            TickTickHost.Children.Add(new Border
-            {
-                Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Child = list,
-            });
-        }
-        catch (Exception ex)
-        {
-            TickTickHost.Children.Remove(loading);
-            TickTickHost.Children.Add(Muted(
-                "TickTick sync failed — the token may have expired. Reconnect once in the " +
-                "Python app and this section comes back. (" + ex.Message + ")"));
-        }
-    }
+    // TickTick section lives in Views/TickTickSection (network I/O out of
+    // this page's rendering code).
 
     private void Render()
     {
         Sections.Children.Clear();
-        Subtitle.Text = DateTime.Today.ToString("dddd dd.MM.yyyy");
+        // App language is English — don't let the OS locale mix in Cyrillic
+        // day names (audit finding #16).
+        Subtitle.Text = DateTime.Today.ToString("dddd dd.MM.yyyy",
+            System.Globalization.CultureInfo.InvariantCulture);
 
         List<Plan> plans;
         Dictionary<(string, int, string), bool> completions;
@@ -226,6 +136,7 @@ public sealed partial class TodayPage : Page
         }
         catch (Exception ex)
         {
+            Log.Error("TodayPage.Render", ex);
             Sections.Children.Add(Muted(
                 "Couldn't load plan data.\n" + ex.Message +
                 "\nIf the app isn't next to the data folder, set MENTOR_ROOT."));
@@ -325,6 +236,8 @@ public sealed partial class TodayPage : Page
             MinWidth = 0,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        // Without a name a screen reader announces 75 bare "checkbox"es.
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(check, item.Task.Text);
         check.Checked += (_, _) => Toggle(item, plan, true);
         check.Unchecked += (_, _) => Toggle(item, plan, false);
         Grid.SetColumn(check, 0);
@@ -403,9 +316,12 @@ public sealed partial class TodayPage : Page
             Render();
             (App.MainWindow as MainWindow)?.RefreshScore();
         }
-        catch
+        catch (Exception ex)
         {
-            // DB briefly locked by the Python app — the next render self-heals.
+            // Likely: DB briefly locked by the Python app. The next render
+            // self-heals visually, but a failed completion write must not
+            // vanish without a trace.
+            Log.Error($"Toggle completion '{item.Task.Text}'", ex);
         }
     }
 }

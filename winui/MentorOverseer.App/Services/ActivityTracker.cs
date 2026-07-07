@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -117,12 +118,20 @@ public sealed class ActivityTracker : IDisposable
     public void Start()
     {
         Running = true;
+        // One-shot + re-arm: a slow poll (locked DB, hung WinAPI call) must
+        // never overlap the next tick — overlapping polls race the session
+        // state and write duplicate diary rows.
         _timer = new Timer(_ =>
         {
             if (!Running) return;
             try { PollOnce(); }
-            catch { /* one bad poll must not kill the loop */ }
-        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(PollSeconds));
+            catch (Exception ex) { Log.Error("ActivityTracker.PollOnce", ex); }
+            finally
+            {
+                if (Running)
+                    _timer?.Change(TimeSpan.FromSeconds(PollSeconds), Timeout.InfiniteTimeSpan);
+            }
+        }, null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
     }
 
     public void Stop()
@@ -244,11 +253,12 @@ public sealed class ActivityTracker : IDisposable
 
     // ── database (same rows as the Python tracker) ───────────────────────
 
-    private static void Log(SqliteConnection conn, string window, string cls)
+    private static void LogActivity(SqliteConnection conn, string window, string cls)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "INSERT INTO activity_log (logged_at, window, class) VALUES ($t, $w, $c)";
-        cmd.Parameters.AddWithValue("$t", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+        cmd.Parameters.AddWithValue("$t",
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$w", window.Length > 240 ? window[..240] : window);
         cmd.Parameters.AddWithValue("$c", cls);
         cmd.ExecuteNonQuery();
@@ -263,9 +273,9 @@ public sealed class ActivityTracker : IDisposable
             "INSERT INTO time_diary " +
             "(date, start_time, end_time, duration_min, category, window, description) " +
             "VALUES ($d, $s, $e, $m, $c, $w, $x)";
-        cmd.Parameters.AddWithValue("$d", start.ToString("yyyy-MM-dd"));
-        cmd.Parameters.AddWithValue("$s", start.ToString("HH:mm"));
-        cmd.Parameters.AddWithValue("$e", end.ToString("HH:mm"));
+        cmd.Parameters.AddWithValue("$d", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$s", start.ToString("HH:mm", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$e", end.ToString("HH:mm", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$m", duration);
         cmd.Parameters.AddWithValue("$c", category);
         cmd.Parameters.AddWithValue("$w", window.Length > 240 ? window[..240] : window);
@@ -327,6 +337,23 @@ public sealed class ActivityTracker : IDisposable
 
     private void PollOnce()
     {
+        // The Python app runs the same tracker against the same database.
+        // Checked every poll (not just at launch) so whichever order the two
+        // apps start in, only one ever writes the diary at a time.
+        if (Process.GetProcessesByName("MentorOverseer").Length > 0)
+        {
+            if (_sessionStart is DateTime openStart && _sessionApp != null)
+            {
+                using var flushConn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
+                flushConn.Open();
+                LogDiarySession(flushConn, openStart, DateTime.Now, _sessionClass!, _sessionApp);
+                _sessionStart = null; _sessionApp = null; _sessionClass = null;
+            }
+            _currentClass = "paused";
+            OnStatus?.Invoke("paused", "");
+            return;
+        }
+
         var now = DateTime.Now;
         var title = ActiveWindowTitle();
         var idleS = IdleSeconds();
@@ -355,7 +382,7 @@ public sealed class ActivityTracker : IDisposable
 
         _currentWindow = title;
         _currentClass = cls;
-        Log(conn, title, cls);
+        LogActivity(conn, title, cls);
         CheckAlert(cls);
         OnStatus?.Invoke(cls, title);
 

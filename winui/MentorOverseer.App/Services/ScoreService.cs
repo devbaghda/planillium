@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using MentorOverseer.App.Models;
 
@@ -69,7 +70,7 @@ public sealed class ScoreService : IDisposable
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT category, SUM(duration_min) FROM time_diary " +
                           "WHERE date=$d GROUP BY category";
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
@@ -112,7 +113,7 @@ public sealed class ScoreService : IDisposable
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT 1 FROM score_ledger WHERE reason=$r AND date=$d";
         cmd.Parameters.AddWithValue("$r", reason);
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         return cmd.ExecuteScalar() != null;
     }
 
@@ -121,8 +122,8 @@ public sealed class ScoreService : IDisposable
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "INSERT INTO score_ledger (ts, date, delta, reason, detail) " +
                           "VALUES ($ts, $d, $delta, $r, $x)";
-        cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-        cmd.Parameters.AddWithValue("$d", (forDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", (forDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$delta", delta);
         cmd.Parameters.AddWithValue("$r", reason);
         cmd.Parameters.AddWithValue("$x", (object?)detail ?? DBNull.Value);
@@ -251,7 +252,7 @@ public sealed class ScoreService : IDisposable
         cmd.CommandText =
             "INSERT INTO reflections (date, text) VALUES ($d, $t) " +
             "ON CONFLICT(date) DO UPDATE SET text=excluded.text";
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$t", text);
         cmd.ExecuteNonQuery();
     }

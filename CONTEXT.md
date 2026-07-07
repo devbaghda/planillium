@@ -208,7 +208,42 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-06 (second pass), branch `winui-rebuild` (off `ux-audit-fixes`)
+- Last session: 2026-07-07, branch `winui-rebuild`
+- **Full audit of the WinUI app + all 18 actionable findings applied** (the user's
+  instruction: apply everything, do NOT re-audit — a re-audit pass is still owed
+  whenever he asks). What changed, by finding #:
+  - #1/#2 logging: new `Services/Log.cs` (thread-safe file logger →
+    `data/mentor-winui.log`, invariant timestamps, never throws); every
+    previously-silent `catch {}` in pages/services/dialogs now calls
+    `Log.Error(context, ex)` first.
+  - #3/#9 App.xaml.cs: `UnhandledException` (+`e.Handled=true`),
+    `TaskScheduler.UnobservedTaskException`, AppDomain handler; single-instance
+    named mutex `MentorOverseerWinUI_SingleInstance` (second launch logs + exits);
+    `AppNotificationManager.Register()` wrapped in try/catch.
+  - #4/#10/#13 ActivityTracker: poll timer is now one-shot + re-arm in `finally`
+    (no reentrancy pile-up on slow polls); every poll checks for the Python
+    `MentorOverseer.exe` first and pauses (flushes open diary session, pill shows
+    "Python app is tracking"); private DB method renamed `Log`→`LogActivity`
+    (shadowed the new Log class, CS0119).
+  - #5 `Dialogs/DialogGate.cs`: SemaphoreSlim(1,1) around all 7 ContentDialog
+    call sites — no more "already an open dialog" crash.
+  - #6/#7 MainWindow: EOD check uses `>=` (fires at exactly EOD, once/day via
+    `_eodOfferedOn` + LastReview); close now confirms via AppWindow.Closing
+    ("tracking and focus alerts stop") with `_reallyClose` flag.
+  - #8 AddPlanDialog: plan `id` validated against `^[a-z0-9][a-z0-9_-]{0,63}$`
+    before it becomes a filename.
+  - #11 close confirmation (see #7), #12/#17 a11y: AutomationProperties.SetName
+    on every task/TickTick checkbox; TickTick section extracted to
+    `Views/TickTickSection.cs` (network I/O out of TodayPage.Render).
+  - #13/#16 InvariantCulture on ALL DB-bound date strings and UI dates (OS
+    locale is Russian; app language is English).
+  - #14/#15 copy: zero-task kickoff no longer celebratory; review dialog shows
+    "floored at −10" split and blocks closing the day before EOD.
+  - #18 Database.cs: `$cat` param renamed `$done_at` (was bound to done_at).
+  - Verified: `dotnet build -p:Platform=x64` clean (0 warnings/0 errors); smoke
+    run — window up + responsive, second instance blocked by mutex (confirmed in
+    `data/mentor-winui.log`), no error entries.
+- Previous session: 2026-07-06 (second pass), branch `winui-rebuild` (off `ux-audit-fixes`)
 - **WinUI rebuild phase 1 shipped** (`e44b6f9`): the user approved the Fluent redesign
   (mockup: https://claude.ai/code/artifact/a3ab9082-83c6-4bb5-8dac-5f696bdc12c0 —
   full design direction in memory `project-design-direction`). New `winui/
