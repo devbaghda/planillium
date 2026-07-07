@@ -189,6 +189,15 @@ public sealed partial class MainWindow : Window
 
     // ── activity tracker wiring ───────────────────────────────────────────
 
+    /// <summary>Stop and re-create the tracker — Settings saves call this so
+    /// new keywords/thresholds apply immediately.</summary>
+    public void RestartTracker()
+    {
+        Tracker?.Stop();
+        Tracker = null;
+        StartTracker();
+    }
+
     private void StartTracker()
     {
         // Always start — the tracker itself pauses per-poll whenever the

@@ -766,3 +766,29 @@ config.json. Private repo, but rotation at the TickTick developer console is the
 real fix. Optional afterwards: history rewrite + force-push (needs the user's go-ahead).
 **Known accepted gaps:** no test suite for this repo yet (tester skill unapplied),
 nothing code-signed, migration-limbo between the two apps (primary app undecided).
+
+## One-app consolidation (2026-07-07, the user's call: "all functionality in one place")
+
+The WinUI app is now THE app; the Python app is retired (kept in the repo +
+MentorOverseer.exe still on disk as fallback, no autostart, old desktop shortcut
+removed; "Mentor Overseer.lnk" now points at the WinUI Release build). Ported in
+this session, in the user's chosen order (highest-risk first):
+
+- **OAuth (Phase A):** CredentialStore (Credential Manager read/WRITE, python-keyring
+  byte format), TickTickAuth (TcpListener loopback callback on 8765, CSRF state,
+  code exchange, refresh), 401 auto-refresh in TickTickService, Connect/Reconnect
+  dialog (Settings + Today's TickTick section). Verified live: reads the token the
+  Python app stored.
+- **Tray (Phase B):** H.NotifyIcon.WinUI; close hides to tray (tracking continues),
+  tray menu Open/Quit, --minimized boots to tray, Start-with-Windows toggle in
+  Settings (StartupService sweeps legacy Run values). NOTE: autostart NOT yet
+  registered — the user flips the toggle (auto-mode reviewer required his explicit call).
+- **Plan import (Phase C):** AddPlanDialog "Load from file" (.docx via zip XML
+  extraction, .txt/.md into reformat prompt, .json straight to import).
+- **Settings (Phase D):** full editing — working hours, day-review time,
+  grace/repeat/idle minutes, activity keywords, idle-answer library → config.json
+  via ConfigService.Mutate + tracker restart.
+- **Export (Phase E):** ReportExport.ExportWeek → data/report.html (escaped,
+  dark-mode aware), button on Reports page.
+
+Python app changes on retirement: none — it still works if launched manually.

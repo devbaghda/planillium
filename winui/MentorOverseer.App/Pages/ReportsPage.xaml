@@ -5,7 +5,11 @@
 
     <ScrollViewer Padding="28,8,28,28">
         <StackPanel MaxWidth="880" Spacing="0">
-            <TextBlock Text="Reports" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,16"/>
+            <Grid Margin="0,8,0,16">
+                <TextBlock Text="Reports" Style="{StaticResource TitleTextBlockStyle}"/>
+                <Button Content="Export HTML report" HorizontalAlignment="Right"
+                        VerticalAlignment="Center" Click="Export_Click"/>
+            </Grid>
             <StackPanel x:Name="Body" Spacing="0"/>
         </StackPanel>
     </ScrollViewer>

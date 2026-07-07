@@ -32,13 +32,51 @@
             <TextBlock x:Name="TrackerInfo" TextWrapping="Wrap"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
+            <TextBlock Text="HOURS &amp; REMINDERS" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBox x:Name="WorkStart" Header="Work start" Width="110" PlaceholderText="08:00"/>
+                <TextBox x:Name="WorkEnd" Header="Work end" Width="110" PlaceholderText="20:00"/>
+                <TextBox x:Name="EodTimeBox" Header="Day review at" Width="110" PlaceholderText="20:00"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <NumberBox x:Name="GraceMin" Header="Grace before alert (min)" Width="170" Minimum="1" SpinButtonPlacementMode="Compact"/>
+                <NumberBox x:Name="RepeatMin" Header="Repeat every (min)" Width="150" Minimum="1" SpinButtonPlacementMode="Compact"/>
+                <NumberBox x:Name="IdleMin" Header="Idle after (min)" Width="130" Minimum="1" SpinButtonPlacementMode="Compact"/>
+            </StackPanel>
+
+            <TextBlock Text="ACTIVITY KEYWORDS  ·  one per line, matched inside window titles" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="RulesOn" Grid.Column="0" Header="On-plan" AcceptsReturn="True" Height="160" TextWrapping="NoWrap"/>
+                <TextBox x:Name="RulesOff" Grid.Column="1" Header="Off-plan" AcceptsReturn="True" Height="160" TextWrapping="NoWrap"/>
+                <TextBox x:Name="RulesNeutral" Grid.Column="2" Header="Neutral" AcceptsReturn="True" Height="160" TextWrapping="NoWrap"/>
+            </Grid>
+
+            <TextBlock Text="IDLE-ANSWER LIBRARY  ·  classifies what you type after being away" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="IdleOn" Grid.Column="0" Header="Counts as on-plan" AcceptsReturn="True" Height="120" TextWrapping="NoWrap"/>
+                <TextBox x:Name="IdleOff" Grid.Column="1" Header="Counts as off-plan" AcceptsReturn="True" Height="120" TextWrapping="NoWrap"/>
+                <TextBox x:Name="IdleNeutral" Grid.Column="2" Header="Counts as neutral" AcceptsReturn="True" Height="120" TextWrapping="NoWrap"/>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button x:Name="SaveRulesBtn" Content="Save settings" Style="{StaticResource AccentButtonStyle}" Click="SaveRules_Click"/>
+                <TextBlock x:Name="SaveStatus" VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
             <TextBlock Text="DATA" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
             <TextBlock x:Name="DataInfo" TextWrapping="Wrap" IsTextSelectionEnabled="True"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-            <TextBlock TextWrapping="Wrap"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"
-                       Text="Scoring rates, activity keywords, and the idle-answer library still live in config.json and are edited in the Python app's Settings for now — both apps read the same file."/>
         </StackPanel>
     </ScrollViewer>
 </Page>

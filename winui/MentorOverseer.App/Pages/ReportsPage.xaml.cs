@@ -16,6 +16,12 @@ public sealed partial class ReportsPage : Page
         Loaded += (_, _) => Render();
     }
 
+    private void Export_Click(object sender, RoutedEventArgs e)
+    {
+        try { ReportExport.ExportWeek(); }
+        catch (Exception ex) { Log.Error("ReportsPage.Export", ex); }
+    }
+
     private void Render()
     {
         Body.Children.Clear();

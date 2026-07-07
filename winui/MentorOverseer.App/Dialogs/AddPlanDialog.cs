@@ -56,7 +56,13 @@ public static class AddPlanDialog
         var ownPlan = new TextBox
         {
             AcceptsReturn = true, Height = 120, TextWrapping = TextWrapping.Wrap,
-            PlaceholderText = "Paste your own plan text here…", Visibility = Visibility.Collapsed,
+            PlaceholderText = "Paste your own plan text here — or load it from a file below…",
+            Visibility = Visibility.Collapsed,
+        };
+        var loadBtn = new Button
+        {
+            Content = "Load from file (.docx / .txt / .md / .json)…",
+            Visibility = Visibility.Collapsed,
         };
 
         var prompt = new TextBox
@@ -90,6 +96,40 @@ public static class AddPlanDialog
             role.Visibility = m.Reformat ? Visibility.Collapsed : Visibility.Visible;
             area.Visibility = m.Reformat ? Visibility.Collapsed : Visibility.Visible;
             ownPlan.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
+            loadBtn.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
+        };
+
+        loadBtn.Click += async (_, _) =>
+        {
+            try
+            {
+                var picker = new Windows.Storage.Pickers.FileOpenPicker();
+                WinRT.Interop.InitializeWithWindow.Initialize(picker,
+                    WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
+                foreach (var ext in new[] { ".docx", ".txt", ".md", ".json" })
+                    picker.FileTypeFilter.Add(ext);
+                var file = await picker.PickSingleFileAsync();
+                if (file is null) return;
+
+                var ext2 = Path.GetExtension(file.Path).ToLowerInvariant();
+                if (ext2 == ".json")
+                {
+                    // Already-structured plan: goes straight into the import box.
+                    reply.Text = await File.ReadAllTextAsync(file.Path);
+                    Show(error, "JSON loaded — press 'Import plan' to add it directly " +
+                                "(no Claude round-trip needed).");
+                    return;
+                }
+                ownPlan.Text = ext2 == ".docx"
+                    ? ExtractDocxText(file.Path)
+                    : await File.ReadAllTextAsync(file.Path);
+                error.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("AddPlanDialog.LoadFile", ex);
+                Show(error, "Couldn't read that file: " + ex.Message);
+            }
         };
 
         genBtn.Click += (_, _) =>
@@ -120,6 +160,7 @@ public static class AddPlanDialog
         panel.Children.Add(role);
         panel.Children.Add(area);
         panel.Children.Add(ownPlan);
+        panel.Children.Add(loadBtn);
         panel.Children.Add(genRow);
         panel.Children.Add(prompt);
         panel.Children.Add(reply);
@@ -147,6 +188,22 @@ public static class AddPlanDialog
         };
 
         return await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
+    }
+
+    /// <summary>Plain text from a .docx (zip of XML) — port of main.py's
+    /// _extract_docx_text: paragraph tags become newlines, all other tags drop.</summary>
+    private static string ExtractDocxText(string path)
+    {
+        using var zip = System.IO.Compression.ZipFile.OpenRead(path);
+        var entry = zip.GetEntry("word/document.xml")
+            ?? throw new InvalidDataException("Not a .docx file (no word/document.xml inside).");
+        using var reader = new StreamReader(entry.Open());
+        var xml = reader.ReadToEnd();
+        xml = xml.Replace("</w:p>", "\n");
+        var text = Regex.Replace(xml, "<[^>]+>", "");
+        text = System.Net.WebUtility.HtmlDecode(text);
+        var lines = text.Split('\n').Select(l => l.TrimEnd()).ToList();
+        return string.Join("\n", lines).Trim();
     }
 
     private static void Show(TextBlock error, string message)
