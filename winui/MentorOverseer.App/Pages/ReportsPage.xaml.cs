@@ -382,16 +382,17 @@ public sealed partial class ReportsPage : Page
 
     // ── today's diary ────────────────────────────────────────────────────
 
-    private static StackPanel DiaryList(
-        List<(string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary)
+    private StackPanel DiaryList(
+        List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary)
     {
         var list = new StackPanel { Spacing = 4 };
-        foreach (var (start, end, dur, cat, window, desc) in diary)
+        foreach (var (id, start, end, dur, cat, window, desc) in diary)
         {
             var row = new Grid { ColumnSpacing = 12 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var time = Dim($"{start} → {end}");
             var catText = new TextBlock
             {
@@ -417,30 +418,47 @@ public sealed partial class ReportsPage : Page
                 FontStyle = desc is { Length: > 0 }
                     ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
             };
+            var edit = new Button
+            {
+                Content = new FontIcon { Glyph = "", FontSize = 12 },
+                Padding = new Thickness(6),
+                MinWidth = 0,
+                MinHeight = 0,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            ((FontIcon)edit.Content).Glyph = "";
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(edit, "Edit diary entry");
+            edit.Click += async (_, _) =>
+            {
+                if (await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc))
+                    Render();
+            };
             Grid.SetColumn(catText, 1);
             Grid.SetColumn(what, 2);
+            Grid.SetColumn(edit, 3);
             row.Children.Add(time);
             row.Children.Add(catText);
             row.Children.Add(what);
+            row.Children.Add(edit);
             list.Children.Add(row);
         }
         return list;
     }
 
-    private static List<(string Start, string End, int Dur, string Cat, string Window, string? Desc)> TodayDiary()
+    private static List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> TodayDiary()
     {
         using var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT start_time, end_time, duration_min, category, window, description " +
+            "SELECT id, start_time, end_time, duration_min, category, window, description " +
             "FROM time_diary WHERE date=$d ORDER BY start_time";
         cmd.Parameters.AddWithValue("$d", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        var result = new List<(string, string, int, string, string, string?)>();
+        var result = new List<(long, string, string, int, string, string, string?)>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
-            result.Add((r.GetString(0), r.GetString(1), r.GetInt32(2), r.GetString(3),
-                        r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5)));
+            result.Add((r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetInt32(3), r.GetString(4),
+                        r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6)));
         return result;
     }
 

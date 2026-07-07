@@ -264,6 +264,25 @@ public sealed partial class SchedulePage : Page
             Grid.SetColumn(move, 2);
             row.Children.Add(move);
         }
+        else if (!t.Completed && t.Overdue)
+        {
+            // Overdue tasks skip "Move to today" (that's what Replan-all is
+            // for) but still need a way out of the past — pick a new date,
+            // the accrued penalty for the late days stands.
+            var reschedule = new HyperlinkButton
+            {
+                Content = "Reschedule…",
+                FontSize = 12,
+                Padding = new Thickness(6, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            reschedule.Click += async (_, _) =>
+            {
+                if (await Dialogs.RescheduleTaskDialog.ShowAsync(XamlRoot, plan, t)) Render();
+            };
+            Grid.SetColumn(reschedule, 2);
+            row.Children.Add(reschedule);
+        }
 
         return row;
     }
@@ -287,7 +306,7 @@ public sealed partial class SchedulePage : Page
     private static Border Chip(string text, string brushKey, bool onAccent = false) => new()
     {
         Background = (Brush)Application.Current.Resources[brushKey],
-        CornerRadius = new CornerRadius(999),
+        CornerRadius = new CornerRadius(6),
         Padding = new Thickness(8, 1, 8, 2),
         VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock

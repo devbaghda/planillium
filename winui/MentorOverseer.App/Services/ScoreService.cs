@@ -274,6 +274,15 @@ public sealed class ScoreService : IDisposable
         SaveOverride(plan.Id, taskText, target.OriginalDay, planDay);
     }
 
+    /// <summary>
+    /// Move a single overdue task to a specific future day, touching nothing
+    /// else — the WinUI port of main.py's _reassign_task_day / the "pick a
+    /// date" reschedule flow. The overdue penalty already accrued for the
+    /// days it was late stands; this only stops it from accruing further.
+    /// </summary>
+    public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay) =>
+        SaveOverride(plan.Id, taskText, originalDay, newAssignedDay);
+
     public HashSet<int> DaysOff(string planId)
     {
         var result = new HashSet<int>();

@@ -48,7 +48,7 @@
 
             <NavigationView.PaneFooter>
                 <StackPanel Margin="16,0,16,12" Spacing="8">
-                    <Border x:Name="ActivityPill" CornerRadius="999" Padding="12,5"
+                    <Border x:Name="ActivityPill" CornerRadius="8" Padding="12,5"
                             HorizontalAlignment="Left"
                             Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="8">

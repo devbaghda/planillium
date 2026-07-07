@@ -65,6 +65,32 @@ public sealed class Database : IDisposable
         return result;
     }
 
+    /// <summary>Same UPDATE as main.py's _edit_diary_entry Save.</summary>
+    public void UpdateDiaryEntry(long id, string startTime, string endTime, int durationMin,
+        string category, string? description)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE time_diary SET start_time=$start, end_time=$end, duration_min=$dur, " +
+            "category=$cat, description=$desc WHERE id=$id";
+        cmd.Parameters.AddWithValue("$start", startTime);
+        cmd.Parameters.AddWithValue("$end", endTime);
+        cmd.Parameters.AddWithValue("$dur", durationMin);
+        cmd.Parameters.AddWithValue("$cat", category);
+        cmd.Parameters.AddWithValue("$desc", (object?)description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Same DELETE as main.py's _delete_diary_entry.</summary>
+    public void DeleteDiaryEntry(long id)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM time_diary WHERE id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     public long ScoreBalance()
     {
         using var cmd = _conn.CreateCommand();

@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
         SetTitleBar(TitleBar);
 
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 780));
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico"));
 
         ApplyOpacity(StateService.Load().Opacity);
 
