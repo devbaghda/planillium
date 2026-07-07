@@ -13,8 +13,88 @@ public sealed class Database : IDisposable
 
     public Database()
     {
+        Directory.CreateDirectory(Path.Combine(AppPaths.Root, "data"));
         _conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
         _conn.Open();
+        EnsureSchema();
+    }
+
+    /// <summary>
+    /// Same tables main.py's ensure_data_store() creates (minus its v1-table
+    /// migration, which only applies to a pre-multi-plan database that can't
+    /// exist on a fresh install) plus tracker/activity.py's time_diary and
+    /// activity_log — every table any part of either app touches. Every
+    /// statement is idempotent, so this runs on every Database construction;
+    /// harmless against an existing progress.db, and the only thing standing
+    /// between a fresh install and "SQLite Error 1: no such table" on first
+    /// launch.
+    /// </summary>
+    private void EnsureSchema()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "CREATE TABLE IF NOT EXISTS task_completions (" +
+            "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  plan_id      TEXT    NOT NULL DEFAULT 'netherlands'," +
+            "  plan_day     INTEGER NOT NULL," +
+            "  task_text    TEXT    NOT NULL," +
+            "  completed    INTEGER NOT NULL," +
+            "  completed_at TEXT," +
+            "  last_updated TEXT    NOT NULL" +
+            ");" +
+            "CREATE UNIQUE INDEX IF NOT EXISTS tc_plan_idx " +
+            "  ON task_completions(plan_id, plan_day, task_text);" +
+            "CREATE TABLE IF NOT EXISTS ticktick_sync (" +
+            "  id               INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  plan_day         INTEGER NOT NULL," +
+            "  task_text        TEXT    NOT NULL," +
+            "  ticktick_task_id TEXT," +
+            "  ticktick_proj_id TEXT," +
+            "  pushed_at        TEXT," +
+            "  synced_at        TEXT," +
+            "  UNIQUE(plan_day, task_text)" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS task_overrides (" +
+            "  plan_id      TEXT    NOT NULL," +
+            "  task_text    TEXT    NOT NULL," +
+            "  original_day INTEGER NOT NULL," +
+            "  assigned_day INTEGER NOT NULL," +
+            "  PRIMARY KEY (plan_id, task_text)" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS plan_days_off (" +
+            "  plan_id   TEXT    NOT NULL," +
+            "  day       INTEGER NOT NULL," +
+            "  marked_at TEXT," +
+            "  PRIMARY KEY (plan_id, day)" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS score_ledger (" +
+            "  id     INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  ts     TEXT    NOT NULL," +
+            "  date   TEXT    NOT NULL," +
+            "  delta  INTEGER NOT NULL," +
+            "  reason TEXT    NOT NULL," +
+            "  detail TEXT" +
+            ");" +
+            "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
+            "  ON score_ledger(reason, date) " +
+            "  WHERE reason IN ('daily_score', 'overdue_accrual');" +
+            "CREATE TABLE IF NOT EXISTS time_diary (" +
+            "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  date         TEXT NOT NULL," +
+            "  start_time   TEXT NOT NULL," +
+            "  end_time     TEXT NOT NULL," +
+            "  duration_min INTEGER NOT NULL," +
+            "  category     TEXT NOT NULL," +
+            "  window       TEXT NOT NULL," +
+            "  description  TEXT" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS activity_log (" +
+            "  id        INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  logged_at TEXT NOT NULL," +
+            "  window    TEXT NOT NULL," +
+            "  class     TEXT NOT NULL" +
+            ");";
+        cmd.ExecuteNonQuery();
     }
 
     public Dictionary<(string PlanId, int Day, string Text), bool> LoadCompletions()
