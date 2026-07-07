@@ -18,6 +18,8 @@ public sealed partial class SettingsPage : Page
             {
                 "light" => 1, "dark" => 2, _ => 0,
             };
+            StartupToggle.IsOn = StartupService.IsEnabled;
+            RefreshTickTickStatus();
             _initialising = false;
 
             var win = App.MainWindow as MainWindow;
@@ -27,6 +29,27 @@ public sealed partial class SettingsPage : Page
                   "and only one tracker may write the diary at a time.";
             DataInfo.Text = "Shared data folder: " + AppPaths.Root;
         };
+    }
+
+    private void RefreshTickTickStatus()
+    {
+        TickTickStatus.Text = TickTickService.IsAuthorized
+            ? "Connected — personal tasks due today appear on the Today page."
+            : "Not connected.";
+        TickTickConnectBtn.Content = TickTickService.IsAuthorized
+            ? "Reconnect TickTick…" : "Connect TickTick…";
+    }
+
+    private void Startup_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_initialising) return;
+        StartupService.SetEnabled(StartupToggle.IsOn);
+    }
+
+    private async void TickTickConnect_Click(object sender, RoutedEventArgs e)
+    {
+        await Dialogs.TickTickConnectDialog.ShowAsync(XamlRoot);
+        RefreshTickTickStatus();
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)

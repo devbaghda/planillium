@@ -53,7 +53,12 @@ public partial class App : Application
             Log.Error("AppNotificationManager.Register", ex);
         }
 
-        MainWindow = new MainWindow();
-        MainWindow.Activate();
+        var window = new MainWindow();
+        MainWindow = window;
+        // --minimized (autostart at boot): start straight into the tray.
+        if (Environment.GetCommandLineArgs().Contains("--minimized"))
+            window.HideToTray();
+        else
+            window.Activate();
     }
 }

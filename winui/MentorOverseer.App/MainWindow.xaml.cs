@@ -57,31 +57,72 @@ public sealed partial class MainWindow : Window
         CatchUpScores();
         StartEodWatcher();
 
-        // Closing the window stops tracking (no tray yet) — make that an
-        // informed decision instead of a silent end to the diary.
+        InitTray();
+
+        // Closing the window hides to the tray — tracking and focus alerts
+        // continue. Actually quitting is the tray menu's job.
         AppWindow.Closing += (_, e) =>
         {
-            if (_reallyClose || Tracker is not { Running: true }) return;
+            if (_reallyClose) return;
             e.Cancel = true;
-            _dq.TryEnqueue(async () =>
-            {
-                var confirm = new ContentDialog
-                {
-                    Title = "Close Mentor Overseer?",
-                    Content = "Activity tracking and focus alerts stop until you open it again.",
-                    PrimaryButtonText = "Close anyway",
-                    CloseButtonText = "Stay open",
-                    DefaultButton = ContentDialogButton.Close,
-                    XamlRoot = Content.XamlRoot,
-                };
-                if (await DialogGate.ShowAsync(confirm) == ContentDialogResult.Primary)
-                {
-                    _reallyClose = true;
-                    Close();
-                }
-            });
+            AppWindow.Hide();
         };
-        Closed += (_, _) => Tracker?.Stop();
+        Closed += (_, _) =>
+        {
+            Tracker?.Stop();
+            _tray?.Dispose();
+        };
+    }
+
+    // ── tray ──────────────────────────────────────────────────────────────
+
+    private H.NotifyIcon.TaskbarIcon? _tray;
+
+    private void InitTray()
+    {
+        try
+        {
+            var open = new MenuFlyoutItem { Text = "Open Mentor Overseer" };
+            open.Click += (_, _) => ShowFromTray();
+            var quit = new MenuFlyoutItem { Text = "Quit (stops tracking)" };
+            quit.Click += (_, _) => { _reallyClose = true; Close(); };
+            var menu = new MenuFlyout();
+            menu.Items.Add(open);
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(quit);
+
+            var openCommand = new Microsoft.UI.Xaml.Input.XamlUICommand();
+            openCommand.ExecuteRequested += (_, _) => ShowFromTray();
+
+            _tray = new H.NotifyIcon.TaskbarIcon
+            {
+                ToolTipText = "Mentor Overseer",
+                Icon = new System.Drawing.Icon(
+                    Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico")),
+                ContextFlyout = menu,
+                ContextMenuMode = H.NotifyIcon.ContextMenuMode.SecondWindow,
+                LeftClickCommand = openCommand,
+            };
+            _tray.ForceCreate();
+        }
+        catch (Exception ex)
+        {
+            // No tray = closing must really close, or the app becomes unkillable.
+            Log.Error("InitTray (window close will quit instead)", ex);
+            _tray = null;
+            _reallyClose = true;
+        }
+    }
+
+    public void HideToTray() => AppWindow.Hide();
+
+    private void ShowFromTray()
+    {
+        _dq.TryEnqueue(() =>
+        {
+            AppWindow.Show();
+            Activate();
+        });
     }
 
     private bool _reallyClose;
