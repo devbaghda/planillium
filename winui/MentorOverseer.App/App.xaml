@@ -7,6 +7,24 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary.ThemeDictionaries>
+                <!--
+                  WinUI's stock Light-theme TextFillColorTertiaryBrush is 45%-
+                  opacity black (~3.35:1 contrast on white) — fails WCAG AA
+                  (4.5:1) for normal text, and this app uses it constantly for
+                  small (11-12px) captions/labels/muted rows. Same class of
+                  bug already found and fixed in the Python app's light theme
+                  (text_muted darkened to #6e7480). Bumping to 56% opacity
+                  (~4.9:1) fixes it centrally for every {ThemeResource
+                  TextFillColorTertiaryBrush} call site at once, the same
+                  "swap the value, not the call sites" approach used there.
+                  Dark theme's tertiary text wasn't reported as a problem, so
+                  it's left at the WinUI default.
+                -->
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8F000000"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

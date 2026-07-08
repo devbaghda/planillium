@@ -147,6 +147,17 @@ public static class ReportData
             DateTimeStyles.None, out var d)
             ? d.ToString("MMMM yyyy", CultureInfo.InvariantCulture) : yyyyMm;
 
+    /// <summary>
+    /// "idle" is a placeholder window, not a real app — once the user gives
+    /// an idle row a description (renames it in the diary editor), that
+    /// description becomes its identity for grouping purposes, so it shows
+    /// as its own line in Time-by-App/Top Distractions instead of staying
+    /// lumped under generic "idle" (whose own total correspondingly shrinks
+    /// as renamed rows move out of it).
+    /// </summary>
+    private static string EffectiveWindow(string window, string? description) =>
+        window == "idle" && description is { Length: > 0 } ? description : window;
+
     /// <summary>Off-plan minutes grouped by "App - sub" label, biggest first.</summary>
     public static List<(string Label, int Minutes)> TopDistractions(ReportPeriod period, int limit = 8)
     {
@@ -154,14 +165,16 @@ public static class ReportData
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT window, SUM(duration_min) FROM time_diary " +
+            "SELECT window, description, SUM(duration_min) FROM time_diary " +
             "WHERE category='off_plan' AND " + DateFilter(period, cmd) +
-            " GROUP BY window";
+            " GROUP BY window, description";
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            var label = AppNames.Label(r.GetString(0));
-            var mins = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+            var window = r.GetString(0);
+            var desc = r.IsDBNull(1) ? null : r.GetString(1);
+            var label = AppNames.Label(EffectiveWindow(window, desc));
+            var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
             aggregated[label] = aggregated.GetValueOrDefault(label) + mins;
         }
         return aggregated.OrderByDescending(kv => kv.Value)
@@ -177,19 +190,21 @@ public static class ReportData
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT window, category, SUM(duration_min) FROM time_diary " +
-            "WHERE " + DateFilter(period, cmd) + " GROUP BY window, category";
+            "SELECT window, category, description, SUM(duration_min) FROM time_diary " +
+            "WHERE " + DateFilter(period, cmd) + " GROUP BY window, category, description";
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
             var window = r.GetString(0);
             var cat = r.GetString(1);
-            var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-            var grp = AppNames.Group(window);
+            var desc = r.IsDBNull(2) ? null : r.GetString(2);
+            var mins = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+            var effective = EffectiveWindow(window, desc);
+            var grp = AppNames.Group(effective);
             if (!groups.TryGetValue(grp, out var g))
                 groups[grp] = g = new AppUsage { Subs = new SortedDictionary<string, AppUsage>() };
             g.Add(cat, mins);
-            if (AppNames.Sub(window) is { Length: > 0 } sub)
+            if (AppNames.Sub(effective) is { Length: > 0 } sub)
             {
                 if (!g.Subs!.TryGetValue(sub, out var s))
                     g.Subs[sub] = s = new AppUsage();
