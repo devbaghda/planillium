@@ -85,6 +85,7 @@ public static class TickTickSection
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var check = new CheckBox { MinWidth = 0 };
         // Screen readers otherwise announce a bare "checkbox" with no label.
@@ -112,12 +113,32 @@ public static class TickTickSection
         Grid.SetColumn(name, 1);
         grid.Children.Add(name);
 
+        // Priority badge (TickTick: 0=None, 1=Low, 3=Medium, 5=High) — only
+        // shown when the task actually has one set.
+        if (PriorityLabel(t.Priority) is { } pl)
+        {
+            var priority = new TextBlock
+            {
+                Text = pl.Text,
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                CharacterSpacing = 20,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources[pl.BrushKey],
+            };
+            Grid.SetColumn(priority, 2);
+            grid.Children.Add(priority);
+        }
+
+        // Flat bordered tag, not a filled oval — matches the app's plainer
+        // chip style elsewhere instead of standing out as a colored pill.
         var proj = new Border
         {
-            CornerRadius = new CornerRadius(999),
-            Padding = new Thickness(10, 3, 10, 4),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 2, 8, 3),
             VerticalAlignment = VerticalAlignment.Center,
-            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
             Child = new TextBlock
             {
                 Text = t.ProjectName, FontSize = 11,
@@ -125,10 +146,18 @@ public static class TickTickSection
                 Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             },
         };
-        Grid.SetColumn(proj, 2);
+        Grid.SetColumn(proj, 3);
         grid.Children.Add(proj);
         return grid;
     }
+
+    private static (string Text, string BrushKey)? PriorityLabel(int priority) => priority switch
+    {
+        5 => ("HIGH", "SystemFillColorCriticalBrush"),
+        3 => ("MED", "SystemFillColorCautionBrush"),
+        1 => ("LOW", "TextFillColorTertiaryBrush"),
+        _ => null,
+    };
 
     private static TextBlock Header() => new()
     {

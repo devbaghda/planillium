@@ -193,10 +193,38 @@ public sealed partial class ReportsPage : Page
             };
             Body.Children.Add(searchBox);
 
+            // Mark-selected toolbar — built once (not on every keystroke) so
+            // its buttons don't get re-wired constantly; UpdateMarkToolbar()
+            // just flips enabled/label state as the selection changes.
+            var selectedIds = new HashSet<long>();
+            var lastRows = new List<(long Id, DateOnly Date, string Start, string End, int Dur, string Cat, string Window, string? Desc)>();
+
+            var markToolbar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+            var selectedLabel = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center, FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            };
+            var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
+            var markOffBtn = new Button { Content = "Mark off-plan", IsEnabled = false };
+            var markNeutralBtn = new Button { Content = "Mark neutral", IsEnabled = false };
+            markToolbar.Children.Add(selectedLabel);
+            markToolbar.Children.Add(markOnBtn);
+            markToolbar.Children.Add(markOffBtn);
+            markToolbar.Children.Add(markNeutralBtn);
+            Body.Children.Add(markToolbar);
+
             var diaryResults = new StackPanel { Spacing = 0 };
             Body.Children.Add(diaryResults);
 
             const int maxSearchResults = 300;
+
+            void UpdateMarkToolbar()
+            {
+                var n = selectedIds.Count;
+                selectedLabel.Text = n > 0 ? $"{n} selected" : "";
+                markOnBtn.IsEnabled = markOffBtn.IsEnabled = markNeutralBtn.IsEnabled = n > 0;
+            }
 
             void RenderDiaryResults()
             {
@@ -218,6 +246,9 @@ public sealed partial class ReportsPage : Page
                         : (_diaryDate == today
                             ? "No diary entries yet today. Tracking runs 06:00–20:00."
                             : "No diary entries on this day.")));
+                    lastRows.Clear();
+                    selectedIds.Clear();
+                    UpdateMarkToolbar();
                     return;
                 }
                 if (searching && filtered.Count > maxSearchResults)
@@ -226,9 +257,43 @@ public sealed partial class ReportsPage : Page
                         $"{filtered.Count} matches — showing the {maxSearchResults} most recent."));
                     filtered = filtered.Take(maxSearchResults).ToList();
                 }
-                diaryResults.Children.Add(Card(DiaryList(filtered, showDate: searching)));
+                lastRows = filtered;
+                selectedIds.RemoveWhere(id => !filtered.Any(e => e.Id == id));
+                UpdateMarkToolbar();
+                diaryResults.Children.Add(Card(DiaryList(filtered, selectedIds, UpdateMarkToolbar, showDate: searching)));
             }
             RenderDiaryResults();
+
+            void MarkSelected(string category)
+            {
+                if (selectedIds.Count == 0) return;
+                try
+                {
+                    using var db = new Database();
+                    var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var id in selectedIds)
+                    {
+                        var row = lastRows.FirstOrDefault(e => e.Id == id);
+                        if (row.Id != id) continue;
+                        db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
+                        var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
+                        if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
+                    }
+                    foreach (var keyword in learned)
+                        ConfigService.LearnActivityRule(keyword, category);
+                    if (learned.Count > 0)
+                        (App.MainWindow as MainWindow)?.RestartTracker();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("ReportsPage.MarkSelected", ex);
+                }
+                selectedIds.Clear();
+                RenderDiaryResults();
+            }
+            markOnBtn.Click += (_, _) => MarkSelected("on_plan");
+            markOffBtn.Click += (_, _) => MarkSelected("off_plan");
+            markNeutralBtn.Click += (_, _) => MarkSelected("neutral");
 
             // Filters in place (doesn't touch searchBox itself) so typing
             // keeps focus/cursor position instead of losing it every keystroke.
@@ -526,16 +591,29 @@ public sealed partial class ReportsPage : Page
 
     private StackPanel DiaryList(
         List<(long Id, DateOnly Date, string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary,
-        bool showDate = false)
+        HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
     {
         var list = new StackPanel { Spacing = 4 };
         foreach (var (id, date, start, end, dur, cat, window, desc) in diary)
         {
             var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var select = new CheckBox
+            {
+                MinWidth = 0, VerticalAlignment = VerticalAlignment.Center,
+                IsChecked = selectedIds.Contains(id),
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(select, "Select this entry");
+            select.Checked += (_, _) => { selectedIds.Add(id); onSelectionChanged(); };
+            select.Unchecked += (_, _) => { selectedIds.Remove(id); onSelectionChanged(); };
+            Grid.SetColumn(select, 0);
+            row.Children.Add(select);
+
             var time = Dim(showDate ? $"{date:dd.MM} · {start} → {end}" : $"{start} → {end}");
             var catText = new TextBlock
             {
@@ -576,9 +654,10 @@ public sealed partial class ReportsPage : Page
                 if (await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc))
                     Render();
             };
-            Grid.SetColumn(catText, 1);
-            Grid.SetColumn(what, 2);
-            Grid.SetColumn(edit, 3);
+            Grid.SetColumn(time, 1);
+            Grid.SetColumn(catText, 2);
+            Grid.SetColumn(what, 3);
+            Grid.SetColumn(edit, 4);
             row.Children.Add(time);
             row.Children.Add(catText);
             row.Children.Add(what);

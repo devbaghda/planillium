@@ -16,7 +16,8 @@ public sealed class TickTickService
     private const string ApiBase = "https://api.ticktick.com/open/v1";
     private const string MirrorProjectName = "Netherlands Plan";
 
-    public record TtTask(string Id, string ProjectId, string ProjectName, string Title);
+    // TickTick's own priority scale: 0=None, 1=Low, 3=Medium, 5=High.
+    public record TtTask(string Id, string ProjectId, string ProjectName, string Title, int Priority);
 
     public static string? AccessToken => CredentialStore.Read("ticktick_access_token");
     public static bool IsAuthorized => !string.IsNullOrEmpty(AccessToken);
@@ -84,7 +85,8 @@ public sealed class TickTickService
                 result.Add(new TtTask(
                     t.GetProperty("id").GetString() ?? "",
                     pid, pname,
-                    t.TryGetProperty("title", out var ti) ? ti.GetString() ?? "Untitled" : "Untitled"));
+                    t.TryGetProperty("title", out var ti) ? ti.GetString() ?? "Untitled" : "Untitled",
+                    t.TryGetProperty("priority", out var pr) ? pr.GetInt32() : 0));
             }
         }
         return result;

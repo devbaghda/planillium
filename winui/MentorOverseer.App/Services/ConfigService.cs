@@ -76,4 +76,43 @@ public static class ConfigService
     public static string TickTickClientId =>
         Root.TryGetProperty("ticktick", out var t) &&
         t.TryGetProperty("client_id", out var v) ? v.GetString() ?? "" : "";
+
+    /// <summary>
+    /// Teaches activity_rules a new keyword for the given category — the
+    /// "remember this" half of manually recategorizing a diary entry, so the
+    /// live tracker classifies matching windows the same way from then on
+    /// (ActivityTracker.Classify does a case-insensitive substring match
+    /// against these same lists). Removed from the other two categories
+    /// first so one keyword never lives in two lists at once, which would
+    /// make classification depend on list-check order instead of intent.
+    /// </summary>
+    public static void LearnActivityRule(string keyword, string category)
+    {
+        if (category is not ("on_plan" or "off_plan" or "neutral")) return;
+        if (string.IsNullOrWhiteSpace(keyword)) return;
+
+        Mutate(node =>
+        {
+            if (node["activity_rules"] is not JsonObject rules)
+                node["activity_rules"] = rules = new JsonObject();
+
+            JsonArray ArrayFor(string cat)
+            {
+                if (rules[cat] is JsonArray existing) return existing;
+                var fresh = new JsonArray();
+                rules[cat] = fresh;
+                return fresh;
+            }
+
+            foreach (var cat in new[] { "on_plan", "off_plan", "neutral" })
+            {
+                var arr = ArrayFor(cat);
+                for (var i = arr.Count - 1; i >= 0; i--)
+                    if (arr[i] is JsonValue v && v.TryGetValue<string>(out var s) &&
+                        string.Equals(s, keyword, StringComparison.OrdinalIgnoreCase))
+                        arr.RemoveAt(i);
+            }
+            ArrayFor(category).Add(keyword);
+        });
+    }
 }
