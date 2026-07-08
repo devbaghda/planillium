@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Models;
 using MentorOverseer.App.Services;
+using MentorOverseer.App.Views;
 
 namespace MentorOverseer.App.Pages;
 
@@ -78,6 +79,7 @@ public sealed partial class SchedulePage : Page
     {
         var planDay = plan.PlanDay;
         var tasks = PlanStore.TasksFor(plan, db, completions);
+        var notes = db.LoadTaskNotes(plan.Id);
         var daysOff = score.DaysOff(plan.Id);
         var byDay = tasks.GroupBy(t => t.AssignedDay)
                          .ToDictionary(g => g.Key, g => g.ToList());
@@ -107,14 +109,14 @@ public sealed partial class SchedulePage : Page
             if (day < planDay && dayTasks.Count == 0 && !isOff) continue;
             if (day > lookahead && dayTasks.Count == 0 && !isOff) continue;
 
-            var card = DayCard(plan, day, isToday, isOff, dayTasks);
+            var card = DayCard(plan, day, isToday, isOff, dayTasks, notes);
             Sections.Children.Add(card);
             if (isToday) _todayCard = card;
         }
     }
 
     private FrameworkElement DayCard(Plan plan, int day, bool isToday, bool isOff,
-        List<AssignedTask> dayTasks)
+        List<AssignedTask> dayTasks, Dictionary<string, string> notes)
     {
         var planDay = plan.PlanDay;
         var date = plan.DateForPlanDay(day);
@@ -154,7 +156,7 @@ public sealed partial class SchedulePage : Page
             });
 
         foreach (var t in dayTasks.OrderBy(t => t.Completed))
-            left.Children.Add(TaskRow(plan, t, planDay));
+            left.Children.Add(TaskRow(plan, t, planDay, notes.GetValueOrDefault(t.Task.Text)));
 
         Grid.SetColumn(left, 0);
         grid.Children.Add(left);
@@ -200,7 +202,7 @@ public sealed partial class SchedulePage : Page
         };
     }
 
-    private FrameworkElement TaskRow(Plan plan, AssignedTask t, int planDay)
+    private FrameworkElement TaskRow(Plan plan, AssignedTask t, int planDay, string? note)
     {
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -244,6 +246,15 @@ public sealed partial class SchedulePage : Page
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = Res("TextFillColorTertiaryBrush"),
             });
+        textPanel.Children.Add(TaskNoteView.Build(note, text =>
+        {
+            try
+            {
+                using var db = new Database();
+                db.SetTaskNote(plan.Id, t.Task.Text, text);
+            }
+            catch (Exception ex) { Log.Error("SchedulePage.SetTaskNote", ex); }
+        }));
         Grid.SetColumn(textPanel, 1);
         row.Children.Add(textPanel);
 

@@ -93,6 +93,7 @@ public sealed partial class TodayPage : Page
             foreach (var plan in plans)
             {
                 var tasks = PlanStore.TasksFor(plan, db, completions);
+                var notes = db.LoadTaskNotes(plan.Id);
                 var planDay = plan.PlanDay;
 
                 Sections.Children.Add(SectionHeader(
@@ -117,7 +118,7 @@ public sealed partial class TodayPage : Page
                     {
                         totalOverdue += overdueToday.Count;
                         Sections.Children.Add(GroupLabel($"OVERDUE · {overdueToday.Count}", danger: true));
-                        Sections.Children.Add(TaskCard(overdueToday, plan));
+                        Sections.Children.Add(TaskCard(overdueToday, plan, notes));
                     }
                     continue;
                 }
@@ -130,14 +131,14 @@ public sealed partial class TodayPage : Page
                 if (overdue.Count > 0)
                 {
                     Sections.Children.Add(GroupLabel($"OVERDUE · {overdue.Count}", danger: true));
-                    Sections.Children.Add(TaskCard(overdue, plan));
+                    Sections.Children.Add(TaskCard(overdue, plan, notes));
                 }
 
                 if (today.Count > 0)
                 {
                     var done = today.Count(t => t.Completed);
                     Sections.Children.Add(GroupLabel($"TODAY · {done} OF {today.Count} DONE"));
-                    Sections.Children.Add(TaskCard(today, plan));
+                    Sections.Children.Add(TaskCard(today, plan, notes));
                 }
                 else if (overdue.Count == 0)
                 {
@@ -216,7 +217,7 @@ public sealed partial class TodayPage : Page
         return panel;
     }
 
-    private Border TaskCard(List<AssignedTask> tasks, Plan plan)
+    private Border TaskCard(List<AssignedTask> tasks, Plan plan, Dictionary<string, string> notes)
     {
         var list = new StackPanel();
         for (var i = 0; i < tasks.Count; i++)
@@ -227,7 +228,7 @@ public sealed partial class TodayPage : Page
                     Height = 1,
                     Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
                 });
-            list.Children.Add(TaskRow(tasks[i], plan));
+            list.Children.Add(TaskRow(tasks[i], plan, notes.GetValueOrDefault(tasks[i].Task.Text)));
         }
 
         return new Border
@@ -240,7 +241,7 @@ public sealed partial class TodayPage : Page
         };
     }
 
-    private Grid TaskRow(AssignedTask item, Plan plan)
+    private Grid TaskRow(AssignedTask item, Plan plan, string? note)
     {
         var grid = new Grid
         {
@@ -289,14 +290,23 @@ public sealed partial class TodayPage : Page
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             });
-        if (item.Task.MentorNote is { Length: > 0 } note)
+        if (item.Task.MentorNote is { Length: > 0 } mentorNote)
             textCol.Children.Add(new TextBlock
             {
-                Text = "💡 " + note,
+                Text = "💡 " + mentorNote,
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             });
+        textCol.Children.Add(Views.TaskNoteView.Build(note, text =>
+        {
+            try
+            {
+                using var db = new Database();
+                db.SetTaskNote(plan.Id, item.Task.Text, text);
+            }
+            catch (Exception ex) { Log.Error("TodayPage.SetTaskNote", ex); }
+        }));
         Grid.SetColumn(textCol, 1);
         grid.Children.Add(textCol);
 

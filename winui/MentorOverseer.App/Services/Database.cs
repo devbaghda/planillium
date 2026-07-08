@@ -101,6 +101,17 @@ public sealed class Database : IDisposable
             "  marked_at TEXT," +
             "  PRIMARY KEY (plan_id, day)" +
             ");" +
+            // The user's own scratchpad per task — separate from the plan
+            // JSON's detail/mentor_note (Claude-authored, read-only). Keyed
+            // the same way task_overrides is; an empty note just deletes
+            // the row rather than storing "".
+            "CREATE TABLE IF NOT EXISTS task_notes (" +
+            "  plan_id    TEXT    NOT NULL," +
+            "  task_text  TEXT    NOT NULL," +
+            "  note       TEXT    NOT NULL," +
+            "  updated_at TEXT    NOT NULL," +
+            "  PRIMARY KEY (plan_id, task_text)" +
+            ");" +
             "CREATE TABLE IF NOT EXISTS score_ledger (" +
             "  id     INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  ts     TEXT    NOT NULL," +
@@ -270,6 +281,44 @@ public sealed class Database : IDisposable
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "DELETE FROM time_diary WHERE id=$id";
         cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>task_notes for one plan: task_text → note.</summary>
+    public Dictionary<string, string> LoadTaskNotes(string planId)
+    {
+        var result = new Dictionary<string, string>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT task_text, note FROM task_notes WHERE plan_id=$pid";
+        cmd.Parameters.AddWithValue("$pid", planId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            result[r.GetString(0)] = r.GetString(1);
+        return result;
+    }
+
+    /// <summary>Upserts a task's note, or deletes the row if it's now empty.</summary>
+    public void SetTaskNote(string planId, string taskText, string note)
+    {
+        note = note.Trim();
+        using var cmd = _conn.CreateCommand();
+        if (note.Length == 0)
+        {
+            cmd.CommandText = "DELETE FROM task_notes WHERE plan_id=$pid AND task_text=$text";
+        }
+        else
+        {
+            cmd.CommandText =
+                "INSERT INTO task_notes (plan_id, task_text, note, updated_at) " +
+                "VALUES ($pid, $text, $note, $now) " +
+                "ON CONFLICT(plan_id, task_text) DO UPDATE SET " +
+                "  note=excluded.note, updated_at=excluded.updated_at";
+            cmd.Parameters.AddWithValue("$note", note);
+            cmd.Parameters.AddWithValue("$now",
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        }
+        cmd.Parameters.AddWithValue("$pid", planId);
+        cmd.Parameters.AddWithValue("$text", taskText);
         cmd.ExecuteNonQuery();
     }
 
