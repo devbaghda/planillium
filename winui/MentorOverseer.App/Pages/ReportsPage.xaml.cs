@@ -494,7 +494,7 @@ public sealed partial class ReportsPage : Page
 
             if (subs.Count == 0)
             {
-                header.Margin = new Thickness(44, 6, 12, 6);
+                header.Margin = new Thickness(16, 6, 12, 6);
                 panel.Children.Add(header);
                 continue;
             }
