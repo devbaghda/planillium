@@ -180,12 +180,14 @@ public sealed partial class ReportsPage : Page
             }
             Body.Children.Add(Card(hintPanel));
 
-            // ── diary, navigable to any past day, filterable by search ─────
+            // ── diary: one day by default; searching widens to everything
+            // still retained (Database.DiaryRetentionDays) instead of just
+            // the day on screen ─────────────────────────────────────────
             Body.Children.Add(DiaryHeader());
 
             var searchBox = new TextBox
             {
-                PlaceholderText = "Search this day's diary (app or description)…",
+                PlaceholderText = $"Search the last {Database.DiaryRetentionDays} days' diary (app or description)…",
                 Text = _diarySearch,
                 Margin = new Thickness(0, 0, 0, 8),
             };
@@ -194,28 +196,37 @@ public sealed partial class ReportsPage : Page
             var diaryResults = new StackPanel { Spacing = 0 };
             Body.Children.Add(diaryResults);
 
-            var allDiary = DiaryForDate(_diaryDate);
+            const int maxSearchResults = 300;
 
             void RenderDiaryResults()
             {
                 diaryResults.Children.Clear();
                 var q = _diarySearch.Trim();
-                var filtered = q.Length == 0
-                    ? allDiary
-                    : allDiary.Where(e =>
-                        AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                        (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
-                        e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
+                var searching = q.Length > 0;
+                var rows = searching
+                    ? DiaryInRange(today.AddDays(-(Database.DiaryRetentionDays - 1)), today)
+                    : DiaryInRange(_diaryDate, _diaryDate);
+                var filtered = !searching ? rows : rows.Where(e =>
+                    AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                    e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
 
                 if (filtered.Count == 0)
-                    diaryResults.Children.Add(Dim(allDiary.Count == 0
-                        ? (_diaryDate == today
+                {
+                    diaryResults.Children.Add(Dim(searching
+                        ? $"No entries match your search in the last {Database.DiaryRetentionDays} days."
+                        : (_diaryDate == today
                             ? "No diary entries yet today. Tracking runs 06:00–20:00."
-                            : "No diary entries on this day.")
-                        : "No entries match your search."));
-                else
-                    diaryResults.Children.Add(Card(DiaryList(filtered)));
+                            : "No diary entries on this day.")));
+                    return;
+                }
+                if (searching && filtered.Count > maxSearchResults)
+                {
+                    diaryResults.Children.Add(Dim(
+                        $"{filtered.Count} matches — showing the {maxSearchResults} most recent."));
+                    filtered = filtered.Take(maxSearchResults).ToList();
+                }
+                diaryResults.Children.Add(Card(DiaryList(filtered, showDate: searching)));
             }
             RenderDiaryResults();
 
@@ -466,7 +477,9 @@ public sealed partial class ReportsPage : Page
     private Grid DiaryHeader()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var label = _diaryDate == today ? "TIME DIARY · TODAY"
+        var searching = _diarySearch.Trim().Length > 0;
+        var label = searching ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
+            : _diaryDate == today ? "TIME DIARY · TODAY"
             : $"TIME DIARY · {_diaryDate:ddd dd.MM.yyyy}".ToUpperInvariant();
 
         var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 6 };
@@ -497,11 +510,12 @@ public sealed partial class ReportsPage : Page
 
         var prevGlyph = new FontIcon { Glyph = "", FontSize = 12 };
         var nextGlyph = new FontIcon { Glyph = "", FontSize = 12 };
-        var prev = NavBtn(prevGlyph, "Previous day", () => { _diaryDate = _diaryDate.AddDays(-1); Render(); });
+        var prev = NavBtn(prevGlyph, "Previous day",
+            () => { _diaryDate = _diaryDate.AddDays(-1); Render(); }, enabled: !searching);
         var todayBtn = NavBtn("Today", "Jump to today",
-            () => { _diaryDate = today; Render(); }, enabled: _diaryDate != today);
+            () => { _diaryDate = today; Render(); }, enabled: !searching && _diaryDate != today);
         var next = NavBtn(nextGlyph, "Next day",
-            () => { _diaryDate = _diaryDate.AddDays(1); Render(); }, enabled: _diaryDate < today);
+            () => { _diaryDate = _diaryDate.AddDays(1); Render(); }, enabled: !searching && _diaryDate < today);
 
         Grid.SetColumn(prev, 1); Grid.SetColumn(todayBtn, 2); Grid.SetColumn(next, 3);
         grid.Children.Add(prev);
@@ -511,17 +525,18 @@ public sealed partial class ReportsPage : Page
     }
 
     private StackPanel DiaryList(
-        List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary)
+        List<(long Id, DateOnly Date, string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary,
+        bool showDate = false)
     {
         var list = new StackPanel { Spacing = 4 };
-        foreach (var (id, start, end, dur, cat, window, desc) in diary)
+        foreach (var (id, date, start, end, dur, cat, window, desc) in diary)
         {
             var row = new Grid { ColumnSpacing = 12 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var time = Dim($"{start} → {end}");
+            var time = Dim(showDate ? $"{date:dd.MM} · {start} → {end}" : $"{start} → {end}");
             var catText = new TextBlock
             {
                 Text = cat.Replace('_', '-'),
@@ -573,20 +588,27 @@ public sealed partial class ReportsPage : Page
         return list;
     }
 
-    private static List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> DiaryForDate(DateOnly date)
+    /// <summary>Diary rows with date BETWEEN from/to inclusive, most recent
+    /// first. Single-day view just passes from == to.</summary>
+    private static List<(long Id, DateOnly Date, string Start, string End, int Dur, string Cat, string Window, string? Desc)> DiaryInRange(DateOnly from, DateOnly to)
     {
         using var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT id, start_time, end_time, duration_min, category, window, description " +
-            "FROM time_diary WHERE date=$d ORDER BY start_time DESC";
-        cmd.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        var result = new List<(long, string, string, int, string, string, string?)>();
+            "SELECT id, date, start_time, end_time, duration_min, category, window, description " +
+            "FROM time_diary WHERE date BETWEEN $from AND $to ORDER BY date DESC, start_time DESC";
+        cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        var result = new List<(long, DateOnly, string, string, int, string, string, string?)>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
-            result.Add((r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetInt32(3), r.GetString(4),
-                        r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6)));
+        {
+            if (!DateOnly.TryParseExact(r.GetString(1), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var d)) continue;
+            result.Add((r.GetInt64(0), d, r.GetString(2), r.GetString(3), r.GetInt32(4), r.GetString(5),
+                        r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7)));
+        }
         return result;
     }
 

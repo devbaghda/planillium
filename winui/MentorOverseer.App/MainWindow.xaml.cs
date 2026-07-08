@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
         RefreshScore();
         StartTracker();
         CatchUpScores();
+        PruneOldDiary();
         StartEodWatcher();
 
         InitTray();
@@ -255,6 +256,19 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error("CatchUpScores (db likely locked — next launch retries)", ex);
+        }
+    }
+
+    private static void PruneOldDiary()
+    {
+        try
+        {
+            using var db = new Database();
+            db.PruneAndRollupDiary();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("PruneOldDiary", ex);
         }
     }
 

@@ -19,6 +19,10 @@ public sealed class Database : IDisposable
     private static bool _schemaEnsured;
     private static readonly object SchemaGate = new();
 
+    /// <summary>Raw time_diary rows older than this are pruned (after being
+    /// rolled up into diary_daily_rollup) — see PruneAndRollupDiary.</summary>
+    public const int DiaryRetentionDays = 90;
+
     public Database()
     {
         Directory.CreateDirectory(Path.Combine(AppPaths.Root, "data"));
@@ -123,8 +127,56 @@ public sealed class Database : IDisposable
             "  logged_at TEXT NOT NULL," +
             "  window    TEXT NOT NULL," +
             "  class     TEXT NOT NULL" +
+            ");" +
+            // One row per day, written just before that day's raw time_diary
+            // rows age out of retention — keeps Year-view minute totals
+            // accurate forever even though the per-entry detail is gone.
+            "CREATE TABLE IF NOT EXISTS diary_daily_rollup (" +
+            "  date        TEXT PRIMARY KEY," +
+            "  on_min      INTEGER NOT NULL DEFAULT 0," +
+            "  off_min     INTEGER NOT NULL DEFAULT 0," +
+            "  neutral_min INTEGER NOT NULL DEFAULT 0," +
+            "  paid_min    INTEGER NOT NULL DEFAULT 0," +
+            "  idle_min    INTEGER NOT NULL DEFAULT 0" +
             ");";
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Rolls up (upserts) any day older than DiaryRetentionDays that still
+    /// has raw time_diary rows, then deletes those raw rows. Idempotent —
+    /// re-running with nothing new to prune is a cheap no-op. Called once at
+    /// startup; the search box and Day/Week/Month views only ever need the
+    /// last 90 days, so this only ever removes data those views can't reach.
+    /// </summary>
+    public void PruneAndRollupDiary(int retentionDays = DiaryRetentionDays)
+    {
+        var cutoff = DateOnly.FromDateTime(DateTime.Today).AddDays(-retentionDays)
+            .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        using (var rollup = _conn.CreateCommand())
+        {
+            rollup.CommandText =
+                "INSERT INTO diary_daily_rollup (date, on_min, off_min, neutral_min, paid_min, idle_min) " +
+                "SELECT date," +
+                "  SUM(CASE WHEN category='on_plan' THEN duration_min ELSE 0 END)," +
+                "  SUM(CASE WHEN category='off_plan' THEN duration_min ELSE 0 END)," +
+                "  SUM(CASE WHEN category='neutral' THEN duration_min ELSE 0 END)," +
+                "  SUM(CASE WHEN category='paid' THEN duration_min ELSE 0 END)," +
+                "  SUM(CASE WHEN category='idle' THEN duration_min ELSE 0 END) " +
+                "FROM time_diary WHERE date < $cutoff GROUP BY date " +
+                "ON CONFLICT(date) DO UPDATE SET " +
+                "  on_min=excluded.on_min, off_min=excluded.off_min, neutral_min=excluded.neutral_min," +
+                "  paid_min=excluded.paid_min, idle_min=excluded.idle_min";
+            rollup.Parameters.AddWithValue("$cutoff", cutoff);
+            rollup.ExecuteNonQuery();
+        }
+        using (var del = _conn.CreateCommand())
+        {
+            del.CommandText = "DELETE FROM time_diary WHERE date < $cutoff";
+            del.Parameters.AddWithValue("$cutoff", cutoff);
+            del.ExecuteNonQuery();
+        }
     }
 
     public Dictionary<(string PlanId, int Day, string Text), bool> LoadCompletions()

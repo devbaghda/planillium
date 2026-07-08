@@ -99,12 +99,16 @@ public static class ReportData
                 w.On, w.Off)).ToList();
         }
 
-        // Year — group by calendar month.
+        // Year — group by calendar month. Raw time_diary only covers the
+        // retained window (Database.DiaryRetentionDays), so anything older
+        // in a 365-day span comes from diary_daily_rollup instead — the two
+        // never overlap (a date only gets a rollup row once its raw rows are
+        // pruned), so summing both sources is safe.
+        var fromStr = today.AddDays(-364).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         cmd.CommandText =
             "SELECT strftime('%Y-%m', date) AS mo, category, SUM(duration_min) " +
             "FROM time_diary WHERE date >= $from GROUP BY mo, category ORDER BY mo";
-        cmd.Parameters.AddWithValue("$from",
-            today.AddDays(-364).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$from", fromStr);
         var months = new SortedDictionary<string, (int On, int Off)>();
         using (var r = cmd.ExecuteReader())
             while (r.Read())
@@ -117,6 +121,23 @@ public static class ReportData
                 months.TryGetValue(mo, out var m);
                 months[mo] = cat == "on_plan" ? (m.On + mins, m.Off) : (m.On, m.Off + mins);
             }
+
+        using var rollupCmd = conn.CreateCommand();
+        rollupCmd.CommandText =
+            "SELECT strftime('%Y-%m', date) AS mo, SUM(on_min), SUM(off_min) " +
+            "FROM diary_daily_rollup WHERE date >= $from GROUP BY mo";
+        rollupCmd.Parameters.AddWithValue("$from", fromStr);
+        using (var r = rollupCmd.ExecuteReader())
+            while (r.Read())
+            {
+                var mo = r.IsDBNull(0) ? "" : r.GetString(0);
+                if (mo.Length == 0) continue;
+                var on = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                var off = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                months.TryGetValue(mo, out var m);
+                months[mo] = (m.On + on, m.Off + off);
+            }
+
         return months.Select(kv => new BucketStat(MonthLabel(kv.Key), kv.Value.On, kv.Value.Off))
                      .ToList();
     }
