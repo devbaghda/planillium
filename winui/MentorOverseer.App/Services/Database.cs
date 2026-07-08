@@ -65,7 +65,7 @@ public sealed class Database : IDisposable
         cmd.CommandText =
             "CREATE TABLE IF NOT EXISTS task_completions (" +
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
-            "  plan_id      TEXT    NOT NULL DEFAULT 'netherlands'," +
+            "  plan_id      TEXT    NOT NULL DEFAULT ''," +
             "  plan_day     INTEGER NOT NULL," +
             "  task_text    TEXT    NOT NULL," +
             "  completed    INTEGER NOT NULL," +

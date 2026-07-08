@@ -14,7 +14,6 @@ namespace MentorOverseer.App.Services;
 public sealed class TickTickService
 {
     private const string ApiBase = "https://api.ticktick.com/open/v1";
-    private const string MirrorProjectName = "Netherlands Plan";
 
     // TickTick's own priority scale: 0=None, 1=Low, 3=Medium, 5=High.
     public record TtTask(string Id, string ProjectId, string ProjectName, string Title, int Priority);
@@ -60,7 +59,7 @@ public sealed class TickTickService
             : null;
     }
 
-    /// <summary>Open personal tasks due today, across all projects except the old mirror.</summary>
+    /// <summary>Open personal tasks due today, across all projects.</summary>
     public static async Task<List<TtTask>> TasksDueTodayAsync()
     {
         using var projResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project");
@@ -73,7 +72,7 @@ public sealed class TickTickService
         {
             var pid = p.GetProperty("id").GetString() ?? "";
             var pname = p.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-            if (pid.Length == 0 || pname == MirrorProjectName) continue;
+            if (pid.Length == 0) continue;
 
             using var dataResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project/{pid}/data");
             if (!dataResp.IsSuccessStatusCode) continue;

@@ -31,7 +31,7 @@ SetupIconFile=..\..\winui\MentorOverseer.App\Assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 ; No code signing cert yet — see release\README.md. Unsigned installers get
 ; SmartScreen's "unrecognized app" wall; acceptable for a private, single-user
-; install where the user clicks "More info" -> "Run anyway" once.
+; install where you click "More info" -> "Run anyway" once.
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

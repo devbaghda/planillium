@@ -68,10 +68,9 @@ public static class PlanStore
     /// <summary>
     /// Surgical patch of one plan file's excluded_weekdays — parses as a raw
     /// JsonNode rather than round-tripping through the Plan model, so fields
-    /// the C# model doesn't know about (hand-authored plans, the user's real
-    /// active plan included, carry extras per phase like days_range/
-    /// cost_eur/effort/key_win) survive untouched. A full deserialize-then-
-    /// reserialize would silently drop them.
+    /// the C# model doesn't know about (hand-authored plans carry extras per
+    /// phase like days_range/cost_eur/effort/key_win) survive untouched. A
+    /// full deserialize-then-reserialize would silently drop them.
     /// </summary>
     public static void SetExcludedWeekdays(string planId, List<int> weekdays)
     {

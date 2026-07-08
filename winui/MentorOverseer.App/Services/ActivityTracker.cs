@@ -322,8 +322,10 @@ public sealed class ActivityTracker : IDisposable
         else if ((now - _lastAlert.Value).TotalMinutes >= _repeatMin)
         {
             _lastAlert = now;
+            var name = ConfigService.UserName;
+            var suffix = string.IsNullOrEmpty(name) ? "" : $", {name}";
             OnAlert?.Invoke("Still off-plan",
-                $"{(int)offMin} min off-plan. Return to your work, the user.");
+                $"{(int)offMin} min off-plan. Return to your work{suffix}.");
         }
     }
 

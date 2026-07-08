@@ -46,7 +46,7 @@ data-format break, MINOR for features, PATCH for fixes.
 
 The installer and exe are **unsigned**. That means Windows SmartScreen shows an
 "unrecognized app" screen on first run — click "More info" → "Run anyway". For
-the user's own machines that's a one-time nuisance, not a blocker. If this app is ever
+your own machines that's a one-time nuisance, not a blocker. If this app is ever
 handed to anyone else, get an Authenticode cert (a hardware-backed token/HSM cert,
 or Azure Trusted Signing for the practical indie route) before shipping to them —
 see `signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ...`.
@@ -57,11 +57,11 @@ see `signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 ...`.
   keyword rules, scoring) — a clean baseline, not a snapshot of whatever's currently
   configured on this machine.
 - **Does not ship:** `data\progress.db` (task completion history, the score ledger,
-  the time diary) or `plans\active\*.json` (the actual relocation plan). Those are
+  the time diary) or `plans\active\*.json` (your actual plans). Those are
   *this machine's* data, not release artifacts — baking a dated snapshot into a
   versioned installer would go stale immediately.
 
-### Moving to a new machine (e.g. after relocating)
+### Moving to a new machine
 
 Install normally, then copy three things from the old machine's install folder into
 the new one, overwriting the installer's defaults:
