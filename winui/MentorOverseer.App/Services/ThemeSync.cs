@@ -59,6 +59,7 @@ public static class ThemeSync
     public static void Apply(ElementTheme actualTheme)
     {
         var themeName = actualTheme == ElementTheme.Dark ? "Dark" : "Light";
+        Log.Info($"ThemeSync.Apply actualTheme={actualTheme} -> {themeName}");
         var app = Application.Current.Resources;
         try
         {

@@ -172,6 +172,7 @@ public sealed partial class SettingsPage : Page
                 "dark" => ElementTheme.Dark,
                 _ => ElementTheme.Default,
             };
+            Log.Info($"Theme_Changed tag={tag} root.ActualTheme immediately after set={root.ActualTheme}");
             // MainWindow's ActualThemeChanged subscription re-applies
             // ThemeSync automatically, but calling it directly here too
             // means the C#-built UI already on screen (this page included)

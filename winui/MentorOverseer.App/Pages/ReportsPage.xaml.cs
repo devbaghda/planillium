@@ -487,40 +487,59 @@ public sealed partial class ReportsPage : Page
         var panel = new StackPanel { Spacing = 4 };
         foreach (var (app, usage) in breakdown)
         {
-            var header = AppUsageRow(app, usage, maxTotal, bold: true);
             var subs = usage.Subs?
                 .OrderByDescending(kv => kv.Value.Total)
                 .Take(10).ToList() ?? new();
 
+            // Every top-level row — app or standalone entry (idle, or anything
+            // classified by its own description) — gets identical margin, so
+            // rows never look like a child of whichever app happened to render
+            // just above them. A native Expander draws its own card chrome
+            // with a different effective inset than a plain row, which is what
+            // caused that; a manual click-to-expand row avoids it entirely.
+            var header = AppUsageRow(app, usage, maxTotal, bold: true, expandable: subs.Count > 0);
+            header.Margin = new Thickness(16, 6, 12, 6);
+
             if (subs.Count == 0)
             {
-                header.Margin = new Thickness(16, 6, 12, 6);
                 panel.Children.Add(header);
                 continue;
             }
 
-            var subPanel = new StackPanel { Spacing = 4, Margin = new Thickness(28, 4, 0, 4) };
+            var subPanel = new StackPanel
+            {
+                Spacing = 4,
+                Margin = new Thickness(28, 4, 0, 8),
+                Visibility = Visibility.Collapsed,
+            };
             foreach (var (sub, su) in subs)
                 subPanel.Children.Add(AppUsageRow(sub, su, maxTotal, bold: false));
 
-            panel.Children.Add(new Expander
+            var chevron = (FontIcon)header.Children.Last();
+            header.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            header.Tapped += (_, _) =>
             {
-                Header = header,
-                Content = subPanel,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            });
+                var expanded = subPanel.Visibility == Visibility.Visible;
+                subPanel.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
+                chevron.Glyph = expanded ? "\uE70D" : "\uE70E";
+            };
+
+            panel.Children.Add(header);
+            panel.Children.Add(subPanel);
         }
         return panel;
     }
 
     /// <summary>Name + stacked on/off/neutral bar + total minutes.</summary>
-    private static Grid AppUsageRow(string name, ReportData.AppUsage u, int maxTotal, bool bold)
+    private static Grid AppUsageRow(string name, ReportData.AppUsage u, int maxTotal, bool bold,
+        bool expandable = false)
     {
         var row = new Grid { ColumnSpacing = 12 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(bold ? 230 : 220) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        if (expandable)
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var label = new TextBlock
         {
@@ -572,6 +591,20 @@ public sealed partial class ReportsPage : Page
         total.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(total, 2);
         row.Children.Add(total);
+
+        if (expandable)
+        {
+            var chevron = new FontIcon
+            {
+                Glyph = "\uE70D",
+                FontSize = 12,
+                Margin = new Thickness(4, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            };
+            Grid.SetColumn(chevron, 3);
+            row.Children.Add(chevron);
+        }
         return row;
     }
 

@@ -51,7 +51,11 @@ public sealed partial class MainWindow : Window
             // subscription keeps it correct if "Follow Windows" is selected
             // and the OS theme changes while the app is running.
             ThemeSync.Apply(root.ActualTheme);
-            root.ActualThemeChanged += (sender, _) => ThemeSync.Apply(sender.ActualTheme);
+            root.ActualThemeChanged += (sender, _) =>
+            {
+                Log.Info($"root.ActualThemeChanged fired, sender.ActualTheme={sender.ActualTheme}");
+                ThemeSync.Apply(sender.ActualTheme);
+            };
         }
 
         // Debug/verification hook: MENTOR_PAGE=reports|plans|settings|schedule
