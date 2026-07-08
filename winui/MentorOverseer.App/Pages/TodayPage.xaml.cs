@@ -290,6 +290,7 @@ public sealed partial class TodayPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         textCol.Children.Add(new TextBlock { Text = item.Task.Text, TextWrapping = TextWrapping.Wrap });
@@ -334,6 +335,20 @@ public sealed partial class TodayPage : Page
         };
         Grid.SetColumn(start, 2);
         grid.Children.Add(start);
+
+        if (item.Task.Detail is { Length: > 0 })
+        {
+            var details = new HyperlinkButton
+            {
+                Content = "Details",
+                FontSize = 12,
+                Padding = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(XamlRoot, item.Task);
+            Grid.SetColumn(details, 3);
+            grid.Children.Add(details);
+        }
 
         return grid;
     }
