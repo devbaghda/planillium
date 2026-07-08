@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 
 namespace MentorOverseer.App.Services;
 
@@ -20,14 +21,25 @@ namespace MentorOverseer.App.Services;
 /// on a Dark-mode machine draws dark-theme (near-white) text on the
 /// correctly-light background, unreadable rather than just low-contrast.
 ///
-/// The fix: copy the CORRECT theme's resolved values for the small, fixed
-/// set of keys this app actually uses dynamically, in as plain top-level
-/// entries on Application.Current.Resources. A flat top-level entry always
-/// wins over anything found via ThemeDictionaries/MergedDictionaries, and —
-/// unlike Application.RequestedTheme — can be reassigned at any time, so
-/// this also correctly handles a live theme change from Settings and (via
-/// the ActualThemeChanged subscription in MainWindow) a live OS theme
-/// change while "Follow Windows" is selected.
+/// The fix: copy the CORRECT theme's resolved COLOR for the small, fixed set
+/// of keys this app actually uses dynamically, as plain top-level entries on
+/// Application.Current.Resources. A flat top-level entry always wins over
+/// anything found via ThemeDictionaries/MergedDictionaries, and — unlike
+/// Application.RequestedTheme — can be reassigned at any time, so this also
+/// handles a live theme change from Settings and (via the ActualThemeChanged
+/// subscription in MainWindow) a live OS theme change while "Follow Windows"
+/// is selected.
+///
+/// Critically, on a LIVE switch we must not replace the dictionary entry with
+/// a brand-new Brush object: every element already on screen captured its
+/// Foreground/Background by direct object reference when it was built
+/// (`(Brush)Application.Current.Resources[key]` is a one-time read, not a
+/// live binding), so swapping in a different Brush instance only affects
+/// elements built *after* the swap — the currently-visible page stays on the
+/// old colors until something forces it to rebuild, which is what made this
+/// look like it "needed a restart" to take effect. Mutating each brush's
+/// .Color in place, and only ever handing out that same cached instance,
+/// makes every existing reference repaint immediately.
 /// </summary>
 public static class ThemeSync
 {
@@ -42,6 +54,8 @@ public static class ThemeSync
         "AccentFillColorDefaultBrush",
     };
 
+    private static readonly Dictionary<string, SolidColorBrush> Cache = new();
+
     public static void Apply(ElementTheme actualTheme)
     {
         var themeName = actualTheme == ElementTheme.Dark ? "Dark" : "Light";
@@ -49,8 +63,14 @@ public static class ThemeSync
         try
         {
             foreach (var key in Keys)
-                if (FindThemed(app, themeName, key) is { } value)
-                    app[key] = value;
+            {
+                if (FindThemed(app, themeName, key) is not SolidColorBrush themed) continue;
+                if (Cache.TryGetValue(key, out var brush))
+                    brush.Color = themed.Color;
+                else
+                    Cache[key] = brush = new SolidColorBrush(themed.Color);
+                app[key] = brush;
+            }
         }
         catch (Exception ex)
         {
