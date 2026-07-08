@@ -134,15 +134,34 @@ public sealed partial class TodayPage : Page
                     Sections.Children.Add(TaskCard(overdue, plan, notes));
                 }
 
+                var done = today.Count(t => t.Completed);
                 if (today.Count > 0)
                 {
-                    var done = today.Count(t => t.Completed);
                     Sections.Children.Add(GroupLabel($"TODAY · {done} OF {today.Count} DONE"));
                     Sections.Children.Add(TaskCard(today, plan, notes));
                 }
                 else if (overdue.Count == 0)
                 {
                     Sections.Children.Add(Muted("All done for today — great work!"));
+                }
+
+                // Nothing left to clear (no overdue, today's list is either
+                // empty or fully checked off) — offer to pull tomorrow's
+                // tasks forward instead of making the user dig for "Move to
+                // today" on the Schedule page.
+                if (overdue.Count == 0 && (today.Count == 0 || done == today.Count))
+                {
+                    var tomorrowDay = planDay + 1;
+                    if (!plan.IsExcluded(plan.DateForPlanDay(tomorrowDay)))
+                    {
+                        var tomorrowTasks = tasks
+                            .Where(t => t.AssignedDay == tomorrowDay && !t.Completed).ToList();
+                        if (tomorrowTasks.Count > 0)
+                        {
+                            Sections.Children.Add(GroupLabel("GET A HEAD START ON TOMORROW?"));
+                            Sections.Children.Add(GetAheadCard(tomorrowTasks, plan));
+                        }
+                    }
                 }
             }
 
@@ -239,6 +258,84 @@ public sealed partial class TodayPage : Page
             CornerRadius = new CornerRadius(8),
             Child = list,
         };
+    }
+
+    private Border GetAheadCard(List<AssignedTask> tomorrowTasks, Plan plan)
+    {
+        var list = new StackPanel();
+        for (var i = 0; i < tomorrowTasks.Count; i++)
+        {
+            if (i > 0)
+                list.Children.Add(new Border
+                {
+                    Height = 1,
+                    Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+                });
+            list.Children.Add(GetAheadRow(tomorrowTasks[i], plan));
+        }
+
+        return new Border
+        {
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Child = list,
+        };
+    }
+
+    private Grid GetAheadRow(AssignedTask item, Plan plan)
+    {
+        var grid = new Grid { Padding = new Thickness(16, 10, 16, 10), ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textCol.Children.Add(new TextBlock { Text = item.Task.Text, TextWrapping = TextWrapping.Wrap });
+        if (item.Task.MentorNote is { Length: > 0 } mentorNote)
+            textCol.Children.Add(new TextBlock
+            {
+                Text = "💡 " + mentorNote,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+        Grid.SetColumn(textCol, 0);
+        grid.Children.Add(textCol);
+
+        if (item.Task.DurationMin is int mins)
+        {
+            var dur = new TextBlock
+            {
+                Text = $"{mins}m",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            };
+            Grid.SetColumn(dur, 1);
+            grid.Children.Add(dur);
+        }
+
+        var start = new Button { Content = "Start now", VerticalAlignment = VerticalAlignment.Center };
+        start.Click += (_, _) =>
+        {
+            try
+            {
+                var plans = PlanStore.LoadActivePlans();
+                var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
+                using var db = new Database();
+                using var score = new ScoreService(plans, db);
+                score.MoveTaskToToday(p, item.Task.Text);
+            }
+            catch (Exception ex) { Log.Error("TodayPage.GetAhead", ex); }
+            Render();
+            (App.MainWindow as MainWindow)?.RefreshScore();
+        };
+        Grid.SetColumn(start, 2);
+        grid.Children.Add(start);
+
+        return grid;
     }
 
     private Grid TaskRow(AssignedTask item, Plan plan, string? note)
