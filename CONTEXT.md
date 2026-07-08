@@ -175,6 +175,52 @@ every feature that mattered.
 _Update this section at the end of each Claude Code session:_
 
 - Last session: 2026-07-08, branch `winui-rebuild` (now == `master`)
+- **Full 5-category audit (windows-app-auditor) + remediation loop**, the user's
+  instruction: apply everything. 16 findings (1 Critical, 1 High, 8 Medium, 4
+  Low, 2 Info) across architecture/security/UX/code-quality/privacy — full
+  writeup in this session's transcript, fixes in commit `2a7b31f` (+ the
+  history rewrite below). Highlights:
+  - **Critical, fixed**: TickTick `client_secret`/`access_token` were still
+    plaintext in git history (`config.json` @ commits `96a6293`/`eb22f8c`, on
+    the now-default branch, repo headed for open-source). Rewrote history with
+    `git filter-branch` (tree-filter regex-redacts `client_secret`/
+    `access_token`/`refresh_token` values in every historical `*.json`),
+    purged `refs/original/` + reflog + `git gc --prune=now --aggressive`,
+    force-pushed `master`/`winui-rebuild`/`v1.0.0` tag. **the user still needs to
+    rotate the actual secret** at developer.ticktick.com — the rewrite only
+    removes it from the repo, the value itself is still whatever it always
+    was. Old hashes remain reachable from 3 purely-local, never-pushed spots
+    (`code-refinement` branch + the `mentor-overseer-test`/
+    `mentor-overseer-theme-test` worktrees) — deliberately left alone since
+    rewriting them would disrupt those worktrees for no public-exposure
+    benefit; harmless unless one is ever pushed.
+  - **High, fixed**: no first-run disclosure of activity tracking —
+    `NameSetupDialog` now says so before `ActivityTracker.Start()` fires.
+  - **Medium, all fixed**: `activity_log` had no retention limit and nothing
+    read it (removed the write); `ReportsPage.Render()` was 283 lines doing
+    everything (cut to 55, extracted named methods, moved `DiaryInRange` into
+    `ReportData.cs`); "All done for today" congratulated empty days with zero
+    tasks (copy-honesty bug); no SQLite busy-timeout + lock errors weren't
+    surfaced to the user (new `AppPaths.OpenConnection()` + a `SaveErrorBar`
+    InfoBar on Today/Schedule); `TickTickService` allocated a new `HttpClient`
+    per call including once per project in a loop (now one shared client); no
+    in-app data export/delete (new Settings "Export all my data" +  "Clear
+    activity history" — see `Services/DataExport.cs`,
+    `Database.ExportAllTables`/`ClearActivityHistory`); an empty `catch {}`
+    from the Planillium-rename patch broke this codebase's own "every catch
+    logs" rule.
+  - **Low, fixed**: dead Python-app-detection code in `ActivityTracker`
+    (mutex/process probe every 60s poll, now-impossible since the Python
+    source is gone) removed, along with the "paused" tray-pill state it fed
+    and stale "Python app was already running" copy in Settings;
+    `_pidAppCache` now clears past 500 entries instead of growing for a 24/7
+    process; added `packages.lock.json` and `THIRD-PARTY-NOTICES.md`.
+  - **Not done — real product decisions, deferred**: schema ownership split
+    across `Database`/`ScoreService`'s two independent SQLite connections
+    (Low, high blast radius to fix, left as-is).
+  - `dotnet build /warnaserror` came back clean (only a benign WindowsAppSDK
+    RID-usage SDK warning, nothing in this app's own code) — checked before
+    starting the fix pass.
 - **Renamed app to "Planillium"**, prepping to open-source as a portfolio piece.
   Finished a partial rename another tool left uncommitted (`CLAUDE_HANDOFF.md`,
   still in repo root, untracked): `Services/AppInfo.cs` centralizes the display
@@ -226,10 +272,14 @@ _Update this section at the end of each Claude Code session:_
   — WinUI became the sole app (OAuth/Credential-Manager port, tray, plan import,
   full Settings editing, HTML export) — the user's call. Full detail in git log
   around `~9e0..194beec` on `winui-rebuild`.
-- Open: **rotate the TickTick OAuth client secret** at developer.ticktick.com — an
-  old value was committed in plaintext early on and separately shown in a
-  screenshot; both burned, git-history rewrite already happened but rotation
-  itself is still outstanding.
+- Open, still the user's to do: **rotate the TickTick OAuth client secret** at
+  developer.ticktick.com. It's been committed in plaintext twice (2026-06-29,
+  and again in the `eb22f8c` baseline snapshot) and shown once in a
+  screenshot — all three exposures are burned regardless of git state. Both
+  git-history leaks have now been rewritten out (2026-06-29's via an earlier
+  `filter-branch` pass, `eb22f8c`'s on 2026-07-08 — see above), but a history
+  rewrite only removes the *committed record*, not the *value* — the actual
+  secret is still whatever it's always been until rotated at the source.
 - Known issue: TickTick redirect URI must be registered at developer.ticktick.com
   as `http://localhost:8765/callback` in the **OAuth redirect URL** field
   specifically (not the separate "App Service URL" field).
