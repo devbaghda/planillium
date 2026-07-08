@@ -23,6 +23,7 @@ public static class RescheduleTaskDialog
             MinDate = minOffset,
             Date = minOffset,
             PlaceholderText = "Pick a date",
+            FirstDayOfWeek = Windows.Globalization.DayOfWeek.Monday,
         };
 
         var dialog = new ContentDialog

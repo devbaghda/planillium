@@ -81,6 +81,10 @@ public static class PlanStore
         var arr = new JsonArray();
         foreach (var d in weekdays) arr.Add(d);
         node["excluded_weekdays"] = arr;
-        File.WriteAllText(path, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        // A bare `new JsonSerializerOptions { WriteIndented = true }` has no
+        // TypeInfoResolver and throws on ToJsonString in .NET 8 — copy from
+        // the pre-configured Default instance instead.
+        File.WriteAllText(path, node.ToJsonString(
+            new JsonSerializerOptions(JsonSerializerOptions.Default) { WriteIndented = true }));
     }
 }

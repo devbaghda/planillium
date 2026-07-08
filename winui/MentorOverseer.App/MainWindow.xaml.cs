@@ -29,10 +29,13 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
 
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1180, 780));
+        var savedState = StateService.Load();
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(
+            Math.Max(savedState.WindowWidth, MinWidthDip), Math.Max(savedState.WindowHeight, MinHeightDip)));
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico"));
+        InstallMinSizeHook();
 
-        ApplyOpacity(StateService.Load().Opacity);
+        ApplyOpacity(savedState.Opacity);
 
         // Theme override saved in Settings (default = follow Windows).
         if (Content is FrameworkElement root)
@@ -66,6 +69,7 @@ public sealed partial class MainWindow : Window
         // continue. Actually quitting is the tray menu's job.
         AppWindow.Closing += (_, e) =>
         {
+            SaveWindowSize();
             if (_reallyClose) return;
             e.Cancel = true;
             AppWindow.Hide();
@@ -153,6 +157,77 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error("ApplyOpacity", ex);
+        }
+    }
+
+    // ── minimum window size ──────────────────────────────────────────────
+    //
+    // WinAppSDK 1.5's OverlappedPresenter has no PreferredMinimumSize yet, so
+    // an unresizable-by-us window could be dragged down to a few pixels and
+    // wedge NavigationView/page content into a broken state — read by the
+    // user as "resize doesn't work well." WM_GETMINMAXINFO is the native way
+    // to enforce a floor: the OS itself refuses to drag past it, so it's as
+    // smooth as any other window's resize (no fighting the live drag).
+
+    private const int MinWidthDip = 900;
+    private const int MinHeightDip = 600;
+    private const int GwlpWndProc = -4;
+    private const uint WmGetMinMaxInfo = 0x0024;
+
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    private WndProcDelegate? _wndProcDelegate;
+    private IntPtr _origWndProc;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr CallWindowProcW(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Point { public int X; public int Y; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public Point ptReserved;
+        public Point ptMaxSize;
+        public Point ptMaxPosition;
+        public Point ptMinTrackSize;
+        public Point ptMaxTrackSize;
+    }
+
+    private void InstallMinSizeHook()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        _wndProcDelegate = (hWnd2, msg, wParam, lParam) =>
+        {
+            if (msg == WmGetMinMaxInfo)
+            {
+                var scale = GetDpiForWindow(hWnd2) / 96.0;
+                var mmi = System.Runtime.InteropServices.Marshal.PtrToStructure<MinMaxInfo>(lParam);
+                mmi.ptMinTrackSize.X = (int)(MinWidthDip * scale);
+                mmi.ptMinTrackSize.Y = (int)(MinHeightDip * scale);
+                System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, false);
+                return IntPtr.Zero;
+            }
+            return CallWindowProcW(_origWndProc, hWnd2, msg, wParam, lParam);
+        };
+        _origWndProc = SetWindowLongPtrW(hwnd, GwlpWndProc,
+            System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
+    }
+
+    private void SaveWindowSize()
+    {
+        try
+        {
+            var s = StateService.Load();
+            s.WindowWidth = Math.Max(AppWindow.Size.Width, MinWidthDip);
+            s.WindowHeight = Math.Max(AppWindow.Size.Height, MinHeightDip);
+            StateService.Save(s);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SaveWindowSize", ex);
         }
     }
 

@@ -14,6 +14,10 @@ public sealed partial class ReportsPage : Page
     // Survives navigation: come back to Reports and it's still on your period.
     private static ReportPeriod _period = ReportPeriod.Week;
 
+    // Survives navigation the same way — leave it on a past day, come back,
+    // it's still there. Resets to today only via the "Today" button.
+    private static DateOnly _diaryDate = DateOnly.FromDateTime(DateTime.Today);
+
     private static readonly (string Label, ReportPeriod Period)[] PeriodOpts =
     {
         ("Day", ReportPeriod.Day), ("Week", ReportPeriod.Week),
@@ -173,11 +177,13 @@ public sealed partial class ReportsPage : Page
             }
             Body.Children.Add(Card(hintPanel));
 
-            // ── today's diary ─────────────────────────────────────────────
-            Body.Children.Add(Section("TIME DIARY · TODAY"));
-            var diary = TodayDiary();
+            // ── diary, navigable to any past day ───────────────────────────
+            Body.Children.Add(DiaryHeader());
+            var diary = DiaryForDate(_diaryDate);
             if (diary.Count == 0)
-                Body.Children.Add(Dim("No diary entries yet today. Tracking runs 06:00–20:00."));
+                Body.Children.Add(Dim(_diaryDate == today
+                    ? "No diary entries yet today. Tracking runs 06:00–20:00."
+                    : "No diary entries on this day."));
             else
                 Body.Children.Add(Card(DiaryList(diary)));
         }
@@ -415,7 +421,54 @@ public sealed partial class ReportsPage : Page
         return row;
     }
 
-    // ── today's diary ────────────────────────────────────────────────────
+    // ── diary ────────────────────────────────────────────────────────────
+
+    private Grid DiaryHeader()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var label = _diaryDate == today ? "TIME DIARY · TODAY"
+            : $"TIME DIARY · {_diaryDate:ddd dd.MM.yyyy}".ToUpperInvariant();
+
+        var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 6 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var caption = Section(label);
+        caption.Margin = new Thickness(0);
+        Grid.SetColumn(caption, 0);
+        grid.Children.Add(caption);
+
+        Button NavBtn(object content, string name, Action onClick, bool enabled = true)
+        {
+            var btn = new Button
+            {
+                Content = content,
+                Padding = new Thickness(8, 4, 8, 4),
+                MinWidth = 0,
+                MinHeight = 0,
+                IsEnabled = enabled,
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, name);
+            btn.Click += (_, _) => onClick();
+            return btn;
+        }
+
+        var prevGlyph = new FontIcon { Glyph = "", FontSize = 12 };
+        var nextGlyph = new FontIcon { Glyph = "", FontSize = 12 };
+        var prev = NavBtn(prevGlyph, "Previous day", () => { _diaryDate = _diaryDate.AddDays(-1); Render(); });
+        var todayBtn = NavBtn("Today", "Jump to today",
+            () => { _diaryDate = today; Render(); }, enabled: _diaryDate != today);
+        var next = NavBtn(nextGlyph, "Next day",
+            () => { _diaryDate = _diaryDate.AddDays(1); Render(); }, enabled: _diaryDate < today);
+
+        Grid.SetColumn(prev, 1); Grid.SetColumn(todayBtn, 2); Grid.SetColumn(next, 3);
+        grid.Children.Add(prev);
+        grid.Children.Add(todayBtn);
+        grid.Children.Add(next);
+        return grid;
+    }
 
     private StackPanel DiaryList(
         List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> diary)
@@ -480,7 +533,7 @@ public sealed partial class ReportsPage : Page
         return list;
     }
 
-    private static List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> TodayDiary()
+    private static List<(long Id, string Start, string End, int Dur, string Cat, string Window, string? Desc)> DiaryForDate(DateOnly date)
     {
         using var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
         conn.Open();
@@ -488,7 +541,7 @@ public sealed partial class ReportsPage : Page
         cmd.CommandText =
             "SELECT id, start_time, end_time, duration_min, category, window, description " +
             "FROM time_diary WHERE date=$d ORDER BY start_time DESC";
-        cmd.Parameters.AddWithValue("$d", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         var result = new List<(long, string, string, int, string, string, string?)>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
