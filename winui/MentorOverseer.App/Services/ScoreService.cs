@@ -38,14 +38,15 @@ public sealed class ScoreService : IDisposable
                 "  date TEXT NOT NULL UNIQUE," +
                 "  text TEXT NOT NULL)")
             .ExecuteNonQuery();
-        // Same definition as main.py's ensure_data_store — the DB-level net
-        // under the SELECT-first guards, so a cross-process race between the
-        // two apps can't double-credit a date.
+        // Belt-and-suspenders no-op: Database's constructor (already run via
+        // db.LoadCompletions() above) owns creating/migrating this index —
+        // see Database.EnsureSchema for the drop-and-recreate logic needed
+        // because "CREATE INDEX IF NOT EXISTS" won't widen an existing one.
         _conn.CreateCommand()
             .Also(c => c.CommandText =
                 "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
                 "ON score_ledger(reason, date) " +
-                "WHERE reason IN ('daily_score', 'overdue_accrual')")
+                "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')")
             .ExecuteNonQuery();
     }
 
@@ -212,7 +213,55 @@ public sealed class ScoreService : IDisposable
             var d = today.AddDays(-i);
             CreditDayScoreIfMissing(d);
             CreditOverdueAccrualIfMissing(d);
+            CreditWeeklyComebackIfMissing(d);
         }
+    }
+
+    // ── weekly comeback bonus ("amplify wins" — recovering from a losing week) ──
+
+    private int SumLedgerRange(DateOnly from, DateOnly to)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM score_ledger WHERE date >= $from AND date <= $to";
+        cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>
+    /// Read-only preview (no writes) — a "comeback" is a full calendar week
+    /// (Mon-Sun) that closed non-negative, immediately after a full week
+    /// that closed negative. Only evaluates anything on a Monday, since
+    /// that's the first day both of the weeks it compares are fully closed.
+    /// Returns the bonus that would be credited, or 0 if none applies.
+    /// </summary>
+    public int ComputeWeeklyComeback(DateOnly d)
+    {
+        if (d.DayOfWeek != DayOfWeek.Monday) return 0;
+        var lastWeekStart = d.AddDays(-7);
+        var lastWeekEnd = d.AddDays(-1);
+        var prevWeekStart = d.AddDays(-14);
+        var prevWeekEnd = d.AddDays(-8);
+        if (SumLedgerRange(prevWeekStart, prevWeekEnd) >= 0) return 0;
+        if (SumLedgerRange(lastWeekStart, lastWeekEnd) < 0) return 0;
+        if (LedgerHas("weekly_comeback_bonus", lastWeekStart)) return 0;
+        return ConfigService.ScoringRate("weekly_comeback_bonus", 20);
+    }
+
+    public int? CreditWeeklyComebackIfMissing(DateOnly d)
+    {
+        var bonus = ComputeWeeklyComeback(d);
+        if (bonus == 0) return null;
+        try
+        {
+            AddLedger(bonus, "weekly_comeback_bonus",
+                "recovered from a losing week", d.AddDays(-7));
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return null;  // the other app credited this date between check and insert
+        }
+        return bonus;
     }
 
     // ── replan all overdue (the "declare bankruptcy" move) ───────────────

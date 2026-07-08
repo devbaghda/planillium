@@ -31,6 +31,23 @@ public sealed class Database : IDisposable
     /// </summary>
     private void EnsureSchema()
     {
+        // sl_reason_date already exists on any pre-existing progress.db with
+        // the old (daily_score, overdue_accrual) WHERE clause — "CREATE
+        // INDEX IF NOT EXISTS" is a no-op against an existing index of that
+        // name regardless of definition, so adding weekly_comeback_bonus to
+        // the guard needs an explicit drop-and-recreate, not just a wider
+        // CREATE statement below.
+        using (var check = _conn.CreateCommand())
+        {
+            check.CommandText = "SELECT sql FROM sqlite_master WHERE type='index' AND name='sl_reason_date'";
+            if (check.ExecuteScalar() is string sql && !sql.Contains("weekly_comeback_bonus"))
+            {
+                using var drop = _conn.CreateCommand();
+                drop.CommandText = "DROP INDEX sl_reason_date";
+                drop.ExecuteNonQuery();
+            }
+        }
+
         using var cmd = _conn.CreateCommand();
         cmd.CommandText =
             "CREATE TABLE IF NOT EXISTS task_completions (" +
@@ -77,7 +94,7 @@ public sealed class Database : IDisposable
             ");" +
             "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
             "  ON score_ledger(reason, date) " +
-            "  WHERE reason IN ('daily_score', 'overdue_accrual');" +
+            "  WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus');" +
             "CREATE TABLE IF NOT EXISTS time_diary (" +
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  date         TEXT NOT NULL," +

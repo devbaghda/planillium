@@ -25,7 +25,10 @@ class TestScoringContract:
     def test_both_sides_create_the_same_ledger_index(self):
         for src in (SCORE_CS, MAIN_SRC):
             assert "sl_reason_date" in src
-            assert re.search(r"WHERE reason IN \('daily_score',\s*'overdue_accrual'\)", src)
+            assert re.search(
+                r"WHERE reason IN \('daily_score',\s*'overdue_accrual',\s*'weekly_comeback_bonus'\)",
+                src,
+            )
 
 
 class TestCoexistenceContract:

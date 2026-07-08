@@ -1364,7 +1364,7 @@ class MentorApp:
         self.conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date "
             "ON score_ledger(reason, date) "
-            "WHERE reason IN ('daily_score', 'overdue_accrual')"
+            "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')"
         )
         self.conn.commit()
 

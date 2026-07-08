@@ -39,15 +39,27 @@ public static class ReviewDialog
             .Count(x => x.DaysOverdue <= ScoreService.OverdueAccrualCapDays);
         var accrual = overdueCapped * ConfigService.ScoringRate("task_overdue_penalty", -5);
 
+        // Only ever non-zero on a Monday, when last week (now fully closed)
+        // recovered from the week before it closing negative.
+        var comeback = score.ComputeWeeklyComeback(today);
+
         var panel = new StackPanel { Spacing = 12, MinWidth = 460 };
 
         // The EOD "designed ending" the dialog never actually had: every day
         // got identical neutral framing regardless of how it went. A day
         // that clears every task, or scores the same "great day" bar Reports
-        // uses (>=20), earns a line that says so instead of just numbers.
-        var finalTotal = dayTotal + accrual;
+        // uses (>=20), earns a line that says so instead of just numbers —
+        // a completed comeback week takes priority, being the rarer event.
+        var finalTotal = dayTotal + accrual + comeback;
         var perfect = total > 0 && done == total;
-        if (perfect || finalTotal >= 20)
+        if (comeback > 0)
+            panel.Children.Add(new TextBlock
+            {
+                Text = "🎉 Comeback week — back in the green after a losing one.",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
+            });
+        else if (perfect || finalTotal >= 20)
             panel.Children.Add(new TextBlock
             {
                 Text = perfect
@@ -105,8 +117,9 @@ public static class ReviewDialog
         Row($"{streak}-day streak bonus", streakPt);
         Row($"{Math.Max(0, total - done)} task(s) missed today", missPt);
         Row($"Overdue carry ({overdueCapped} task(s), 3-day cap)", accrual);
+        Row("Weekly comeback bonus (last week recovered)", comeback);
         Row(floored ? "Day total — floored at −10, it can't get worse" : "Day total",
-            dayTotal + accrual, always: true);
+            finalTotal, always: true);
         panel.Children.Add(new Border
         {
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
@@ -141,7 +154,7 @@ public static class ReviewDialog
         {
             Title = $"{DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture)} — day review",
             Content = panel,
-            PrimaryButtonText = $"Close the day · {(dayTotal + accrual >= 0 ? "+" : "")}{dayTotal + accrual} pts",
+            PrimaryButtonText = $"Close the day · {(finalTotal >= 0 ? "+" : "")}{finalTotal} pts",
             CloseButtonText = beforeEod ? "Close" : "Later",
             IsPrimaryButtonEnabled = !beforeEod,
             DefaultButton = ContentDialogButton.Primary,
@@ -152,6 +165,7 @@ public static class ReviewDialog
         {
             score.CreditDayScoreIfMissing(today);
             score.CreditOverdueAccrualIfMissing(today);
+            score.CreditWeeklyComebackIfMissing(today);
             if (reflection.Text.Trim() is { Length: > 0 } text)
                 score.SaveReflection(today, text);
             var state = StateService.Load();

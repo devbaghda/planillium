@@ -75,7 +75,8 @@
     "task_overdue_penalty": -5,
     "on_plan_hour": 3,
     "off_plan_hour": -2,
-    "streak_bonus_per_day": 5
+    "streak_bonus_per_day": 5,
+    "weekly_comeback_bonus": 20
   },
   "score": {
     "points_per_minute": 1.0,
