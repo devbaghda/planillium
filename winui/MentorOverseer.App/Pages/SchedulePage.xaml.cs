@@ -16,20 +16,10 @@ namespace MentorOverseer.App.Pages;
 /// </summary>
 public sealed partial class SchedulePage : Page
 {
-    private FrameworkElement? _todayCard;
-
     public SchedulePage()
     {
         InitializeComponent();
-        Loaded += (_, _) =>
-        {
-            Render();
-            // Land the viewport on today, not on Day 1 of a 90-day plan.
-            _todayCard?.StartBringIntoView(new BringIntoViewOptions
-            {
-                VerticalAlignmentRatio = 0.12,
-            });
-        };
+        Loaded += (_, _) => Render();
     }
 
     private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
@@ -37,7 +27,6 @@ public sealed partial class SchedulePage : Page
     private void Render()
     {
         Sections.Children.Clear();
-        _todayCard = null;
 
         List<Plan> plans;
         try
@@ -93,6 +82,13 @@ public sealed partial class SchedulePage : Page
             Margin = new Thickness(0, 8, 0, 4),
         });
 
+        // Each plan gets its own bounded scroll box instead of every plan's
+        // day cards pouring into one shared list — with 2 active plans,
+        // reaching the second plan used to mean scrolling past the whole
+        // first one first.
+        var dayList = new StackPanel { Spacing = 12, Padding = new Thickness(0, 0, 8, 0) };
+        FrameworkElement? todayCard = null;
+
         // A long plan (e.g. 160 days) was rendering a full DayCard — Grid,
         // Border, multiple TextBlocks — for every single future day even
         // when empty, 150+ mostly-blank cards on every visit to this page.
@@ -110,9 +106,28 @@ public sealed partial class SchedulePage : Page
             if (day > lookahead && dayTasks.Count == 0 && !isOff) continue;
 
             var card = DayCard(plan, day, isToday, isOff, dayTasks, notes);
-            Sections.Children.Add(card);
-            if (isToday) _todayCard = card;
+            dayList.Children.Add(card);
+            if (isToday) todayCard = card;
         }
+
+        var scroller = new ScrollViewer
+        {
+            Height = 440,
+            Content = dayList,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+        Sections.Children.Add(new Border
+        {
+            BorderBrush = Res("CardStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(4),
+            Child = scroller,
+        });
+
+        // Land this plan's own viewport on its own today, not Day 1.
+        todayCard?.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0.12 });
     }
 
     private FrameworkElement DayCard(Plan plan, int day, bool isToday, bool isOff,
