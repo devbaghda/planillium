@@ -200,6 +200,9 @@ public sealed partial class ReportsPage : Page
             var lastRows = new List<(long Id, DateOnly Date, string Start, string End, int Dur, string Cat, string Window, string? Desc)>();
 
             var markToolbar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+            // IsThreeState so it can show "some but not all selected" as a
+            // dash rather than lying with a plain checked/unchecked state.
+            var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
             var selectedLabel = new TextBlock
             {
                 VerticalAlignment = VerticalAlignment.Center, FontSize = 12,
@@ -208,6 +211,7 @@ public sealed partial class ReportsPage : Page
             var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
             var markOffBtn = new Button { Content = "Mark off-plan", IsEnabled = false };
             var markNeutralBtn = new Button { Content = "Mark neutral", IsEnabled = false };
+            markToolbar.Children.Add(selectAllBox);
             markToolbar.Children.Add(selectedLabel);
             markToolbar.Children.Add(markOnBtn);
             markToolbar.Children.Add(markOffBtn);
@@ -219,11 +223,23 @@ public sealed partial class ReportsPage : Page
 
             const int maxSearchResults = 300;
 
+            // Guards Checked/Unchecked below from firing when UpdateMarkToolbar
+            // sets IsChecked itself to reflect the current selection — without
+            // it, syncing the box would immediately re-trigger select-all/none.
+            var syncingSelectAll = false;
+
             void UpdateMarkToolbar()
             {
                 var n = selectedIds.Count;
                 selectedLabel.Text = n > 0 ? $"{n} selected" : "";
                 markOnBtn.IsEnabled = markOffBtn.IsEnabled = markNeutralBtn.IsEnabled = n > 0;
+
+                syncingSelectAll = true;
+                selectAllBox.IsEnabled = lastRows.Count > 0;
+                selectAllBox.IsChecked = lastRows.Count == 0 || n == 0 ? false
+                    : n == lastRows.Count ? true
+                    : null;
+                syncingSelectAll = false;
             }
 
             void RenderDiaryResults()
@@ -294,6 +310,28 @@ public sealed partial class ReportsPage : Page
             markOnBtn.Click += (_, _) => MarkSelected("on_plan");
             markOffBtn.Click += (_, _) => MarkSelected("off_plan");
             markNeutralBtn.Click += (_, _) => MarkSelected("neutral");
+
+            selectAllBox.Checked += (_, _) =>
+            {
+                if (syncingSelectAll) return;
+                foreach (var row in lastRows) selectedIds.Add(row.Id);
+                RenderDiaryResults();
+            };
+            selectAllBox.Unchecked += (_, _) =>
+            {
+                if (syncingSelectAll) return;
+                selectedIds.Clear();
+                RenderDiaryResults();
+            };
+            // A three-state box that's currently indeterminate (partial
+            // selection) cycles to Unchecked on the next click, same as if
+            // it were fully checked — clicking a partial state clears it.
+            selectAllBox.Indeterminate += (_, _) =>
+            {
+                if (syncingSelectAll) return;
+                selectedIds.Clear();
+                RenderDiaryResults();
+            };
 
             // Filters in place (doesn't touch searchBox itself) so typing
             // keeps focus/cursor position instead of losing it every keystroke.
