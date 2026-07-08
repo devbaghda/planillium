@@ -165,11 +165,19 @@ public sealed partial class SettingsPage : Page
         StateService.Save(state);
 
         if ((App.MainWindow as MainWindow)?.Content is FrameworkElement root)
+        {
             root.RequestedTheme = tag switch
             {
                 "light" => ElementTheme.Light,
                 "dark" => ElementTheme.Dark,
                 _ => ElementTheme.Default,
             };
+            // MainWindow's ActualThemeChanged subscription re-applies
+            // ThemeSync automatically, but calling it directly here too
+            // means the C#-built UI already on screen (this page included)
+            // updates immediately rather than waiting for that event to
+            // propagate through the dispatcher.
+            ThemeSync.Apply(root.ActualTheme);
+        }
     }
 }

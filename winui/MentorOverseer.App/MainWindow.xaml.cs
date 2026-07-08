@@ -39,12 +39,20 @@ public sealed partial class MainWindow : Window
 
         // Theme override saved in Settings (default = follow Windows).
         if (Content is FrameworkElement root)
+        {
             root.RequestedTheme = StateService.Load().Theme switch
             {
                 "light" => ElementTheme.Light,
                 "dark" => ElementTheme.Dark,
                 _ => ElementTheme.Default,
             };
+            // See ThemeSync's doc comment — root.ActualTheme is the true
+            // resolved theme (Light/Dark, never Default) right now, and the
+            // subscription keeps it correct if "Follow Windows" is selected
+            // and the OS theme changes while the app is running.
+            ThemeSync.Apply(root.ActualTheme);
+            root.ActualThemeChanged += (sender, _) => ThemeSync.Apply(sender.ActualTheme);
+        }
 
         // Debug/verification hook: MENTOR_PAGE=reports|plans|settings|schedule
         // opens straight on that page (default: Today). Drives the nav
