@@ -152,7 +152,7 @@ public sealed partial class ReportsPage : Page
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
-                Body.Children.Add(AppBreakdownPanel(breakdown));
+                Body.Children.Add(Card(AppBreakdownPanel(breakdown)));
 
             // ── insights (week-based, like the score card) ────────────────
             Body.Children.Add(Section("INSIGHTS"));
@@ -498,7 +498,7 @@ public sealed partial class ReportsPage : Page
             // with a different effective inset than a plain row, which is what
             // caused that; a manual click-to-expand row avoids it entirely.
             var header = AppUsageRow(app, usage, maxTotal, bold: true, expandable: subs.Count > 0);
-            header.Margin = new Thickness(16, 6, 12, 6);
+            header.Margin = new Thickness(0, 6, 0, 6);
 
             if (subs.Count == 0)
             {
