@@ -138,7 +138,27 @@ public sealed class Database : IDisposable
             "  neutral_min INTEGER NOT NULL DEFAULT 0," +
             "  paid_min    INTEGER NOT NULL DEFAULT 0," +
             "  idle_min    INTEGER NOT NULL DEFAULT 0" +
-            ");";
+            ");" +
+            // Read-only reporting views — nothing in either app queries
+            // these, they exist purely so an external tool (Power Query,
+            // Excel, a BI dashboard) can point straight at progress.db
+            // without re-deriving the raw-table joins/category math itself.
+            // v_diary_daily spans the full history: it unions live
+            // time_diary with diary_daily_rollup, so a day's totals read
+            // the same whether its raw rows have aged out of the 90-day
+            // retention window or not.
+            "CREATE VIEW IF NOT EXISTS v_diary_daily AS " +
+            "  SELECT date," +
+            "    SUM(CASE WHEN category='on_plan'  THEN duration_min ELSE 0 END) AS on_min," +
+            "    SUM(CASE WHEN category='off_plan' THEN duration_min ELSE 0 END) AS off_min," +
+            "    SUM(CASE WHEN category='neutral'  THEN duration_min ELSE 0 END) AS neutral_min," +
+            "    SUM(CASE WHEN category='paid'     THEN duration_min ELSE 0 END) AS paid_min," +
+            "    SUM(CASE WHEN category='idle'     THEN duration_min ELSE 0 END) AS idle_min " +
+            "  FROM time_diary GROUP BY date " +
+            "  UNION ALL " +
+            "  SELECT date, on_min, off_min, neutral_min, paid_min, idle_min FROM diary_daily_rollup;" +
+            "CREATE VIEW IF NOT EXISTS v_score_daily AS " +
+            "  SELECT date, SUM(delta) AS score_delta FROM score_ledger GROUP BY date;";
         cmd.ExecuteNonQuery();
     }
 
