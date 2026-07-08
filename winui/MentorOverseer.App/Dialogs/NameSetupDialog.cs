@@ -23,6 +23,15 @@ public static class NameSetupDialog
         });
         var input = new TextBox { PlaceholderText = "e.g. the user" };
         panel.Children.Add(input);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "One more thing: this app tracks your active window every 60s to " +
+                   "measure on-plan time. Everything stays local on this machine. " +
+                   "Quit from the tray icon anytime to stop tracking.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
 
         var dialog = new ContentDialog
         {

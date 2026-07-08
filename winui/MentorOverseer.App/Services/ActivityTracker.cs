@@ -7,12 +7,9 @@ using Microsoft.Data.Sqlite;
 namespace MentorOverseer.App.Services;
 
 /// <summary>
-/// C# port of tracker/activity.py — same polling cadence, classification
-/// rules, diary-session semantics, idle/sleep detection, and focus-alert
-/// escalation. Writes the same activity_log / time_diary rows so reports
-/// stay identical whichever app produced the data.
-/// IMPORTANT: run only one tracker at a time — close the Python app (or its
-/// tray icon) when this one is tracking, or sessions will be double-logged.
+/// Polls the foreground window, classifies it on_plan/off_plan/neutral,
+/// and writes time_diary rows accordingly, with idle/sleep detection and
+/// focus-alert escalation.
 /// </summary>
 public sealed class ActivityTracker : IDisposable
 {
@@ -28,11 +25,6 @@ public sealed class ActivityTracker : IDisposable
     [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
     [StructLayout(LayoutKind.Sequential)]
     private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr OpenMutexW(uint desiredAccess, bool inheritHandle, string name);
-    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
-    private const uint Synchronize = 0x00100000;
-    private const string PythonAppMutex = "MentorOverseerSingleInstance_v1";
 
     private static readonly Dictionary<string, string> ExeAppNames = new()
     {
@@ -231,7 +223,16 @@ public sealed class ActivityTracker : IDisposable
             }
             catch { /* transient — fall back to the sticky cache below */ }
 
-            if (app.Length > 0) _pidAppCache[pid] = app;
+            if (app.Length > 0)
+            {
+                // PIDs get reused constantly on a machine that's up for
+                // weeks — an unbounded cache would grow for the life of the
+                // process. A full clear past a generous cap is simplest;
+                // a cache miss just re-resolves via OpenProcess next poll,
+                // the same fallback path a cold cache already takes.
+                if (_pidAppCache.Count > 500) _pidAppCache.Clear();
+                _pidAppCache[pid] = app;
+            }
             else _pidAppCache.TryGetValue(pid, out app!);
             app ??= "";
 
@@ -258,17 +259,6 @@ public sealed class ActivityTracker : IDisposable
 
     // ── database (same rows as the Python tracker) ───────────────────────
 
-    private static void LogActivity(SqliteConnection conn, string window, string cls)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO activity_log (logged_at, window, class) VALUES ($t, $w, $c)";
-        cmd.Parameters.AddWithValue("$t",
-            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$w", window.Length > 240 ? window[..240] : window);
-        cmd.Parameters.AddWithValue("$c", cls);
-        cmd.ExecuteNonQuery();
-    }
-
     private static void LogDiarySession(SqliteConnection conn, DateTime start, DateTime end,
         string category, string window, string? description = null)
     {
@@ -293,8 +283,7 @@ public sealed class ActivityTracker : IDisposable
     {
         var end = idleStart.AddMinutes(idleMinutes);
         var category = ClassifyIdleText(description);
-        using var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-        conn.Open();
+        using var conn = AppPaths.OpenConnection();
         LogDiarySession(conn, idleStart, end, category, "idle", description);
     }
 
@@ -340,50 +329,15 @@ public sealed class ActivityTracker : IDisposable
 
     // ── poll (port of _poll_once) ─────────────────────────────────────────
 
-    /// <summary>
-    /// True while the Python app is alive. Probes the named mutex the Python
-    /// app holds for its whole lifetime — that covers the frozen exe AND
-    /// dev-mode `python main.py` runs, which a process-name check misses
-    /// (they run as python.exe). The name check stays as a fallback for any
-    /// Python build predating the mutex.
-    /// </summary>
-    private static bool PythonAppRunning()
-    {
-        var h = OpenMutexW(Synchronize, false, PythonAppMutex);
-        if (h != IntPtr.Zero) { CloseHandle(h); return true; }
-        var procs = Process.GetProcessesByName("MentorOverseer");
-        var running = procs.Length > 0;
-        foreach (var p in procs) p.Dispose();
-        return running;
-    }
-
     private void PollOnce()
     {
-        // The Python app runs the same tracker against the same database.
-        // Checked every poll (not just at launch) so whichever order the two
-        // apps start in, only one ever writes the diary at a time.
-        if (PythonAppRunning())
-        {
-            if (_sessionStart is DateTime openStart && _sessionApp != null)
-            {
-                using var flushConn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-                flushConn.Open();
-                LogDiarySession(flushConn, openStart, DateTime.Now, _sessionClass!, _sessionApp);
-                _sessionStart = null; _sessionApp = null; _sessionClass = null;
-            }
-            _currentClass = "paused";
-            OnStatus?.Invoke("paused", "");
-            return;
-        }
-
         var now = DateTime.Now;
         var title = ActiveWindowTitle();
         var idleS = IdleSeconds();
         var cls = EffectiveClass(Classify(title));
         var diaryEndToday = now.Date + DiaryEnd.ToTimeSpan();
 
-        using var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-        conn.Open();
+        using var conn = AppPaths.OpenConnection();
 
         // Sleep detection: wall-clock gap far beyond the poll interval.
         if (_lastPollAt is DateTime last)
@@ -404,7 +358,6 @@ public sealed class ActivityTracker : IDisposable
 
         _currentWindow = title;
         _currentClass = cls;
-        LogActivity(conn, title, cls);
         CheckAlert(cls);
         OnStatus?.Invoke(cls, title);
 

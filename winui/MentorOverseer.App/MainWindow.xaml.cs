@@ -26,7 +26,7 @@ public sealed partial class MainWindow : Window
         {
             TitleText.Text = AppInfo.DisplayName;
         }
-        catch { }
+        catch (Exception ex) { Log.Error("MainWindow.SetTitleText", ex); }
         _dq = DispatcherQueue;
 
         // Mica ground; falls back to the theme's solid color on unsupported OS.
@@ -371,7 +371,6 @@ public sealed partial class MainWindow : Window
             "on_plan" => ("On plan", "SystemFillColorSuccessBrush"),
             "off_plan" => ("Off plan", "SystemFillColorCriticalBrush"),
             "paid" => ("Paid time", "AccentFillColorDefaultBrush"),
-            "paused" => ("Python app is tracking", "TextFillColorTertiaryBrush"),
             _ => ("Neutral", "TextFillColorTertiaryBrush"),
         };
         ActivityText.Text = Tracker?.OffPlanMinutes is int m and > 0

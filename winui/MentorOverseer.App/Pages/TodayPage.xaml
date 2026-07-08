@@ -29,6 +29,13 @@
                 </InfoBar.ActionButton>
             </InfoBar>
 
+            <InfoBar x:Name="SaveErrorBar"
+                     Severity="Error"
+                     IsOpen="False"
+                     Title="Couldn't save that change"
+                     Message="The database was briefly busy — try again in a moment."
+                     Margin="0,0,0,8"/>
+
             <StackPanel x:Name="Sections" Spacing="0"/>
             <StackPanel x:Name="TickTickHost" Spacing="0"/>
         </StackPanel>

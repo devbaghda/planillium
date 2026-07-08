@@ -36,8 +36,7 @@ public sealed class ScoreService : IDisposable
         _plans = plans;
         _db = db;
         _completions = db.LoadCompletions();
-        _conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-        _conn.Open();
+        _conn = AppPaths.OpenConnection();
         lock (SchemaGate)
         {
             if (!_schemaEnsured)

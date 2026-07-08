@@ -355,6 +355,7 @@ public sealed partial class SchedulePage : Page
         catch (Exception ex)
         {
             Log.Error($"SchedulePage.ToggleDone '{t.Task.Text}'", ex);
+            SaveErrorBar.IsOpen = true;
         }
         Render();
     }

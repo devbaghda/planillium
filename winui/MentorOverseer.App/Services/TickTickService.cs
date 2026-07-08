@@ -24,28 +24,30 @@ public sealed class TickTickService
 
     // ── API core (with one refresh-and-retry on 401) ─────────────────────
 
-    private static async Task<HttpResponseMessage> SendAsync(
-        Func<HttpClient, Task<HttpResponseMessage>> call)
+    // One shared, long-lived client instead of one per call — TickTick calls
+    // only ever happen sequentially in this app (Today-page load), so a
+    // per-request Authorization header (not DefaultRequestHeaders) is all
+    // that's needed to keep this safe to share.
+    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+
+    private static async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url)
     {
         var token = AccessToken ?? throw new InvalidOperationException("No TickTick token.");
-        using (var client = Client(token))
-        {
-            var resp = await call(client);
-            if (resp.StatusCode != HttpStatusCode.Unauthorized) return resp;
-            resp.Dispose();
-        }
+        var resp = await Send(method, url, token);
+        if (resp.StatusCode != HttpStatusCode.Unauthorized) return resp;
+        resp.Dispose();
+
         if (!await TickTickAuth.RefreshAsync())
             throw new InvalidOperationException(
                 "TickTick token expired and refresh failed — reconnect in Settings.");
-        using var retryClient = Client(AccessToken!);
-        return await call(retryClient);
+        return await Send(method, url, AccessToken!);
     }
 
-    private static HttpClient Client(string token)
+    private static Task<HttpResponseMessage> Send(HttpMethod method, string url, string token)
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return c;
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return SharedClient.SendAsync(request);
     }
 
     /// <summary>Local calendar date a task is due (TickTick sends UTC), or null.</summary>
@@ -61,7 +63,7 @@ public sealed class TickTickService
     /// <summary>Open personal tasks due today, across all projects except the old mirror.</summary>
     public static async Task<List<TtTask>> TasksDueTodayAsync()
     {
-        using var projResp = await SendAsync(c => c.GetAsync($"{ApiBase}/project"));
+        using var projResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project");
         projResp.EnsureSuccessStatusCode();
         using var projects = JsonDocument.Parse(await projResp.Content.ReadAsStringAsync());
 
@@ -73,7 +75,7 @@ public sealed class TickTickService
             var pname = p.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
             if (pid.Length == 0 || pname == MirrorProjectName) continue;
 
-            using var dataResp = await SendAsync(c => c.GetAsync($"{ApiBase}/project/{pid}/data"));
+            using var dataResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project/{pid}/data");
             if (!dataResp.IsSuccessStatusCode) continue;
             using var data = JsonDocument.Parse(await dataResp.Content.ReadAsStringAsync());
             if (!data.RootElement.TryGetProperty("tasks", out var tasks)) continue;
@@ -94,8 +96,8 @@ public sealed class TickTickService
 
     public static async Task CompleteTaskAsync(string projectId, string taskId)
     {
-        using var resp = await SendAsync(c => c.PostAsync(
-            $"{ApiBase}/project/{projectId}/task/{taskId}/complete", null));
+        using var resp = await SendAsync(HttpMethod.Post,
+            $"{ApiBase}/project/{projectId}/task/{taskId}/complete");
         resp.EnsureSuccessStatusCode();
     }
 }

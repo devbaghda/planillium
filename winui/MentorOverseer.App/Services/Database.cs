@@ -3,10 +3,7 @@ using Microsoft.Data.Sqlite;
 
 namespace MentorOverseer.App.Services;
 
-/// <summary>
-/// Read/write access to the Python app's progress.db. SQL mirrors main.py
-/// exactly (same tables, same upsert semantics) — schema is the contract.
-/// </summary>
+/// <summary>Read/write access to data/progress.db.</summary>
 public sealed class Database : IDisposable
 {
     private readonly SqliteConnection _conn;
@@ -26,8 +23,7 @@ public sealed class Database : IDisposable
     public Database()
     {
         Directory.CreateDirectory(Path.Combine(AppPaths.Root, "data"));
-        _conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-        _conn.Open();
+        _conn = AppPaths.OpenConnection();
         lock (SchemaGate)
         {
             if (!_schemaEnsured)
@@ -208,6 +204,70 @@ public sealed class Database : IDisposable
             del.Parameters.AddWithValue("$cutoff", cutoff);
             del.ExecuteNonQuery();
         }
+    }
+
+    /// <summary>Rows that ClearActivityHistory would delete — for the confirmation dialog.</summary>
+    public (int DiaryRows, int RollupDays) CountActivityHistory()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT (SELECT COUNT(*) FROM time_diary), (SELECT COUNT(*) FROM diary_daily_rollup)";
+        using var r = cmd.ExecuteReader();
+        r.Read();
+        return (r.GetInt32(0), r.GetInt32(1));
+    }
+
+    /// <summary>
+    /// Wipes the activity/diary history (raw sessions + the rolled-up daily
+    /// totals) — the window-title-derived tracking data, not the user's own
+    /// plan progress (task_completions/score_ledger/reflections are untouched;
+    /// those aren't what a privacy "clear my tracked activity" ask means).
+    /// VACUUM afterward since deleted SQLite rows otherwise linger in the
+    /// file on disk until compacted.
+    /// </summary>
+    public void ClearActivityHistory()
+    {
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup;";
+            cmd.ExecuteNonQuery();
+        }
+        using var vacuum = _conn.CreateCommand();
+        vacuum.CommandText = "VACUUM";
+        vacuum.ExecuteNonQuery();
+    }
+
+    private static readonly string[] ExportedTables =
+    {
+        "task_completions", "task_overrides", "plan_days_off", "task_notes",
+        "score_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
+    };
+
+    /// <summary>
+    /// Every row of every user-data table, schema-agnostic (reads column
+    /// names off each reader rather than hardcoding them) so this doesn't
+    /// silently go stale the next time a table gains a column. Used by the
+    /// Settings "Export all my data" action — the full picture, not just
+    /// the aggregated numbers ReportExport's HTML/CSV reports show.
+    /// </summary>
+    public Dictionary<string, List<Dictionary<string, object?>>> ExportAllTables()
+    {
+        var result = new Dictionary<string, List<Dictionary<string, object?>>>();
+        foreach (var table in ExportedTables)
+        {
+            var rows = new List<Dictionary<string, object?>>();
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = $"SELECT * FROM {table}";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var row = new Dictionary<string, object?>();
+                for (var i = 0; i < r.FieldCount; i++)
+                    row[r.GetName(i)] = r.IsDBNull(i) ? null : r.GetValue(i);
+                rows.Add(row);
+            }
+            result[table] = rows;
+        }
+        return result;
     }
 
     public Dictionary<(string PlanId, int Day, string Text), bool> LoadCompletions()

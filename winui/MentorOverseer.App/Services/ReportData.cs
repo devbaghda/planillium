@@ -217,15 +217,37 @@ public static class ReportData
                      .ToList();
     }
 
+    public sealed record DiaryEntry(long Id, DateOnly Date, string Start, string End,
+        int Dur, string Cat, string Window, string? Desc);
+
+    /// <summary>Raw time_diary rows in a date range, newest first — backs the
+    /// diary search/list view. Moved out of ReportsPage's code-behind, which
+    /// had been opening its own ambient DB connection directly.</summary>
+    public static List<DiaryEntry> DiaryInRange(DateOnly from, DateOnly to)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT id, date, start_time, end_time, duration_min, category, window, description " +
+            "FROM time_diary WHERE date BETWEEN $from AND $to ORDER BY date DESC, start_time DESC";
+        cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        var result = new List<DiaryEntry>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            if (!DateOnly.TryParseExact(r.GetString(1), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var d)) continue;
+            result.Add(new DiaryEntry(r.GetInt64(0), d, r.GetString(2), r.GetString(3), r.GetInt32(4),
+                r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7)));
+        }
+        return result;
+    }
+
     public static string FmtMins(int mins) =>
         mins >= 60 ? $"{mins / 60}h {mins % 60:00}m" : $"{mins}m";
 
-    private static SqliteConnection Open()
-    {
-        var conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
-        conn.Open();
-        return conn;
-    }
+    private static SqliteConnection Open() => AppPaths.OpenConnection();
 
     /// <summary>SQL date predicate for the period; adds its parameter to cmd.</summary>
     private static string DateFilter(ReportPeriod period, SqliteCommand cmd)

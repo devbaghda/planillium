@@ -142,7 +142,10 @@ public sealed partial class TodayPage : Page
                 }
                 else if (overdue.Count == 0)
                 {
-                    Sections.Children.Add(Muted("All done for today — great work!"));
+                    // today.Count == 0 here means no task was ever scheduled
+                    // for this plan day (a gap day, not a completed one) —
+                    // "great work!" would be congratulating for nothing.
+                    Sections.Children.Add(Muted("No tasks scheduled for today."));
                 }
 
                 // Nothing left to clear (no overdue, today's list is either
@@ -466,10 +469,12 @@ public sealed partial class TodayPage : Page
         }
         catch (Exception ex)
         {
-            // Likely: DB briefly locked by the Python app. The next render
-            // self-heals visually, but a failed completion write must not
-            // vanish without a trace.
+            // Likely: the poll thread's own connection briefly held the
+            // write lock. Logged either way, but a failed completion write
+            // must not vanish silently — the checkbox would otherwise just
+            // revert on next render with no explanation.
             Log.Error($"Toggle completion '{item.Task.Text}'", ex);
+            SaveErrorBar.IsOpen = true;
         }
     }
 }

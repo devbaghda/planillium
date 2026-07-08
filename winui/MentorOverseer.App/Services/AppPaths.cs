@@ -1,3 +1,5 @@
+using Microsoft.Data.Sqlite;
+
 namespace MentorOverseer.App.Services;
 
 /// <summary>
@@ -37,4 +39,21 @@ public static class AppPaths
 
     public static string ActivePlansDir => Path.Combine(Root, "plans", "active");
     public static string DbPath => Path.Combine(Root, "data", "progress.db");
+
+    /// <summary>
+    /// Opens a connection with a busy timeout set — this app's own poll
+    /// thread (ActivityTracker) and UI thread each hold independent
+    /// connections to the same file, so a completion toggle landing in the
+    /// same instant as a 60s poll write must wait briefly instead of
+    /// throwing SQLITE_BUSY immediately.
+    /// </summary>
+    public static SqliteConnection OpenConnection()
+    {
+        var conn = new SqliteConnection($"Data Source={DbPath}");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "PRAGMA busy_timeout=2000;";
+        cmd.ExecuteNonQuery();
+        return conn;
+    }
 }

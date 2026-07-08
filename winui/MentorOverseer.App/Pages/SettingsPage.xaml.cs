@@ -27,8 +27,7 @@ public sealed partial class SettingsPage : Page
             var win = App.MainWindow as MainWindow;
             TrackerInfo.Text = win?.Tracker is { Running: true }
                 ? "This app is tracking your activity (60s polls, diary 06:00–20:00)."
-                : "Tracking is off in this app — the Python app was already running " +
-                  "and only one tracker may write the diary at a time.";
+                : "Tracking isn't running — check data/mentor-winui.log for why it failed to start.";
             DataInfo.Text = $"{AppInfo.DisplayName} v{AppVersion.Current}\nShared data folder: " + AppPaths.Root;
         };
     }
@@ -153,6 +152,66 @@ public sealed partial class SettingsPage : Page
     {
         await Dialogs.TickTickConnectDialog.ShowAsync(XamlRoot);
         RefreshTickTickStatus();
+    }
+
+    private void ExportAll_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = DataExport.ExportAll();
+            SaveStatus.Text = "Exported to " + path;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ExportAll", ex);
+            SaveStatus.Text = "Export failed: " + ex.Message;
+        }
+    }
+
+    private async void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        int diaryRows, rollupDays;
+        try
+        {
+            using var db = new Database();
+            (diaryRows, rollupDays) = db.CountActivityHistory();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearHistory.Count", ex);
+            SaveStatus.Text = "Couldn't read activity history: " + ex.Message;
+            return;
+        }
+        if (diaryRows == 0 && rollupDays == 0)
+        {
+            SaveStatus.Text = "No activity history to clear.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "Clear activity history?",
+            Content = $"Deletes {diaryRows} diary session(s) and {rollupDays} day(s) of " +
+                      "rolled-up totals — the tracked window-activity record. Your plans, " +
+                      "task completions, notes, and score are not affected. This cannot be undone.",
+            PrimaryButtonText = "Clear history",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        try
+        {
+            using var db = new Database();
+            db.ClearActivityHistory();
+            SaveStatus.Text = "Activity history cleared.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearHistory", ex);
+            SaveStatus.Text = "Couldn't clear activity history: " + ex.Message;
+        }
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
