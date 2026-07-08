@@ -13,6 +13,7 @@ public class Plan
     [JsonPropertyName("start_date")] public string StartDate { get; set; } = "";
     [JsonPropertyName("total_days")] public int? TotalDays { get; set; }
     [JsonPropertyName("phases")] public List<Phase> Phases { get; set; } = new();
+    [JsonPropertyName("briefing")] public PlanBriefing? Briefing { get; set; }
 
     public DateOnly StartDateParsed =>
         DateOnly.TryParse(StartDate, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
@@ -32,6 +33,17 @@ public class Plan
             return max;
         }
     }
+}
+
+/// <summary>The 4-point strategic briefing the plan-generation templates ask
+/// Claude for, saved with the plan (main.py's _show_plan_briefing_dialog
+/// shape — see PlanTemplates.cs for the exact field meanings).</summary>
+public class PlanBriefing
+{
+    [JsonPropertyName("high_leverage")] public List<string> HighLeverage { get; set; } = new();
+    [JsonPropertyName("ignore_completely")] public string? IgnoreCompletely { get; set; }
+    [JsonPropertyName("common_time_wasters")] public string? CommonTimeWasters { get; set; }
+    [JsonPropertyName("realistic_timeline")] public string? RealisticTimeline { get; set; }
 }
 
 public class Phase

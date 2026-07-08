@@ -1,4 +1,5 @@
 {
+  "user_name": "",
   "working_hours": {
     "start": "08:00",
     "end": "20:00"
@@ -9,11 +10,6 @@
   "end_of_day_summary_time": "20:00",
   "ticktick": {
     "client_id": "MaG1F9KpgmuPB81UmX"
-  },
-  "notifications": {
-    "enabled": true,
-    "sound": true,
-    "escalating": true
   },
   "activity_rules": {
     "on_plan": [

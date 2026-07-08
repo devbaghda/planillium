@@ -64,6 +64,10 @@ public static class ConfigService
         return (ppm, ppu, sym);
     }
 
+    /// <summary>Empty until the first-launch NameSetupDialog asks and saves it.</summary>
+    public static string UserName =>
+        Root.TryGetProperty("user_name", out var v) ? v.GetString() ?? "" : "";
+
     public static string TickTickClientId =>
         Root.TryGetProperty("ticktick", out var t) &&
         t.TryGetProperty("client_id", out var v) ? v.GetString() ?? "" : "";

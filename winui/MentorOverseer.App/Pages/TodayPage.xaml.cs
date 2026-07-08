@@ -17,8 +17,13 @@ public sealed partial class TodayPage : Page
         {
             Render();
             _ = Views.TickTickSection.LoadAsync(TickTickHost);
-            if (KickoffDialog.ShouldShow() && App.MainWindow is MainWindow win)
-                await KickoffDialog.ShowAsync(win);
+            if (App.MainWindow is MainWindow win)
+            {
+                if (NameSetupDialog.ShouldShow())
+                    await NameSetupDialog.ShowAsync(win);
+                if (KickoffDialog.ShouldShow())
+                    await KickoffDialog.ShowAsync(win);
+            }
         };
     }
 
@@ -228,6 +233,7 @@ public sealed partial class TodayPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var check = new CheckBox
         {
@@ -255,13 +261,21 @@ public sealed partial class TodayPage : Page
             name.Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
         textCol.Children.Add(name);
 
-        var metaText = item.Overdue
-            ? $"{plan.PlanDay - item.AssignedDay} day(s) late — from day {item.AssignedDay}"
-            : item.Task.MentorNote is { Length: > 0 } note ? "💡 " + note : null;
-        if (metaText != null)
+        // Overdue status and the mentor note are independent facts — an
+        // overdue task still deserves its "why this matters" line, not one
+        // or the other.
+        if (item.Overdue)
             textCol.Children.Add(new TextBlock
             {
-                Text = metaText,
+                Text = $"{plan.PlanDay - item.AssignedDay} day(s) late — from day {item.AssignedDay}",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+        if (item.Task.MentorNote is { Length: > 0 } note)
+            textCol.Children.Add(new TextBlock
+            {
+                Text = "💡 " + note,
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
@@ -280,6 +294,22 @@ public sealed partial class TodayPage : Page
             };
             Grid.SetColumn(dur, 2);
             grid.Children.Add(dur);
+        }
+
+        // The "explanation of tasks" — detail is the concrete how-to, which
+        // (unlike the mentor note) never had anywhere to display at all.
+        if (item.Task.Detail is { Length: > 0 })
+        {
+            var details = new HyperlinkButton
+            {
+                Content = "Details",
+                FontSize = 12,
+                Padding = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(XamlRoot, item.Task);
+            Grid.SetColumn(details, 3);
+            grid.Children.Add(details);
         }
 
         return grid;

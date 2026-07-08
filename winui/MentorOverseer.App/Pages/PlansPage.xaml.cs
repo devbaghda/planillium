@@ -70,6 +70,7 @@ public sealed partial class PlansPage : Page
         var grid = new Grid { Padding = new Thickness(18, 14, 18, 14), ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { Spacing = 4 };
         left.Children.Add(new TextBlock
@@ -91,6 +92,14 @@ public sealed partial class PlansPage : Page
         left.Children.Add(bar);
         grid.Children.Add(left);
 
+        if (plan.Briefing != null)
+        {
+            var briefing = new Button { Content = "📋 Briefing", VerticalAlignment = VerticalAlignment.Center };
+            briefing.Click += async (_, _) => await BriefingDialog.ShowAsync(XamlRoot, plan);
+            Grid.SetColumn(briefing, 1);
+            grid.Children.Add(briefing);
+        }
+
         var archive = new Button
         {
             Content = complete ? "Archive ✓" : "Archive",
@@ -100,7 +109,7 @@ public sealed partial class PlansPage : Page
         ToolTipService.SetToolTip(archive,
             complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
         archive.Click += async (_, _) => await ArchiveAsync(plan);
-        Grid.SetColumn(archive, 1);
+        Grid.SetColumn(archive, 2);
         grid.Children.Add(archive);
 
         return new Border

@@ -14,6 +14,7 @@ public class AppState
     [JsonPropertyName("last_review")] public string LastReview { get; set; } = "";
     [JsonPropertyName("theme")] public string Theme { get; set; } = "default"; // default|light|dark
     [JsonPropertyName("opacity")] public int Opacity { get; set; } = 100;      // window opacity, 40–100 %
+    [JsonPropertyName("name_asked")] public bool NameAsked { get; set; } = false;
 }
 
 public static class StateService

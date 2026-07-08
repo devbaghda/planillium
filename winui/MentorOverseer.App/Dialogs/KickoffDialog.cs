@@ -110,9 +110,10 @@ public static class KickoffDialog
                 });
         }
 
+        var name = ConfigService.UserName is { Length: > 0 } n ? n : "there";
         var dialog = new ContentDialog
         {
-            Title = "Good morning, the user.",
+            Title = $"Good morning, {name}.",
             Content = panel,
             PrimaryButtonText = "Start the day",
             DefaultButton = ContentDialogButton.Primary,
