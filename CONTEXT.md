@@ -1,12 +1,9 @@
 # Mentor-Overseer — Project Context
 
-**App display name is now "Planillium"** (renamed 2026-07-08, in prep for open-
-sourcing this as a public portfolio piece — see the Session handoff notes at the
-bottom). The repo folder, `winui/MentorOverseer.App/` project path, C# namespace,
-and this doc's own title are all deliberately left as `MentorOverseer` — internal,
-invisible to end users, and renaming them was explicitly out of scope (see handoff).
-User-facing surfaces (window title, tray, dialogs, installer, exported reports) all
-say "Planillium"; the compiled exe is `Planillium.App.exe`.
+**Display name is "Planillium"** (renamed 2026-07-08, prepping to open-source as a
+portfolio piece — detail in Session handoff notes). Repo folder, C# namespace, and
+this doc's title stay `MentorOverseer` on purpose — internal, invisible to users.
+Compiled exe: `Planillium.App.exe`.
 
 ## What this app is
 A desktop personal mentor and accountability companion that tracks the user's progress
@@ -178,84 +175,61 @@ every feature that mattered.
 _Update this section at the end of each Claude Code session:_
 
 - Last session: 2026-07-08, branch `winui-rebuild` (now == `master`)
-- **Renamed to "Planillium"**, prepping to open-source as a public portfolio piece.
-  Picked up an uncommitted, partial rename left by a different tool
-  (`CLAUDE_HANDOFF.md`, still sitting in the repo root, untracked) and finished it:
-  new `Services/AppInfo.cs`
-  (`DisplayName`/mutex/startup-registry-value constants, referenced everywhere
-  instead of hardcoded strings); `csproj` `<AssemblyName>`/`app.manifest`
-  `assemblyIdentity` → `Planillium.App`; installer (`app.iss`, `release.ps1`,
-  `release/README.md`) renamed and its `[UninstallRun]` reg-delete sweep extended to
-  cover both the new and every legacy Run-key value name; Desktop shortcut
-  retargeted + renamed. Deliberately did NOT rename the repo folder
-  (`winui/MentorOverseer.App/`), the csproj filename, or the C# namespace — the
-  handoff itself called that optional, and it's invisible to end users; renaming it
-  would have meant touching the namespace declaration in every one of ~50 files for
-  no user-visible benefit. Found and fixed one real bug the naive rename would have
-  caused: `CredentialStore`'s Windows Credential Manager target name was about to
-  flip from `...@MentorOverseer` to `...@Planillium`, which would have silently
-  orphaned the user's already-stored TickTick OAuth token (`Read` only checked one
-  target). Added a `LegacyService` fallback so reads still find the pre-rename
-  credential while writes go to the new name — verified live: TickTick's "My Tasks"
-  still loaded a real task after rebuilding. Built clean, launched, screenshot-
-  confirmed "Planillium" in the title bar, tray, and in-app header.
-  **Not done yet, before anything goes public**: scrub personal data — real plans
-  (`plans/active/netherlands.json` describes the user's actual relocation),
-  `config.json` (real activity keywords, TickTick `client_id`), and git history
-  (carries all of the above across every commit, not just the current tree) all
-  need a plan — a public template config already exists at
-  `release/installer/config.default.json` (empty `user_name`, a separate TickTick
-  `client_id`) as a starting point, but the *repo itself* going public is a bigger
-  decision than the rename and hasn't been made yet.
-- **Repo consolidation**: `master` fast-forwarded to match `winui-rebuild` (they'd
-  diverged since the WinUI work started on a feature branch); stale branches fully
-  contained in it (`audit-remediation`, `ux-audit-fixes`, `ui-theme-light-dark`)
-  deleted locally + on origin; GitHub's default branch switched from
-  `audit-remediation` → `master`. `code-refinement` kept (checked out in the
-  `mentor-overseer-test/` worktree). Removed ~430MB of local build cruft (caches,
-  old PyInstaller output, an unused Debug config build, stray test logs) and retired
-  the Python app source entirely (see Project history above).
-- **New features**: per-plan-independent scrollable schedule boxes (each plan on the
-  Schedule page now scrolls in its own bounded box, auto-scrolled to its own today,
-  instead of one shared list where reaching plan 2 meant scrolling past all of plan
-  1); "Get a head start on tomorrow?" prompt on Today once the day's tasks are fully
-  cleared (lists tomorrow's tasks with one-click "Start now", reusing
-  `MoveTaskToToday`); manual "+ Add step" on Plans (`AddTaskDialog` →
-  `PlanStore.AddTask`, surgical JSON patch); personal per-task notes, inline-editable
-  on both Today and Schedule; a "Details" link on Schedule (was Today-only).
-- **Fixes**: dark-mode live theme switching (root cause — `ThemeSync`'s
-  `ThemeDictionaries`-walk silently returned `null` for every key on every call;
-  replaced with hardcoded Light/Dark hex values pulled from the pinned WindowsAppSDK
-  package's `generic.xaml`); Reports page bar-column alignment between "Time by App"
-  and "Top Distractions" (three layered bugs, fixed in sequence); reschedule no
-  longer double-books a day (now shifts, same semantics as Move-to-today/Day-off).
-- Also folded in same-day work from 2026-07-07 that hadn't made it into this log:
-  **v1.0.0 release** (Inno Setup installer pipeline, version surfacing in Settings +
-  log header) plus overdue-reschedule dialog, editable diary entries, app icon,
-  score-chip styling, latest-first diary ordering, dropped category tags from Today.
-- Everything built clean (`dotnet build -p:Platform=x64 -c Release`, 0 warnings/0
-  errors) and verified via `PrintWindow` screenshots against a running instance
-  (`MENTOR_PAGE` env hook). Shift/reschedule logic verified by code-pattern match
-  against the already-proven pattern, not click-tested — standing rule against
-  simulating mouse/keyboard input on the user's live app/data.
-- Previous session: 2026-07-07 — **full audit of the WinUI app, all 18 findings
-  applied**: file logger (`Services/Log.cs`) wired into every previously-silent
-  `catch{}`; global exception handlers + single-instance mutex in `App.xaml.cs`;
-  `ActivityTracker` poll timer reentrancy fix + pauses when the Python app is
-  running; `DialogGate` semaphore around every `ContentDialog` (no more
-  "already an open dialog" crash); EOD-check `>=` fix + close confirmation; plan-id
-  filename validation; a11y names on checkboxes; `InvariantCulture` on all DB/UI
-  dates (OS locale is Russian, app language is English). Also: **one-app
-  consolidation** — WinUI became the sole app (OAuth/Credential-Manager port, tray
-  via H.NotifyIcon, plan import from .docx/.txt/.md/.json, full Settings editing,
-  HTML report export) — the user's call: "all functionality in one place." Full detail
-  for both in git log around commits `~9e0..194beec` on `winui-rebuild`.
-- Open action items (carried from the Python-era audits, still not done as of
-  2026-07-08): **rotate the TickTick OAuth client secret** at
-  developer.ticktick.com — the old value was committed in plaintext early on and,
-  separately, shown in a screenshot; both instances are burned and rotation is the
-  only real fix (git-history rewrite already happened for the first leak, but
-  rotation itself is still outstanding).
+- **Renamed app to "Planillium"**, prepping to open-source as a portfolio piece.
+  Finished a partial rename another tool left uncommitted (`CLAUDE_HANDOFF.md`,
+  still in repo root, untracked): `Services/AppInfo.cs` centralizes the display
+  name/mutex/startup-registry-value; `csproj`/`app.manifest` identity →
+  `Planillium.App`; installer renamed, its uninstall reg-delete sweep now covers
+  every legacy Run-key name too; Desktop shortcut retargeted. Kept the repo folder,
+  csproj filename, and C# namespace as `MentorOverseer` — internal, invisible to
+  users, not worth touching ~50 files' namespace declarations for. Caught a real
+  bug first: `CredentialStore`'s Credential Manager target was about to flip from
+  `...@MentorOverseer` to `...@Planillium`, which would've silently orphaned
+  the user's stored TickTick token — added a `LegacyService` read fallback, verified
+  live (TickTick still loaded after rebuild). **Not done — needed before anything
+  goes public**: scrub personal data (`plans/active/netherlands.json`, `config.json`
+  secrets/keywords, git history) — `release/installer/config.default.json` is a
+  template starting point, but going public is a separate decision, not yet made.
+- **Repo consolidation**: `master` fast-forwarded to `winui-rebuild` (had diverged
+  since WinUI started as a feature branch); branches fully contained in it
+  (`audit-remediation`, `ux-audit-fixes`, `ui-theme-light-dark`) deleted local +
+  origin; GitHub default branch switched to `master`. `code-refinement` kept (in
+  the `mentor-overseer-test/` worktree). Removed ~430MB local build cruft and
+  retired the Python source entirely (see Project history above).
+- **New features**: per-plan independent scrollable schedule boxes (was one shared
+  list — reaching plan 2 meant scrolling past all of plan 1); "Get a head start on
+  tomorrow?" prompt once today's tasks are cleared (reuses `MoveTaskToToday`);
+  manual "+ Add step" on Plans; personal per-task notes inline on Today/Schedule;
+  a "Details" link on Schedule (was Today-only).
+- **Fixes**: dark-mode live theme switching (`ThemeSync`'s `ThemeDictionaries`-walk
+  silently returned `null` always — replaced with hardcoded Light/Dark hex values
+  from the pinned WindowsAppSDK package); Reports page bar-column alignment (3
+  layered bugs); reschedule no longer double-books a day (now shifts).
+- Also folded in same-day 2026-07-07 work that hadn't made this log yet: v1.0.0
+  release (Inno Setup pipeline, version surfacing), overdue-reschedule dialog,
+  editable diary entries, app icon, score-chip styling.
+- Everything built clean, verified via `PrintWindow` screenshots against a running
+  instance. Shift/reschedule logic verified by code-pattern match, not click-tested
+  — standing rule against simulating input on the user's live app/data.
+- **Lesson**: killing a running instance to rebuild/test can destroy its EOD-review
+  watcher before it ever ticks — happened today, killed the real session before
+  20:00 while starting the rename work, so the automatic evening-review popup never
+  fired; the user had to trigger it manually at 20:23 (worked fine, real data, just no
+  reflection prompt). Check the time against `end_of_day_summary_time` before
+  stopping a live instance, don't just kill-and-rebuild reflexively near EOD.
+- Previous session: 2026-07-07 — full audit of the WinUI app, all 18 findings
+  applied (file logger wired into every silent `catch{}`; global exception
+  handlers + single-instance mutex; `ActivityTracker` poll reentrancy fix + pauses
+  when the Python app runs; `DialogGate` semaphore around every dialog; EOD-check
+  `>=` fix; plan-id filename validation; a11y names; `InvariantCulture` everywhere
+  — OS locale is Russian, app language is English). Also **one-app consolidation**
+  — WinUI became the sole app (OAuth/Credential-Manager port, tray, plan import,
+  full Settings editing, HTML export) — the user's call. Full detail in git log
+  around `~9e0..194beec` on `winui-rebuild`.
+- Open: **rotate the TickTick OAuth client secret** at developer.ticktick.com — an
+  old value was committed in plaintext early on and separately shown in a
+  screenshot; both burned, git-history rewrite already happened but rotation
+  itself is still outstanding.
 - Known issue: TickTick redirect URI must be registered at developer.ticktick.com
   as `http://localhost:8765/callback` in the **OAuth redirect URL** field
-  specifically (not the separate "App Service URL" field on that page).
+  specifically (not the separate "App Service URL" field).
