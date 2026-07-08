@@ -46,16 +46,15 @@ public sealed partial class MainWindow : Window
                 "dark" => ElementTheme.Dark,
                 _ => ElementTheme.Default,
             };
-            // See ThemeSync's doc comment — root.ActualTheme is the true
-            // resolved theme (Light/Dark, never Default) right now, and the
-            // subscription keeps it correct if "Follow Windows" is selected
-            // and the OS theme changes while the app is running.
-            ThemeSync.Apply(root.ActualTheme);
-            root.ActualThemeChanged += (sender, _) =>
-            {
-                Log.Info($"root.ActualThemeChanged fired, sender.ActualTheme={sender.ActualTheme}");
-                ThemeSync.Apply(sender.ActualTheme);
-            };
+            // Deferred to Loaded rather than called here directly: the two
+            // accent-derived keys ThemeSync.Apply reads (SystemAccentColor*)
+            // aren't guaranteed available until the resource tree is fully
+            // merged. root.ActualTheme is the true resolved theme (Light/
+            // Dark, never Default), and the ActualThemeChanged subscription
+            // keeps it correct afterward if "Follow Windows" is selected and
+            // the OS theme changes while running.
+            root.Loaded += (_, _) => ThemeSync.Apply(root.ActualTheme);
+            root.ActualThemeChanged += (sender, _) => ThemeSync.Apply(sender.ActualTheme);
         }
 
         // Debug/verification hook: MENTOR_PAGE=reports|plans|settings|schedule
