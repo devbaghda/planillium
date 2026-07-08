@@ -41,6 +41,22 @@ public static class ReviewDialog
 
         var panel = new StackPanel { Spacing = 12, MinWidth = 460 };
 
+        // The EOD "designed ending" the dialog never actually had: every day
+        // got identical neutral framing regardless of how it went. A day
+        // that clears every task, or scores the same "great day" bar Reports
+        // uses (>=20), earns a line that says so instead of just numbers.
+        var finalTotal = dayTotal + accrual;
+        var perfect = total > 0 && done == total;
+        if (perfect || finalTotal >= 20)
+            panel.Children.Add(new TextBlock
+            {
+                Text = perfect
+                    ? "🎉 Perfect day — every task done."
+                    : "🎉 Strong day — well above the line.",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
+            });
+
         var ring = new ProgressRing
         {
             IsIndeterminate = false,
