@@ -247,6 +247,11 @@ public sealed partial class SchedulePage : Page
         Grid.SetColumn(textPanel, 1);
         row.Children.Add(textPanel);
 
+        // Move/Reschedule and Details are independent — a task can be both
+        // overdue and have a detail worth reading — so they share one
+        // action column instead of competing for it.
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+
         if (!t.Completed && t.AssignedDay > planDay)
         {
             var move = new HyperlinkButton
@@ -269,8 +274,7 @@ public sealed partial class SchedulePage : Page
                 catch (Exception ex) { Log.Error("SchedulePage.MoveToToday", ex); }
                 Render();
             };
-            Grid.SetColumn(move, 2);
-            row.Children.Add(move);
+            actions.Children.Add(move);
         }
         else if (!t.Completed && t.Overdue)
         {
@@ -288,8 +292,26 @@ public sealed partial class SchedulePage : Page
             {
                 if (await Dialogs.RescheduleTaskDialog.ShowAsync(XamlRoot, plan, t)) Render();
             };
-            Grid.SetColumn(reschedule, 2);
-            row.Children.Add(reschedule);
+            actions.Children.Add(reschedule);
+        }
+
+        if (t.Task.Detail is { Length: > 0 })
+        {
+            var details = new HyperlinkButton
+            {
+                Content = "Details",
+                FontSize = 12,
+                Padding = new Thickness(6, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(XamlRoot, t.Task);
+            actions.Children.Add(details);
+        }
+
+        if (actions.Children.Count > 0)
+        {
+            Grid.SetColumn(actions, 2);
+            row.Children.Add(actions);
         }
 
         return row;
