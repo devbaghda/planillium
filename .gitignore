@@ -2,16 +2,9 @@
 data/
 
 # Build artifacts
-build/
-dist/
-*.spec
 *.exe
 release/dist/
 release/output/
-
-# Python
-__pycache__/
-*.pyc
 
 # Editor/tooling
 .vscode/

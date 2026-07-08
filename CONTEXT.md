@@ -16,44 +16,45 @@ keeps him on-plan, logs his full day (06:00–20:00), and generates weekly repor
 
 ## App architecture
 
+**The WinUI app (`winui/MentorOverseer.App`) is THE app** — the original Python/Tkinter
+app was retired in the 2026-07-07 one-app consolidation and its source was fully
+removed from the repo on 2026-07-08 (still recoverable from git history/tags if ever
+needed; nothing about it is missed for day-to-day use).
+
 ```
 mentor-overseer/
 ├── CONTEXT.md              ← you are here. Read this first every session.
-├── config.json             ← user settings, idle threshold, scoring rules (no secrets —
-│                              TickTick client_secret/access_token live in Windows
-│                              Credential Manager via `keyring`, not on disk)
-├── main.py                 ← single-file app entry point (MentorApp class, ~2100 lines)
+├── config.json             ← shared user settings, idle threshold, scoring rules (no
+│                              secrets — TickTick client_secret/access_token live in
+│                              Windows Credential Manager via CredentialStore, not on disk)
 ├── plans/
 │   ├── active/             ← up to 2 active plan JSONs (e.g. netherlands.json)
 │   └── archive/            ← completed plans moved here; frees a slot for a new plan
-├── tracker/
-│   ├── __init__.py
-│   └── activity.py         ← window monitor, diary session tracking, idle detection
-├── ticktick/
-│   ├── __init__.py
-│   └── sync.py             ← TickTick OAuth2 REST client
 ├── data/
-│   └── progress.db         ← SQLite: task_completions, activity_log, time_diary, ticktick_sync
-├── icon.ico                ← app/exe icon (only icon file actually used by build.bat)
-├── requirements.txt        ← pip dependencies
-├── MentorOverseer.exe      ← PyInstaller single-file build (rebuild with build.bat, not auto-updated)
-└── build.bat               ← PyInstaller build script (no run.bat — use `python main.py` for dev runs)
+│   ├── progress.db         ← SQLite: task_completions, activity_log, time_diary,
+│   │                          ticktick_sync, task_notes, reflections, score_ledger, ...
+│   ├── winui_state.json    ← window size/theme/kickoff-review state (additive, WinUI-only)
+│   └── mentor-winui.log    ← app log
+├── release/                ← Inno Setup installer pipeline (release.ps1, app.iss) — see
+│                              the windows-app-releaser skill for how to cut a build
+└── winui/MentorOverseer.App/  ← WinUI 3 / .NET 8 source — see Tech stack below
 ```
-Legacy `plan/roadmap.json` (pre-multi-plan migration source) and icon design exploration
-files (`icon_options/`, `gen_*.py`, alternate `.ico`/`.png` variants) were removed
-2026-07-04 — fully superseded / unused, still recoverable from git history if ever needed.
 
 ---
 
 ## Tech stack
-- **Language:** Python 3.11 — `C:\Users\devba\AppData\Local\Programs\Python\Python311\python.exe`
-- **UI framework:** Tkinter (3-column layout: sidebar + task list + detail panel)
-- **Database:** SQLite via sqlite3
-- **Notifications:** pystray (tray icon + notify) with plyer fallback
-- **Activity tracking:** ctypes `GetForegroundWindow` + `GetLastInputInfo` (Windows)
-- **TickTick:** REST API (OAuth2) — redirect URI: `http://localhost:8765/callback`
-- **Packaging:** PyInstaller `--onefile --noconsole --icon`
-- **App name constant:** `APP_NAME = "Mentor-Overseer"`, `MAX_PLANS = 2`
+- **Framework:** WinUI 3 / .NET 8 (`net8.0-windows10.0.19041.0`), Windows App SDK 1.5.240627000
+- **Build:** `dotnet build -p:Platform=x64 -c Release` from `winui/MentorOverseer.App/` —
+  no Visual Studio required. Unpackaged, self-contained (`WindowsPackageType=None`,
+  `WindowsAppSDKSelfContained=true`), no admin rights needed.
+- **Database:** SQLite via `Microsoft.Data.Sqlite`
+- **Tray:** H.NotifyIcon.WinUI — close hides to tray, tracking keeps running
+- **Activity tracking:** P/Invoke `GetForegroundWindow` + `GetLastInputInfo` (Windows)
+- **TickTick:** REST API (OAuth2), own `TickTickAuth`/loopback listener on 8765
+- **Credentials:** Windows Credential Manager (`CredentialStore`, python-keyring-compatible
+  byte format — reads tokens the old Python app once wrote, still works after its removal)
+- **Packaging:** Inno Setup via `release/release.ps1` (see `release/README.md`)
+- **App name constant:** `AppNames`, `MAX_PLANS = 2`
 
 ---
 
