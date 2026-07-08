@@ -91,6 +91,13 @@ public sealed partial class SchedulePage : Page
             Margin = new Thickness(0, 8, 0, 4),
         });
 
+        // A long plan (e.g. 160 days) was rendering a full DayCard — Grid,
+        // Border, multiple TextBlocks — for every single future day even
+        // when empty, 150+ mostly-blank cards on every visit to this page.
+        // Cap the empty-future window to 3 weeks out; anything with real
+        // content (tasks, or marked off) still always renders regardless
+        // of distance, so nothing actually useful is hidden.
+        var lookahead = planDay + 21;
         for (var day = 1; day <= lastDay; day++)
         {
             var isToday = day == planDay;
@@ -98,6 +105,7 @@ public sealed partial class SchedulePage : Page
             var dayTasks = byDay.TryGetValue(day, out var list) ? list : new List<AssignedTask>();
             // The past is history: skip empty days that are already gone.
             if (day < planDay && dayTasks.Count == 0 && !isOff) continue;
+            if (day > lookahead && dayTasks.Count == 0 && !isOff) continue;
 
             var card = DayCard(plan, day, isToday, isOff, dayTasks);
             Sections.Children.Add(card);
@@ -109,7 +117,7 @@ public sealed partial class SchedulePage : Page
         List<AssignedTask> dayTasks)
     {
         var planDay = plan.PlanDay;
-        var date = plan.StartDateParsed.AddDays(day - 1);
+        var date = plan.DateForPlanDay(day);
         var overdueCount = dayTasks.Count(t => t.Overdue);
 
         var grid = new Grid();

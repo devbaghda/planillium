@@ -24,6 +24,13 @@ public sealed class ScoreService : IDisposable
     private readonly Database _db;
     private readonly Dictionary<(string, int, string), bool> _completions;
 
+    // Same "once per process, not once per construction" reasoning as
+    // Database.cs — ScoreService is constructed on nearly every page render
+    // and button click, and re-running two schema statements every time was
+    // pure avoidable overhead on the UI thread.
+    private static bool _schemaEnsured;
+    private static readonly object SchemaGate = new();
+
     public ScoreService(List<Plan> plans, Database db)
     {
         _plans = plans;
@@ -31,35 +38,59 @@ public sealed class ScoreService : IDisposable
         _completions = db.LoadCompletions();
         _conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
         _conn.Open();
-        _conn.CreateCommand()
-            .Also(c => c.CommandText =
-                "CREATE TABLE IF NOT EXISTS reflections (" +
-                "  id   INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "  date TEXT NOT NULL UNIQUE," +
-                "  text TEXT NOT NULL)")
-            .ExecuteNonQuery();
-        // Belt-and-suspenders no-op: Database's constructor (already run via
-        // db.LoadCompletions() above) owns creating/migrating this index —
-        // see Database.EnsureSchema for the drop-and-recreate logic needed
-        // because "CREATE INDEX IF NOT EXISTS" won't widen an existing one.
-        _conn.CreateCommand()
-            .Also(c => c.CommandText =
-                "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
-                "ON score_ledger(reason, date) " +
-                "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')")
-            .ExecuteNonQuery();
+        lock (SchemaGate)
+        {
+            if (!_schemaEnsured)
+            {
+                _conn.CreateCommand()
+                    .Also(c => c.CommandText =
+                        "CREATE TABLE IF NOT EXISTS reflections (" +
+                        "  id   INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "  date TEXT NOT NULL UNIQUE," +
+                        "  text TEXT NOT NULL)")
+                    .ExecuteNonQuery();
+                // Belt-and-suspenders no-op: Database's constructor (already
+                // run via db.LoadCompletions() above) owns creating/migrating
+                // this index — see Database.EnsureSchema for the drop-and-
+                // recreate logic needed because "CREATE INDEX IF NOT EXISTS"
+                // won't widen an existing one.
+                _conn.CreateCommand()
+                    .Also(c => c.CommandText =
+                        "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
+                        "ON score_ledger(reason, date) " +
+                        "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')")
+                    .ExecuteNonQuery();
+                _schemaEnsured = true;
+            }
+        }
     }
 
     public void Dispose() => _conn.Dispose();
 
     // ── day stats (ports of _day_task_counts / _day_diary_minutes) ───────
 
+    /// <summary>True if d is a day off for this plan — either a recurring
+    /// weekly exclusion or a specific day manually marked off. Used only to
+    /// exempt scoring; overdue tasks still display as overdue in the UI on
+    /// a day off, they just don't cost anything further that day.</summary>
+    private bool IsDayOffFor(Plan plan, DateOnly d)
+    {
+        if (plan.IsExcluded(d)) return true;
+        return DaysOff(plan.Id).Contains(plan.PlanDayForDate(d));
+    }
+
     public (int Total, int Done) DayTaskCounts(DateOnly d)
     {
         int total = 0, done = 0;
         foreach (var plan in _plans)
         {
-            var dayNum = d.DayNumber - plan.StartDateParsed.DayNumber + 1;
+            // A day off contributes nothing either way — and for a
+            // recurring exclusion specifically, PlanDayForDate resolves an
+            // excluded date to the SAME day-number as the last valid day
+            // before it, so without this skip an excluded Saturday would
+            // silently re-count Friday's already-credited tasks.
+            if (IsDayOffFor(plan, d)) continue;
+            var dayNum = plan.PlanDayForDate(d);
             var overrides = _db.LoadOverrides(plan.Id);
             foreach (var phase in plan.Phases)
                 foreach (var task in phase.Tasks)
@@ -109,6 +140,9 @@ public sealed class ScoreService : IDisposable
         for (var i = 1; i <= 7; i++)
         {
             var d = DateOnly.FromDateTime(DateTime.Today).AddDays(-i);
+            // A day off doesn't break a streak — skip it rather than
+            // treating its (necessarily zero) task count as a miss.
+            if (_plans.Any(p => IsDayOffFor(p, d))) continue;
             var (total, done) = DayTaskCounts(d);
             if (total > 0 && done == total) streak++;
             else break;
@@ -164,7 +198,7 @@ public sealed class ScoreService : IDisposable
         var result = new List<(Plan, AssignedTask, int)>();
         foreach (var plan in _plans)
         {
-            var dayNum = d.DayNumber - plan.StartDateParsed.DayNumber + 1;
+            var dayNum = plan.PlanDayForDate(d);
             var overrides = _db.LoadOverrides(plan.Id);
             foreach (var phase in plan.Phases)
                 foreach (var task in phase.Tasks)
@@ -191,7 +225,13 @@ public sealed class ScoreService : IDisposable
     public int? CreditOverdueAccrualIfMissing(DateOnly d)
     {
         if (LedgerHas("overdue_accrual", d)) return null;
-        var count = OverdueAsOf(d).Count(x => x.DaysOverdue <= OverdueAccrualCapDays);
+        // A day off (recurring exclusion or manually marked) costs nothing —
+        // tasks a plan already had overdue don't accrue further that day.
+        // They're still shown as overdue everywhere in the UI (OverdueAsOf
+        // itself is untouched) and resume accruing the day after.
+        var count = OverdueAsOf(d)
+            .Where(x => !IsDayOffFor(x.Plan, d))
+            .Count(x => x.DaysOverdue <= OverdueAccrualCapDays);
         if (count == 0) return 0;
         var delta = count * ConfigService.ScoringRate("task_overdue_penalty", -5);
         try

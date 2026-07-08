@@ -14,7 +14,7 @@ public static class RescheduleTaskDialog
 {
     public static async Task<bool> ShowAsync(XamlRoot xamlRoot, Plan plan, AssignedTask task)
     {
-        var minDate = plan.StartDateParsed.AddDays(plan.PlanDay);  // tomorrow (day PlanDay+1)
+        var minDate = plan.DateForPlanDay(plan.PlanDay + 1);  // tomorrow, exclusion-aware
         var minOffset = new DateTimeOffset(minDate.ToDateTime(TimeOnly.MinValue));
 
         var picker = new CalendarDatePicker
@@ -38,7 +38,7 @@ public static class RescheduleTaskDialog
         if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return false;
         if (picker.Date is not { } picked) return false;
 
-        var newDay = DateOnly.FromDateTime(picked.DateTime).DayNumber - plan.StartDateParsed.DayNumber + 1;
+        var newDay = plan.PlanDayForDate(DateOnly.FromDateTime(picked.DateTime));
 
         try
         {

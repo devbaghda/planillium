@@ -15,11 +15,59 @@ public class Plan
     [JsonPropertyName("phases")] public List<Phase> Phases { get; set; } = new();
     [JsonPropertyName("briefing")] public PlanBriefing? Briefing { get; set; }
 
+    /// <summary>Days of the week this plan never schedules anything on —
+    /// .NET DayOfWeek values (0=Sunday..6=Saturday). Per-plan, editable any
+    /// time from the Plans page. When today falls on one of these, the plan
+    /// day counter simply doesn't advance — day N's tasks land on the next
+    /// non-excluded date instead, cascading if that's excluded too.</summary>
+    [JsonPropertyName("excluded_weekdays")] public List<int> ExcludedWeekdays { get; set; } = new();
+
     public DateOnly StartDateParsed =>
         DateOnly.TryParse(StartDate, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
 
-    public int PlanDay =>
-        DateOnly.FromDateTime(DateTime.Today).DayNumber - StartDateParsed.DayNumber + 1;
+    public bool IsExcluded(DateOnly d) => ExcludedWeekdays.Contains((int)d.DayOfWeek);
+
+    /// <summary>Calendar date day N's tasks actually land on — walks forward
+    /// from the start date counting only non-excluded days. With no
+    /// exclusions this is exactly StartDateParsed.AddDays(planDay - 1).</summary>
+    public DateOnly DateForPlanDay(int planDay)
+    {
+        if (ExcludedWeekdays.Count == 0) return StartDateParsed.AddDays(planDay - 1);
+        var date = StartDateParsed;
+        var count = 0;
+        // planDay is always small relative to any realistic plan length, and
+        // exclusions are at most a handful of weekdays, so this terminates
+        // quickly — no need for a closed-form skip-ahead calculation.
+        while (true)
+        {
+            if (!IsExcluded(date))
+            {
+                count++;
+                if (count == planDay) return date;
+            }
+            date = date.AddDays(1);
+        }
+    }
+
+    /// <summary>Inverse of DateForPlanDay — how many non-excluded days have
+    /// elapsed from the start date through (and including) target. If
+    /// target itself is excluded, the count doesn't advance for it, so the
+    /// result is the same as the last non-excluded day before it (nothing
+    /// new becomes due on an excluded day; work picks back up where it left
+    /// off on the next valid day).</summary>
+    public int PlanDayForDate(DateOnly target)
+    {
+        if (ExcludedWeekdays.Count == 0)
+            return target.DayNumber - StartDateParsed.DayNumber + 1;
+        if (target < StartDateParsed)
+            return target.DayNumber - StartDateParsed.DayNumber + 1;
+        var count = 0;
+        for (var date = StartDateParsed; date <= target; date = date.AddDays(1))
+            if (!IsExcluded(date)) count++;
+        return count;
+    }
+
+    public int PlanDay => PlanDayForDate(DateOnly.FromDateTime(DateTime.Today));
 
     public int TotalDaysComputed
     {

@@ -90,6 +90,41 @@ public sealed partial class ReportsPage : Page
                                   $"{todayStat.OnMin}m on-plan · {todayStat.OffMin}m off-plan"));
             Body.Children.Add(Card(card));
 
+            // ── schedule drift: how far excluded days + overdue have pushed
+            // the plan past where a zero-exclusion, nothing-ever-overdue
+            // schedule would be. Approximation, not full history: it applies
+            // TODAY'S excluded-day pattern back across the whole timeline,
+            // so a pattern widened partway through (2 days/week -> 3) reads
+            // as if the wider pattern had always applied, not just from the
+            // week it changed.
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var overdueCount = score.OverdueAsOf(today).Count;
+            var driftLines = new List<string>();
+            foreach (var plan in plans.Where(p => p.PlanDay >= 1))
+            {
+                var naiveDate = plan.StartDateParsed.AddDays(plan.PlanDay - 1);
+                var shiftDays = today.DayNumber - naiveDate.DayNumber;
+                if (shiftDays > 0)
+                    driftLines.Add($"{plan.Name}: day {plan.PlanDay} landed on {today:dd.MM} — " +
+                                    $"{shiftDays} day(s) later than a straight count from " +
+                                    $"{plan.StartDateParsed:dd.MM.yyyy} would put it.");
+            }
+            if (driftLines.Count > 0 || overdueCount > 0)
+            {
+                var drift = new StackPanel { Spacing = 4 };
+                drift.Children.Add(Caption("SCHEDULE DRIFT"));
+                foreach (var line in driftLines)
+                    drift.Children.Add(new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap });
+                if (overdueCount > 0)
+                    drift.Children.Add(new TextBlock
+                    {
+                        Text = $"{overdueCount} task(s) currently overdue.",
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+                    });
+                Body.Children.Add(Card(drift));
+            }
+
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
             Body.Children.Add(Card(_period is ReportPeriod.Day or ReportPeriod.Week

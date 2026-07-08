@@ -71,6 +71,7 @@ public sealed partial class PlansPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { Spacing = 4 };
         left.Children.Add(new TextBlock
@@ -78,9 +79,16 @@ public sealed partial class PlansPage : Page
             Text = plan.Name,
             Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
         });
+        var metaLine = $"Day {plan.PlanDay} of {plan.TotalDaysComputed} · {done}/{total} tasks done";
+        if (plan.ExcludedWeekdays.Count > 0)
+        {
+            var names = plan.ExcludedWeekdays
+                .Select(d => ((DayOfWeek)d).ToString()[..3]);
+            metaLine += $" · excludes {string.Join(", ", names)}";
+        }
         left.Children.Add(new TextBlock
         {
-            Text = $"Day {plan.PlanDay} of {plan.TotalDaysComputed} · {done}/{total} tasks done",
+            Text = metaLine,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             FontSize = 13,
         });
@@ -100,6 +108,14 @@ public sealed partial class PlansPage : Page
             grid.Children.Add(briefing);
         }
 
+        var excludeDays = new Button { Content = "Excluded days…", VerticalAlignment = VerticalAlignment.Center };
+        excludeDays.Click += async (_, _) =>
+        {
+            if (await ExcludedWeekdaysDialog.ShowAsync(XamlRoot, plan)) Render();
+        };
+        Grid.SetColumn(excludeDays, 2);
+        grid.Children.Add(excludeDays);
+
         var archive = new Button
         {
             Content = complete ? "Archive ✓" : "Archive",
@@ -109,7 +125,7 @@ public sealed partial class PlansPage : Page
         ToolTipService.SetToolTip(archive,
             complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
         archive.Click += async (_, _) => await ArchiveAsync(plan);
-        Grid.SetColumn(archive, 2);
+        Grid.SetColumn(archive, 3);
         grid.Children.Add(archive);
 
         return new Border

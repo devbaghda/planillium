@@ -105,6 +105,23 @@ public sealed partial class TodayPage : Page
                     continue;
                 }
 
+                // Today itself is an excluded weekday — nothing is due, and
+                // the day counter hasn't advanced, so without this check
+                // "today's tasks" would just re-show yesterday's (already
+                // completed) ones instead of a clean day-off state.
+                if (plan.IsExcluded(DateOnly.FromDateTime(DateTime.Today)))
+                {
+                    Sections.Children.Add(Muted("🌴 Day off — no tasks scheduled today."));
+                    var overdueToday = tasks.Where(t => t.Overdue).OrderBy(t => t.AssignedDay).ToList();
+                    if (overdueToday.Count > 0)
+                    {
+                        totalOverdue += overdueToday.Count;
+                        Sections.Children.Add(GroupLabel($"OVERDUE · {overdueToday.Count}", danger: true));
+                        Sections.Children.Add(TaskCard(overdueToday, plan));
+                    }
+                    continue;
+                }
+
                 var overdue = tasks.Where(t => t.Overdue)
                                    .OrderBy(t => t.AssignedDay).ToList();
                 var today = tasks.Where(t => t.AssignedDay == planDay).ToList();

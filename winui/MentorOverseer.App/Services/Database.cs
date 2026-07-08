@@ -11,12 +11,27 @@ public sealed class Database : IDisposable
 {
     private readonly SqliteConnection _conn;
 
+    // Every page navigation, every checkbox toggle, every button click opens
+    // a new Database() — construction used to re-run the full schema check
+    // (a sqlite_master scan plus 8 CREATE-IF-NOT-EXISTS statements) EVERY
+    // single time, which is pure overhead after the first call in a running
+    // process (the schema can't change mid-session). Gate it to once.
+    private static bool _schemaEnsured;
+    private static readonly object SchemaGate = new();
+
     public Database()
     {
         Directory.CreateDirectory(Path.Combine(AppPaths.Root, "data"));
         _conn = new SqliteConnection($"Data Source={AppPaths.DbPath}");
         _conn.Open();
-        EnsureSchema();
+        lock (SchemaGate)
+        {
+            if (!_schemaEnsured)
+            {
+                EnsureSchema();
+                _schemaEnsured = true;
+            }
+        }
     }
 
     /// <summary>
@@ -24,10 +39,8 @@ public sealed class Database : IDisposable
     /// migration, which only applies to a pre-multi-plan database that can't
     /// exist on a fresh install) plus tracker/activity.py's time_diary and
     /// activity_log — every table any part of either app touches. Every
-    /// statement is idempotent, so this runs on every Database construction;
-    /// harmless against an existing progress.db, and the only thing standing
-    /// between a fresh install and "SQLite Error 1: no such table" on first
-    /// launch.
+    /// statement is idempotent; gated to run once per process (see above)
+    /// rather than on every construction.
     /// </summary>
     private void EnsureSchema()
     {

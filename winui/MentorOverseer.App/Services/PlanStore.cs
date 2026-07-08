@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MentorOverseer.App.Models;
 
 namespace MentorOverseer.App.Services;
@@ -62,5 +63,24 @@ public static class PlanStore
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Surgical patch of one plan file's excluded_weekdays — parses as a raw
+    /// JsonNode rather than round-tripping through the Plan model, so fields
+    /// the C# model doesn't know about (hand-authored plans, the user's real
+    /// active plan included, carry extras per phase like days_range/
+    /// cost_eur/effort/key_win) survive untouched. A full deserialize-then-
+    /// reserialize would silently drop them.
+    /// </summary>
+    public static void SetExcludedWeekdays(string planId, List<int> weekdays)
+    {
+        var path = Path.Combine(AppPaths.ActivePlansDir, $"{planId}.json");
+        var node = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
+            ?? throw new InvalidOperationException($"Plan file for '{planId}' isn't a JSON object.");
+        var arr = new JsonArray();
+        foreach (var d in weekdays) arr.Add(d);
+        node["excluded_weekdays"] = arr;
+        File.WriteAllText(path, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 }
