@@ -26,7 +26,7 @@ public static class NameSetupDialog
 
         var dialog = new ContentDialog
         {
-            Title = "Welcome to Mentor Overseer",
+            Title = $"Welcome to {AppInfo.DisplayName}",
             Content = panel,
             PrimaryButtonText = "Continue",
             DefaultButton = ContentDialogButton.Primary,

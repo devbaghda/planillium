@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Builds a distributable Mentor Overseer installer: clean publish -> stage a
+  Builds a distributable Planillium installer: clean publish -> stage a
   self-contained data folder -> compile with Inno Setup -> checksum.
 
 .PARAMETER Force
@@ -39,7 +39,7 @@ function Fail($msg) { Write-Host "FAILED: $msg" -ForegroundColor Red; exit 1 }
 $csprojText = Get-Content $ProjectPath -Raw
 if ($csprojText -notmatch '<Version>([^<]+)</Version>') { Fail "No <Version> in $ProjectPath" }
 $Version = $Matches[1]
-Step "Mentor Overseer v$Version"
+Step "Planillium v$Version"
 
 # -- 2. clean tree check -----------------------------------------------------
 Step "Checking git tree"

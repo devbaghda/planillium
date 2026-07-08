@@ -35,9 +35,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Log.Info($"Mentor Overseer v{AppVersion.Current} starting");
+        Log.Info($"Planillium v{AppVersion.Current} starting");
 
-        _instanceMutex = new Mutex(true, "MentorOverseerWinUI_SingleInstance", out var createdNew);
+        _instanceMutex = new Mutex(true, AppInfo.SingleInstanceMutex, out var createdNew);
         if (!createdNew)
         {
             Log.Info("Second instance blocked by mutex — exiting.");

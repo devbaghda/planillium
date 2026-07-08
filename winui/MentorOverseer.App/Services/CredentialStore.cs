@@ -4,13 +4,17 @@ namespace MentorOverseer.App.Services;
 
 /// <summary>
 /// Windows Credential Manager access, read AND write, byte-compatible with
-/// python-keyring's WinVault backend (TargetName "&lt;key&gt;@MentorOverseer",
+/// python-keyring's WinVault backend (TargetName "&lt;key&gt;@ServiceName",
 /// generic type, UTF-16LE blob) — so tokens written by either app are read
 /// by both. Secrets never touch disk.
 /// </summary>
 public static class CredentialStore
 {
-    private const string Service = "MentorOverseer";
+    private const string Service = AppInfo.DisplayName;
+    // Reads still check the pre-rename target so an existing TickTick token
+    // (stored under "...@MentorOverseer" before this app was Planillium)
+    // isn't orphaned — new writes only ever use the current Service name.
+    private const string LegacyService = AppInfo.LegacyStartupRegistryValue;
 
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
@@ -30,7 +34,7 @@ public static class CredentialStore
 
     public static string? Read(string key)
     {
-        foreach (var target in new[] { $"{key}@{Service}", Service, key })
+        foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}", Service, key })
         {
             if (!CredRead(target, 1 /* CRED_TYPE_GENERIC */, 0, out var ptr)) continue;
             try

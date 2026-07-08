@@ -5,13 +5,13 @@ namespace MentorOverseer.App.Services;
 /// <summary>
 /// Start-with-Windows via the HKCU Run key. Value name is distinct from the
 /// retired Python app's names — and Enable() sweeps those legacy names so
-/// only ever one Mentor Overseer starts at boot.
+/// only ever one Planillium starts at boot.
 /// </summary>
 public static class StartupService
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "MentorOverseer";
-    private static readonly string[] LegacyNames = { "Mentor-Overseer", "NetherlandsMentor" };
+    private const string ValueName = AppInfo.StartupRegistryValue;
+    private static readonly string[] LegacyNames = { "Mentor-Overseer", "NetherlandsMentor", AppInfo.LegacyStartupRegistryValue };
 
     private static string Command =>
         $"\"{Environment.ProcessPath}\" --minimized";

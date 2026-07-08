@@ -17,7 +17,7 @@
                     <FontIcon Glyph="&#xE73E;" FontSize="10"
                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
                 </Border>
-                <TextBlock Text="Mentor Overseer"
+                <TextBlock x:Name="TitleText"
                            Style="{StaticResource CaptionTextBlockStyle}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            VerticalAlignment="Center"/>

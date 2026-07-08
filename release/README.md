@@ -1,4 +1,4 @@
-# Releasing Mentor Overseer
+# Releasing Planillium
 
 One command builds the installer:
 
@@ -9,7 +9,7 @@ One command builds the installer:
 That publishes a self-contained x64 build, stages `release\dist\` (the exe plus a
 first-run `config.json` / empty `plans\` / `data\`), compiles
 `release\installer\app.iss` with Inno Setup, and writes
-`release\output\MentorOverseer-<version>-setup.exe` + `SHA256SUMS.txt`. Neither
+`release\output\Planillium-<version>-setup.exe` + `SHA256SUMS.txt`. Neither
 `dist\` nor `output\` are committed (see `.gitignore`) — the installer is a build
 artifact, not source.
 

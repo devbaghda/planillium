@@ -20,7 +20,13 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "Mentor Overseer";
+        Title = AppInfo.DisplayName;
+        // Ensure the custom title bar text matches the app display name
+        try
+        {
+            TitleText.Text = AppInfo.DisplayName;
+        }
+        catch { }
         _dq = DispatcherQueue;
 
         // Mica ground; falls back to the theme's solid color on unsupported OS.
@@ -101,7 +107,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var open = new MenuFlyoutItem { Text = "Open Mentor Overseer" };
+            var open = new MenuFlyoutItem { Text = $"Open {AppInfo.DisplayName}" };
             open.Click += (_, _) => ShowFromTray();
             var quit = new MenuFlyoutItem { Text = "Quit (stops tracking)" };
             quit.Click += (_, _) => { _reallyClose = true; Close(); };
@@ -115,7 +121,7 @@ public sealed partial class MainWindow : Window
 
             _tray = new H.NotifyIcon.TaskbarIcon
             {
-                ToolTipText = "Mentor Overseer",
+                ToolTipText = AppInfo.DisplayName,
                 Icon = new System.Drawing.Icon(
                     Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico")),
                 ContextFlyout = menu,

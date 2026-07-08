@@ -1,5 +1,13 @@
 # Mentor-Overseer — Project Context
 
+**App display name is now "Planillium"** (renamed 2026-07-08, in prep for open-
+sourcing this as a public portfolio piece — see the Session handoff notes at the
+bottom). The repo folder, `winui/MentorOverseer.App/` project path, C# namespace,
+and this doc's own title are all deliberately left as `MentorOverseer` — internal,
+invisible to end users, and renaming them was explicitly out of scope (see handoff).
+User-facing surfaces (window title, tray, dialogs, installer, exported reports) all
+say "Planillium"; the compiled exe is `Planillium.App.exe`.
+
 ## What this app is
 A desktop personal mentor and accountability companion that tracks the user's progress
 across up to 2 active life/career plans simultaneously. It monitors his activity,
@@ -170,6 +178,35 @@ every feature that mattered.
 _Update this section at the end of each Claude Code session:_
 
 - Last session: 2026-07-08, branch `winui-rebuild` (now == `master`)
+- **Renamed to "Planillium"**, prepping to open-source as a public portfolio piece.
+  Picked up an uncommitted, partial rename left by a different tool
+  (`CLAUDE_HANDOFF.md`, still sitting in the repo root, untracked) and finished it:
+  new `Services/AppInfo.cs`
+  (`DisplayName`/mutex/startup-registry-value constants, referenced everywhere
+  instead of hardcoded strings); `csproj` `<AssemblyName>`/`app.manifest`
+  `assemblyIdentity` → `Planillium.App`; installer (`app.iss`, `release.ps1`,
+  `release/README.md`) renamed and its `[UninstallRun]` reg-delete sweep extended to
+  cover both the new and every legacy Run-key value name; Desktop shortcut
+  retargeted + renamed. Deliberately did NOT rename the repo folder
+  (`winui/MentorOverseer.App/`), the csproj filename, or the C# namespace — the
+  handoff itself called that optional, and it's invisible to end users; renaming it
+  would have meant touching the namespace declaration in every one of ~50 files for
+  no user-visible benefit. Found and fixed one real bug the naive rename would have
+  caused: `CredentialStore`'s Windows Credential Manager target name was about to
+  flip from `...@MentorOverseer` to `...@Planillium`, which would have silently
+  orphaned the user's already-stored TickTick OAuth token (`Read` only checked one
+  target). Added a `LegacyService` fallback so reads still find the pre-rename
+  credential while writes go to the new name — verified live: TickTick's "My Tasks"
+  still loaded a real task after rebuilding. Built clean, launched, screenshot-
+  confirmed "Planillium" in the title bar, tray, and in-app header.
+  **Not done yet, before anything goes public**: scrub personal data — real plans
+  (`plans/active/netherlands.json` describes the user's actual relocation),
+  `config.json` (real activity keywords, TickTick `client_id`), and git history
+  (carries all of the above across every commit, not just the current tree) all
+  need a plan — a public template config already exists at
+  `release/installer/config.default.json` (empty `user_name`, a separate TickTick
+  `client_id`) as a starting point, but the *repo itself* going public is a bigger
+  decision than the rename and hasn't been made yet.
 - **Repo consolidation**: `master` fast-forwarded to match `winui-rebuild` (they'd
   diverged since the WinUI work started on a feature branch); stale branches fully
   contained in it (`audit-remediation`, `ux-audit-fixes`, `ui-theme-light-dark`)

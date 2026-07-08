@@ -63,7 +63,7 @@ public static class ReportExport
 
         var html = $$"""
             <!DOCTYPE html><html><head><meta charset="utf-8">
-            <title>Mentor Overseer — Weekly Report</title>
+            <title>Planillium — Weekly Report</title>
             <style>
               body { font-family: 'Segoe UI', sans-serif; max-width: 760px; margin: 40px auto;
                      padding: 0 16px; color: #1a1a1a; }
@@ -79,7 +79,7 @@ public static class ReportExport
                 td, th { border-color: #333; } .sub { color: #999; }
               }
             </style></head><body>
-            <h1>Mentor Overseer</h1>
+            <h1>Planillium</h1>
             <div class="sub">Weekly Report · generated {{DateTime.Now.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)}}</div>
             <h2>The week</h2>
             <table><tr><th>Day</th><th>Tasks</th><th>On-plan</th><th>Off-plan</th><th>Score</th></tr>{{dayRows}}</table>
@@ -111,7 +111,7 @@ public static class ReportExport
 
         var sb = new StringBuilder();
         var name = ReportData.PeriodName(period);
-        sb.AppendLine(Csv("Mentor Overseer report", name,
+        sb.AppendLine(Csv("Planillium report", name,
             "generated " + DateTime.Now.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)));
         sb.AppendLine();
 

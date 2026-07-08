@@ -29,7 +29,7 @@ public sealed partial class SettingsPage : Page
                 ? "This app is tracking your activity (60s polls, diary 06:00–20:00)."
                 : "Tracking is off in this app — the Python app was already running " +
                   "and only one tracker may write the diary at a time.";
-            DataInfo.Text = $"Mentor Overseer v{AppVersion.Current}\nShared data folder: " + AppPaths.Root;
+            DataInfo.Text = $"{AppInfo.DisplayName} v{AppVersion.Current}\nShared data folder: " + AppPaths.Root;
         };
     }
 
