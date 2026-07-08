@@ -208,7 +208,63 @@ launch after the 2026-06-29 audit fix.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-07, branch `winui-rebuild`
+- Last session: 2026-07-08, branch `winui-rebuild`
+- **Dark-mode live theme switching actually fixed** (`0d37a9d`) — root cause was
+  `ThemeSync`'s `ThemeDictionaries`-walk (`FindThemed`) silently returning `null`
+  for every brush key on every call, confirmed only after adding per-key
+  diagnostic logging and reading the real log output. Any earlier appearance of
+  correctness was coincidental (ambient `Application.RequestedTheme` mirroring
+  the OS theme). Abandoned runtime discovery entirely — hardcoded the 12 needed
+  Light/Dark hex values straight from the pinned `Microsoft.WindowsAppSDK
+  1.5.240627000` package's `generic.xaml`; the 2 accent-derived keys
+  (`AccentFillColorDefaultBrush`/`AccentTextFillColorPrimaryBrush`) still
+  resolve live via `SystemAccentColorDark/Light` aliases since they follow the
+  OS accent color. `MainWindow`'s initial `ThemeSync.Apply` moved to
+  `root.Loaded` so first paint gets it too, not just subsequent switches.
+- **Reports page "Time by App"/"Top Distractions" indentation** — three
+  separate, layered bugs, each surfaced by a follow-up "still not fixed" report
+  and fixed in sequence: top-level rows no longer indented like sub-items
+  (`9a9d459`), both lists wrapped in matching `Card()` (`d7ac65c`), and finally
+  identical label-column widths so the *colored bars* line up, not just the
+  text (`9e841cb`) — that last one only became clear from the user's own
+  annotated screenshot.
+- **Schedule page "Details" link** (`ae2b430`) — same `TaskDetailDialog` Today
+  already used, now reachable from Schedule too.
+- **Personal task notes**, inline on the task row on both Today and Schedule
+  (`194beec`) — new `task_notes` SQLite table (`plan_id, task_text` key), new
+  shared `Views/TaskNoteView` widget. the user explicitly chose "inline on the
+  row" over the recommended "inside the Details dialog" when asked.
+- **Reschedule no longer double-books a day** (`3fe94fb`) —
+  `ScoreService.RescheduleTask` used to just drop the task onto its new day
+  even if something was already there. Now shifts that day (and everything
+  after) forward by one first, same "insert, don't overlap" semantics
+  `MoveTaskToToday`/`MarkDayOff` already used.
+- **Manual plan steps** (`3fe94fb`) — new "+ Add step" button on each Plans
+  card → `AddTaskDialog` (day/title/optional detail/duration/category) →
+  `PlanStore.AddTask`, a surgical `JsonNode` patch appending to the plan's
+  last phase (same technique as `SetExcludedWeekdays`, preserves hand-authored
+  extras elsewhere in the file). Deliberately no `mentor_note` field — that's
+  Claude-authored commentary, not something to fake for a manually-typed task.
+- **"Get a head start on tomorrow?"** (`5ced5be`) — Today page used to just say
+  "All done for today" and stop once you'd cleared the list, leaving the
+  existing move-to-today shift logic reachable only by digging into the
+  Schedule page. Now, once nothing's overdue and today's list is empty or
+  fully checked off, it lists tomorrow's tasks with a one-click "Start now"
+  (reuses `MoveTaskToToday`).
+- All of the above built clean (`dotnet build -p:Platform=x64 -c Release`, 0
+  warnings/0 errors) and verified via `PrintWindow` screenshots against a
+  running instance (`MENTOR_PAGE` env hook). The reschedule-shift logic could
+  only be verified by code-pattern match against the already-proven
+  `MoveTaskToToday`/`MarkDayOff` pattern — not click-tested, per the standing
+  rule against simulating mouse/keyboard input on the user's live app/data.
+- Also folding in same-day work from 2026-07-07 that hadn't made it into this
+  log yet: **v1.0.0 release** (`2d046d9` — Inno Setup installer pipeline,
+  version surfacing in Settings + log header; `3ef76b0` fixed `release.ps1`
+  failing to parse under Windows PowerShell 5.1) plus `aff19a7`/`483ad7d`/
+  `e2fc6b9` (overdue-reschedule dialog, editable diary entries, app icon,
+  score-chip styling, latest-first diary ordering, dropped category tags from
+  Today).
+- Previous session: 2026-07-07, branch `winui-rebuild`
 - **Full audit of the WinUI app + all 18 actionable findings applied** (the user's
   instruction: apply everything, do NOT re-audit — a re-audit pass is still owed
   whenever he asks). What changed, by finding #:
