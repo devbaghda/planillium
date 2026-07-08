@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer Padding="28,8,28,28">
-        <StackPanel MaxWidth="880" Spacing="0">
+        <StackPanel MaxWidth="880" HorizontalAlignment="Center" Spacing="0">
             <Grid Margin="0,8,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

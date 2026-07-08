@@ -18,6 +18,9 @@ public sealed partial class ReportsPage : Page
     // it's still there. Resets to today only via the "Today" button.
     private static DateOnly _diaryDate = DateOnly.FromDateTime(DateTime.Today);
 
+    // Diary search text, same survives-navigation treatment.
+    private static string _diarySearch = "";
+
     private static readonly (string Label, ReportPeriod Period)[] PeriodOpts =
     {
         ("Day", ReportPeriod.Day), ("Week", ReportPeriod.Week),
@@ -177,15 +180,52 @@ public sealed partial class ReportsPage : Page
             }
             Body.Children.Add(Card(hintPanel));
 
-            // ── diary, navigable to any past day ───────────────────────────
+            // ── diary, navigable to any past day, filterable by search ─────
             Body.Children.Add(DiaryHeader());
-            var diary = DiaryForDate(_diaryDate);
-            if (diary.Count == 0)
-                Body.Children.Add(Dim(_diaryDate == today
-                    ? "No diary entries yet today. Tracking runs 06:00–20:00."
-                    : "No diary entries on this day."));
-            else
-                Body.Children.Add(Card(DiaryList(diary)));
+
+            var searchBox = new TextBox
+            {
+                PlaceholderText = "Search this day's diary (app or description)…",
+                Text = _diarySearch,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            Body.Children.Add(searchBox);
+
+            var diaryResults = new StackPanel { Spacing = 0 };
+            Body.Children.Add(diaryResults);
+
+            var allDiary = DiaryForDate(_diaryDate);
+
+            void RenderDiaryResults()
+            {
+                diaryResults.Children.Clear();
+                var q = _diarySearch.Trim();
+                var filtered = q.Length == 0
+                    ? allDiary
+                    : allDiary.Where(e =>
+                        AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                        (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                        e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                if (filtered.Count == 0)
+                    diaryResults.Children.Add(Dim(allDiary.Count == 0
+                        ? (_diaryDate == today
+                            ? "No diary entries yet today. Tracking runs 06:00–20:00."
+                            : "No diary entries on this day.")
+                        : "No entries match your search."));
+                else
+                    diaryResults.Children.Add(Card(DiaryList(filtered)));
+            }
+            RenderDiaryResults();
+
+            // Filters in place (doesn't touch searchBox itself) so typing
+            // keeps focus/cursor position instead of losing it every keystroke.
+            searchBox.TextChanged += (_, _) =>
+            {
+                _diarySearch = searchBox.Text;
+                RenderDiaryResults();
+            };
         }
         catch (Exception ex)
         {

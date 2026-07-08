@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer Padding="28,8,28,28">
-        <StackPanel MaxWidth="720" Spacing="16">
+        <StackPanel MaxWidth="720" HorizontalAlignment="Center" Spacing="16">
             <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0"/>
 
             <TextBlock Text="APPEARANCE" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
