@@ -87,4 +87,35 @@ public static class PlanStore
         File.WriteAllText(path, node.ToJsonString(
             new JsonSerializerOptions(JsonSerializerOptions.Default) { WriteIndented = true }));
     }
+
+    /// <summary>
+    /// Appends a manually-added step to a plan file's last phase — same
+    /// surgical JsonNode patch as SetExcludedWeekdays, so hand-authored
+    /// extras elsewhere in the file survive untouched. Multiple tasks
+    /// sharing a day is already normal (most days already have more than
+    /// one), so this never needs to shift anything.
+    /// </summary>
+    public static void AddTask(string planId, int day, string text, string? detail,
+        string? category, int? durationMin)
+    {
+        var path = Path.Combine(AppPaths.ActivePlansDir, $"{planId}.json");
+        var node = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
+            ?? throw new InvalidOperationException($"Plan file for '{planId}' isn't a JSON object.");
+        var phases = node["phases"] as JsonArray;
+        if (phases is null || phases.Count == 0)
+            throw new InvalidOperationException($"Plan '{planId}' has no phase to add a task to.");
+        var lastPhase = phases[^1] as JsonObject
+            ?? throw new InvalidOperationException($"Plan '{planId}''s last phase isn't a JSON object.");
+        if (lastPhase["tasks"] is not JsonArray tasks)
+            lastPhase["tasks"] = tasks = new JsonArray();
+
+        var task = new JsonObject { ["day"] = day, ["task"] = text };
+        if (detail != null) task["detail"] = detail;
+        if (category != null) task["category"] = category;
+        if (durationMin is int d) task["duration_min"] = d;
+        tasks.Add(task);
+
+        File.WriteAllText(path, node.ToJsonString(
+            new JsonSerializerOptions(JsonSerializerOptions.Default) { WriteIndented = true }));
+    }
 }

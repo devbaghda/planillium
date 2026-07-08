@@ -364,13 +364,25 @@ public sealed class ScoreService : IDisposable
     }
 
     /// <summary>
-    /// Move a single overdue task to a specific future day, touching nothing
-    /// else — the WinUI port of main.py's _reassign_task_day / the "pick a
-    /// date" reschedule flow. The overdue penalty already accrued for the
-    /// days it was late stands; this only stops it from accruing further.
+    /// Move a single overdue task to a specific future day. Whatever was
+    /// already on that day — and everything after it — shifts forward by
+    /// one day first, so the rescheduled task gets its own slot instead of
+    /// doubling up with whatever was already there (same "insert, don't
+    /// overlap" semantics as MoveTaskToToday/MarkDayOff). The overdue
+    /// penalty already accrued for the days it was late stands; this only
+    /// stops it from accruing further.
     /// </summary>
-    public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay) =>
+    public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay)
+    {
+        var tasks = PlanStore.TasksFor(plan, _db, _completions);
+        foreach (var t in tasks)
+        {
+            if (t.Task.Text == taskText) continue;
+            if (t.AssignedDay >= newAssignedDay)
+                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+        }
         SaveOverride(plan.Id, taskText, originalDay, newAssignedDay);
+    }
 
     public HashSet<int> DaysOff(string planId)
     {

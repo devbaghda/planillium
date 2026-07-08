@@ -72,6 +72,7 @@ public sealed partial class PlansPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { Spacing = 4 };
         left.Children.Add(new TextBlock
@@ -108,12 +109,20 @@ public sealed partial class PlansPage : Page
             grid.Children.Add(briefing);
         }
 
+        var addStep = new Button { Content = "+ Add step", VerticalAlignment = VerticalAlignment.Center };
+        addStep.Click += async (_, _) =>
+        {
+            if (await AddTaskDialog.ShowAsync(XamlRoot, plan)) Render();
+        };
+        Grid.SetColumn(addStep, 2);
+        grid.Children.Add(addStep);
+
         var excludeDays = new Button { Content = "Excluded days…", VerticalAlignment = VerticalAlignment.Center };
         excludeDays.Click += async (_, _) =>
         {
             if (await ExcludedWeekdaysDialog.ShowAsync(XamlRoot, plan)) Render();
         };
-        Grid.SetColumn(excludeDays, 2);
+        Grid.SetColumn(excludeDays, 3);
         grid.Children.Add(excludeDays);
 
         var archive = new Button
@@ -125,7 +134,7 @@ public sealed partial class PlansPage : Page
         ToolTipService.SetToolTip(archive,
             complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
         archive.Click += async (_, _) => await ArchiveAsync(plan);
-        Grid.SetColumn(archive, 3);
+        Grid.SetColumn(archive, 4);
         grid.Children.Add(archive);
 
         return new Border
