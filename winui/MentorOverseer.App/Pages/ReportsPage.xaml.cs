@@ -448,7 +448,10 @@ public sealed partial class ReportsPage : Page
         foreach (var (label, minutes) in distractions)
         {
             var row = new Grid { ColumnSpacing = 12 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            // 230, not some other width: matches AppUsageRow's bold-row label
+            // column in Time by App, so the two lists' bars start at the same
+            // x instead of only their row/card edges lining up.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var name = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis };
