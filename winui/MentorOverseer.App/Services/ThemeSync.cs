@@ -33,11 +33,12 @@ public static class ThemeSync
 {
     private static readonly string[] Keys =
     {
-        "TextFillColorSecondaryBrush", "TextFillColorTertiaryBrush",
+        "TextFillColorPrimaryBrush", "TextFillColorSecondaryBrush", "TextFillColorTertiaryBrush",
         "CardBackgroundFillColorDefaultBrush", "CardStrokeColorDefaultBrush",
         "DividerStrokeColorDefaultBrush", "SubtleFillColorSecondaryBrush",
         "SystemFillColorCriticalBrush", "SystemFillColorSuccessBrush",
-        "SystemFillColorCautionBrush", "AccentTextFillColorPrimaryBrush",
+        "SystemFillColorCautionBrush", "SystemFillColorCriticalBackgroundBrush",
+        "AccentTextFillColorPrimaryBrush", "TextOnAccentFillColorPrimaryBrush",
         "AccentFillColorDefaultBrush",
     };
 
