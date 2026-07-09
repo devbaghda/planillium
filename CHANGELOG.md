@@ -9,6 +9,11 @@ going forward; the original Python/Tkinter version is retired.
 - Fixed a bug where completing a task today, then pulling a future task to
   today ("get a head start on tomorrow"), silently unmarked today's already-
   completed task and pushed it to tomorrow instead
+- "Get a head start on tomorrow?" now offers as soon as any task today is
+  done, not only once every task today is cleared
+- Pulling a future task to today no longer leaves a dead, empty day behind
+  it — if that was the day's only task, everything after it shifts back
+  one day to close the gap, so finishing early actually shortens the plan
 - Added a multi-task bonus: each task completed beyond the first one on the
   same day now earns extra points on top of the flat per-task credit,
   shown as its own line in the evening review breakdown

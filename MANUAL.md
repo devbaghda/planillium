@@ -50,7 +50,10 @@ It shows:
 Getting a head start on tomorrow's work doesn't cost anything from today —
 a task finished early stays credited to the day it was actually done on,
 and finishing more than one task in a day earns a small bonus on top of the
-per-task credit (see the evening review for the breakdown).
+per-task credit (see the evening review for the breakdown). Pulling a task
+forward also compresses the rest of the plan: if that was the only task on
+its original day, everything after it moves up to close the gap instead of
+leaving an empty day behind.
 
 ### Schedule view
 

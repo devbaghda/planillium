@@ -156,11 +156,13 @@ public sealed partial class TodayPage : Page
                     Sections.Children.Add(Muted("No tasks scheduled for today."));
                 }
 
-                // Nothing left to clear (no overdue, today's list is either
-                // empty or fully checked off) — offer to pull tomorrow's
-                // tasks forward instead of making the user dig for "Move to
-                // today" on the Schedule page.
-                if (overdue.Count == 0 && (today.Count == 0 || done == today.Count))
+                // No overdue work, and at least one task today is already
+                // done (or there was never anything scheduled) — offer to
+                // pull tomorrow's tasks forward instead of making the user
+                // dig for "Move to today" on the Schedule page. Used to
+                // require *every* task today to be done first; now any
+                // amount of progress is enough to ask.
+                if (overdue.Count == 0 && (today.Count == 0 || done > 0))
                 {
                     var tomorrowDay = planDay + 1;
                     if (!plan.IsExcluded(plan.DateForPlanDay(tomorrowDay)))

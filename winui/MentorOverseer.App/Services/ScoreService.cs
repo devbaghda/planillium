@@ -351,16 +351,21 @@ public sealed class ScoreService : IDisposable
     // ── schedule operations (ports of _swap_task_to_today / _mark_day_off) ──
 
     /// <summary>
-    /// Pull a future task to today; shift everything between today and its
-    /// old slot forward by one day (same semantics as the Python app's
-    /// _swap_task_to_today). No-op if the task is already due or overdue.
-    /// Already-completed tasks are never shifted — a completion is a
-    /// historical record of what happened on a given day, not a schedule
-    /// slot, and re-shelving it silently orphaned its task_completions row
-    /// (keyed by assigned day) so a finished task on today's day would
-    /// appear undone and pushed to tomorrow. Multiple tasks per day is
-    /// already normal, so completed tasks can simply stay put alongside
-    /// whatever lands on their day.
+    /// Pull a future task to today. If that empties out its old day (no
+    /// other tasks left assigned there), every later pending task shifts
+    /// back one day to close the gap — finishing something ahead of
+    /// schedule should compress the remaining plan, not leave a dead day
+    /// sitting in the middle of it. No-op if the task is already due or
+    /// overdue. (This replaces an earlier "shift everything between today
+    /// and the old slot forward" rule ported from the Python app's
+    /// _swap_task_to_today, which assumed one task per day; multiple tasks
+    /// per day is normal in the current plan format, so there was never
+    /// really an overlap to avoid by pushing other days later.)
+    /// Already-completed tasks are never shifted, here or in the backward
+    /// compaction — a completion is a historical record of what happened on
+    /// a given day, not a schedule slot, and re-shelving it silently
+    /// orphaned its task_completions row (keyed by assigned day) so a
+    /// finished task on today's day would appear undone and pushed forward.
     /// </summary>
     public void MoveTaskToToday(Plan plan, string taskText)
     {
@@ -369,13 +374,19 @@ public sealed class ScoreService : IDisposable
         var target = tasks.FirstOrDefault(t => t.Task.Text == taskText);
         if (target is null || target.AssignedDay <= planDay) return;
 
-        foreach (var t in tasks)
-        {
-            if (t.Task.Text == taskText || t.Completed) continue;
-            if (t.AssignedDay >= planDay && t.AssignedDay < target.AssignedDay)
-                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
-        }
+        var oldDay = target.AssignedDay;
         SaveOverride(plan.Id, taskText, target.OriginalDay, planDay);
+
+        var dayNowEmpty = tasks.All(t => t.Task.Text == taskText || t.AssignedDay != oldDay);
+        if (dayNowEmpty)
+        {
+            foreach (var t in tasks)
+            {
+                if (t.Task.Text == taskText || t.Completed) continue;
+                if (t.AssignedDay > oldDay)
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
+            }
+        }
     }
 
     /// <summary>
