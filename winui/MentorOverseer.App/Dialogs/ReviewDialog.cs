@@ -27,11 +27,12 @@ public static class ReviewDialog
         var streak = score.CurrentStreak();
 
         var taskPt = done * ConfigService.ScoringRate("task_completed", 10);
+        var multiTaskPt = Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3);
         var onPt = (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3));
         var offPt = (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2));
         var missPt = Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5);
         var streakPt = streak * ConfigService.ScoringRate("streak_bonus_per_day", 5);
-        var rawTotal = taskPt + onPt + offPt + missPt + streakPt;
+        var rawTotal = taskPt + multiTaskPt + onPt + offPt + missPt + streakPt;
         var dayTotal = Math.Max(rawTotal, ScoreService.DailyFloor);
         var floored = dayTotal != rawTotal;
 
@@ -113,6 +114,7 @@ public static class ReviewDialog
             ledger.Children.Add(g);
         }
         Row($"{done} task(s) completed", taskPt);
+        Row("Multi-task bonus (more than 1 done today)", multiTaskPt);
         Row("On-plan focus", onPt);
         Row($"{streak}-day streak bonus", streakPt);
         Row($"{Math.Max(0, total - done)} task(s) missed today", missPt);

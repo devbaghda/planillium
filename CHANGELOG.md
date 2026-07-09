@@ -5,6 +5,14 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Scheduling & scoring**
+- Fixed a bug where completing a task today, then pulling a future task to
+  today ("get a head start on tomorrow"), silently unmarked today's already-
+  completed task and pushed it to tomorrow instead
+- Added a multi-task bonus: each task completed beyond the first one on the
+  same day now earns extra points on top of the flat per-task credit,
+  shown as its own line in the evening review breakdown
+
 **Reports**
 - Fixed the diary list's column width visibly resizing depending on that
   day's content — the content column is now sized deterministically from

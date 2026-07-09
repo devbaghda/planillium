@@ -72,6 +72,7 @@
   },
   "scoring": {
     "task_completed": 10,
+    "multi_task_bonus_per_extra_task": 3,
     "task_overdue_penalty": -5,
     "on_plan_hour": 3,
     "off_plan_hour": -2,

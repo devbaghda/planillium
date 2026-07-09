@@ -47,6 +47,11 @@ It shows:
 - overdue work,
 - and opportunities to start tomorrow’s work early.
 
+Getting a head start on tomorrow's work doesn't cost anything from today —
+a task finished early stays credited to the day it was actually done on,
+and finishing more than one task in a day earns a small bonus on top of the
+per-task credit (see the evening review for the breakdown).
+
 ### Schedule view
 
 The Schedule page gives a structured view of planned work over time.

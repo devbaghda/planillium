@@ -138,11 +138,16 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
    Rescheduling doesn't refund penalties already taken.
 7. Reschedule / Move-to-today / Day-off all use the same "insert, don't overlap" shift:
    whatever's already on the target day (and everything after it) shifts forward one
-   day first, rather than doubling up.
+   day first, rather than doubling up — **except already-completed tasks, which are
+   never shifted** (fixed 2026-07-09; see Session handoff notes — shifting a completed
+   task orphaned its `task_completions` row, keyed by assigned day, silently unmarking
+   it and moving it to tomorrow).
 8. Archive: plan moves to `plans/archive/` when ALL tasks done; frees a slot (max 2
    active plans)
 9. Score floor: daily score floors at −10; a `weekly_comeback_bonus` (20 pts) rewards
-   a full week back on track after a bad stretch.
+   a full week back on track after a bad stretch; a `multi_task_bonus_per_extra_task`
+   (3 pts, added 2026-07-09) rewards each task completed beyond the first one on the
+   same day, on top of the flat per-task rate.
 
 ---
 
@@ -233,6 +238,31 @@ _Update this section at the end of each Claude Code session:_
     `winui/MentorOverseer.App/`) left by another tool — their rename
     instructions were already fully merged (verified via grep for
     `Planillium.App` in the csproj/manifest and `git log`).
+  - **Later same session — completed tasks getting silently unmarked**: the user
+    reported that finishing a task today, then pulling a future task to
+    today ("get a head start on tomorrow"), unmarked *today's already-done*
+    task and moved it to tomorrow. Root cause: `PlanStore.TasksFor` looks up
+    a task's completion by `(plan_id, assigned_day, task_text)` — the
+    *current* assigned day — but `MoveTaskToToday`'s "insert, don't overlap"
+    shift (business rule 7) pushed every task assigned between today and
+    the pulled task's old slot forward by one day, **including already-
+    completed ones**, orphaning their completion row under the old day.
+    Fixed by excluding completed tasks from the shift loop in
+    `MoveTaskToToday`, `RescheduleTask`, `MarkDayOff`, and `UnmarkDayOff`
+    (`ScoreService.cs`) — a completion is a historical record, not a
+    schedule slot, and multiple tasks already share a day routinely so
+    there's no collision to avoid by moving it. `ReplanAllOverdue` was
+    already safe (only ever touches overdue = incomplete tasks, never
+    reassigns anything else). Also added a `multi_task_bonus_per_extra_task`
+    scoring rate (default 3, `config.json`/`config.default.json`) — each
+    task completed beyond the first one on a given day now adds this on top
+    of the flat `task_completed` rate in `ScoreService.DayScore`, surfaced
+    as its own line in the evening `ReviewDialog` breakdown. Release build
+    verified clean and relaunched; the fix itself was **not** click-tested
+    against the user's live data (would require actually completing/moving
+    real tasks) per the standing rule against simulating input that mutates
+    his real plan/score data — logic verified by code inspection against
+    the exact reported symptom instead.
   - **Testing-tool lessons for next time**: `CopyFromScreen`/GDI `BitBlt`
     doesn't capture WinUI3's Mica/DirectComposition rendering correctly —
     use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`) against the

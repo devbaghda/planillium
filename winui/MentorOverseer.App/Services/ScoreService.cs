@@ -125,10 +125,16 @@ public sealed class ScoreService : IDisposable
         return (on, off);
     }
 
-    /// <summary>Base formula from config["scoring"], then the v2 floor.</summary>
+    /// <summary>Base formula from config["scoring"], then the v2 floor.
+    /// Beyond the flat per-task rate, each task completed past the first
+    /// one on the same day adds a "multi-task" bonus — rewards a day where
+    /// more than one task got done (working ahead included, now that a
+    /// pulled-forward task counts as done for the day it was actually
+    /// finished on) on top of the linear per-task credit.</summary>
     public int DayScore(int done, int total, int onMin, int offMin, int streak = 0)
     {
         var raw = done * ConfigService.ScoringRate("task_completed", 10)
+                + Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3)
                 + Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5)
                 + (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3))
                 + (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2))
@@ -348,6 +354,13 @@ public sealed class ScoreService : IDisposable
     /// Pull a future task to today; shift everything between today and its
     /// old slot forward by one day (same semantics as the Python app's
     /// _swap_task_to_today). No-op if the task is already due or overdue.
+    /// Already-completed tasks are never shifted — a completion is a
+    /// historical record of what happened on a given day, not a schedule
+    /// slot, and re-shelving it silently orphaned its task_completions row
+    /// (keyed by assigned day) so a finished task on today's day would
+    /// appear undone and pushed to tomorrow. Multiple tasks per day is
+    /// already normal, so completed tasks can simply stay put alongside
+    /// whatever lands on their day.
     /// </summary>
     public void MoveTaskToToday(Plan plan, string taskText)
     {
@@ -358,7 +371,7 @@ public sealed class ScoreService : IDisposable
 
         foreach (var t in tasks)
         {
-            if (t.Task.Text == taskText) continue;
+            if (t.Task.Text == taskText || t.Completed) continue;
             if (t.AssignedDay >= planDay && t.AssignedDay < target.AssignedDay)
                 SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
         }
@@ -370,16 +383,18 @@ public sealed class ScoreService : IDisposable
     /// already on that day — and everything after it — shifts forward by
     /// one day first, so the rescheduled task gets its own slot instead of
     /// doubling up with whatever was already there (same "insert, don't
-    /// overlap" semantics as MoveTaskToToday/MarkDayOff). The overdue
-    /// penalty already accrued for the days it was late stands; this only
-    /// stops it from accruing further.
+    /// overlap" semantics as MoveTaskToToday/MarkDayOff). Already-completed
+    /// tasks are excluded from the shift for the same reason as
+    /// MoveTaskToToday — see its doc comment. The overdue penalty already
+    /// accrued for the days it was late stands; this only stops it from
+    /// accruing further.
     /// </summary>
     public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay)
     {
         var tasks = PlanStore.TasksFor(plan, _db, _completions);
         foreach (var t in tasks)
         {
-            if (t.Task.Text == taskText) continue;
+            if (t.Task.Text == taskText || t.Completed) continue;
             if (t.AssignedDay >= newAssignedDay)
                 SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
         }
@@ -397,11 +412,12 @@ public sealed class ScoreService : IDisposable
         return result;
     }
 
-    /// <summary>Mark a day as non-working: tasks on or after it shift +1.</summary>
+    /// <summary>Mark a day as non-working: tasks on or after it shift +1.
+    /// Completed tasks are excluded — see MoveTaskToToday's doc comment.</summary>
     public void MarkDayOff(Plan plan, int day)
     {
         foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
-            if (t.AssignedDay >= day)
+            if (!t.Completed && t.AssignedDay >= day)
                 SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
         using var cmd = _conn.CreateCommand();
         cmd.CommandText =
@@ -414,11 +430,12 @@ public sealed class ScoreService : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Inverse of MarkDayOff: tasks after the day shift back −1.</summary>
+    /// <summary>Inverse of MarkDayOff: tasks after the day shift back −1.
+    /// Completed tasks are excluded — see MoveTaskToToday's doc comment.</summary>
     public void UnmarkDayOff(Plan plan, int day)
     {
         foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
-            if (t.AssignedDay > day)
+            if (!t.Completed && t.AssignedDay > day)
                 SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "DELETE FROM plan_days_off WHERE plan_id=$pid AND day=$day";
