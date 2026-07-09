@@ -29,6 +29,16 @@ letting either one absorb the other's job.
   `end_of_day_summary_time` before stopping the live instance — stopping it early can skip that
   day's evening-review popup entirely. Then stop → rebuild Release → relaunch → bring to
   foreground.
+- `dotnet test` from `winui/MentorOverseer.App.Tests/` runs the automated suite (added
+  2026-07-09, covers `ScoreService`'s schedule-shifting logic — the one area that's changed
+  repeatedly with a real regression that shipped). **It is a source-file link, not a
+  `ProjectReference`** to `MentorOverseer.App` — that project's `UseWinUI=true` pulls in
+  MSIX/PRI-resource-generation targets that need Visual Studio's Windows App SDK workload
+  installed, which this environment doesn't have; a plain `ProjectReference` fails to build here.
+  If you add a test that needs another plain-C# file from the main app, link it the same way
+  (`<Compile Include="..\MentorOverseer.App\...\File.cs" Link="App\File.cs" />`) — don't add a
+  `ProjectReference` without first confirming `dotnet build` on this machine can actually handle
+  a `UseWinUI=true` transitive reference (it couldn't as of 2026-07-09).
 
 ## Verifying UI fixes without breaking things
 - **Never simulate clicks/keystrokes that would mutate the user's real plan/score data**
