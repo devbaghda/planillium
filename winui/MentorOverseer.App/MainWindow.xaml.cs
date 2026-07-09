@@ -100,7 +100,7 @@ public sealed partial class MainWindow : Window
                 .FirstOrDefault(i => (string?)i.Tag == page)
                 ?? Nav.MenuItems.OfType<NavigationViewItem>().First();
         RefreshScore();
-        StartTracker();
+        _ = InitTrackingAsync();
         CatchUpScores();
         PruneOldDiary();
         StartEodWatcher();
@@ -382,6 +382,25 @@ public sealed partial class MainWindow : Window
     {
         Tracker?.Stop();
         Tracker = null;
+        StartTracker();
+    }
+
+    /// <summary>
+    /// The first-run tracking disclosure must finish — be shown and
+    /// dismissed by the user — before the tracker's poll timer can capture
+    /// anything. Previously this only happened to hold true by incidental
+    /// timing (TodayPage's OnNavigatedTo requested the dialog, but this
+    /// constructor's call to StartTracker() didn't wait on it — an async
+    /// void method returns control to its caller at the first await, so the
+    /// constructor carried on and started tracking regardless). A slow
+    /// first launch could start capturing/logging the foreground window
+    /// before the user had seen or dismissed the notice (2026-07-09 privacy
+    /// audit finding #2). This makes the ordering an actual code dependency
+    /// instead of a coincidence.
+    /// </summary>
+    private async Task InitTrackingAsync()
+    {
+        await NameSetupDialog.EnsureShownAsync(this);
         StartTracker();
     }
 

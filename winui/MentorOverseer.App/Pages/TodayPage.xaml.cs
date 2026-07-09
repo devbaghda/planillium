@@ -28,8 +28,7 @@ public sealed partial class TodayPage : Page
         _ = Views.TickTickSection.LoadAsync(TickTickHost);
         if (App.MainWindow is MainWindow win)
         {
-            if (NameSetupDialog.ShouldShow())
-                await NameSetupDialog.ShowAsync(win);
+            await NameSetupDialog.EnsureShownAsync(win);
             if (KickoffDialog.ShouldShow())
                 await KickoffDialog.ShowAsync(win);
         }

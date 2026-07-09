@@ -390,15 +390,28 @@ public sealed class ScoreService : IDisposable
     }
 
     /// <summary>
-    /// Move a single overdue task to a specific future day. Whatever was
-    /// already on that day — and everything after it — shifts forward by
-    /// one day first, so the rescheduled task gets its own slot instead of
-    /// doubling up with whatever was already there (same "insert, don't
-    /// overlap" semantics as MoveTaskToToday/MarkDayOff). Already-completed
-    /// tasks are excluded from the shift for the same reason as
+    /// Move a single overdue task to a specific, user-picked future day.
+    /// Whatever was already on that day — and everything after it — shifts
+    /// forward by one day first, so the rescheduled task gets its own slot
+    /// instead of doubling up with whatever was already there. Already-
+    /// completed tasks are excluded from the shift for the same reason as
     /// MoveTaskToToday — see its doc comment. The overdue penalty already
     /// accrued for the days it was late stands; this only stops it from
     /// accruing further.
+    ///
+    /// Deliberately NOT the same shift-avoidance rule MoveTaskToToday uses
+    /// (confirmed with the user 2026-07-09, after an audit flagged the
+    /// difference as a possible inconsistency): the two actions represent
+    /// different intents. MoveTaskToToday means "I got ahead of schedule" —
+    /// pulling work earlier should compress the remaining plan, so it closes
+    /// the gap it leaves instead of pushing other days later. RescheduleTask
+    /// means "place this specific task on this specific day" — the user's
+    /// stated preference is a strict one-task-per-day steady state (a day
+    /// holding two tasks should only ever be a transient "I did extra today"
+    /// fact, not a permanent state a manual reschedule creates), so this
+    /// still needs to push the target day's existing task later rather than
+    /// double up on it. Don't "fix" this to match MoveTaskToToday without
+    /// re-confirming intent first.
     /// </summary>
     public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay)
     {

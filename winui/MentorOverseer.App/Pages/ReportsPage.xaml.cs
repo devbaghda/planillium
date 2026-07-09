@@ -366,7 +366,7 @@ public sealed partial class ReportsPage : Page
                 foreach (var id in selectedIds)
                 {
                     var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row.Id != id) continue;
+                    if (row is null || row.Id != id) continue;
                     db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
                     var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
                     if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
@@ -835,7 +835,6 @@ public sealed partial class ReportsPage : Page
                 MinHeight = 0,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            ((FontIcon)edit.Content).Glyph = "";
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(edit, "Edit diary entry");
             edit.Click += async (_, _) =>
             {

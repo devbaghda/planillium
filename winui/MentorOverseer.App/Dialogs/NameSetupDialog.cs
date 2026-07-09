@@ -10,8 +10,20 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class NameSetupDialog
 {
+    // Two independent code paths need this dialog to have finished before
+    // they proceed: MainWindow's constructor (tracking must not start until
+    // the disclosure in this dialog has been shown/dismissed) and TodayPage's
+    // first navigation (Kickoff should follow Name, not race ahead of it).
+    // Caching the in-flight Task means whichever path gets here first is the
+    // one that actually shows the dialog; the other awaits the same
+    // completion instead of triggering a second, duplicate dialog.
+    private static Task? _pending;
+
     public static bool ShouldShow() =>
         ConfigService.UserName.Length == 0 && !StateService.Load().NameAsked;
+
+    public static Task EnsureShownAsync(MainWindow window) =>
+        ShouldShow() ? _pending ??= ShowAsync(window) : Task.CompletedTask;
 
     public static async Task ShowAsync(MainWindow window)
     {

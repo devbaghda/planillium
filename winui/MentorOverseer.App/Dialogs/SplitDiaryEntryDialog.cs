@@ -84,6 +84,7 @@ public static class SplitDiaryEntryDialog
                 HorizontalAlignment = HorizontalAlignment.Stretch,
             };
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(removeBtn, "Remove this activity");
 
             var row = new Grid { ColumnSpacing = 8 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
