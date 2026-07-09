@@ -239,8 +239,12 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
     use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons,
     UI Automation `BoundingRectangle` beats pixel-diffing screenshots.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **Rotate the TickTick OAuth client secret** at developer.ticktick.com — committed in
-    plaintext twice historically; the repo rewrite removed it from git, not from validity.
+  - ~~Rotate the TickTick OAuth client secret~~ — **the user confirmed done 2026-07-09**
+    (rotated at developer.ticktick.com). One follow-up remains, not yet done: the app's
+    Windows Credential Manager entry still holds the *old* secret until the user reconnects
+    TickTick from Settings (disconnect → "Connect TickTick" → re-auth writes the new value
+    via `TickTickAuth.SaveClientSecret`) — until then, TickTick sync will fail with an
+    auth error using the now-invalid old secret.
   - `PlanTemplates.cs`'s "Format my own plan" wizard mode still tells Claude to key each
     phase as `"title"`, but `PlanModels.cs`'s `Phase` deserializes `"name"` — phases from
     that specific wizard mode get a silently-empty name (low impact: Schedule only renders

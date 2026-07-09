@@ -56,10 +56,80 @@ classifier enforces it and will reject a vague "yes, go ahead."
 ## Keeping docs current
 When a session ships a real fix or feature change, update in the same pass:
 - `CONTEXT.md`'s Session handoff notes — append tersely, it's an index not an archive.
-  Compress it once it gets long (there's precedent: 852→224 lines, then further down again)
-  rather than letting entries accumulate forever.
 - `CHANGELOG.md` (Unreleased section) and `MANUAL.md`, if the change is user-visible.
-- Global skills under `~/.claude/skills/` (`windows-app-auditor`, `windows-app-tester`, etc.)
-  when a lesson generalizes beyond this specific app — this repo has sharpened those skills
-  more than once (WinUI layout quirks, UIA verification technique, the
-  shift-vs-completion-keying bug class).
+
+**Compacting `CONTEXT.md` is automatic, not something to ask permission for.** After a
+significant milestone (a shipped fix/feature, a completed audit-and-remediation pass) or
+whenever the Session handoff notes section has grown long (rule of thumb: once it's pushing
+the file past ~300 lines, or an individual entry is re-explaining something better left to git
+log), compress it in the same pass — don't wait to be asked, and don't ask first. There's
+precedent for this (852→224 lines, then further compressed again). **No information may be
+lost in compaction** — condense narrative prose into terse facts/decisions/open-items, but
+every open TODO, unresolved bug, and standing lesson must survive the compression. When in
+doubt about whether a detail is safe to drop, keep it; git log is the fallback for *narrative*
+detail, not for facts that only live in this file (open TODOs, business-rule rationale).
+
+**Updating the global skills is automatic, not something to ask permission for.** Whenever a
+session produces a significant *error finding and correction* — a real bug found in review, an
+audit finding confirmed and fixed, a wrong assumption caught and corrected — check whether the
+lesson generalizes beyond this specific app (a pattern any Windows/WinUI app could have, a
+testing/verification technique, a class of regression) and fold it into the relevant skill
+under `~/.claude/skills/` (`windows-app-auditor`, `windows-app-tester`, etc.) in the same pass.
+This repo has sharpened those skills more than once already (WinUI layout quirks, UIA
+verification technique, the shift-vs-completion-keying bug class) — keep doing it without
+waiting to be asked each time.
+
+## Regression-prevention lesson (2026-07-09 audit, finding #1)
+
+`MoveTaskToToday`'s forward-shift-to-avoid-overlap logic was removed in one session because
+multiple tasks per day had become normal — but the *sibling* function `RescheduleTask`, which
+implements the same "insert, don't overlap" pattern for a different user action, was left
+untouched. A later audit caught the inconsistency and initially framed it as a straightforward
+"regression to fix by matching the two functions" — but on closer discussion with the user, the
+right fix might not be "make them match" at all: the two functions serve different actions
+(pulling a *future* task to *today*, vs. manually relocating an *overdue* task to an
+*arbitrary* future day) and the user's actual mental model — strict one-task-per-day as the
+steady state, with multiple tasks on a day only as a transient "I did extra today" fact — may
+justify different shift behavior in each. Two standing lessons from this:
+
+1. **When fixing a bug pattern that appears in more than one function doing similar work,
+   check every sibling for the same pattern before calling the fix complete.** Grep for the
+   pattern name/shape across the file, not just the one call site the bug report pointed at.
+2. **Don't generalize a design principle from one code comment or one screenshot into a rule
+   applied elsewhere without confirming actual product intent first**, especially before
+   changing shared scheduling/business logic. "I saw two tasks under one day once and the user
+   didn't complain" is not the same as "multiple tasks per day is the intended steady state." If
+   a fix depends on a business-rule assumption that isn't already stated in `CONTEXT.md`, ask
+   before applying it broadly — this is exactly the kind of decision-only-the-user-can-make
+   case, not one to resolve by inference.
+3. **After confirming and fixing something a static/compiler check flagged (like
+   `/warnaserror`), re-run that exact check to close the loop** — don't just trust that the fix
+   looks right by inspection. This audit caught a build regression (`ReportsPage.xaml.cs:369`)
+   that three prior sessions had been treating as a pre-existing, harmless warning without ever
+   re-running a clean `/warnaserror` build to check.
+
+## Audit report format
+When running `windows-app-auditor` (or reporting findings from one) for this project, use this
+table structure instead of the skill's default one — the user reads these findings, not just
+engineers:
+
+| # | Severity | Category | Finding | Suggested fix | Explanation | Location |
+
+The **Explanation** column is mandatory and must be written for a non-technical reader (see
+Communication style below). It must always cover, explicitly, all three of:
+1. **Why this is an issue** — the real-world consequence if left alone.
+2. **What the suggested fix is** — described in plain terms, not just a code snippet.
+3. **Why that fix solves the issue** — the causal link between the fix and the problem going
+   away.
+
+Skipping any of the three, or writing the Explanation column in engineer-to-engineer language,
+means the report doesn't meet this project's bar — redo it before presenting.
+
+## Communication style
+**Write all explanations of issues, fixes, and findings as if for a non-technical person** —
+not just in formal audit reports, but whenever explaining why something is a problem, what's
+being changed, or why a fix works. Avoid unexplained jargon, code-level framing, or assuming
+the reader already knows the mechanism; explain the real-world effect first, the mechanism
+second (and only as much of the mechanism as is needed to trust the fix). This doesn't mean
+dumbing down the actual technical work — the code changes stay precise — it means the
+*narration around* the work stays accessible.
