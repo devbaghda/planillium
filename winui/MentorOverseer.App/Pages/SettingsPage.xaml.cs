@@ -201,16 +201,32 @@ public sealed partial class SettingsPage : Page
         };
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
+        // VACUUM rewrites the whole database file, not just the deleted
+        // rows, so its cost scales with total file size — on months of
+        // history this can take a perceptible moment. Running it inline on
+        // the click handler used to freeze the window for that whole time
+        // (2026-07-09 audit finding #8); moved off the UI thread, with the
+        // button disabled and a status message so a slow clear still reads
+        // as "working," not "stuck."
+        ClearHistoryBtn.IsEnabled = false;
+        SaveStatus.Text = "Clearing…";
         try
         {
-            using var db = new Database();
-            db.ClearActivityHistory();
+            await Task.Run(() =>
+            {
+                using var db = new Database();
+                db.ClearActivityHistory();
+            });
             SaveStatus.Text = "Activity history cleared.";
         }
         catch (Exception ex)
         {
             Log.Error("SettingsPage.ClearHistory", ex);
             SaveStatus.Text = "Couldn't clear activity history: " + ex.Message;
+        }
+        finally
+        {
+            ClearHistoryBtn.IsEnabled = true;
         }
     }
 

@@ -118,8 +118,7 @@ public sealed partial class MainWindow : Window
                 .FirstOrDefault(i => (string?)i.Tag == page)
                 ?? Nav.MenuItems.OfType<NavigationViewItem>().First();
         RefreshScore();
-        CatchUpScores();
-        PruneOldDiary();
+        RunStartupCatchUp();
         StartEodWatcher();
         StartKickoffWatcher();
 
@@ -302,6 +301,27 @@ public sealed partial class MainWindow : Window
 
     private bool _reallyClose;
     private string? _eodOfferedOn;
+
+    /// <summary>
+    /// CatchUpScores (up to 7 days of scoring math) and PruneOldDiary (a
+    /// rollup INSERT + DELETE) used to run synchronously on the constructor
+    /// before the window ever appeared — real, if usually small, delay
+    /// added directly to how long the app takes to become visible on
+    /// launch (2026-07-09 audit finding #7). Both already open their own
+    /// Database/ScoreService connections (the same per-call-connection
+    /// pattern ActivityTracker's background poll already uses), so running
+    /// them off the UI thread is safe. RefreshScore runs again afterward in
+    /// case catch-up added score for a missed day.
+    /// </summary>
+    private void RunStartupCatchUp()
+    {
+        _ = Task.Run(() =>
+        {
+            CatchUpScores();
+            PruneOldDiary();
+            _dq.TryEnqueue(RefreshScore);
+        });
+    }
 
     private static void CatchUpScores()
     {
