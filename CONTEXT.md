@@ -30,6 +30,9 @@ everything it did (still recoverable from git history/tags if ever needed).
 ```
 mentor-overseer/
 ├── CONTEXT.md              ← you are here. Read this first every session.
+├── CLAUDE.md               ← operating instructions (how to work here — build/verify/
+│                              publish workflow, safety rules). CONTEXT.md is facts,
+│                              CLAUDE.md is process; read both, keep them separate.
 ├── config.json             ← shared user settings, idle threshold, scoring rules (no
 │                              secrets — TickTick client_secret/access_token live in
 │                              Windows Credential Manager via CredentialStore, not on disk)
@@ -182,238 +185,70 @@ period needs re-reading to work on the app today; the WinUI rebuild below ported
 every feature that mattered.
 
 ## Session handoff notes
-_Update this section at the end of each Claude Code session:_
+_Update this section at the end of each Claude Code session. This is an index, not an
+archive — full blow-by-blow detail for any entry lives in git log/commit messages.
+Compress aggressively rather than letting this grow forever (compressed 852→224 lines on
+2026-07-06; compressed again, ~230→~50 lines, on 2026-07-09)._
 
-- Last session: 2026-07-09, branch `winui-rebuild`. Continued a prior session
-  from repo state alone (no conversation history carried over — reconstructed
-  intent from `git status`/diffs). the user gave live screenshot feedback across
-  several rounds, so this went through real rebuild/relaunch/verify cycles
-  against his running instance, not just code inspection.
-  - **`ReportsPage` diary column width instability** — took three iterations
-    to actually fix, each surfacing the next layer of the bug: (1) the
-    description column was `Star`-sized with ellipsis trimming, which always
-    shrinks to fit and can never overflow, so the horizontal scrollbar had
-    nothing to scroll to — switched to a fixed `GridLength(480)` column with
-    `TextTrimming.CharacterEllipsis` + a `ToolTipService` tooltip for the
-    full text on hover. (2) That stopped per-row jitter but the whole page
-    still visibly re-centered day to day — `HorizontalAlignment="Center"`
-    on the `MaxWidth="880"` body `StackPanel` sizes to its widest child's
-    *natural content width* (capped at 880, not fixed at it), so a short
-    day still measured narrower than a long one. Switching to `Stretch`
-    fixed the width but left a ~29px position-only shift depending on
-    content height — a WinUI `ScrollViewer`/`ScrollContentPresenter` quirk
-    where a `Stretch`-aligned child's arrange width isn't fully independent
-    of content extent (confirmed via UI-Automation `BoundingRectangle`
-    reads, not just screenshots — pixel-scanning and scrollbar-visibility
-    theories were both tested and ruled out along the way). (3) Root-fixed
-    by dropping `MaxWidth`/alignment from XAML entirely and computing the
-    content column's width/position explicitly in code-behind
-    (`RootScroller_SizeChanged` in `ReportsPage.xaml.cs`) from the
-    `ScrollViewer`'s own `ActualWidth` — set top-down by the window/nav
-    pane, never by this page's scrollable content, so it's deterministic
-    regardless of how tall any given day's diary is. Verified byte-identical
-    `BoundingRectangle` (`645,58,880,38`) on both a populated day and a
-    confirmed-empty day (Sunday).
-  - **Window opens off-screen / oversized** — a second, unrelated bug the user
-    caught while screenshotting the above: `AppWindow.Resize` in
-    `MainWindow.xaml.cs` had no ceiling against the monitor's actual work
-    area and never repositioned after resizing, so a saved state from a
-    larger/multi-monitor session (`window_width: 1936` in
-    `data/winui_state.json`) could open partially off-screen on a smaller
-    display. Fixed by clamping both size *and* position to
-    `DisplayArea.GetFromWindowId(...).WorkArea` at startup (needs `using
-    Microsoft.UI.Windowing;`). Verified via `GetWindowRect` P/Invoke showing
-    exact in-bounds `(0,0)-(1920,1032)`.
-  - **Added a `CalendarDatePicker` to the diary header** (`DiaryHeader()` in
-    `ReportsPage.xaml.cs`) so a date can be jumped to directly instead of
-    only stepping day-by-day, bounded to `Database.DiaryRetentionDays`.
-    `DateFormat` uses WinRT template syntax with explicit width specifiers —
-    `{day.integer(2)}.{month.integer(2)}.{year.full}` — for a zero-padded
-    `dd.MM.yyyy` (the user caught the unpadded `7.7.2026` on the first pass;
-    plain `{day.integer}` doesn't zero-pad). Numeric-only tokens deliberately
-    avoid Russian month/day names given the OS-locale-vs-app-language
-    mismatch documented elsewhere in this file. Verified via UIA
-    `ValuePattern` reading `"09.07.2026"`. **Not fully click-verified**: could
-    not confirm via automation that the flyout calendar itself opens —
-    `CalendarDatePicker` flyouts render in a separate popup window that
-    `PrintWindow`-against-the-main-HWND doesn't capture, and simulated
-    clicks didn't produce a detectable `Calendar` UIA element either. Standard
-    WinUI control, very likely fine, but worth the user clicking it once.
-  - Also deleted two stale `CLAUDE_HANDOFF.md` files (root +
-    `winui/MentorOverseer.App/`) left by another tool — their rename
-    instructions were already fully merged (verified via grep for
-    `Planillium.App` in the csproj/manifest and `git log`).
-  - **Later same session — completed tasks getting silently unmarked**: the user
-    reported that finishing a task today, then pulling a future task to
-    today ("get a head start on tomorrow"), unmarked *today's already-done*
-    task and moved it to tomorrow. Root cause: `PlanStore.TasksFor` looks up
-    a task's completion by `(plan_id, assigned_day, task_text)` — the
-    *current* assigned day — but `MoveTaskToToday`'s "insert, don't overlap"
-    shift (business rule 7) pushed every task assigned between today and
-    the pulled task's old slot forward by one day, **including already-
-    completed ones**, orphaning their completion row under the old day.
-    Fixed by excluding completed tasks from the shift loop in
-    `MoveTaskToToday`, `RescheduleTask`, `MarkDayOff`, and `UnmarkDayOff`
-    (`ScoreService.cs`) — a completion is a historical record, not a
-    schedule slot, and multiple tasks already share a day routinely so
-    there's no collision to avoid by moving it. `ReplanAllOverdue` was
-    already safe (only ever touches overdue = incomplete tasks, never
-    reassigns anything else). Also added a `multi_task_bonus_per_extra_task`
-    scoring rate (default 3, `config.json`/`config.default.json`) — each
-    task completed beyond the first one on a given day now adds this on top
-    of the flat `task_completed` rate in `ScoreService.DayScore`, surfaced
-    as its own line in the evening `ReviewDialog` breakdown. Release build
-    verified clean and relaunched; the fix itself was **not** click-tested
-    against the user's live data (would require actually completing/moving
-    real tasks) per the standing rule against simulating input that mutates
-    his real plan/score data — logic verified by code inspection against
-    the exact reported symptom instead.
-  - **Same day, follow-up round — the user live-tested the fix and found two more gaps**:
-    (1) the "GET A HEAD START ON TOMORROW?" card only appeared once *every* task
-    today was done (`done == today.Count`); the user wanted it to offer as soon as
-    *any* task today is finished. Changed the trigger in `TodayPage.xaml.cs` to
-    `overdue.Count == 0 && (today.Count == 0 || done > 0)`.
-    (2) `MoveTaskToToday`'s old "shift pending tasks between today and the pulled
-    task's original day forward by one" rule (ported from the Python app's
-    one-task-per-day assumption) never actually served a purpose once multiple
-    tasks per day became normal, and left a **dead day** behind wherever a future
-    task got pulled to today and that was its only task (screenshot: "Day 3 — No
-    tasks" after pulling a day-3 task to day-2/today). Replaced it: no forward
-    shift at all now; instead, if the vacated day ends up with zero tasks, every
-    later *pending* task shifts *back* one day to close the gap (completed tasks
-    still excluded, per the fix above). This also directly serves the user's original
-    ask from earlier in the day ("remaining days of the plan should decrease and
-    the remaining tasks should reschedule") — pulling work forward now genuinely
-    compresses the plan instead of just relocating one task.
-    **Retroactive data fix**: the Day-3 gap already existed in the user's real
-    `data/progress.db` (written by the old logic before this fix), and the new
-    code only prevents *future* gaps — it doesn't repair past ones. Corrected it
-    with a one-off Python script directly against `task_overrides` for plan
-    `claude-code-10-level-mastery` (20 tasks, day 4→3 cascading through day
-    23→22), after the harness's auto-mode classifier blocked the first attempt as
-    an unauthorized direct DB mutation and required the user to explicitly name the
-    table/change before it would allow it — a correct gate; direct writes to live
-    user data outside the app's own code path should always require that. Verified
-    read-only afterward via UI Automation (Schedule page text dump) — Day 3 through
-    Day 9+ each showing the right "moved from day N+1" task, no remaining gaps.
-  - **Testing-tool lessons for next time**: `CopyFromScreen`/GDI `BitBlt`
-    doesn't capture WinUI3's Mica/DirectComposition rendering correctly —
-    use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`) against the
-    specific HWND instead. For exact layout comparisons, UI Automation
-    `BoundingRectangle` (via `System.Windows.Automation` in PowerShell) is
-    far more reliable than pixel-diffing screenshots. Cached
-    `AutomationElement` references go stale across a `Render()` that rebuilds
-    the visual tree — re-`FindFirst` inside loops, don't cache across
-    iterations. The app's live instance runs from `bin\x64\Release\...`, not
-    Debug — confirm via `wmic process where "ProcessId=X" get ExecutablePath`
-    before trusting a Debug-only rebuild as verification.
-- Previous session: 2026-07-08, branch `winui-rebuild` (now == `master`)
-- **Full 5-category audit (windows-app-auditor) + remediation loop**, the user's
-  instruction: apply everything. 16 findings (1 Critical, 1 High, 8 Medium, 4
-  Low, 2 Info) across architecture/security/UX/code-quality/privacy — full
-  writeup in this session's transcript, fixes in commit `2a7b31f` (+ the
-  history rewrite below). Highlights:
-  - **Critical, fixed**: TickTick `client_secret`/`access_token` were still
-    plaintext in git history (`config.json` @ commits `96a6293`/`eb22f8c`, on
-    the now-default branch, repo headed for open-source). Rewrote history with
-    `git filter-branch` (tree-filter regex-redacts `client_secret`/
-    `access_token`/`refresh_token` values in every historical `*.json`),
-    purged `refs/original/` + reflog + `git gc --prune=now --aggressive`,
-    force-pushed `master`/`winui-rebuild`/`v1.0.0` tag. **the user still needs to
-    rotate the actual secret** at developer.ticktick.com — the rewrite only
-    removes it from the repo, the value itself is still whatever it always
-    was. Old hashes remain reachable from 3 purely-local, never-pushed spots
-    (`code-refinement` branch + the `mentor-overseer-test`/
-    `mentor-overseer-theme-test` worktrees) — deliberately left alone since
-    rewriting them would disrupt those worktrees for no public-exposure
-    benefit; harmless unless one is ever pushed.
-  - **High, fixed**: no first-run disclosure of activity tracking —
-    `NameSetupDialog` now says so before `ActivityTracker.Start()` fires.
-  - **Medium, all fixed**: `activity_log` had no retention limit and nothing
-    read it (removed the write); `ReportsPage.Render()` was 283 lines doing
-    everything (cut to 55, extracted named methods, moved `DiaryInRange` into
-    `ReportData.cs`); "All done for today" congratulated empty days with zero
-    tasks (copy-honesty bug); no SQLite busy-timeout + lock errors weren't
-    surfaced to the user (new `AppPaths.OpenConnection()` + a `SaveErrorBar`
-    InfoBar on Today/Schedule); `TickTickService` allocated a new `HttpClient`
-    per call including once per project in a loop (now one shared client); no
-    in-app data export/delete (new Settings "Export all my data" +  "Clear
-    activity history" — see `Services/DataExport.cs`,
-    `Database.ExportAllTables`/`ClearActivityHistory`); an empty `catch {}`
-    from the Planillium-rename patch broke this codebase's own "every catch
-    logs" rule.
-  - **Low, fixed**: dead Python-app-detection code in `ActivityTracker`
-    (mutex/process probe every 60s poll, now-impossible since the Python
-    source is gone) removed, along with the "paused" tray-pill state it fed
-    and stale "Python app was already running" copy in Settings;
-    `_pidAppCache` now clears past 500 entries instead of growing for a 24/7
-    process; added `packages.lock.json` and `THIRD-PARTY-NOTICES.md`.
-  - **Not done — real product decisions, deferred**: schema ownership split
-    across `Database`/`ScoreService`'s two independent SQLite connections
-    (Low, high blast radius to fix, left as-is).
-  - `dotnet build /warnaserror` came back clean (only a benign WindowsAppSDK
-    RID-usage SDK warning, nothing in this app's own code) — checked before
-    starting the fix pass.
-- **Renamed app to "Planillium"**, prepping to open-source as a portfolio piece.
-  Finished a partial rename another tool left uncommitted (`CLAUDE_HANDOFF.md`,
-  deleted 2026-07-09 once its instructions were confirmed already merged):
-  `Services/AppInfo.cs` centralizes the display
-  name/mutex/startup-registry-value; `csproj`/`app.manifest` identity →
-  `Planillium.App`; installer renamed, its uninstall reg-delete sweep now covers
-  every legacy Run-key name too; Desktop shortcut retargeted. Kept the repo folder,
-  csproj filename, and C# namespace as `MentorOverseer` — internal, invisible to
-  users, not worth touching ~50 files' namespace declarations for. Caught a real
-  bug first: `CredentialStore`'s Credential Manager target was about to flip from
-  `...@MentorOverseer` to `...@Planillium`, which would've silently orphaned
-  the user's stored TickTick token — added a `LegacyService` read fallback, verified
-  live (TickTick still loaded after rebuild). **Not done — needed before anything
-  goes public**: scrub personal data (`plans/active/netherlands.json`, `config.json`
-  secrets/keywords, git history) — `release/installer/config.default.json` is a
-  template starting point, but going public is a separate decision, not yet made.
-- **Repo consolidation**: `master` fast-forwarded to `winui-rebuild` (had diverged
-  since WinUI started as a feature branch); branches fully contained in it
-  (`audit-remediation`, `ux-audit-fixes`, `ui-theme-light-dark`) deleted local +
-  origin; GitHub default branch switched to `master`. `code-refinement` kept (in
-  the `mentor-overseer-test/` worktree). Removed ~430MB local build cruft and
-  retired the Python source entirely (see Project history above).
-- **New features**: per-plan independent scrollable schedule boxes (was one shared
-  list — reaching plan 2 meant scrolling past all of plan 1); "Get a head start on
-  tomorrow?" prompt once today's tasks are cleared (reuses `MoveTaskToToday`);
-  manual "+ Add step" on Plans; personal per-task notes inline on Today/Schedule;
-  a "Details" link on Schedule (was Today-only).
-- **Fixes**: dark-mode live theme switching (`ThemeSync`'s `ThemeDictionaries`-walk
-  silently returned `null` always — replaced with hardcoded Light/Dark hex values
-  from the pinned WindowsAppSDK package); Reports page bar-column alignment (3
-  layered bugs); reschedule no longer double-books a day (now shifts).
-- Also folded in same-day 2026-07-07 work that hadn't made this log yet: v1.0.0
-  release (Inno Setup pipeline, version surfacing), overdue-reschedule dialog,
-  editable diary entries, app icon, score-chip styling.
-- Everything built clean, verified via `PrintWindow` screenshots against a running
-  instance. Shift/reschedule logic verified by code-pattern match, not click-tested
-  — standing rule against simulating input on the user's live app/data.
-- **Lesson**: killing a running instance to rebuild/test can destroy its EOD-review
-  watcher before it ever ticks — happened today, killed the real session before
-  20:00 while starting the rename work, so the automatic evening-review popup never
-  fired; the user had to trigger it manually at 20:23 (worked fine, real data, just no
-  reflection prompt). Check the time against `end_of_day_summary_time` before
-  stopping a live instance, don't just kill-and-rebuild reflexively near EOD.
-- Earlier session: 2026-07-07 — full audit of the WinUI app, all 18 findings
-  applied (file logger wired into every silent `catch{}`; global exception
-  handlers + single-instance mutex; `ActivityTracker` poll reentrancy fix + pauses
-  when the Python app runs; `DialogGate` semaphore around every dialog; EOD-check
-  `>=` fix; plan-id filename validation; a11y names; `InvariantCulture` everywhere
-  — OS locale is Russian, app language is English). Also **one-app consolidation**
-  — WinUI became the sole app (OAuth/Credential-Manager port, tray, plan import,
-  full Settings editing, HTML export) — the user's call. Full detail in git log
-  around `~9e0..194beec` on `winui-rebuild`.
-- Open, still the user's to do: **rotate the TickTick OAuth client secret** at
-  developer.ticktick.com. It's been committed in plaintext twice (2026-06-29,
-  and again in the `eb22f8c` baseline snapshot) and shown once in a
-  screenshot — all three exposures are burned regardless of git state. Both
-  git-history leaks have now been rewritten out (2026-06-29's via an earlier
-  `filter-branch` pass, `eb22f8c`'s on 2026-07-08 — see above), but a history
-  rewrite only removes the *committed record*, not the *value* — the actual
-  secret is still whatever it's always been until rotated at the source.
-- Known issue: TickTick redirect URI must be registered at developer.ticktick.com
-  as `http://localhost:8765/callback` in the **OAuth redirect URL** field
-  specifically (not the separate "App Service URL" field).
+- **2026-07-09** (three rounds, `winui-rebuild` kept in sync with `master`, both pushed):
+  Reports diary column width is now computed deterministically in code-behind from
+  `RootScroller`'s `ActualWidth` (three XAML-only attempts didn't hold — see `1e7dc07`).
+  Window size/position now clamped to `DisplayArea.WorkArea` at launch (was opening
+  off-screen with a stale saved size). Added a zero-padded (`dd.MM.yyyy`)
+  `CalendarDatePicker` to jump to a diary date. Fixed a real data-loss bug: shifting an
+  already-completed task's assigned day (move-to-today/reschedule/day-off) orphaned its
+  `task_completions` row, silently un-marking it — completed tasks are now excluded from
+  every such shift (business rule 7). Replaced move-to-today's forward-shift with backward
+  compaction — pulling a future task to today now closes the gap it leaves instead of
+  abandoning a dead day. "Get a head start on tomorrow?" now offers after *any* task today
+  is done, not only after all of them. Added a `multi_task_bonus_per_extra_task` scoring
+  rate. One live-data repair applied directly (`task_overrides` for
+  `claude-code-10-level-mastery`, 20 rows), only after the user's explicit reviewed
+  confirmation — see Standing lessons below. Deleted two stale `CLAUDE_HANDOFF.md` files
+  another tool left behind (already-merged rename instructions). Pulled the
+  testing/architecture lessons from this session into the `windows-app-tester` and
+  `windows-app-auditor` global skills (UIA-over-screenshots, `PrintWindow` flag 2,
+  reorder-shift-vs-completion-keying).
+- **2026-07-08**: Full 5-category audit + remediation (`2a7b31f`). Critical: TickTick
+  secret was in git history twice, rewritten out via `filter-branch` (the user still needs to
+  **rotate the actual secret** — history rewrite doesn't invalidate the value, see Open
+  TODOs). High: first-run activity-tracking disclosure added. 8 Medium/4 Low fixed
+  (activity_log retention, `ReportsPage.Render` decomposed, SQLite lock-error surfacing,
+  shared `HttpClient`, in-app data export/clear-history, dead Python-detection code
+  removed). Renamed app to "Planillium" (display/build identity only — repo folder/C#
+  namespace stay `MentorOverseer`); caught a `CredentialStore` target-name bug before it
+  could silently orphan the stored TickTick token. Repo consolidated: `master`
+  fast-forwarded to `winui-rebuild`, stale branches removed, ~430MB build cruft removed,
+  Python source retired.
+- **2026-07-07**: Full audit of the freshly-rebuilt WinUI app, all 18 findings applied
+  (global exception handlers, single-instance mutex, `DialogGate` semaphore,
+  `InvariantCulture` everywhere — OS locale is Russian, app language English). WinUI became
+  the sole app (Python retired the next day). v1.0.0 shipped (Inno Setup installer).
+- **Standing lessons** (apply every session, not just the one that taught them):
+  - Check `end_of_day_summary_time` before killing a live instance near EOD — killing it
+    early can skip the evening-review popup entirely for that day.
+  - The live instance usually runs from `bin\x64\Release\...`, not Debug — confirm via
+    `wmic process where "ProcessId=X" get ExecutablePath` before trusting a Debug rebuild
+    as verification.
+  - Never simulate input (clicks/keystrokes) that would mutate the user's real plan/score
+    data — verify data-mutating logic by code inspection + a clean build, not by clicking
+    it live. Any direct write to `data/progress.db` outside the app's own code path needs
+    the user's explicit confirmation naming the specific table/change first — the harness's
+    auto-mode classifier enforces this and will block an unnamed attempt.
+  - `CopyFromScreen`/GDI `BitBlt` doesn't capture WinUI3 Mica/DirectComposition content —
+    use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons,
+    UI Automation `BoundingRectangle` beats pixel-diffing screenshots.
+- **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **Rotate the TickTick OAuth client secret** at developer.ticktick.com — committed in
+    plaintext twice historically; the repo rewrite removed it from git, not from validity.
+  - `PlanTemplates.cs`'s "Format my own plan" wizard mode still tells Claude to key each
+    phase as `"title"`, but `PlanModels.cs`'s `Phase` deserializes `"name"` — phases from
+    that specific wizard mode get a silently-empty name (low impact: Schedule only renders
+    `Day N`, not phase names).
+  - **Scrub personal data before making the repo public**: `plans/active/netherlands.json`,
+    `config.json` keywords, and this file's own "The user" section all name the user directly.
+    The GitHub repo is currently **Private** (confirmed 2026-07-09), so there's no live
+    exposure today, but this is still an unresolved pre-publish step, not a completed one.
+  - TickTick redirect URI must be registered at developer.ticktick.com as
+    `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
+    "App Service URL").
