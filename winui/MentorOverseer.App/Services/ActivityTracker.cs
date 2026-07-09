@@ -38,6 +38,8 @@ public sealed class ActivityTracker : IDisposable
     };
 
     private readonly Dictionary<uint, string> _pidAppCache = new();
+    private bool _pidLookupErrorLogged;
+    private bool _titleDecorationErrorLogged;
 
     // config-derived rules (same keys as the Python app)
     private readonly List<string> _onPlan;
@@ -252,7 +254,21 @@ public sealed class ActivityTracker : IDisposable
                 ExeAppNames.TryGetValue(exe, out app!);
                 app ??= "";
             }
-            catch { /* transient — fall back to the sticky cache below */ }
+            catch (Exception ex)
+            {
+                // Expected to happen occasionally (process exits between
+                // GetForegroundWindow and GetProcessById) — deliberately not
+                // logged every time to avoid spamming the log on this
+                // per-minute poll. But a *persistent* failure here would
+                // otherwise be invisible forever, so log once per run
+                // (2026-07-09 audit finding #26).
+                if (!_pidLookupErrorLogged)
+                {
+                    _pidLookupErrorLogged = true;
+                    Log.Warn("ActivityTracker.ActiveWindowTitle.PidLookup",
+                        $"first occurrence (further ones this run are suppressed): {ex.Message}");
+                }
+            }
 
             if (app.Length > 0)
             {
@@ -276,7 +292,17 @@ public sealed class ActivityTracker : IDisposable
                     : app;
             }
         }
-        catch { /* never let title decoration break the poll */ }
+        catch (Exception ex)
+        {
+            // Same reasoning as the PID-lookup catch above — log once per
+            // run, not every poll (2026-07-09 audit finding #26).
+            if (!_titleDecorationErrorLogged)
+            {
+                _titleDecorationErrorLogged = true;
+                Log.Warn("ActivityTracker.ActiveWindowTitle.Decoration",
+                    $"first occurrence (further ones this run are suppressed): {ex.Message}");
+            }
+        }
 
         return title;
     }

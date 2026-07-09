@@ -200,7 +200,15 @@ public sealed partial class PlansPage : Page
             name = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file))
                 .RootElement.GetProperty("name").GetString() ?? Path.GetFileName(file);
         }
-        catch { name = Path.GetFileName(file); }
+        catch (Exception ex)
+        {
+            // Runs once per archived plan file on page render, not a hot
+            // loop, so logging every occurrence is fine here — unlike the
+            // tracker's per-minute poll catches, this doesn't need
+            // once-per-run suppression (2026-07-09 audit finding #26).
+            Log.Warn("PlansPage.ArchivedRow", $"couldn't read name from {Path.GetFileName(file)}: {ex.Message}");
+            name = Path.GetFileName(file);
+        }
 
         var grid = new Grid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

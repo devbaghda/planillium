@@ -96,13 +96,29 @@ public static class TickTickAuth
                 using (client)
                 {
                     var stream = client.GetStream();
-                    var buffer = new byte[8192];
-                    var read = await stream.ReadAsync(buffer, timeout.Token);
-                    var requestLine = Encoding.ASCII.GetString(buffer, 0, read)
-                        .Split('\r', '\n').FirstOrDefault() ?? "";
-                    var parts = requestLine.Split(' ');
-                    var path = parts.Length > 1 ? parts[1] : "";
-                    var query = HttpUtility.ParseQueryString(new Uri("http://x" + path).Query);
+                    System.Collections.Specialized.NameValueCollection query;
+                    try
+                    {
+                        var buffer = new byte[8192];
+                        var read = await stream.ReadAsync(buffer, timeout.Token);
+                        var requestLine = Encoding.ASCII.GetString(buffer, 0, read)
+                            .Split('\r', '\n').FirstOrDefault() ?? "";
+                        var parts = requestLine.Split(' ');
+                        var path = parts.Length > 1 ? parts[1] : "";
+                        query = HttpUtility.ParseQueryString(new Uri("http://x" + path).Query);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Any local process can connect to this loopback
+                        // listener during the auth window and send garbage —
+                        // treat a malformed request the same as a stray one
+                        // (answer, keep waiting) instead of letting a parse
+                        // exception escape the whole auth flow (2026-07-09
+                        // audit finding #23).
+                        Log.Warn("TickTickAuth", $"malformed callback request: {ex.Message}");
+                        await Respond(stream, 400, "Bad request", "Waiting for TickTick…");
+                        continue;
+                    }
 
                     if (query["code"] is null && query["error"] is null)
                     {
