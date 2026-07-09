@@ -26,15 +26,19 @@ public static class ReviewDialog
         var (onMin, offMin) = score.DayDiaryMinutes(today);
         var streak = score.CurrentStreak();
 
-        var taskPt = done * ConfigService.ScoringRate("task_completed", 10);
-        var multiTaskPt = Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3);
-        var onPt = (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3));
-        var offPt = (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2));
-        var missPt = Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5);
-        var streakPt = streak * ConfigService.ScoringRate("streak_bonus_per_day", 5);
-        var rawTotal = taskPt + multiTaskPt + onPt + offPt + missPt + streakPt;
-        var dayTotal = Math.Max(rawTotal, ScoreService.DailyFloor);
-        var floored = dayTotal != rawTotal;
+        // Single source of truth for the formula — see ComputeDayScore's
+        // doc comment (2026-07-09 audit finding #4: this used to be
+        // recomputed by hand here, independently of ScoreService.DayScore,
+        // and could silently drift out of sync with it).
+        var breakdown = score.ComputeDayScore(done, total, onMin, offMin, streak);
+        var taskPt = breakdown.TaskPoints;
+        var multiTaskPt = breakdown.MultiTaskBonus;
+        var onPt = breakdown.OnPlanPoints;
+        var offPt = breakdown.OffPlanPoints;
+        var missPt = breakdown.MissedPoints;
+        var streakPt = breakdown.StreakBonus;
+        var dayTotal = breakdown.FlooredTotal;
+        var floored = dayTotal != breakdown.RawTotal;
 
         var overdueCapped = score.OverdueAsOf(today)
             .Count(x => x.DaysOverdue <= ScoreService.OverdueAccrualCapDays);

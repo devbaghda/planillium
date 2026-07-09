@@ -13,9 +13,21 @@ public static class PlanStore
         AllowTrailingCommas = true,
     };
 
-    public static List<Plan> LoadActivePlans()
+    public static List<Plan> LoadActivePlans() => LoadActivePlans(out _);
+
+    /// <summary>
+    /// Overload used by the Plans page: <paramref name="failedFiles"/> lists
+    /// the file names (not full paths) of any plan JSON that failed to
+    /// parse, so the page can tell the user which plan silently vanished
+    /// and why, instead of it just disappearing with no trace anywhere
+    /// (2026-07-09 audit finding #5 — a malformed file used to be dropped
+    /// with no log entry and a comment promising UI surfacing that was
+    /// never built).
+    /// </summary>
+    public static List<Plan> LoadActivePlans(out List<string> failedFiles)
     {
         var plans = new List<Plan>();
+        failedFiles = new List<string>();
         if (!Directory.Exists(AppPaths.ActivePlansDir)) return plans;
         foreach (var file in Directory.GetFiles(AppPaths.ActivePlansDir, "*.json").OrderBy(f => f))
         {
@@ -24,10 +36,13 @@ public static class PlanStore
                 var plan = JsonSerializer.Deserialize<Plan>(File.ReadAllText(file), Options);
                 if (plan is { Id.Length: > 0 }) plans.Add(plan);
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // A malformed plan file shouldn't take the whole app down;
-                // the Plans page will surface it in a later phase.
+                // A malformed plan file shouldn't take the whole app down —
+                // but it must leave a trace, both for diagnosis (the log)
+                // and for the user (failedFiles, surfaced as an InfoBar).
+                Log.Error($"PlanStore.LoadActivePlans({Path.GetFileName(file)})", ex);
+                failedFiles.Add(Path.GetFileName(file));
             }
         }
         return plans;

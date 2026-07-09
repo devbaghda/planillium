@@ -295,16 +295,17 @@ public sealed partial class SchedulePage : Page
         {
             Text = t.Task.Text,
             TextWrapping = TextWrapping.Wrap,
-            // Overdue reads red here now that the warning glyph gave way to
-            // the checkbox.
-            Foreground = t.Completed ? Res("TextFillColorTertiaryBrush")
-                       : t.Overdue ? Res("SystemFillColorCriticalBrush")
-                       : Res("TextFillColorPrimaryBrush"),
+            Foreground = TaskRowStyle.TitleForeground(t),
         };
         textPanel.Children.Add(title);
         var meta = new List<string>();
         if (t.Task.DurationMin is int dur) meta.Add($"{dur} min");
         if (t.AssignedDay != t.OriginalDay) meta.Add($"moved from day {t.OriginalDay}");
+        // Same "N day(s) late" caption Today shows — overdue used to be
+        // color-only here, which loses the signal for anyone who can't
+        // rely on color (2026-07-09 audit finding #17).
+        if (t.Overdue)
+            meta.Add($"{planDay - t.AssignedDay} day(s) late — from day {t.AssignedDay}");
         if (meta.Count > 0)
             textPanel.Children.Add(new TextBlock
             {
@@ -312,15 +313,7 @@ public sealed partial class SchedulePage : Page
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = Res("TextFillColorTertiaryBrush"),
             });
-        textPanel.Children.Add(TaskNoteView.Build(note, text =>
-        {
-            try
-            {
-                using var db = new Database();
-                db.SetTaskNote(plan.Id, t.Task.Text, text);
-            }
-            catch (Exception ex) { Log.Error("SchedulePage.SetTaskNote", ex); }
-        }));
+        textPanel.Children.Add(TaskNoteView.Build(note, plan.Id, t.Task.Text, "SchedulePage.SetTaskNote"));
         Grid.SetColumn(textPanel, 1);
         row.Children.Add(textPanel);
 

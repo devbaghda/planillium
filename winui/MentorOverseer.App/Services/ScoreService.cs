@@ -12,6 +12,17 @@ namespace MentorOverseer.App.Services;
 ///   • overdue accrual capped at 3 days per task, then the task goes stale,
 ///   • "Replan all overdue" — one flat −10 instead of per-task bleeding.
 /// </summary>
+/// <summary>The day-score formula's individual terms, for display (the
+/// evening review's ledger) — see ScoreService.ComputeDayScore, the single
+/// place this formula is written.</summary>
+public sealed record DayScoreBreakdown(
+    int TaskPoints, int MultiTaskBonus, int OnPlanPoints, int OffPlanPoints,
+    int MissedPoints, int StreakBonus)
+{
+    public int RawTotal => TaskPoints + MultiTaskBonus + OnPlanPoints + OffPlanPoints + MissedPoints + StreakBonus;
+    public int FlooredTotal => Math.Max(RawTotal, ScoreService.DailyFloor);
+}
+
 public sealed class ScoreService : IDisposable
 {
     public const int DailyFloor = -10;
@@ -130,17 +141,29 @@ public sealed class ScoreService : IDisposable
     /// one on the same day adds a "multi-task" bonus — rewards a day where
     /// more than one task got done (working ahead included, now that a
     /// pulled-forward task counts as done for the day it was actually
-    /// finished on) on top of the linear per-task credit.</summary>
-    public int DayScore(int done, int total, int onMin, int offMin, int streak = 0)
-    {
-        var raw = done * ConfigService.ScoringRate("task_completed", 10)
-                + Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3)
-                + Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5)
-                + (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3))
-                + (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2))
-                + streak * ConfigService.ScoringRate("streak_bonus_per_day", 5);
-        return Math.Max(raw, DailyFloor);
-    }
+    /// finished on) on top of the linear per-task credit.
+    ///
+    /// This is a thin wrapper over ComputeDayScore — the single source of
+    /// truth for the formula. Kept as its own method (rather than having
+    /// every caller unpack a breakdown) because most callers (e.g.
+    /// CreditDayScoreIfMissing) only ever need the final number; ReviewDialog
+    /// is the one caller that needs the per-term breakdown and calls
+    /// ComputeDayScore directly instead of re-deriving these terms itself
+    /// (2026-07-09 audit finding #4 — the two had been computed
+    /// independently and could silently drift out of sync).</summary>
+    public int DayScore(int done, int total, int onMin, int offMin, int streak = 0) =>
+        ComputeDayScore(done, total, onMin, offMin, streak).FlooredTotal;
+
+    /// <summary>Same formula as DayScore, broken into its individual terms
+    /// for display (the evening review's line-by-line ledger).</summary>
+    public DayScoreBreakdown ComputeDayScore(int done, int total, int onMin, int offMin, int streak = 0) =>
+        new(
+            TaskPoints: done * ConfigService.ScoringRate("task_completed", 10),
+            MultiTaskBonus: Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3),
+            OnPlanPoints: (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3)),
+            OffPlanPoints: (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2)),
+            MissedPoints: Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5),
+            StreakBonus: streak * ConfigService.ScoringRate("streak_bonus_per_day", 5));
 
     public int CurrentStreak()
     {

@@ -35,7 +35,21 @@ public sealed partial class PlansPage : Page
         Dictionary<(string, int, string), bool> completions;
         try
         {
-            plans = PlanStore.LoadActivePlans();
+            plans = PlanStore.LoadActivePlans(out var failedFiles);
+            if (failedFiles.Count > 0)
+            {
+                LoadErrorBar.Title = failedFiles.Count == 1
+                    ? $"Couldn't load '{failedFiles[0]}'"
+                    : $"Couldn't load {failedFiles.Count} plan files";
+                LoadErrorBar.Message = $"{string.Join(", ", failedFiles)} — the file's JSON " +
+                    "may be malformed. Fix it manually or re-generate the plan; it won't " +
+                    "appear here until then. See the log for details.";
+                LoadErrorBar.IsOpen = true;
+            }
+            else
+            {
+                LoadErrorBar.IsOpen = false;
+            }
             using var db = new Database();
             completions = db.LoadCompletions();
 
