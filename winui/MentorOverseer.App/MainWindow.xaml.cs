@@ -85,6 +85,24 @@ public sealed partial class MainWindow : Window
             // the OS theme changes while running.
             root.Loaded += (_, _) => ThemeSync.Apply(root.ActualTheme);
             root.ActualThemeChanged += (sender, _) => ThemeSync.Apply(sender.ActualTheme);
+            // InitTrackingAsync (which may show the first-run disclosure
+            // ContentDialog) also has to wait for Loaded — Content.XamlRoot
+            // isn't valid until the visual tree is actually loaded, and
+            // calling ContentDialog.ShowAsync before that throws
+            // ArgumentException ("This element does not have a XamlRoot"),
+            // which on a fire-and-forget task is silently swallowed by the
+            // UnobservedTaskException handler — so the tracker would never
+            // start on first run at all, not just start too early. Caught
+            // by testing this in the isolated environment before this fix
+            // shipped; see CONTEXT.md.
+            root.Loaded += (_, _) => _ = InitTrackingAsync();
+        }
+        else
+        {
+            // Defensive fallback — shouldn't happen for a XAML-defined
+            // Window, but without this branch a null/non-FrameworkElement
+            // Content would mean the tracker never starts at all.
+            _ = InitTrackingAsync();
         }
 
         // Debug/verification hook: MENTOR_PAGE=reports|plans|settings|schedule
@@ -100,7 +118,6 @@ public sealed partial class MainWindow : Window
                 .FirstOrDefault(i => (string?)i.Tag == page)
                 ?? Nav.MenuItems.OfType<NavigationViewItem>().First();
         RefreshScore();
-        _ = InitTrackingAsync();
         CatchUpScores();
         PruneOldDiary();
         StartEodWatcher();
