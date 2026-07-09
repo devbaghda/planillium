@@ -11,18 +11,41 @@ namespace MentorOverseer.App.Dialogs;
 /// <summary>
 /// Morning kickoff — the day's designed beginning: one spotlighted task with
 /// its mentor note, the rest of the day at a glance, the time budget, and
-/// yesterday's result. Shows once per day, first launch after 06:00.
+/// yesterday's result. Shows once per day, at or after the configured
+/// working-day start time — triggered both by MainWindow's per-minute
+/// watcher (fires even if Today isn't the open page) and by TodayPage's
+/// Loaded handler (catches the case where the app is opened after start
+/// time but before the watcher's next tick).
 /// </summary>
 public static class KickoffDialog
 {
+    // Guards against the two trigger paths (TodayPage.Loaded and MainWindow's
+    // per-minute watcher) both passing ShouldShow() in the same instant and
+    // queuing two kickoff dialogs back to back through DialogGate.
+    private static bool _showing;
+
     public static bool ShouldShow()
     {
-        if (DateTime.Now.Hour < 6) return false;
+        if (_showing) return false;
+        if (DateTime.Now.TimeOfDay < ConfigService.WorkStartTime()) return false;
         return StateService.Load().LastKickoff !=
                DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     public static async Task ShowAsync(MainWindow window)
+    {
+        _showing = true;
+        try
+        {
+            await ShowCore(window);
+        }
+        finally
+        {
+            _showing = false;
+        }
+    }
+
+    private static async Task ShowCore(MainWindow window)
     {
         var plans = PlanStore.LoadActivePlans();
         using var db = new Database();

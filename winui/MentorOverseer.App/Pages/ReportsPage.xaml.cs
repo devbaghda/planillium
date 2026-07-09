@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Navigation;
 using MentorOverseer.App.Models;
 using MentorOverseer.App.Services;
 
@@ -31,7 +32,16 @@ public sealed partial class ReportsPage : Page
     {
         InitializeComponent();
         BuildPeriodBar();
-        Loaded += (_, _) => Render();
+    }
+
+    // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
+    // menu switches instead of reconstructing the page + reopening the DB
+    // every time; OnNavigatedTo fires every visit (cached or not), unlike
+    // Loaded which would only fire once for a reused instance.
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        Render();
     }
 
     private void ExportHtml_Click(object sender, RoutedEventArgs e)
@@ -643,7 +653,7 @@ public sealed partial class ReportsPage : Page
         var searching = _diarySearch.Trim().Length > 0;
         var label = searching ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
             : _diaryDate == today ? "TIME DIARY · TODAY"
-            : $"TIME DIARY · {_diaryDate:ddd dd.MM.yyyy}".ToUpperInvariant();
+            : $"TIME DIARY · {_diaryDate.ToString("ddd dd.MM.yyyy", CultureInfo.InvariantCulture)}".ToUpperInvariant();
 
         var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 6 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -700,6 +710,7 @@ public sealed partial class ReportsPage : Page
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var select = new CheckBox
             {
@@ -752,14 +763,30 @@ public sealed partial class ReportsPage : Page
                 if (await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc))
                     Render();
             };
+            var split = new Button
+            {
+                Content = "Split",
+                Padding = new Thickness(8, 4, 8, 4),
+                MinWidth = 0,
+                MinHeight = 0,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(split, "Split into several activities");
+            split.Click += async (_, _) =>
+            {
+                if (await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc))
+                    Render();
+            };
             Grid.SetColumn(time, 1);
             Grid.SetColumn(catText, 2);
             Grid.SetColumn(what, 3);
             Grid.SetColumn(edit, 4);
+            Grid.SetColumn(split, 5);
             row.Children.Add(time);
             row.Children.Add(catText);
             row.Children.Add(what);
             row.Children.Add(edit);
+            row.Children.Add(split);
             list.Children.Add(row);
         }
         return list;

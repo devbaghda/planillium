@@ -2,6 +2,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Navigation;
 using MentorOverseer.App.Dialogs;
 using MentorOverseer.App.Models;
 using MentorOverseer.App.Services;
@@ -13,7 +14,16 @@ public sealed partial class PlansPage : Page
     public PlansPage()
     {
         InitializeComponent();
-        Loaded += (_, _) => Render();
+    }
+
+    // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
+    // menu switches instead of reconstructing the page + reopening the DB
+    // every time; OnNavigatedTo fires every visit (cached or not), unlike
+    // Loaded which would only fire once for a reused instance.
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        Render();
     }
 
     private void Render()

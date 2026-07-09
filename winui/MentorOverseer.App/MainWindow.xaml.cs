@@ -80,6 +80,7 @@ public sealed partial class MainWindow : Window
         CatchUpScores();
         PruneOldDiary();
         StartEodWatcher();
+        StartKickoffWatcher();
 
         InitTray();
 
@@ -307,6 +308,22 @@ public sealed partial class MainWindow : Window
                 _eodOfferedOn = today;  // offer once per day; "Later" means later by choice
                 await Dialogs.ReviewDialog.ShowAsync(this);
             }
+        };
+        timer.Start();
+    }
+
+    /// <summary>At the configured start-of-day time, show the morning kickoff
+    /// once — regardless of which page happens to be open. Today page's own
+    /// Loaded check still covers "opened after start time, before this timer's
+    /// next tick"; KickoffDialog's _showing guard keeps the two from double-showing.</summary>
+    private void StartKickoffWatcher()
+    {
+        var timer = _dq.CreateTimer();
+        timer.Interval = TimeSpan.FromMinutes(1);
+        timer.Tick += async (_, _) =>
+        {
+            if (KickoffDialog.ShouldShow())
+                await KickoffDialog.ShowAsync(this);
         };
         timer.Start();
     }

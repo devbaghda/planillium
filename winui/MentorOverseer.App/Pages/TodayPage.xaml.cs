@@ -2,6 +2,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Navigation;
 using MentorOverseer.App.Dialogs;
 using MentorOverseer.App.Models;
 using MentorOverseer.App.Services;
@@ -13,18 +14,25 @@ public sealed partial class TodayPage : Page
     public TodayPage()
     {
         InitializeComponent();
-        Loaded += async (_, _) =>
+    }
+
+    // NavigationCacheMode="Enabled" (see XAML) keeps this instance alive
+    // across menu switches instead of reconstructing the whole page — and
+    // its C#-built UI tree plus a DB open — every single time. OnNavigatedTo
+    // (not Loaded) fires on every navigation TO this page, cached or not,
+    // so the content still refreshes each visit.
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        Render();
+        _ = Views.TickTickSection.LoadAsync(TickTickHost);
+        if (App.MainWindow is MainWindow win)
         {
-            Render();
-            _ = Views.TickTickSection.LoadAsync(TickTickHost);
-            if (App.MainWindow is MainWindow win)
-            {
-                if (NameSetupDialog.ShouldShow())
-                    await NameSetupDialog.ShowAsync(win);
-                if (KickoffDialog.ShouldShow())
-                    await KickoffDialog.ShowAsync(win);
-            }
-        };
+            if (NameSetupDialog.ShouldShow())
+                await NameSetupDialog.ShowAsync(win);
+            if (KickoffDialog.ShouldShow())
+                await KickoffDialog.ShowAsync(win);
+        }
     }
 
     private async void Review_Click(object sender, RoutedEventArgs e)

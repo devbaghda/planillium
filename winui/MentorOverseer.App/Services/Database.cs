@@ -206,6 +206,44 @@ public sealed class Database : IDisposable
         }
     }
 
+    /// <summary>Most common past idle-answer descriptions (excludes "dismissed" and
+    /// blanks), most frequent first — feeds the idle-return dialog's quick-suggestion
+    /// chips alongside the fixed Lunch/Break/Errand set.</summary>
+    public List<string> MostFrequentIdleAnswers(int topN = 6)
+    {
+        var result = new List<string>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT description FROM time_diary " +
+            "WHERE window='idle' AND description IS NOT NULL AND description <> '' " +
+            "AND description <> 'dismissed' " +
+            "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
+        cmd.Parameters.AddWithValue("$n", topN);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) result.Add(r.GetString(0));
+        return result;
+    }
+
+    /// <summary>Inserts one time_diary row directly — used when splitting an existing
+    /// entry into several (unlike ActivityTracker.LogIdleAnswer, this isn't idle-specific:
+    /// category is whatever the caller decides, not auto-classified from description text).</summary>
+    public void InsertDiaryEntry(string date, string startTime, string endTime, int durationMin,
+        string category, string window, string? description)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO time_diary (date, start_time, end_time, duration_min, category, window, description) " +
+            "VALUES ($d, $s, $e, $m, $c, $w, $x)";
+        cmd.Parameters.AddWithValue("$d", date);
+        cmd.Parameters.AddWithValue("$s", startTime);
+        cmd.Parameters.AddWithValue("$e", endTime);
+        cmd.Parameters.AddWithValue("$m", durationMin);
+        cmd.Parameters.AddWithValue("$c", category);
+        cmd.Parameters.AddWithValue("$w", window);
+        cmd.Parameters.AddWithValue("$x", (object?)description ?? DBNull.Value);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Rows that ClearActivityHistory would delete — for the confirmation dialog.</summary>
     public (int DiaryRows, int RollupDays) CountActivityHistory()
     {

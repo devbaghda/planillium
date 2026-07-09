@@ -69,6 +69,15 @@ public static class ConfigService
         return (ppm, ppu, sym);
     }
 
+    /// <summary>Configured start of the working day ("working_hours.start"), default 08:00.</summary>
+    public static TimeSpan WorkStartTime()
+    {
+        var start = "08:00";
+        if (Root.TryGetProperty("working_hours", out var wh) &&
+            wh.TryGetProperty("start", out var v) && v.GetString() is { Length: > 0 } s) start = s;
+        return TimeSpan.TryParse(start, out var t) ? t : new TimeSpan(8, 0, 0);
+    }
+
     /// <summary>Empty until the first-launch NameSetupDialog asks and saves it.</summary>
     public static string UserName =>
         Root.TryGetProperty("user_name", out var v) ? v.GetString() ?? "" : "";
