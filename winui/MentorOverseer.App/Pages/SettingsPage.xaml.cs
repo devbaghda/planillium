@@ -57,6 +57,7 @@ public sealed partial class SettingsPage : Page
         GraceMin.Value = Num(cfg, "reminder_grace_minutes", 15);
         RepeatMin.Value = Num(cfg, "reminder_interval_minutes", 5);
         IdleMin.Value = Num(cfg, "idle_threshold_minutes", 10);
+        RetentionDays.Value = Num(cfg, "diary_retention_days", Database.DiaryRetentionDays);
         RulesOn.Text = Words(cfg, "activity_rules", "on_plan");
         RulesOff.Text = Words(cfg, "activity_rules", "off_plan");
         RulesNeutral.Text = Words(cfg, "activity_rules", "neutral");
@@ -96,6 +97,10 @@ public sealed partial class SettingsPage : Page
                 cfg["reminder_grace_minutes"] = (int)GraceMin.Value;
                 cfg["reminder_interval_minutes"] = (int)RepeatMin.Value;
                 cfg["idle_threshold_minutes"] = (int)IdleMin.Value;
+                // User-configurable retention (2026-07-09 audit finding
+                // #34) — Database.DiaryRetentionDays remains the fallback
+                // default, read via ConfigService.DiaryRetentionDays().
+                cfg["diary_retention_days"] = (int)RetentionDays.Value;
                 cfg["activity_rules"] = new System.Text.Json.Nodes.JsonObject
                 {
                     ["on_plan"] = Lines(RulesOn),

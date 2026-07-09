@@ -119,7 +119,6 @@ ticktick_sync    (id, plan_day, task_text, ticktick_task_id, ticktick_proj_id, p
   UNIQUE (plan_day, task_text)
 time_diary       (id, date, start_time, end_time, duration_min, category, window, description)
   -- category: on_plan | off_plan | neutral | idle | paid
-activity_log     (id, logged_at, window, class)   -- one row per 60s poll; pruned to 90 days
 diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
   -- written just before a day's raw time_diary rows age out (365-day retention), keeps
   -- Year-view totals accurate forever after per-entry detail is gone

@@ -47,6 +47,7 @@
                 <NumberBox x:Name="GraceMin" Header="Grace before alert (min)" Width="170" Minimum="1" SpinButtonPlacementMode="Compact"/>
                 <NumberBox x:Name="RepeatMin" Header="Repeat every (min)" Width="150" Minimum="1" SpinButtonPlacementMode="Compact"/>
                 <NumberBox x:Name="IdleMin" Header="Idle after (min)" Width="130" Minimum="1" SpinButtonPlacementMode="Compact"/>
+                <NumberBox x:Name="RetentionDays" Header="Keep detailed diary (days)" Width="190" Minimum="1" SpinButtonPlacementMode="Compact"/>
             </StackPanel>
 
             <TextBlock Text="ACTIVITY KEYWORDS  ·  one per line, matched inside window titles" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"

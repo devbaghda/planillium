@@ -62,7 +62,7 @@ public static class AddTaskDialog
 
         var dialog = new ContentDialog
         {
-            Title = $"Add a step to {plan.Name}",
+            Title = $"Add a task to {plan.Name}",
             Content = panel,
             PrimaryButtonText = "Add",
             CloseButtonText = "Cancel",

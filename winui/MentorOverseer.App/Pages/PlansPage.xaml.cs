@@ -133,7 +133,11 @@ public sealed partial class PlansPage : Page
             grid.Children.Add(briefing);
         }
 
-        var addStep = new Button { Content = "+ Add step", VerticalAlignment = VerticalAlignment.Center };
+        // "task" everywhere else in the app (Today/Schedule/Reports); this
+        // used to say "step" here and in the dialog title, while the
+        // dialog's own field was already headered "Task" three lines below
+        // it (2026-07-09 audit finding #32).
+        var addStep = new Button { Content = "+ Add task", VerticalAlignment = VerticalAlignment.Center };
         addStep.Click += async (_, _) =>
         {
             if (await AddTaskDialog.ShowAsync(XamlRoot, plan)) Render();

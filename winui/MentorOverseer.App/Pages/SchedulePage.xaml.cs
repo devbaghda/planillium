@@ -52,7 +52,28 @@ public sealed partial class SchedulePage : Page
 
         if (plans.Count == 0)
         {
+            // Matches Today's empty state instead of a dead end with
+            // nothing to click (2026-07-09 audit finding #33).
             Subtitle.Text = "No active plans.";
+            var addPanel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 12, 0, 0) };
+            addPanel.Children.Add(new TextBlock
+            {
+                Text = "Add a plan on the Plans page, or right here, to see it on your schedule.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            var add = new Button
+            {
+                Content = "+ Add Plan",
+                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+                Margin = new Thickness(0, 8, 0, 0),
+            };
+            add.Click += async (_, _) =>
+            {
+                if (await Dialogs.AddPlanDialog.ShowAsync(this)) Render();
+            };
+            addPanel.Children.Add(add);
+            Sections.Children.Add(addPanel);
             return;
         }
         Subtitle.Text = "Move tasks, take days off — the plan flexes, the goal doesn't.";

@@ -368,7 +368,10 @@ public sealed partial class MainWindow : Window
         try
         {
             using var db = new Database();
-            db.PruneAndRollupDiary();
+            // The parameter default is only a fallback — the actual
+            // retention window is user-configurable (Settings, 2026-07-09
+            // audit finding #34).
+            db.PruneAndRollupDiary(ConfigService.DiaryRetentionDays());
         }
         catch (Exception ex)
         {

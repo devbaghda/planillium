@@ -240,8 +240,9 @@ public sealed partial class ReportsPage : Page
 
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
-    /// everything still retained (Database.DiaryRetentionDays) instead of
-    /// just the day on screen. Kept as one method (not further split) since
+    /// everything still retained (ConfigService.DiaryRetentionDays(),
+    /// user-configurable — see Settings) instead of just the day on screen.
+    /// Kept as one method (not further split) since
     /// its closures share a lot of local state (selection, search text,
     /// the toolbar) that's specific to this one widget.
     /// </summary>
@@ -259,7 +260,7 @@ public sealed partial class ReportsPage : Page
 
         var searchBox = new TextBox
         {
-            PlaceholderText = $"Search the last {Database.DiaryRetentionDays} days' diary (app or description)…",
+            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary (app or description)…",
             Text = _diarySearch,
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -338,7 +339,7 @@ public sealed partial class ReportsPage : Page
             var q = _diarySearch.Trim();
             var searching = q.Length > 0;
             var rows = searching
-                ? ReportData.DiaryInRange(today.AddDays(-(Database.DiaryRetentionDays - 1)), today)
+                ? ReportData.DiaryInRange(today.AddDays(-(ConfigService.DiaryRetentionDays() - 1)), today)
                 : ReportData.DiaryInRange(_diaryDate, _diaryDate);
             var filtered = !searching ? rows : rows.Where(e =>
                 AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -348,7 +349,7 @@ public sealed partial class ReportsPage : Page
             if (filtered.Count == 0)
             {
                 diaryResults.Children.Add(Dim(searching
-                    ? $"No entries match your search in the last {Database.DiaryRetentionDays} days."
+                    ? $"No entries match your search in the last {ConfigService.DiaryRetentionDays()} days."
                     : (_diaryDate == today
                         ? "No diary entries yet today. Tracking runs 06:00–20:00."
                         : "No diary entries on this day.")));
@@ -746,7 +747,7 @@ public sealed partial class ReportsPage : Page
         var today = DateOnly.FromDateTime(DateTime.Today);
         var searching = _diarySearch.Trim().Length > 0;
         var caption = searching
-            ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
+            ? $"TIME DIARY · SEARCH (LAST {ConfigService.DiaryRetentionDays()} DAYS)"
             : "TIME DIARY";
 
         var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 10 };
@@ -797,7 +798,7 @@ public sealed partial class ReportsPage : Page
         var datePicker = new CalendarDatePicker
         {
             Date = ToOffset(_diaryDate),
-            MinDate = ToOffset(today.AddDays(-Database.DiaryRetentionDays)),
+            MinDate = ToOffset(today.AddDays(-ConfigService.DiaryRetentionDays())),
             MaxDate = ToOffset(today),
             DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
             IsEnabled = !searching,
