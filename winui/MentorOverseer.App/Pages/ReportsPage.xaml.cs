@@ -34,6 +34,20 @@ public sealed partial class ReportsPage : Page
         BuildPeriodBar();
     }
 
+    // Centers ContentColumn explicitly instead of relying on
+    // HorizontalAlignment/MaxWidth: RootScroller's own ActualWidth is set
+    // top-down by the window/nav pane, so it's unaffected by how tall this
+    // page's own scrollable content is on any given day — see the XAML
+    // comment for why the alignment-based approaches didn't hold still.
+    private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        const double maxContentWidth = 880;
+        var available = e.NewSize.Width - RootScroller.Padding.Left - RootScroller.Padding.Right;
+        var width = Math.Min(maxContentWidth, Math.Max(0, available));
+        ContentColumn.Width = width;
+        ContentColumn.Margin = new Thickness(Math.Max(0, (available - width) / 2), 0, 0, 0);
+    }
+
     // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
     // menu switches instead of reconstructing the page + reopening the DB
     // every time; OnNavigatedTo fires every visit (cached or not), unlike
@@ -672,9 +686,6 @@ public sealed partial class ReportsPage : Page
         var caption = searching
             ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
             : "TIME DIARY";
-        var dateLabel = _diaryDate == today
-            ? "TODAY"
-            : _diaryDate.ToString("ddd dd.MM.yyyy", CultureInfo.InvariantCulture).ToUpperInvariant();
 
         var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 10 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -715,20 +726,40 @@ public sealed partial class ReportsPage : Page
         var nextGlyph = new FontIcon { Glyph = "", FontSize = 12 };
         var prev = NavBtn(prevGlyph, "Previous day",
             () => { _diaryDate = _diaryDate.AddDays(-1); Render(); }, enabled: !searching);
-        var dateText = new TextBlock
+        // A calendar picker, not just a label — jumping more than a few days
+        // used to mean clicking prev/next repeatedly. DateFormat is spelled
+        // out numerically (no month/weekday names) for the same reason the
+        // rest of the diary uses InvariantCulture: the OS locale is Russian,
+        // and name-based tokens would render in Russian instead of digits.
+        static DateTimeOffset ToOffset(DateOnly d) => new(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var datePicker = new CalendarDatePicker
         {
-            Text = dateLabel,
+            Date = ToOffset(_diaryDate),
+            MinDate = ToOffset(today.AddDays(-Database.DiaryRetentionDays)),
+            MaxDate = ToOffset(today),
+            DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
+            IsEnabled = !searching,
             VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 0,
             FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Padding = new Thickness(8, 4, 8, 4),
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(datePicker, "Jump to date");
+        datePicker.DateChanged += (_, e) =>
+        {
+            if (e.NewDate is { } picked && DateOnly.FromDateTime(picked.DateTime) != _diaryDate)
+            {
+                _diaryDate = DateOnly.FromDateTime(picked.DateTime);
+                Render();
+            }
+        };
+
         var next = NavBtn(nextGlyph, "Next day",
             () => { _diaryDate = _diaryDate.AddDays(1); Render(); }, enabled: !searching && _diaryDate < today);
 
-        Grid.SetColumn(prev, 1); Grid.SetColumn(dateText, 2); Grid.SetColumn(next, 3);
+        Grid.SetColumn(prev, 1); Grid.SetColumn(datePicker, 2); Grid.SetColumn(next, 3);
         grid.Children.Add(prev);
-        grid.Children.Add(dateText);
+        grid.Children.Add(datePicker);
         grid.Children.Add(next);
         return grid;
     }
@@ -744,7 +775,16 @@ public sealed partial class ReportsPage : Page
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            // Fixed pixel width, not Auto/Star — the page body is a
+            // MaxWidth+Center StackPanel (ReportsPage.xaml), which sizes
+            // itself to its widest child's natural content width rather
+            // than a fixed width. An Auto or capped-MaxWidth column still
+            // measures narrower for a short entry than a long one, so the
+            // whole centered page visibly grew/shrank per day. A fixed
+            // width makes every row occupy the exact same space regardless
+            // of that day's content; overflow past it ellipsis-trims with
+            // a tooltip for the full text.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(480) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -777,13 +817,16 @@ public sealed partial class ReportsPage : Page
             };
             // "Application - name" display, same grouping labels as above.
             var windowLabel = AppNames.Label(window);
+            var whatText = desc is { Length: > 0 } ? $"“{desc}” ({dur}m)" : $"{windowLabel} ({dur}m)";
             var what = new TextBlock
             {
-                Text = desc is { Length: > 0 } ? $"“{desc}” ({dur}m)" : $"{windowLabel} ({dur}m)",
-                TextTrimming = TextTrimming.CharacterEllipsis,
+                Text = whatText,
                 FontStyle = desc is { Length: > 0 }
                     ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
             };
+            ToolTipService.SetToolTip(what, whatText);
             var edit = new Button
             {
                 Content = new FontIcon { Glyph = "", FontSize = 12 },

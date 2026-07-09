@@ -4,8 +4,17 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     NavigationCacheMode="Enabled">
 
-    <ScrollViewer Padding="28,8,28,28" HorizontalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="880" HorizontalAlignment="Center" Spacing="0">
+    <!-- Neither Center+MaxWidth (shrinks to content) nor Stretch+MaxWidth
+         (still re-centers by a few dozen px depending on that day's content
+         height — a WinUI ScrollViewer/ScrollContentPresenter quirk where a
+         Stretch-aligned child's arrange width isn't fully independent of
+         the content extent) kept this column's position stable across days.
+         SizeChanged below computes width/position explicitly from this
+         ScrollViewer's own ActualWidth — set top-down by the window/nav
+         pane, never by this page's scrollable content — so the column is
+         deterministic regardless of how tall any given day's diary is. -->
+    <ScrollViewer x:Name="RootScroller" Padding="28,8,28,28" SizeChanged="RootScroller_SizeChanged">
+        <StackPanel x:Name="ContentColumn" HorizontalAlignment="Left" Spacing="0">
             <Grid Margin="0,8,0,10">
                 <TextBlock Text="Reports" Style="{StaticResource TitleTextBlockStyle}"/>
                 <DropDownButton Content="Export" HorizontalAlignment="Right" VerticalAlignment="Center">

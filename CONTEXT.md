@@ -174,7 +174,77 @@ every feature that mattered.
 ## Session handoff notes
 _Update this section at the end of each Claude Code session:_
 
-- Last session: 2026-07-08, branch `winui-rebuild` (now == `master`)
+- Last session: 2026-07-09, branch `winui-rebuild`. Continued a prior session
+  from repo state alone (no conversation history carried over — reconstructed
+  intent from `git status`/diffs). the user gave live screenshot feedback across
+  several rounds, so this went through real rebuild/relaunch/verify cycles
+  against his running instance, not just code inspection.
+  - **`ReportsPage` diary column width instability** — took three iterations
+    to actually fix, each surfacing the next layer of the bug: (1) the
+    description column was `Star`-sized with ellipsis trimming, which always
+    shrinks to fit and can never overflow, so the horizontal scrollbar had
+    nothing to scroll to — switched to a fixed `GridLength(480)` column with
+    `TextTrimming.CharacterEllipsis` + a `ToolTipService` tooltip for the
+    full text on hover. (2) That stopped per-row jitter but the whole page
+    still visibly re-centered day to day — `HorizontalAlignment="Center"`
+    on the `MaxWidth="880"` body `StackPanel` sizes to its widest child's
+    *natural content width* (capped at 880, not fixed at it), so a short
+    day still measured narrower than a long one. Switching to `Stretch`
+    fixed the width but left a ~29px position-only shift depending on
+    content height — a WinUI `ScrollViewer`/`ScrollContentPresenter` quirk
+    where a `Stretch`-aligned child's arrange width isn't fully independent
+    of content extent (confirmed via UI-Automation `BoundingRectangle`
+    reads, not just screenshots — pixel-scanning and scrollbar-visibility
+    theories were both tested and ruled out along the way). (3) Root-fixed
+    by dropping `MaxWidth`/alignment from XAML entirely and computing the
+    content column's width/position explicitly in code-behind
+    (`RootScroller_SizeChanged` in `ReportsPage.xaml.cs`) from the
+    `ScrollViewer`'s own `ActualWidth` — set top-down by the window/nav
+    pane, never by this page's scrollable content, so it's deterministic
+    regardless of how tall any given day's diary is. Verified byte-identical
+    `BoundingRectangle` (`645,58,880,38`) on both a populated day and a
+    confirmed-empty day (Sunday).
+  - **Window opens off-screen / oversized** — a second, unrelated bug the user
+    caught while screenshotting the above: `AppWindow.Resize` in
+    `MainWindow.xaml.cs` had no ceiling against the monitor's actual work
+    area and never repositioned after resizing, so a saved state from a
+    larger/multi-monitor session (`window_width: 1936` in
+    `data/winui_state.json`) could open partially off-screen on a smaller
+    display. Fixed by clamping both size *and* position to
+    `DisplayArea.GetFromWindowId(...).WorkArea` at startup (needs `using
+    Microsoft.UI.Windowing;`). Verified via `GetWindowRect` P/Invoke showing
+    exact in-bounds `(0,0)-(1920,1032)`.
+  - **Added a `CalendarDatePicker` to the diary header** (`DiaryHeader()` in
+    `ReportsPage.xaml.cs`) so a date can be jumped to directly instead of
+    only stepping day-by-day, bounded to `Database.DiaryRetentionDays`.
+    `DateFormat` uses WinRT template syntax with explicit width specifiers —
+    `{day.integer(2)}.{month.integer(2)}.{year.full}` — for a zero-padded
+    `dd.MM.yyyy` (the user caught the unpadded `7.7.2026` on the first pass;
+    plain `{day.integer}` doesn't zero-pad). Numeric-only tokens deliberately
+    avoid Russian month/day names given the OS-locale-vs-app-language
+    mismatch documented elsewhere in this file. Verified via UIA
+    `ValuePattern` reading `"09.07.2026"`. **Not fully click-verified**: could
+    not confirm via automation that the flyout calendar itself opens —
+    `CalendarDatePicker` flyouts render in a separate popup window that
+    `PrintWindow`-against-the-main-HWND doesn't capture, and simulated
+    clicks didn't produce a detectable `Calendar` UIA element either. Standard
+    WinUI control, very likely fine, but worth the user clicking it once.
+  - Also deleted two stale `CLAUDE_HANDOFF.md` files (root +
+    `winui/MentorOverseer.App/`) left by another tool — their rename
+    instructions were already fully merged (verified via grep for
+    `Planillium.App` in the csproj/manifest and `git log`).
+  - **Testing-tool lessons for next time**: `CopyFromScreen`/GDI `BitBlt`
+    doesn't capture WinUI3's Mica/DirectComposition rendering correctly —
+    use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`) against the
+    specific HWND instead. For exact layout comparisons, UI Automation
+    `BoundingRectangle` (via `System.Windows.Automation` in PowerShell) is
+    far more reliable than pixel-diffing screenshots. Cached
+    `AutomationElement` references go stale across a `Render()` that rebuilds
+    the visual tree — re-`FindFirst` inside loops, don't cache across
+    iterations. The app's live instance runs from `bin\x64\Release\...`, not
+    Debug — confirm via `wmic process where "ProcessId=X" get ExecutablePath`
+    before trusting a Debug-only rebuild as verification.
+- Previous session: 2026-07-08, branch `winui-rebuild` (now == `master`)
 - **Full 5-category audit (windows-app-auditor) + remediation loop**, the user's
   instruction: apply everything. 16 findings (1 Critical, 1 High, 8 Medium, 4
   Low, 2 Info) across architecture/security/UX/code-quality/privacy — full
@@ -223,7 +293,8 @@ _Update this section at the end of each Claude Code session:_
     starting the fix pass.
 - **Renamed app to "Planillium"**, prepping to open-source as a portfolio piece.
   Finished a partial rename another tool left uncommitted (`CLAUDE_HANDOFF.md`,
-  still in repo root, untracked): `Services/AppInfo.cs` centralizes the display
+  deleted 2026-07-09 once its instructions were confirmed already merged):
+  `Services/AppInfo.cs` centralizes the display
   name/mutex/startup-registry-value; `csproj`/`app.manifest` identity →
   `Planillium.App`; installer renamed, its uninstall reg-delete sweep now covers
   every legacy Run-key name too; Desktop shortcut retargeted. Kept the repo folder,
@@ -263,7 +334,7 @@ _Update this section at the end of each Claude Code session:_
   fired; the user had to trigger it manually at 20:23 (worked fine, real data, just no
   reflection prompt). Check the time against `end_of_day_summary_time` before
   stopping a live instance, don't just kill-and-rebuild reflexively near EOD.
-- Previous session: 2026-07-07 — full audit of the WinUI app, all 18 findings
+- Earlier session: 2026-07-07 — full audit of the WinUI app, all 18 findings
   applied (file logger wired into every silent `catch{}`; global exception
   handlers + single-instance mutex; `ActivityTracker` poll reentrancy fix + pauses
   when the Python app runs; `DialogGate` semaphore around every dialog; EOD-check

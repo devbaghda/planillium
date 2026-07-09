@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -36,8 +37,25 @@ public sealed partial class MainWindow : Window
         SetTitleBar(TitleBar);
 
         var savedState = StateService.Load();
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(
-            Math.Max(savedState.WindowWidth, MinWidthDip), Math.Max(savedState.WindowHeight, MinHeightDip)));
+        // Clamp to the monitor's actual work area, not just a floor — a
+        // maximized custom-title-bar window can report/save a size a few
+        // pixels taller/wider than the visible screen (WinAppSDK invisible-
+        // resize-border quirk), which then persists forever and reopens
+        // partially off-screen on every future launch since Resize() alone
+        // has no ceiling.
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var width = Math.Clamp(savedState.WindowWidth, MinWidthDip, workArea.Width);
+        var height = Math.Clamp(savedState.WindowHeight, MinHeightDip, workArea.Height);
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+        // Resize() alone doesn't move the window — the app never saves/
+        // restores position, so it keeps whatever default placement the OS
+        // assigned a fresh AppWindow, which can push a work-area-sized
+        // window off the right/bottom edge. Clamp position against the
+        // now-final size so the whole window stays on-screen.
+        var pos = AppWindow.Position;
+        AppWindow.Move(new Windows.Graphics.PointInt32(
+            Math.Clamp(pos.X, workArea.X, workArea.X + workArea.Width - width),
+            Math.Clamp(pos.Y, workArea.Y, workArea.Y + workArea.Height - height)));
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
         AppWindow.SetIcon(iconPath);
         // The custom title bar's own logo mark used to be a placeholder
