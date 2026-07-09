@@ -50,7 +50,10 @@ public sealed class ActivityTracker : IDisposable
     private static readonly TimeOnly DiaryEnd = new(20, 0);
     private readonly int _graceMin, _repeatMin, _idleThresholdMin;
 
-    // state (poll thread only, except PaidUntil/status reads)
+    // state (poll thread only — PaidUntil is lock-protected and
+    // _lockPending is volatile precisely because they're the two fields
+    // written from the UI thread; everything else here is never touched
+    // outside PollOnce)
     private string _currentClass = "neutral";
     private string _currentWindow = "";
     private DateTime? _offSince;
@@ -63,7 +66,28 @@ public sealed class ActivityTracker : IDisposable
     private DateTime? _lastPollAt;
 
     public volatile bool Running;
-    public DateTime? PaidUntil;  // set by UI thread when entertainment time is bought
+
+    // Written by the UI thread (SpendDialog) when entertainment time is
+    // bought, read every poll from the background timer thread. `volatile`
+    // isn't legal on DateTime? (not one of the types C# allows it on), so
+    // this needs an actual lock, not just a keyword (2026-07-09 audit
+    // finding #19 — the fix suggested at the time, "mark it volatile,"
+    // would not have compiled).
+    private readonly object _paidUntilLock = new();
+    private DateTime? _paidUntil;
+    public DateTime? PaidUntil
+    {
+        get { lock (_paidUntilLock) return _paidUntil; }
+        set { lock (_paidUntilLock) _paidUntil = value; }
+    }
+
+    // Set (UI thread, via MainWindow's WM_WTSSESSION_CHANGE hook) the
+    // instant Windows reports the session locked; cleared by the next poll.
+    // A plain bool (unlike PaidUntil above) IS a legal volatile type, and a
+    // few seconds/up to one poll interval of imprecision in exactly when
+    // the lock is noticed is an acceptable tradeoff for the simplicity of
+    // not needing a lock here too — see NotifySessionLocked's doc comment.
+    private volatile bool _lockPending;
 
     /// <summary>(title, message) — focus-alert toast.</summary>
     public event Action<string, string>? OnAlert;
@@ -338,6 +362,22 @@ public sealed class ActivityTracker : IDisposable
 
     // ── poll (port of _poll_once) ─────────────────────────────────────────
 
+    /// <summary>
+    /// Called from the UI thread when Windows reports the session locked
+    /// (Win+L, screen-saver lock) — see MainWindow's WM_WTSSESSION_CHANGE
+    /// handler. Previously there was no lock detection at all: the tracker
+    /// only noticed the user was away once GetLastInputInfo's idle time
+    /// crossed the configured threshold (10 min default), so locking the
+    /// screen and stepping away kept attributing elapsed time to whatever
+    /// app was in the foreground for up to that whole threshold
+    /// (2026-07-09 audit finding #11). This doesn't touch tracker state
+    /// directly — state is poll-thread-only (see the field comments above)
+    /// — it just flags the next poll to close out the current session
+    /// immediately, the same way the existing sleep/idle-threshold paths
+    /// already do.
+    /// </summary>
+    public void NotifySessionLocked() => _lockPending = true;
+
     private void PollOnce()
     {
         var now = DateTime.Now;
@@ -347,6 +387,22 @@ public sealed class ActivityTracker : IDisposable
         var diaryEndToday = now.Date + DiaryEnd.ToTimeSpan();
 
         using var conn = AppPaths.OpenConnection();
+
+        if (_lockPending && !_idleNotified)
+        {
+            _lockPending = false;
+            if (_sessionStart is DateTime lockedSs && _sessionApp != null)
+            {
+                LogDiarySession(conn, lockedSs, now, _sessionClass!, _sessionApp);
+                _sessionStart = null; _sessionApp = null; _sessionClass = null;
+            }
+            _idleSince = now;
+            _idleNotified = true;
+        }
+        else
+        {
+            _lockPending = false;
+        }
 
         // Sleep detection: wall-clock gap far beyond the poll interval.
         if (_lastPollAt is DateTime last)

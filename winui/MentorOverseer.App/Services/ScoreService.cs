@@ -519,6 +519,41 @@ public sealed class ScoreService : IDisposable
         cmd.Parameters.AddWithValue("$t", text);
         cmd.ExecuteNonQuery();
     }
+
+    public int CountReflections()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM reflections";
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>Read back a day's reflection, if any — previously written but
+    /// never read anywhere in the app (2026-07-09 audit finding #12).</summary>
+    public string? LoadReflection(DateOnly d)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT text FROM reflections WHERE date=$d";
+        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        return cmd.ExecuteScalar() as string;
+    }
+
+    /// <summary>Deliberately separate from Database.ClearActivityHistory —
+    /// reflections are the user's own reflective text, not tracked activity
+    /// data (see that method's doc comment), so clearing them is its own
+    /// explicit choice, not folded into "clear activity history"
+    /// (2026-07-09 audit finding #12: reflections previously had no delete
+    /// path anywhere in the app).</summary>
+    public void ClearReflections()
+    {
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM reflections";
+            cmd.ExecuteNonQuery();
+        }
+        using var vacuum = _conn.CreateCommand();
+        vacuum.CommandText = "VACUUM";
+        vacuum.ExecuteNonQuery();
+    }
 }
 
 internal static class ObjectExtensions

@@ -143,7 +143,7 @@ public sealed partial class ReportsPage : Page
             Body.Children.Add(Section("INSIGHTS"));
             Body.Children.Add(Card(InsightsPanel(weekStats)));
 
-            BuildDiarySection(today);
+            BuildDiarySection(today, score);
         }
         catch (Exception ex)
         {
@@ -245,9 +245,17 @@ public sealed partial class ReportsPage : Page
     /// its closures share a lot of local state (selection, search text,
     /// the toolbar) that's specific to this one widget.
     /// </summary>
-    private void BuildDiarySection(DateOnly today)
+    private void BuildDiarySection(DateOnly today, ScoreService score)
     {
         Body.Children.Add(DiaryHeader());
+
+        // Reflections (the evening review's one-line answers) were
+        // previously write-only — saved but never shown back anywhere in
+        // the app (2026-07-09 audit finding #12). Shown for whichever day
+        // the diary is currently viewing, same as everything else on this
+        // section.
+        if (_diarySearch.Trim().Length == 0 && score.LoadReflection(_diaryDate) is { Length: > 0 } reflection)
+            Body.Children.Add(ReflectionCallout(reflection));
 
         var searchBox = new TextBox
         {
@@ -716,6 +724,22 @@ public sealed partial class ReportsPage : Page
     }
 
     // ── diary ────────────────────────────────────────────────────────────
+
+    private static Border ReflectionCallout(string text) => new()
+    {
+        Background = (Brush)Application.Current.Resources["CardBackgroundFillColorSecondaryBrush"],
+        CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(12, 8, 12, 8),
+        Margin = new Thickness(0, 0, 0, 10),
+        Child = new TextBlock
+        {
+            Text = "💭 " + text,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        },
+    };
 
     private Grid DiaryHeader()
     {

@@ -84,8 +84,9 @@
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button x:Name="ExportAllBtn" Content="Export all my data…" Click="ExportAll_Click"/>
                 <Button x:Name="ClearHistoryBtn" Content="Clear activity history…" Click="ClearHistory_Click"/>
+                <Button x:Name="ClearReflectionsBtn" Content="Clear my reflections…" Click="ClearReflections_Click"/>
             </StackPanel>
-            <TextBlock Text="Export writes every stored row (tasks, notes, score history, activity diary) to one JSON file. Clearing activity history removes the tracked window-activity diary only — your plans, task completions, and score are untouched."
+            <TextBlock Text="Export writes every stored row (tasks, notes, score history, activity diary, evening reflections) to one JSON file. Clearing activity history removes the tracked window-activity diary only. Clearing reflections removes your evening-review answers only — each is separate from your plans, task completions, and score, which are always untouched."
                        TextWrapping="Wrap" FontSize="12"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
         </StackPanel>

@@ -137,6 +137,7 @@ public sealed partial class MainWindow : Window
         {
             Tracker?.Stop();
             _tray?.Dispose();
+            if (_hwnd != IntPtr.Zero) WTSUnRegisterSessionNotification(_hwnd);
         };
     }
 
@@ -233,14 +234,26 @@ public sealed partial class MainWindow : Window
     private const int GwlpWndProc = -4;
     private const uint WmGetMinMaxInfo = 0x0024;
 
+    // Windows session lock/unlock notifications (2026-07-09 audit finding
+    // #11) — piggybacks on the same WndProc subclass hook the min-size fix
+    // already installs, rather than adding a second one.
+    private const uint WmWtsSessionChange = 0x02B1;
+    private const int WtsSessionLock = 0x7;
+    private const int NotifyForThisSession = 0;
+
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     private WndProcDelegate? _wndProcDelegate;
     private IntPtr _origWndProc;
+    private IntPtr _hwnd;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr CallWindowProcW(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hWnd);
+    [System.Runtime.InteropServices.DllImport("wtsapi32.dll", SetLastError = true)]
+    private static extern bool WTSRegisterSessionNotification(IntPtr hWnd, int dwFlags);
+    [System.Runtime.InteropServices.DllImport("wtsapi32.dll", SetLastError = true)]
+    private static extern bool WTSUnRegisterSessionNotification(IntPtr hWnd);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct Point { public int X; public int Y; }
@@ -257,7 +270,7 @@ public sealed partial class MainWindow : Window
 
     private void InstallMinSizeHook()
     {
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         _wndProcDelegate = (hWnd2, msg, wParam, lParam) =>
         {
             if (msg == WmGetMinMaxInfo)
@@ -269,10 +282,22 @@ public sealed partial class MainWindow : Window
                 System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, false);
                 return IntPtr.Zero;
             }
+            // Session lock (Win+L, screen-saver): tell the tracker to close
+            // out the current session right away instead of waiting out the
+            // full idle threshold before noticing the user is gone
+            // (2026-07-09 audit finding #11). Still forwarded to the
+            // original WndProc below — this is observation, not a message
+            // we need to override the default handling of.
+            if (msg == WmWtsSessionChange && wParam.ToInt32() == WtsSessionLock)
+                Tracker?.NotifySessionLocked();
             return CallWindowProcW(_origWndProc, hWnd2, msg, wParam, lParam);
         };
-        _origWndProc = SetWindowLongPtrW(hwnd, GwlpWndProc,
+        _origWndProc = SetWindowLongPtrW(_hwnd, GwlpWndProc,
             System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
+        if (!WTSRegisterSessionNotification(_hwnd, NotifyForThisSession))
+            Log.Error("InstallMinSizeHook.WTSRegisterSessionNotification",
+                new InvalidOperationException(
+                    $"Win32 error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}"));
     }
 
     private void SaveWindowSize()

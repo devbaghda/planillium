@@ -230,6 +230,69 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    /// <summary>
+    /// Reflections (the evening review's one-line answers) previously had
+    /// no delete path anywhere in the app — a deliberately separate action
+    /// from "Clear activity history" above, since reflections are the
+    /// user's own reflective text, not tracked window-activity data
+    /// (2026-07-09 audit finding #12).
+    /// </summary>
+    private async void ClearReflections_Click(object sender, RoutedEventArgs e)
+    {
+        int count;
+        try
+        {
+            using var db = new Database();
+            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+            count = score.CountReflections();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearReflections.Count", ex);
+            SaveStatus.Text = "Couldn't read reflections: " + ex.Message;
+            return;
+        }
+        if (count == 0)
+        {
+            SaveStatus.Text = "No reflections to clear.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "Clear my reflections?",
+            Content = $"Deletes {count} evening-review reflection(s). Your plans, task " +
+                      "completions, activity diary, and score are not affected. This cannot be undone.",
+            PrimaryButtonText = "Clear reflections",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        ClearReflectionsBtn.IsEnabled = false;
+        SaveStatus.Text = "Clearing…";
+        try
+        {
+            await Task.Run(() =>
+            {
+                using var db = new Database();
+                using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+                score.ClearReflections();
+            });
+            SaveStatus.Text = "Reflections cleared.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearReflections", ex);
+            SaveStatus.Text = "Couldn't clear reflections: " + ex.Message;
+        }
+        finally
+        {
+            ClearReflectionsBtn.IsEnabled = true;
+        }
+    }
+
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_initialising) return;
