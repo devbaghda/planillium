@@ -72,14 +72,7 @@ public static class SplitDiaryEntryDialog
 
         void AddRow(int? prefillMin, string prefillCat, string? prefillDesc)
         {
-            var durBox = new NumberBox
-            {
-                Value = prefillMin ?? double.NaN,
-                Minimum = 1,
-                Width = 80,
-                PlaceholderText = "min",
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
-            };
+            var durBox = DialogControls.MinutesBox(prefillMin);
             var catBox = new ComboBox { Width = 110 };
             foreach (var (label, value) in Categories)
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });

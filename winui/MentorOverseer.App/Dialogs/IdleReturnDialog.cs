@@ -126,14 +126,7 @@ public static class IdleReturnDialog
 
         void AddRow(int? prefillMin)
         {
-            var durBox = new NumberBox
-            {
-                Value = prefillMin ?? double.NaN,
-                Minimum = 1,
-                Width = 90,
-                PlaceholderText = "min",
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
-            };
+            var durBox = DialogControls.MinutesBox(prefillMin);
             var descBox = new TextBox
             {
                 PlaceholderText = "e.g. lunch, walked the dog…",

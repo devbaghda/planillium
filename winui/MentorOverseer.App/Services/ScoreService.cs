@@ -36,7 +36,7 @@ public sealed class ScoreService : IDisposable
         _plans = plans;
         _db = db;
         _completions = db.LoadCompletions();
-        _conn = AppPaths.OpenConnection();
+        _conn = db.Conn; // shared with Database — see Database.Conn's doc comment
         lock (SchemaGate)
         {
             if (!_schemaEnsured)
@@ -64,7 +64,10 @@ public sealed class ScoreService : IDisposable
         }
     }
 
-    public void Dispose() => _conn.Dispose();
+    // No-op: _conn is shared with (owned and disposed by) the Database this
+    // instance was constructed with. Every call site disposes its own
+    // Database separately, so this is never the last reference standing.
+    public void Dispose() { }
 
     // ── day stats (ports of _day_task_counts / _day_diary_minutes) ───────
 

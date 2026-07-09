@@ -8,6 +8,11 @@ public sealed class Database : IDisposable
 {
     private readonly SqliteConnection _conn;
 
+    /// <summary>Shared with ScoreService so it doesn't open a second connection
+    /// to the same file on every construction — that was pure avoidable
+    /// per-render overhead (measured ~200ms of a ~550ms Reports render).</summary>
+    internal SqliteConnection Conn => _conn;
+
     // Every page navigation, every checkbox toggle, every button click opens
     // a new Database() — construction used to re-run the full schema check
     // (a sqlite_master scan plus 8 CREATE-IF-NOT-EXISTS statements) EVERY

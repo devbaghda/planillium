@@ -651,20 +651,18 @@ public sealed partial class ReportsPage : Page
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var searching = _diarySearch.Trim().Length > 0;
-        var label = searching ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
-            : _diaryDate == today ? "TIME DIARY · TODAY"
-            : $"TIME DIARY · {_diaryDate.ToString("ddd dd.MM.yyyy", CultureInfo.InvariantCulture)}".ToUpperInvariant();
+        var caption = searching
+            ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
+            : "TIME DIARY";
+        var dateLabel = _diaryDate == today
+            ? "TODAY"
+            : _diaryDate.ToString("ddd dd.MM.yyyy", CultureInfo.InvariantCulture).ToUpperInvariant();
 
-        var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 6 };
+        var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 10 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var caption = Section(label);
-        caption.Margin = new Thickness(0);
-        Grid.SetColumn(caption, 0);
-        grid.Children.Add(caption);
 
         Button NavBtn(object content, string name, Action onClick, bool enabled = true)
         {
@@ -681,18 +679,38 @@ public sealed partial class ReportsPage : Page
             return btn;
         }
 
+        // Today is now the jump-shortcut on the left, next to the caption —
+        // it used to sit between the prev/next arrows, which read as a state
+        // indicator rather than the button it actually is. The current date
+        // now lives on the right, between the arrows that move it.
+        var todayBtn = NavBtn("Today", "Jump to today",
+            () => { _diaryDate = today; Render(); }, enabled: !searching && _diaryDate != today);
+        var captionText = Section(caption);
+        captionText.Margin = new Thickness(0);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        left.Children.Add(todayBtn);
+        left.Children.Add(captionText);
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
         var prevGlyph = new FontIcon { Glyph = "", FontSize = 12 };
         var nextGlyph = new FontIcon { Glyph = "", FontSize = 12 };
         var prev = NavBtn(prevGlyph, "Previous day",
             () => { _diaryDate = _diaryDate.AddDays(-1); Render(); }, enabled: !searching);
-        var todayBtn = NavBtn("Today", "Jump to today",
-            () => { _diaryDate = today; Render(); }, enabled: !searching && _diaryDate != today);
+        var dateText = new TextBlock
+        {
+            Text = dateLabel,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
         var next = NavBtn(nextGlyph, "Next day",
             () => { _diaryDate = _diaryDate.AddDays(1); Render(); }, enabled: !searching && _diaryDate < today);
 
-        Grid.SetColumn(prev, 1); Grid.SetColumn(todayBtn, 2); Grid.SetColumn(next, 3);
+        Grid.SetColumn(prev, 1); Grid.SetColumn(dateText, 2); Grid.SetColumn(next, 3);
         grid.Children.Add(prev);
-        grid.Children.Add(todayBtn);
+        grid.Children.Add(dateText);
         grid.Children.Add(next);
         return grid;
     }
