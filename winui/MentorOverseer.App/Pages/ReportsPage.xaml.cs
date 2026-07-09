@@ -132,7 +132,13 @@ public sealed partial class ReportsPage : Page
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
+            {
+                // The bars below are colored with no other label — without
+                // this, the only way to know what a color means is to
+                // already know it (2026-07-09 audit finding #18).
+                Body.Children.Add(TimeByAppLegend());
                 Body.Children.Add(Card(AppBreakdownPanel(breakdown)));
+            }
 
             Body.Children.Add(Section("INSIGHTS"));
             Body.Children.Add(Card(InsightsPanel(weekStats)));
@@ -597,6 +603,38 @@ public sealed partial class ReportsPage : Page
             panel.Children.Add(subPanel);
         }
         return panel;
+    }
+
+    /// <summary>Color key for AppUsageRow's stacked bars — same three
+    /// brush keys, same order, so this can never drift from what the bars
+    /// actually use.</summary>
+    private static StackPanel TimeByAppLegend()
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new Thickness(2, 0, 0, 8) };
+        foreach (var (label, brushKey) in new[]
+        {
+            ("On-plan", "SystemFillColorSuccessBrush"),
+            ("Off-plan", "SystemFillColorCriticalBrush"),
+            ("Neutral", "AccentFillColorDefaultBrush"),
+        })
+        {
+            var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            item.Children.Add(new Border
+            {
+                Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = (Brush)Application.Current.Resources[brushKey],
+            });
+            item.Children.Add(new TextBlock
+            {
+                Text = label,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+            row.Children.Add(item);
+        }
+        return row;
     }
 
     /// <summary>Name + stacked on/off/neutral bar + total minutes.</summary>

@@ -170,7 +170,16 @@ public sealed partial class TodayPage : Page
                             .Where(t => t.AssignedDay == tomorrowDay && !t.Completed).ToList();
                         if (tomorrowTasks.Count > 0)
                         {
-                            Sections.Children.Add(GroupLabel("GET A HEAD START ON TOMORROW?"));
+                            // Today.Count == 0 or done == today.Count means
+                            // today is genuinely clear — confident copy.
+                            // Otherwise this is firing on partial progress
+                            // (as little as one task done), so the header
+                            // shouldn't read as if today were finished
+                            // (2026-07-09 audit finding #13).
+                            var todayClear = today.Count == 0 || done == today.Count;
+                            Sections.Children.Add(GroupLabel(todayClear
+                                ? "GET A HEAD START ON TOMORROW?"
+                                : "ALSO ON DECK FOR TOMORROW"));
                             Sections.Children.Add(GetAheadCard(tomorrowTasks, plan));
                         }
                     }

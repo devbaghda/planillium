@@ -77,12 +77,14 @@ public static class SplitDiaryEntryDialog
             foreach (var (label, value) in Categories)
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
             catBox.SelectedIndex = Array.FindIndex(Categories, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(catBox, "Category");
             var descBox = new TextBox
             {
                 PlaceholderText = "description",
                 Text = prefillDesc ?? "",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
             };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(removeBtn, "Remove this activity");
 

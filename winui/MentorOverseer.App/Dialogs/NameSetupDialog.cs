@@ -33,7 +33,7 @@ public static class NameSetupDialog
             Text = "One thing first — what should I call you?",
             TextWrapping = TextWrapping.Wrap,
         });
-        var input = new TextBox { PlaceholderText = "e.g. the user" };
+        var input = new TextBox { PlaceholderText = "e.g. the user", Header = "Your name" };
         panel.Children.Add(input);
         panel.Children.Add(new TextBlock
         {

@@ -18,7 +18,7 @@ internal static class DialogControls
     /// already hit once with date formatting.</summary>
     public static NumberBox MinutesBox(double? value)
     {
-        return new NumberBox
+        var box = new NumberBox
         {
             Value = value ?? double.NaN,
             Minimum = 1,
@@ -28,5 +28,11 @@ internal static class DialogControls
             NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter(
                 new[] { "en-US" }, "US") { FractionDigits = 0 },
         };
+        // No visible Header (would repeat on every row in a tightly-packed
+        // multi-row list), but still needs a name for screen readers —
+        // PlaceholderText alone isn't exposed as one (2026-07-09 audit
+        // finding #15).
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, "Minutes");
+        return box;
     }
 }
