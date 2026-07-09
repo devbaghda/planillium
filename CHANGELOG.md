@@ -3,6 +3,23 @@
 Newest first. This tracks the WinUI app (`winui/MentorOverseer.App`) — the one app
 going forward; the original Python/Tkinter version is retired.
 
+## Unreleased
+
+**Reports**
+- Fixed the diary list's column width visibly resizing depending on that
+  day's content — the content column is now sized deterministically from
+  the page's own scroll viewport rather than its content, so it holds
+  steady across empty and busy days alike; long descriptions truncate with
+  the full text available on hover
+- Added a date picker to the diary header to jump straight to a specific
+  day instead of stepping through one at a time
+
+**Startup**
+- Fixed the window opening partially off-screen (or oversized) when a
+  previous session's saved size/position no longer fit the current
+  monitor — size and position are now both clamped to the current
+  display's work area on launch
+
 ## v1.0.0 — 2026-07-07
 
 First installable release. The WinUI app now covers everything the Python app did

@@ -83,6 +83,8 @@ This creates a fuller picture of how time is actually spent.
 
 Weekly reporting summarizes progress and highlights where effort was spent. This helps the user see patterns rather than only isolated task completion.
 
+The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained.
+
 ## Settings and configuration
 
 The app includes configurable settings for:
