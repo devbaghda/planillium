@@ -112,9 +112,16 @@ public sealed class ActivityTracker : IDisposable
         _offSince is DateTime s && _currentClass == "off_plan"
             ? (int)(DateTime.Now - s).TotalMinutes : 0;
 
-    public void Start()
+    /// <param name="lastDiaryEnd">End of the most recent time_diary row, if any.
+    /// Seeds the sleep/idle-gap check so the very first poll after a cold
+    /// start (app was fully closed, or the machine was off) treats the time
+    /// since then the same way a mid-session sleep gap is treated — asked
+    /// about via OnIdleReturn — instead of silently vanishing because
+    /// _lastPollAt had no prior poll to compare against.</param>
+    public void Start(DateTime? lastDiaryEnd = null)
     {
         Running = true;
+        _lastPollAt = lastDiaryEnd;
         // One-shot + re-arm: a slow poll (locked DB, hung WinAPI call) must
         // never overlap the next tick — overlapping polls race the session
         // state and write duplicate diary rows.

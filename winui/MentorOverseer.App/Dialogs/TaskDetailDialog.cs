@@ -44,7 +44,12 @@ public static class TaskDetailDialog
                 CharacterSpacing = 60,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             });
-            block.Children.Add(new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap });
+            block.Children.Add(new TextBlock
+            {
+                Text = detail,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+            });
             panel.Children.Add(block);
         }
 
@@ -59,7 +64,12 @@ public static class TaskDetailDialog
                 CharacterSpacing = 60,
                 Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
             });
-            block.Children.Add(new TextBlock { Text = note, TextWrapping = TextWrapping.Wrap });
+            block.Children.Add(new TextBlock
+            {
+                Text = note,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+            });
             panel.Children.Add(block);
         }
 

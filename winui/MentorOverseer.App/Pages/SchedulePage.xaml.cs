@@ -73,6 +73,25 @@ public sealed partial class SchedulePage : Page
         }
     }
 
+    /// <summary>Cheap per-day data — building this for every day in a long plan is
+    /// trivial; building the actual DayCard UI tree for every day is not (that was
+    /// the whole cost problem). ItemsRepeater only calls the factory below for
+    /// days that are actually near the viewport.</summary>
+    private sealed record ScheduleDayItem(Plan Plan, int Day, bool IsToday, bool IsOff,
+        List<AssignedTask> DayTasks, Dictionary<string, string> Notes);
+
+    private sealed class DayCardElementFactory : IElementFactory
+    {
+        private readonly Func<ScheduleDayItem, UIElement> _build;
+        public DayCardElementFactory(Func<ScheduleDayItem, UIElement> build) => _build = build;
+        public UIElement GetElement(ElementFactoryGetArgs args) => _build((ScheduleDayItem)args.Data);
+        // No pooling: each DayCard closes over its own plan/day/task state rather
+        // than binding to a reusable template, so a recycled container would need
+        // its handlers rewired anyway. Discarding and rebuilding on re-entry into
+        // view still avoids the original problem (building every day up front).
+        public void RecycleElement(ElementFactoryRecycleArgs args) { }
+    }
+
     private void RenderPlan(Plan plan, Database db, ScoreService score,
         Dictionary<(string, int, string), bool> completions)
     {
@@ -92,12 +111,10 @@ public sealed partial class SchedulePage : Page
             Margin = new Thickness(0, 8, 0, 4),
         });
 
-        // Each plan gets its own bounded scroll box instead of every plan's
-        // day cards pouring into one shared list — with 2 active plans,
-        // reaching the second plan used to mean scrolling past the whole
-        // first one first.
-        var dayList = new StackPanel { Spacing = 12, Padding = new Thickness(0, 0, 8, 0) };
-        FrameworkElement? todayCard = null;
+        // Data only here — no UI construction — so a 160-day plan costs a
+        // list of records, not 160 Grids/Borders/TextBlocks built up front.
+        var items = new List<ScheduleDayItem>();
+        var todayIndex = -1;
 
         // A long plan (e.g. 160 days) was rendering a full DayCard — Grid,
         // Border, multiple TextBlocks — for every single future day even
@@ -115,15 +132,28 @@ public sealed partial class SchedulePage : Page
             if (day < planDay && dayTasks.Count == 0 && !isOff) continue;
             if (day > lookahead && dayTasks.Count == 0 && !isOff) continue;
 
-            var card = DayCard(plan, day, isToday, isOff, dayTasks, notes);
-            dayList.Children.Add(card);
-            if (isToday) todayCard = card;
+            if (isToday) todayIndex = items.Count;
+            items.Add(new ScheduleDayItem(plan, day, isToday, isOff, dayTasks, notes));
         }
 
+        // Each plan gets its own bounded scroll box instead of every plan's
+        // day cards pouring into one shared list — with 2 active plans,
+        // reaching the second plan used to mean scrolling past the whole
+        // first one first. The ScrollViewer is also what makes the
+        // ItemsRepeater below virtualize: it only realizes DayCards for
+        // days actually within (or near) this 440px viewport.
+        var repeater = new ItemsRepeater
+        {
+            ItemsSource = items,
+            Layout = new StackLayout { Spacing = 12 },
+            ItemTemplate = new DayCardElementFactory(item =>
+                DayCard(item.Plan, item.Day, item.IsToday, item.IsOff, item.DayTasks, item.Notes)),
+        };
         var scroller = new ScrollViewer
         {
             Height = 440,
-            Content = dayList,
+            Padding = new Thickness(0, 0, 8, 0),
+            Content = repeater,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
@@ -136,8 +166,19 @@ public sealed partial class SchedulePage : Page
             Child = scroller,
         });
 
-        // Land this plan's own viewport on its own today, not Day 1.
-        todayCard?.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0.12 });
+        // Land this plan's own viewport on its own today, not Day 1. Deferred
+        // to Loaded (rather than called inline like the old eager StackPanel
+        // version could) because the repeater can't realize/measure an item
+        // by index until it's actually been through a layout pass.
+        if (todayIndex >= 0)
+        {
+            var idx = todayIndex;
+            repeater.Loaded += (_, _) =>
+            {
+                if (repeater.GetOrCreateElement(idx) is FrameworkElement el)
+                    el.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0.12 });
+            };
+        }
     }
 
     private FrameworkElement DayCard(Plan plan, int day, bool isToday, bool isOff,

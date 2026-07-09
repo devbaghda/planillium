@@ -38,7 +38,13 @@ public sealed partial class MainWindow : Window
         var savedState = StateService.Load();
         AppWindow.Resize(new Windows.Graphics.SizeInt32(
             Math.Max(savedState.WindowWidth, MinWidthDip), Math.Max(savedState.WindowHeight, MinHeightDip)));
-        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico"));
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
+        AppWindow.SetIcon(iconPath);
+        // The custom title bar's own logo mark used to be a placeholder
+        // FontIcon glyph (a generic checkmark) instead of the real artwork —
+        // load the same file the taskbar/tray icon use so all three agree.
+        try { AppLogoImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(iconPath)); }
+        catch (Exception ex) { Log.Error("MainWindow.AppLogoImage", ex); }
         InstallMinSizeHook();
 
         ApplyOpacity(savedState.Opacity);
@@ -372,7 +378,14 @@ public sealed partial class MainWindow : Window
             Tracker.OnAlert += (title, msg) => _dq.TryEnqueue(() => Notify(title, msg));
             Tracker.OnIdleReturn += (mins, start) =>
                 _dq.TryEnqueue(() => _ = IdleReturnDialog.ShowAsync(this, mins, start));
-            Tracker.Start();
+            DateTime? lastDiaryEnd = null;
+            try
+            {
+                using var db = new Database();
+                lastDiaryEnd = db.LastDiaryEnd();
+            }
+            catch (Exception ex) { Log.Error("StartTracker.LastDiaryEnd", ex); }
+            Tracker.Start(lastDiaryEnd);
         }
         catch (Exception ex)
         {

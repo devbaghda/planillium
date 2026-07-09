@@ -229,6 +229,22 @@ public sealed class Database : IDisposable
         return result;
     }
 
+    /// <summary>End timestamp of the most recent time_diary row, if any — lets the
+    /// tracker detect "the app itself wasn't running" gaps (closed and reopened,
+    /// machine rebooted) the same way it detects sleep/idle within a running
+    /// session, instead of silently dropping that span from the diary.</summary>
+    public DateTime? LastDiaryEnd()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT date, end_time FROM time_diary ORDER BY date DESC, end_time DESC LIMIT 1";
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        var date = r.GetString(0);
+        var end = r.GetString(1);
+        return DateTime.TryParse($"{date} {end}", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var dt) ? dt : null;
+    }
+
     /// <summary>Inserts one time_diary row directly — used when splitting an existing
     /// entry into several (unlike ActivityTracker.LogIdleAnswer, this isn't idle-specific:
     /// category is whatever the caller decides, not auto-classified from description text).</summary>

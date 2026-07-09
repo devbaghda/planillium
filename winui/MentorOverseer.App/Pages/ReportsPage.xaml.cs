@@ -262,8 +262,26 @@ public sealed partial class ReportsPage : Page
         markToolbar.Children.Add(markNeutralBtn);
         Body.Children.Add(markToolbar);
 
-        var diaryResults = new StackPanel { Spacing = 0 };
-        Body.Children.Add(diaryResults);
+        // Own scroll box, both directions: a long day (or a search hitting the
+        // full retention window) used to keep growing the whole Reports page
+        // and could push row content wider than the page, which then either
+        // clipped off-screen or shifted the page's own measured width from
+        // one day to the next. Bounding it here keeps the page's width and
+        // the diary's own scrolling independent of how much/how wide the
+        // content for a given day happens to be.
+        // MinWidth pins the row grids to a sane layout width even though the
+        // scroller offers them unconstrained width in the scrollable
+        // direction — without it, a Grid measured with infinite width can
+        // collapse its Star column instead of sizing sensibly.
+        var diaryResults = new StackPanel { Spacing = 0, MinWidth = 820 };
+        var diaryScroller = new ScrollViewer
+        {
+            MaxHeight = 520,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = diaryResults,
+        };
+        Body.Children.Add(diaryScroller);
 
         const int maxSearchResults = 300;
 
