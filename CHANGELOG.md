@@ -55,6 +55,27 @@ going forward; the original Python/Tkinter version is retired.
   previous session's saved size/position no longer fit the current
   monitor — size and position are now both clamped to the current
   display's work area on launch
+- If the app can't find its data folder at startup, it now shows a plain
+  error message and exits cleanly instead of leaving an invisible, stuck
+  process running with no window and no way to reach it
+
+**Reliability & fixes**
+- The morning "start your day" prompt no longer marks itself as shown the
+  instant a notification is *sent* — it's only recorded once you've
+  actually opened the real prompt, so a missed notification doesn't
+  silently skip the whole day's kickoff
+- Fixed a rare timing issue where the background tracker and the evening
+  review could read the same in-progress information at the same instant,
+  occasionally showing a stale "Day off" status or an unnecessary "where
+  were you" prompt for time already accounted for
+- Exported CSV reports now escape any tracked text that starts with a
+  formula character, closing the same spreadsheet-safety gap the HTML
+  export already had
+- "Clear activity history" now tells you if a saved report/export file
+  still exists on disk, since clearing history doesn't remove those
+  separately-saved copies
+- "Show more apps" now reads correctly whether there's one hidden app or
+  several
 
 ## v1.0.0 — 2026-07-07
 

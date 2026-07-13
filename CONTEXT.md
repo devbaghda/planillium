@@ -197,74 +197,54 @@ archive — full blow-by-blow detail for any entry lives in git log/commit messa
 Compress aggressively rather than letting this grow forever (compressed 852→224 lines on
 2026-07-06; compressed again, ~230→~50 lines, on 2026-07-09)._
 
-- **2026-07-13 (full audit, no fixes applied yet)**: full 5-category audit of `winui-rebuild`
-  (the actual live/deployed branch, not `audit-fixes-2026-07-09` which is still unmerged) —
-  4 High, 15 Medium, 18 Low, 4 Info. Findings-only, report not yet acted on. Full report:
-  artifact at https://claude.ai/code/artifact/7cb9538b-4859-4eea-ac1a-396b6f722282. Highlights:
-  (1) `KickoffDialog.Trigger` marks the day's kickoff "shown" the instant the toast is *sent*,
-  not when actually seen — a missed toast silently loses the whole morning-kickoff ritual for
-  the day (self-inflicted by today's earlier tray-notification work). (2) `new MainWindow()`
-  in `App.OnLaunched` has no try/catch — if the data folder can't be resolved, the app can end
-  up alive-but-invisible (mutex held, no window, no tray icon). (3) TickTick OAuth still lacks
-  PKCE on this branch (fixed on the unmerged `audit-fixes-2026-07-09` branch, never merged
-  here). (4) `config.json`/`plans/active/*.json` are git-tracked, not gitignored — sharpens the
-  existing "scrub before going public" Open TODO into a concrete action (gitignore + history
-  rewrite before any public push). Also: a new, unguarded cross-thread race in
-  `ActivityTracker` (`_restCheckDate`/`_restDayToday`/`_accountedUntil` now touched from both
-  the poll thread and the UI thread), a reintroduced N+1-connection perf regression in the
-  rewritten `ReportData.cs`, CSV-export formula-injection risk, 72 unreachable git objects from
-  an incomplete cleanup (verified — no live secret in them), and confirmation that several
-  `audit-fixes-2026-07-09` fixes (PKCE, `ReportsPage` decomposition, score-formula dedup,
-  `PlanStore` error surfacing) are genuinely absent from `winui-rebuild` since that branch was
-  never merged. **Decision needed next session: fix findings here directly, or finally merge
-  `audit-fixes-2026-07-09` first** (which would resolve several Mediums as a side effect)
-  before layering more fixes on top.
-
-- **2026-07-13** (`winui-rebuild`, built Debug+Release clean, **deployed to the live
-  Release instance, not yet committed** at time of writing): six feature changes. (1)
-  Reports are now *calendar* periods, not rolling windows — Week = Mon→today of this week,
-  Month = 1st→today, Year = Jan→now (`ReportData.PeriodStart`/`WeekStats`/`Buckets`/
-  `DateFilter`; HTML export labels updated). (2) "Time by app" shows top 3 with a "Show
-  more" toggle (`AppBreakdownPanel`, fetch limit raised to 100). (3) No tracking on
-  recurring rest days — `PlanStore.IsRestDay` (all active plans exclude the weekday);
-  `ActivityTracker.PollOnce` early-returns with a "Day off" pill, logs nothing, no nudges
-  (day-off definition confirmed with the user: *recurring excluded weekdays only*, not manual
-  mark-day-off). (4) "Where have you been?" now (a) fires on return from idle at any hour
-  (removed the 6am–8pm gate; the diary-window clamps already suppress bogus night prompts)
-  and (b) sweeps any unaccounted early-finish gap at the evening review
-  (`ActivityTracker.PendingDayGap`, shown before `ReviewDialog`). Guard added against the
-  sweep + return-handler double-logging the same span (`_accountedUntil`/
-  `MarkAccountedThrough`). (5) Morning kickoff and "where have you been?" now route through
-  a tray toast notification (new `Services/ToastNotifier.cs`, reusing the
-  `AppNotificationManager` mechanism already proven for focus alerts) whenever the window
-  isn't actually on screen (`MainWindow.IsOnScreen()` — hidden to tray OR
-  `OverlappedPresenterState.Minimized`), instead of silently opening a ContentDialog inside
-  a window nobody can see; clicking the toast (`AppNotificationManager.NotificationInvoked`,
-  wired in `MainWindow`) brings the window forward and opens the same interactive dialog,
-  carrying idle-return's minutes/start through the toast's arguments
-  (`KickoffDialog.Trigger`/`IdleReturnDialog.Trigger` are the new orchestrating entry
-  points; `ShowAsync` on both is now the "definitely show the real dialog" path used both
-  directly and from the notification-click handler). **Caused and fixed a live crash**: the
-  first deploy subscribed `AppNotificationManager.Default.NotificationInvoked` in
-  `MainWindow`'s constructor *after* `App.OnLaunched` had already called
-  `AppNotificationManager.Default.Register()` — threw `COMException 0x80070490 "Element not
-  found"` on every launch, taking the whole app (and tracking) down. Root cause: Microsoft's
-  own quickstart subscribes before `Register()`; fixed by reordering `App.OnLaunched` to
-  construct `MainWindow` (which subscribes) before calling `Register()`, plus wrapping the
-  subscription in try/catch (`MainWindow._notificationActivationWired`) so this class of bug
-  degrades to "toast click-through disabled" instead of crashing the app outright. Verified
-  via a throwaway Debug launch before touching the live Release instance a second time.
-  Live-instance restart to deploy: stopped old PID well before the 20:00 EOD time, confirmed
-  via `wmic`; confirmed the fixed build stays up (checked twice, ~5s apart) before ending
-  the session on it. Pre-existing warning at `ReportsPage.xaml.cs:372` (diary `row.Id`
-  null-deref) left as-is — it's fixed on the unmerged `audit-fixes-2026-07-09` branch. That
-  audit branch (33/40 findings) is still unmerged; merge decision still open. **None of
-  today's changes are committed yet.**
-- **Standing lesson**: when wiring any `AppNotificationManager` event subscription
-  (`NotificationInvoked` or future ones), subscribe *before* calling `.Register()` — the
-  reverse order throws at the WinRT layer for this unpackaged app. If a next session adds
-  another such subscription, put it in `MainWindow`'s constructor alongside the existing one
-  (before `App.OnLaunched`'s `Register()` call), not after.
+- **2026-07-13** (`winui-rebuild`, merged + remediated + re-audited, all committed and
+  deployed to the live Release instance): six feature changes (calendar-period reports;
+  day-off pause via `PlanStore.IsRestDay` — confirmed with the user as *recurring excluded
+  weekdays only*, not manual mark-day-off; "where have you been" fires any hour + sweeps
+  gaps at evening review; tray-toast routing for kickoff/idle-return via new
+  `Services/ToastNotifier.cs`) were built, then round-1 audited (4 High/15 Medium/18 Low/4
+  Info — https://claude.ai/code/artifact/7cb9538b-4859-4eea-ac1a-396b6f722282), then merged
+  with the long-unmerged `audit-fixes-2026-07-09` branch (2 conflicts, both resolved by
+  combining both branches' logic, not picking one side). Remediation commit `4014b00` fixed
+  both round-1 Highs still open post-merge (kickoff-toast marked-shown-before-seen; unguarded
+  `MainWindow()` ctor crash — now try/catch + `MessageBoxW` fallback) plus 9 Medium/9 Low
+  (cross-thread race in `ActivityTracker` via new `_dayStateLock`; CSV formula-injection
+  escaping; `ReportData.Buckets`/`TopDistractions`/`AppBreakdown` now share the caller's
+  connection — `DiaryInRange` deliberately still opens its own, see its doc comment, since a
+  long-lived UI closure calls it after `Render()`'s connection is gone; `ScoreService.
+  GreatDayThreshold` constant; explicit `asInvoker` manifest; WAL mode).
+  **Round-2 audit** (5 fresh passes against the merged+fixed code, not trusting round 1's or
+  the remediation commit's own descriptions) confirmed all 4 round-1 Highs genuinely fixed,
+  but found **1 new High, not yet fixed**: `StartEodWatcher` (`MainWindow.xaml.cs:459`) was
+  never given the `IsOnScreen()`/toast-fallback routing the kickoff/idle-return fixes got, so
+  it can open `ReviewDialog` while the window's hidden to tray and wedge `DialogGate`'s single
+  process-wide semaphore for every other dialog in the app until someone manually finds it.
+  Plus 14 Medium/13 Low — highlights: the `'dismissed'`→`'unaccounted time'` rename missed the
+  SQL filter that hides it from suggestion chips (`Database.cs:225`); diary-row checkboxes all
+  share one generic accessible name; a theme brush (`CardBackgroundFillColorSecondaryBrush`)
+  is missing from `ThemeSync`, causing a mismatched card when in-app/Windows themes differ;
+  diary search runs a fresh query on every keystroke, undebounced; the new test suite covers
+  task-scheduling but not the `ComputeDayScore` formula it's named after; `ReportsPage`/
+  `MainWindow` grew further past their round-1 God-Object flags; clear-history still only
+  warns about leftover export files instead of offering to delete them; kickoff/idle-return
+  toasts write literal "away N min" text into Windows' Action Center with no dedup tag, so
+  they accumulate. Full report: https://claude.ai/code/artifact/1f5b15bb-c6d5-4ea0-a1db-a46b984db19e.
+  Also this session: untracked `config.json`/`plans/active/*.json` from git going forward
+  (`.gitignore` + `git rm --cached`, commit `9be8515` — history NOT purged, files still readable
+  in past commits, see Open TODOs); ran `git reflog expire --expire=now --all && git gc
+  --prune=now --aggressive` (the user's explicit confirmation) to finish the incomplete
+  2026-07-09 secret cleanup — 0 dangling objects now; left the new
+  `plans/active/claude-code-10-level-mastery.json` untracked, consistent with the gitignore
+  decision. **Next session's first job: fix the `StartEodWatcher` dialog-gate wedge.**
+- **Standing lesson**: when wiring any `AppNotificationManager` event subscription, subscribe
+  *before* calling `.Register()` — the reverse order throws at the WinRT layer for this
+  unpackaged app. Separately: any new "show a prompt on a timer" trigger must route through
+  the same `IsOnScreen()`-check-then-toast-fallback pattern as `KickoffDialog.Trigger`/
+  `IdleReturnDialog.Trigger` — `StartEodWatcher` skipping this is exactly what caused this
+  session's new High finding. When a feature adds this pattern to some triggers, grep for
+  every other timer-driven `ShowAsync`/dialog-opening call before calling it done, the same
+  "check every sibling" lesson as the regression-prevention entry below, just for a different
+  pattern shape.
 - **2026-07-09** (three rounds, `winui-rebuild` kept in sync with `master`, both pushed):
   Reports diary column width is now computed deterministically in code-behind from
   `RootScroller`'s `ActualWidth` (three XAML-only attempts didn't hold — see `1e7dc07`).
@@ -324,10 +304,19 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
     phase as `"title"`, but `PlanModels.cs`'s `Phase` deserializes `"name"` — phases from
     that specific wizard mode get a silently-empty name (low impact: Schedule only renders
     `Day N`, not phase names).
-  - **Scrub personal data before making the repo public**: `plans/active/netherlands.json`,
-    `config.json` keywords, and this file's own "The user" section all name the user directly.
-    The GitHub repo is currently **Private** (confirmed 2026-07-09), so there's no live
-    exposure today, but this is still an unresolved pre-publish step, not a completed one.
+  - **Scrub personal data before making the repo public**: `config.json` and
+    `plans/active/*.json` were gitignored + untracked going forward on 2026-07-13 (commit
+    `9be8515`), and this file's own "The user" section still names the user directly. The GitHub
+    repo is currently **Private** (confirmed 2026-07-09), so there's no live exposure today,
+    but **history still holds the real files in every past commit** — untracking only stops
+    new copies, it doesn't purge old ones. Full purge (if wanted before any public push) needs
+    `git filter-repo` across every branch + a force-push of each, a deliberately separate,
+    bigger step from the untracking done tonight.
+  - **Fix the `StartEodWatcher` dialog-gate wedge** (round-2 audit, new High,
+    `MainWindow.xaml.cs:459`): route it through the same `IsOnScreen()`/toast-fallback pattern
+    `KickoffDialog.Trigger`/`IdleReturnDialog.Trigger` already use, and don't mark
+    `_eodOfferedOn` until the review dialog is actually shown. See Session handoff notes above
+    for why this matters — it can wedge every dialog in the app, not just the review itself.
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
