@@ -212,9 +212,12 @@ public sealed class Database : IDisposable
         }
     }
 
-    /// <summary>Most common past idle-answer descriptions (excludes "dismissed" and
-    /// blanks), most frequent first — feeds the idle-return dialog's quick-suggestion
-    /// chips alongside the fixed Lunch/Break/Errand set.</summary>
+    /// <summary>Most common past idle-answer descriptions (excludes the "no real
+    /// answer" placeholder and blanks), most frequent first — feeds the idle-return
+    /// dialog's quick-suggestion chips alongside the fixed Lunch/Break/Errand set.
+    /// Excludes both "unaccounted time" (the current placeholder) and the older
+    /// "dismissed" (rows saved before that rename) so neither shows up disguised
+    /// as a real answer.</summary>
     public List<string> MostFrequentIdleAnswers(int topN = 6)
     {
         var result = new List<string>();
@@ -222,7 +225,7 @@ public sealed class Database : IDisposable
         cmd.CommandText =
             "SELECT description FROM time_diary " +
             "WHERE window='idle' AND description IS NOT NULL AND description <> '' " +
-            "AND description <> 'dismissed' " +
+            "AND description NOT IN ('dismissed', 'unaccounted time') " +
             "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
         cmd.Parameters.AddWithValue("$n", topN);
         using var r = cmd.ExecuteReader();

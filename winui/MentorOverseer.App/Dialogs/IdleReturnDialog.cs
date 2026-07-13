@@ -33,21 +33,20 @@ public static class IdleReturnDialog
     /// </summary>
     public static Task Trigger(MainWindow window, int idleMinutes, DateTime idleStart)
     {
-        if (window.IsOnScreen())
-        {
-            // See KickoffDialog.Trigger's comment — IsOnScreen doesn't mean
-            // "in front," so bring the window forward before opening a
-            // dialog that would otherwise render unseen behind another app.
-            window.Activate();
-            return ShowAsync(window, idleMinutes, idleStart);
-        }
-
-        ToastNotifier.Show("Welcome back.",
-            $"You were away {idleMinutes} min. Click to say where.",
+        // No once-per-day throttle here, unlike Kickoff/Review — a real
+        // idle-return can legitimately happen several times in one day
+        // (lunch, an errand, an afternoon break), and each is a distinct
+        // event worth its own prompt. The Tag below still stops them from
+        // stacking up in Action Center: a second toast before the first is
+        // acted on replaces it rather than piling beside it, but it never
+        // suppresses a genuinely new return.
+        return PromptRouter.ShowOrToast(window, () => ShowAsync(window, idleMinutes, idleStart),
+            () => false, () => { },
+            "Welcome back.", "Quick check-in — click to log where you were.",
+            ToastArgs.IdleReturn,
             (ToastArgs.Action, ToastArgs.IdleReturn),
             (ToastArgs.Mins, idleMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             (ToastArgs.Start, idleStart.ToString("o", System.Globalization.CultureInfo.InvariantCulture)));
-        return Task.CompletedTask;
     }
 
     /// <param name="leadIn">Optional context line shown above the usual

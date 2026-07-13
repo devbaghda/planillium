@@ -32,13 +32,22 @@ public static class ToastArgs
 
 public static class ToastNotifier
 {
-    public static void Show(string title, string message, params (string Key, string Value)[] args)
+    /// <param name="tag">When set, a later Show with the same tag replaces
+    /// this notification in Windows' Action Center instead of stacking a
+    /// new one beside it — used by the recurring prompts (kickoff,
+    /// idle-return, review) so a day's worth of missed toasts can't pile up
+    /// into a lingering history of exactly when/how-long the user was away.
+    /// Leave null for one-off alerts that aren't meant to replace anything
+    /// (e.g. the focus-nudge alert).</param>
+    public static void Show(string title, string message, string? tag,
+        params (string Key, string Value)[] args)
     {
         try
         {
             var builder = new AppNotificationBuilder().AddText(title).AddText(message);
             foreach (var (key, value) in args)
                 builder.AddArgument(key, value);
+            if (tag is { Length: > 0 }) builder.SetTag(tag);
             AppNotificationManager.Default.Show(builder.BuildNotification());
         }
         catch (Exception ex)

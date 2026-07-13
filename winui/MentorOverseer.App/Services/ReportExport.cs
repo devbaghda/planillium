@@ -179,7 +179,7 @@ public static class ReportExport
     // as a formula by Excel on open (CSV/"Dangerous Data" injection). A
     // leading apostrophe forces spreadsheet tools to treat it as text.
     private static string EscapeFormula(string f) =>
-        f.Length > 0 && (f[0] is '=' or '+' or '-' or '@') ? "'" + f : f;
+        f.Length > 0 && (f[0] is '=' or '+' or '-' or '@' or '\t' or '\r') ? "'" + f : f;
 
     private static string Csv(params string[] fields) =>
         string.Join(",", fields.Select(EscapeFormula).Select(f =>

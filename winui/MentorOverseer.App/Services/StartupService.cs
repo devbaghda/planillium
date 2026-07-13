@@ -20,8 +20,16 @@ public static class StartupService
     {
         get
         {
-            using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue(ValueName) is string;
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+                return key?.GetValue(ValueName) is string;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("StartupService.IsEnabled", ex);
+                return false;
+            }
         }
     }
 

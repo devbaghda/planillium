@@ -87,11 +87,16 @@ public sealed class ScoreService : IDisposable
 
     // ── day stats (ports of _day_task_counts / _day_diary_minutes) ───────
 
-    /// <summary>True if d is a day off for this plan — either a recurring
-    /// weekly exclusion or a specific day manually marked off. Used only to
-    /// exempt scoring; overdue tasks still display as overdue in the UI on
-    /// a day off, they just don't cost anything further that day.</summary>
-    private bool IsDayOffFor(Plan plan, DateOnly d)
+    /// <summary>True if d is a day off for this ONE plan — either a
+    /// recurring weekly exclusion or a specific day manually marked off.
+    /// Used only to exempt scoring; overdue tasks still display as overdue
+    /// in the UI on a day off, they just don't cost anything further that
+    /// day. Deliberately distinct from PlanStore.AllPlansExclude — that one
+    /// answers "should tracking itself pause today" (all active plans,
+    /// recurring exclusions only, no manual override) for a different
+    /// purpose; the two rules differ on purpose, don't unify them by
+    /// mistake if one is ever renamed or refactored near the other.</summary>
+    private bool IsScoringExemptFor(Plan plan, DateOnly d)
     {
         if (plan.IsExcluded(d)) return true;
         return DaysOff(plan.Id).Contains(plan.PlanDayForDate(d));
@@ -107,7 +112,7 @@ public sealed class ScoreService : IDisposable
             // excluded date to the SAME day-number as the last valid day
             // before it, so without this skip an excluded Saturday would
             // silently re-count Friday's already-credited tasks.
-            if (IsDayOffFor(plan, d)) continue;
+            if (IsScoringExemptFor(plan, d)) continue;
             var dayNum = plan.PlanDayForDate(d);
             var overrides = _db.LoadOverrides(plan.Id);
             foreach (var phase in plan.Phases)
@@ -178,7 +183,7 @@ public sealed class ScoreService : IDisposable
             var d = DateOnly.FromDateTime(DateTime.Today).AddDays(-i);
             // A day off doesn't break a streak — skip it rather than
             // treating its (necessarily zero) task count as a miss.
-            if (_plans.Any(p => IsDayOffFor(p, d))) continue;
+            if (_plans.Any(p => IsScoringExemptFor(p, d))) continue;
             var (total, done) = DayTaskCounts(d);
             if (total > 0 && done == total) streak++;
             else break;
@@ -266,7 +271,7 @@ public sealed class ScoreService : IDisposable
         // They're still shown as overdue everywhere in the UI (OverdueAsOf
         // itself is untouched) and resume accruing the day after.
         var count = OverdueAsOf(d)
-            .Where(x => !IsDayOffFor(x.Plan, d))
+            .Where(x => !IsScoringExemptFor(x.Plan, d))
             .Count(x => x.DaysOverdue <= OverdueAccrualCapDays);
         if (count == 0) return 0;
         var delta = count * ConfigService.ScoringRate("task_overdue_penalty", -5);

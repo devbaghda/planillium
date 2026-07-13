@@ -52,26 +52,15 @@ public static class KickoffDialog
     /// <see cref="_toastSentOn"/> alone stops the per-minute watcher from
     /// re-nudging every single minute in the meantime.
     /// </summary>
-    public static async Task Trigger(MainWindow window)
+    public static Task Trigger(MainWindow window)
     {
-        if (!ShouldShow()) return;
-        if (window.IsOnScreen())
-        {
-            // IsOnScreen only means "not hidden/minimized" — the window could
-            // still be buried behind whatever's actually in front. Bring it
-            // forward so the dialog that's about to open isn't opening
-            // unseen behind another app.
-            window.Activate();
-            await ShowAsync(window);
-            return;
-        }
+        if (!ShouldShow()) return Task.CompletedTask;
         var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        if (_toastSentOn == today) return;
-        _toastSentOn = today;
         var name = ConfigService.UserName is { Length: > 0 } n ? n : "there";
-        ToastNotifier.Show($"Good morning, {name}.",
-            "Time to start your day — click to see today's plan.",
-            (ToastArgs.Action, ToastArgs.Kickoff));
+        return PromptRouter.ShowOrToast(window, () => ShowAsync(window),
+            () => _toastSentOn == today, () => _toastSentOn = today,
+            $"Good morning, {name}.", "Time to start your day — click to see today's plan.",
+            ToastArgs.Kickoff, (ToastArgs.Action, ToastArgs.Kickoff));
     }
 
     public static void MarkShownToday()

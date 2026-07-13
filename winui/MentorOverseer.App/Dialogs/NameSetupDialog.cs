@@ -38,8 +38,11 @@ public static class NameSetupDialog
         panel.Children.Add(new TextBlock
         {
             Text = "One more thing: this app tracks your active window every 60s to " +
-                   "measure on-plan time. Everything stays local on this machine. " +
-                   "Quit from the tray icon anytime to stop tracking.",
+                   "measure on-plan time. Everything it tracks stays local on this " +
+                   "machine — reminder notifications may briefly appear in Windows' " +
+                   "own notification area, so turn off notification sync to other " +
+                   "devices if that matters to you. Quit from the tray icon anytime " +
+                   "to stop tracking.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],

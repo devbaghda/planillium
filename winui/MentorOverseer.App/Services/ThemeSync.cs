@@ -66,6 +66,7 @@ public static class ThemeSync
         ["TextFillColorSecondaryBrush"] = (Color.FromArgb(0x9E, 0, 0, 0), Color.FromArgb(0xC5, 0xFF, 0xFF, 0xFF)),
         ["TextFillColorTertiaryBrush"] = (Color.FromArgb(0x8F, 0, 0, 0), Color.FromArgb(0x87, 0xFF, 0xFF, 0xFF)),
         ["CardBackgroundFillColorDefaultBrush"] = (Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+        ["CardBackgroundFillColorSecondaryBrush"] = (Color.FromArgb(0x80, 0xF6, 0xF6, 0xF6), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF)),
         ["CardStrokeColorDefaultBrush"] = (Color.FromArgb(0x0F, 0, 0, 0), Color.FromArgb(0x19, 0, 0, 0)),
         ["DividerStrokeColorDefaultBrush"] = (Color.FromArgb(0x0F, 0, 0, 0), Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)),
         ["SubtleFillColorSecondaryBrush"] = (Color.FromArgb(0x09, 0, 0, 0), Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),

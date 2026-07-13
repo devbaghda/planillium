@@ -563,7 +563,7 @@ public sealed partial class MainWindow : Window
         ActivityWindow.Text = app.Length > 60 ? app[..60] : app;
     }
 
-    private static void Notify(string title, string message) => ToastNotifier.Show(title, message);
+    private static void Notify(string title, string message) => ToastNotifier.Show(title, message, tag: null);
 
     private async void BuyTime_Click(object sender, RoutedEventArgs e) =>
         await Dialogs.SpendDialog.ShowBuyAsync(this);

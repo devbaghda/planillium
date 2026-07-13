@@ -102,10 +102,22 @@ public partial class App : Application
         }
 
         // --minimized (autostart at boot): start straight into the tray.
-        if (Environment.GetCommandLineArgs().Contains("--minimized"))
-            window.HideToTray();
-        else
-            window.Activate();
+        // Same defense-in-depth as the constructor above: InitTray() already
+        // ran inside the (now successfully-returned) constructor, so a
+        // failure here would still leave a tray icon behind — but without a
+        // catch, it'd otherwise reproduce the exact "alive, mutex held, no
+        // way to bring the window up" failure one call later.
+        try
+        {
+            if (Environment.GetCommandLineArgs().Contains("--minimized"))
+                window.HideToTray();
+            else
+                window.Activate();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Post-construction HideToTray/Activate", ex);
+        }
     }
 
     private const uint MbIconError = 0x10;

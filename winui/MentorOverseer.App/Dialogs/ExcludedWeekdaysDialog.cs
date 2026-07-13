@@ -67,6 +67,17 @@ public static class ExcludedWeekdaysDialog
         catch (Exception ex)
         {
             Log.Error("ExcludedWeekdaysDialog", ex);
+            // The picker dialog above has already closed by this point (the
+            // user clicked Save), so failing silently here would leave no
+            // visible sign the choice wasn't actually persisted — a second,
+            // small dialog is the only way left to say so.
+            await DialogGate.ShowAsync(new ContentDialog
+            {
+                Title = "Couldn't save",
+                Content = "The excluded days didn't save — nothing changed. Try again in a moment.",
+                CloseButtonText = "OK",
+                XamlRoot = xamlRoot,
+            });
             return false;
         }
         return true;

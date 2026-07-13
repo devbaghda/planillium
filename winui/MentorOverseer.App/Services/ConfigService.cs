@@ -32,24 +32,36 @@ public static class ConfigService
         Invalidate();
     }
 
+    // Guards _doc: read from both the UI thread and ActivityTracker's
+    // background poll timer (e.g. ConfigService.UserName inside CheckAlert),
+    // and cleared/rebuilt from the UI thread via Mutate()/Invalidate() —
+    // same class of cross-thread race as ActivityTracker's _dayStateLock,
+    // just for the config cache instead of tracker state.
+    private static readonly object _docLock = new();
     private static JsonDocument? _doc;
 
     public static JsonElement Root
     {
         get
         {
-            if (_doc is null)
+            lock (_docLock)
             {
-                var path = Path.Combine(AppPaths.Root, "config.json");
-                _doc = File.Exists(path)
-                    ? JsonDocument.Parse(File.ReadAllText(path))
-                    : JsonDocument.Parse("{}");
+                if (_doc is null)
+                {
+                    var path = Path.Combine(AppPaths.Root, "config.json");
+                    _doc = File.Exists(path)
+                        ? JsonDocument.Parse(File.ReadAllText(path))
+                        : JsonDocument.Parse("{}");
+                }
+                return _doc.RootElement.Clone();
             }
-            return _doc.RootElement.Clone();
         }
     }
 
-    public static void Invalidate() { _doc?.Dispose(); _doc = null; }
+    public static void Invalidate()
+    {
+        lock (_docLock) { _doc?.Dispose(); _doc = null; }
+    }
 
     public static int ScoringRate(string key, int fallback) =>
         Root.TryGetProperty("scoring", out var s) &&

@@ -391,8 +391,8 @@ public sealed class ActivityTracker : IDisposable
             if (_restCheckDate != today)
             {
                 _restCheckDate = today;
-                try { _restDayToday = PlanStore.IsRestDay(today); }
-                catch (Exception ex) { Log.Error("ActivityTracker.IsRestDay", ex); _restDayToday = false; }
+                try { _restDayToday = PlanStore.AllPlansExclude(today); }
+                catch (Exception ex) { Log.Error("ActivityTracker.AllPlansExclude", ex); _restDayToday = false; }
             }
             return _restDayToday;
         }

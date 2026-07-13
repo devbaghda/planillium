@@ -197,29 +197,51 @@ public sealed partial class SettingsPage : Page
         // already saved to disk (data/report.html, report.csv,
         // full-export.json) is a second, untouched copy of some of the same
         // information. Rather than silently delete files the user may have
-        // deliberately kept, name the ones that currently exist so "cleared"
-        // doesn't quietly mean "except for that export from last week."
+        // deliberately kept, name the ones that currently exist and offer
+        // an opt-in checkbox to remove them in the same action instead of
+        // just warning and leaving it to a manual trip to File Explorer.
         var exportNames = new[] { "report.html", "report.csv", "full-export.json" }
             .Where(f => File.Exists(Path.Combine(AppPaths.Root, "data", f)))
             .ToList();
-        var exportWarning = exportNames.Count > 0
-            ? $"\n\nNote: {string.Join(", ", exportNames)} in your data folder still holds a copy " +
-              "of some of this — delete those separately if you want them gone too."
-            : "";
+
+        var confirmPanel = new StackPanel { Spacing = 10 };
+        confirmPanel.Children.Add(new TextBlock
+        {
+            Text = $"Deletes {diaryRows} diary session(s) and {rollupDays} day(s) of " +
+                   "rolled-up totals — the tracked window-activity record. Your plans, " +
+                   "task completions, notes, and score are not affected. This cannot be undone.",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        var deleteExportsBox = new CheckBox
+        {
+            Content = $"Also delete {string.Join(", ", exportNames)} from your data folder",
+            Visibility = Visibility.Collapsed,
+        };
+        if (exportNames.Count > 0)
+        {
+            confirmPanel.Children.Add(new TextBlock
+            {
+                Text = $"{string.Join(", ", exportNames)} in your data folder still holds a copy " +
+                       "of some of this.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+            deleteExportsBox.Visibility = Visibility.Visible;
+            confirmPanel.Children.Add(deleteExportsBox);
+        }
 
         var confirm = new ContentDialog
         {
             Title = "Clear activity history?",
-            Content = $"Deletes {diaryRows} diary session(s) and {rollupDays} day(s) of " +
-                      "rolled-up totals — the tracked window-activity record. Your plans, " +
-                      "task completions, notes, and score are not affected. This cannot be undone." +
-                      exportWarning,
+            Content = confirmPanel,
             PrimaryButtonText = "Clear history",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
         };
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+        var deleteExports = deleteExportsBox.IsChecked == true;
 
         // VACUUM rewrites the whole database file, not just the deleted
         // rows, so its cost scales with total file size — on months of
@@ -228,25 +250,41 @@ public sealed partial class SettingsPage : Page
         // (2026-07-09 audit finding #8); moved off the UI thread, with the
         // button disabled and a status message so a slow clear still reads
         // as "working," not "stuck."
-        ClearHistoryBtn.IsEnabled = false;
+        await RunClearActionAsync(ClearHistoryBtn, () =>
+        {
+            using var db = new Database();
+            db.ClearActivityHistory();
+            if (deleteExports)
+                foreach (var f in exportNames)
+                {
+                    try { File.Delete(Path.Combine(AppPaths.Root, "data", f)); }
+                    catch (Exception ex) { Log.Error($"SettingsPage.ClearHistory.DeleteExport({f})", ex); }
+                }
+        }, "Activity history cleared.", "SettingsPage.ClearHistory");
+    }
+
+    /// <summary>Shared busy-state sequence for the two "clear my data"
+    /// buttons below — confirm dialog already shown by the caller; this
+    /// covers disable-button → "Clearing…" → run off the UI thread →
+    /// status message → re-enable, so the two buttons can't drift apart on
+    /// this shared shape while still owning their own confirm copy/dbAction.</summary>
+    private async Task RunClearActionAsync(Button trigger, Action dbAction, string successMessage, string logTag)
+    {
+        trigger.IsEnabled = false;
         SaveStatus.Text = "Clearing…";
         try
         {
-            await Task.Run(() =>
-            {
-                using var db = new Database();
-                db.ClearActivityHistory();
-            });
-            SaveStatus.Text = "Activity history cleared.";
+            await Task.Run(dbAction);
+            SaveStatus.Text = successMessage;
         }
         catch (Exception ex)
         {
-            Log.Error("SettingsPage.ClearHistory", ex);
-            SaveStatus.Text = "Couldn't clear activity history: " + ex.Message;
+            Log.Error(logTag, ex);
+            SaveStatus.Text = "Couldn't clear: " + ex.Message;
         }
         finally
         {
-            ClearHistoryBtn.IsEnabled = true;
+            trigger.IsEnabled = true;
         }
     }
 
@@ -290,27 +328,12 @@ public sealed partial class SettingsPage : Page
         };
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
-        ClearReflectionsBtn.IsEnabled = false;
-        SaveStatus.Text = "Clearing…";
-        try
+        await RunClearActionAsync(ClearReflectionsBtn, () =>
         {
-            await Task.Run(() =>
-            {
-                using var db = new Database();
-                using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
-                score.ClearReflections();
-            });
-            SaveStatus.Text = "Reflections cleared.";
-        }
-        catch (Exception ex)
-        {
-            Log.Error("SettingsPage.ClearReflections", ex);
-            SaveStatus.Text = "Couldn't clear reflections: " + ex.Message;
-        }
-        finally
-        {
-            ClearReflectionsBtn.IsEnabled = true;
-        }
+            using var db = new Database();
+            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+            score.ClearReflections();
+        }, "Reflections cleared.", "SettingsPage.ClearReflections");
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)

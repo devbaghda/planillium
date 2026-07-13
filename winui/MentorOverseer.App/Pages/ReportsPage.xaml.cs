@@ -115,9 +115,20 @@ public sealed partial class ReportsPage : Page
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
-            Body.Children.Add(Card(_period is ReportPeriod.Day or ReportPeriod.Week
-                ? DayTable(weekStats)
-                : BucketTable(ReportData.Buckets(_period, db.Conn))));
+            if (_period is ReportPeriod.Day or ReportPeriod.Week)
+                Body.Children.Add(Card(DayTable(weekStats)));
+            else
+            {
+                var buckets = ReportData.Buckets(_period, db.Conn);
+                // Month always has at least this-week's row seeded in,
+                // but Year only gets rows for months that actually have
+                // data — a brand-new install (or a period with zero
+                // history) renders just a bare header row otherwise,
+                // which reads as broken rather than simply empty.
+                Body.Children.Add(buckets.Count == 0
+                    ? Dim("No activity logged yet.")
+                    : Card(BucketTable(buckets)));
+            }
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────
             Body.Children.Add(Section($"TOP DISTRACTIONS — {periodName}"));
@@ -430,10 +441,20 @@ public sealed partial class ReportsPage : Page
 
         // Filters in place (doesn't touch searchBox itself) so typing
         // keeps focus/cursor position instead of losing it every keystroke.
+        // Debounced: each keystroke would otherwise open a fresh connection
+        // and scan the full retention window synchronously on the UI thread
+        // — fine at personal-DB scale today, but a free anti-pattern to fix
+        // while the file's already open, before it accumulates enough
+        // history to actually be felt.
+        var searchDebounce = DispatcherQueue.CreateTimer();
+        searchDebounce.Interval = TimeSpan.FromMilliseconds(250);
+        searchDebounce.IsRepeating = false;
+        searchDebounce.Tick += (_, _) => RenderDiaryResults();
         searchBox.TextChanged += (_, _) =>
         {
             _diarySearch = searchBox.Text;
-            RenderDiaryResults();
+            searchDebounce.Stop();
+            searchDebounce.Start();
         };
     }
 
@@ -621,6 +642,13 @@ public sealed partial class ReportsPage : Page
             // it keyboard-operable; the accessible name is kept in sync with
             // the visible expand/collapse state on every toggle.
             header.IsTabStop = true;
+            // WinUI has no attached property to change a plain Grid's reported
+            // control type to "button" short of a custom AutomationPeer
+            // subclass — HelpText is the lightest honest way to tell Narrator
+            // users Enter/Space does something, since the peer still reports
+            // as a generic group/pane.
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(header,
+                "Press Enter or Space to expand or collapse.");
             void SetExpandedState(bool expanded)
             {
                 Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(header,
@@ -683,6 +711,7 @@ public sealed partial class ReportsPage : Page
             ("On-plan", "SystemFillColorSuccessBrush"),
             ("Off-plan", "SystemFillColorCriticalBrush"),
             ("Neutral", "AccentFillColorDefaultBrush"),
+            ("Paid", "SystemFillColorCautionBrush"),
         })
         {
             var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
@@ -745,6 +774,7 @@ public sealed partial class ReportsPage : Page
             (u.On, "SystemFillColorSuccessBrush"),
             (u.Off, "SystemFillColorCriticalBrush"),
             (u.Neutral, "AccentFillColorDefaultBrush"),
+            (u.Paid, "SystemFillColorCautionBrush"),
         })
         {
             var w = barWidth * mins / maxTotal;
@@ -914,7 +944,8 @@ public sealed partial class ReportsPage : Page
                 MinWidth = 0, VerticalAlignment = VerticalAlignment.Center,
                 IsChecked = selectedIds.Contains(id),
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(select, "Select this entry");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(select,
+                $"Select entry: {AppNames.Label(window)}, {start}–{end}");
             select.Checked += (_, _) => { selectedIds.Add(id); onSelectionChanged(); };
             select.Unchecked += (_, _) => { selectedIds.Remove(id); onSelectionChanged(); };
             Grid.SetColumn(select, 0);

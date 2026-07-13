@@ -49,13 +49,17 @@ public static class PlanStore
     }
 
     /// <summary>
-    /// True when <paramref name="d"/> is a recurring rest day — every active
-    /// plan treats that weekday as an excluded (non-advancing) day. Used to
-    /// pause activity tracking on the user's days off. Returns false when no
-    /// plans are loaded, so tracking never quietly stops just because a plan
-    /// file failed to load or none exists yet.
+    /// True when <paramref name="d"/> is a recurring rest day for EVERY
+    /// active plan — all of them treat that weekday as an excluded
+    /// (non-advancing) day. Used only to pause activity tracking itself on
+    /// the user's days off; ignores manually-marked single-day exclusions on
+    /// purpose (unlike ScoreService.IsScoringExemptFor, which is per-plan and
+    /// does consider them) — the two rules answer different questions and
+    /// are deliberately not unified. Returns false when no plans are loaded,
+    /// so tracking never quietly stops just because a plan file failed to
+    /// load or none exists yet.
     /// </summary>
-    public static bool IsRestDay(DateOnly d)
+    public static bool AllPlansExclude(DateOnly d)
     {
         var plans = LoadActivePlans();
         return plans.Count > 0 && plans.All(p => p.IsExcluded(d));

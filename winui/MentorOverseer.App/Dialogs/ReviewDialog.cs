@@ -50,21 +50,14 @@ public static class ReviewDialog
     /// would wedge every other dialog in the app behind it via DialogGate's
     /// single process-wide queue.
     /// </summary>
-    public static async Task Trigger(MainWindow window)
+    public static Task Trigger(MainWindow window)
     {
-        if (!ShouldOffer()) return;
-        if (window.IsOnScreen())
-        {
-            window.Activate();
-            await ShowAsync(window);
-            return;
-        }
+        if (!ShouldOffer()) return Task.CompletedTask;
         var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        if (_toastSentOn == today) return;
-        _toastSentOn = today;
-        ToastNotifier.Show("Day review ready.",
-            "See how today went — click to close out the day.",
-            (ToastArgs.Action, ToastArgs.Review));
+        return PromptRouter.ShowOrToast(window, () => ShowAsync(window),
+            () => _toastSentOn == today, () => _toastSentOn = today,
+            "Day review ready.", "See how today went — click to close out the day.",
+            ToastArgs.Review, (ToastArgs.Action, ToastArgs.Review));
     }
 
     public static async Task ShowAsync(MainWindow window)
@@ -81,7 +74,7 @@ public static class ReviewDialog
                 if (tracker.PendingDayGap(gapDb) is { } gap)
                 {
                     await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start,
-                        leadIn: "One gap to fill in before today's review —");
+                        leadIn: "Some unaccounted time to fill in before today's review —");
                     // The whole gap is now written to the diary (even a skipped
                     // dialog logs it as idle) — stop the poll loop re-asking.
                     tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));

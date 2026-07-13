@@ -19,7 +19,7 @@ public static class ReportData
 
     public sealed class AppUsage
     {
-        public int Total, On, Off, Neutral;
+        public int Total, On, Off, Neutral, Paid;
         public SortedDictionary<string, AppUsage>? Subs;
 
         public void Add(string category, int mins)
@@ -30,6 +30,7 @@ public static class ReportData
                 case "on_plan": On += mins; break;
                 case "off_plan": Off += mins; break;
                 case "neutral": Neutral += mins; break;
+                case "paid": Paid += mins; break;
             }
         }
     }
@@ -77,7 +78,7 @@ public static class ReportData
             var weeks = new SortedDictionary<string, (DateOnly WeekStart, int On, int Off)>();
             for (var d = start; d <= today; d = d.AddDays(1))
             {
-                var ws = d.AddDays(-(((int)d.DayOfWeek + 6) % 7));  // Monday
+                var ws = MondayOf(d);
                 weeks.TryAdd(ws.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), (ws, 0, 0));
             }
             cmd.CommandText =
@@ -90,7 +91,7 @@ public static class ReportData
                 if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", out var d)) continue;
                 var cat = r.GetString(1);
                 if (cat != "on_plan" && cat != "off_plan") continue;
-                var ws = d.AddDays(-(((int)d.DayOfWeek + 6) % 7));
+                var ws = MondayOf(d);
                 var key = ws.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                 if (!weeks.TryGetValue(key, out var w)) continue;
                 var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
@@ -104,8 +105,9 @@ public static class ReportData
         }
 
         // Year — group by calendar month, January through the current month.
-        // Raw time_diary only covers the retained window
-        // (Database.DiaryRetentionDays), so earlier months of the year come
+        // Raw time_diary only covers the diary's configured retention window
+        // (ConfigService.DiaryRetentionDays(); Database.DiaryRetentionDays is
+        // only its fallback default), so earlier months of the year come
         // from diary_daily_rollup instead — the two never overlap (a date
         // only gets a rollup row once its raw rows are pruned), so summing
         // both sources is safe.
