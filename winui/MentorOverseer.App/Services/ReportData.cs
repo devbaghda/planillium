@@ -42,15 +42,19 @@ public static class ReportData
         _ => "THIS WEEK",
     };
 
-    /// <summary>Last 7 days, oldest first — the day/week summary table.</summary>
+    /// <summary>
+    /// This calendar week so far — Monday through today, oldest first —
+    /// backing the day/week summary table. Future days of the week are
+    /// omitted (they'd be empty rows); the last element is always today, so
+    /// callers that want "today" can take <c>[^1]</c>.
+    /// </summary>
     public static List<DayStat> WeekStats(ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var streak = score.CurrentStreak();
         var rows = new List<DayStat>();
-        for (var i = 6; i >= 0; i--)
+        for (var d = MondayOf(today); d <= today; d = d.AddDays(1))
         {
-            var d = today.AddDays(-i);
             var (total, done) = score.DayTaskCounts(d);
             var (on, off) = score.DayDiaryMinutes(d);
             var s = score.DayScore(done, total, on, off, d == today ? streak : 0);
@@ -59,7 +63,8 @@ public static class ReportData
         return rows;
     }
 
-    /// <summary>Month → week buckets (last 30 days); Year → calendar months (last 365).</summary>
+    /// <summary>Month → week buckets within this calendar month; Year → the
+    /// calendar months of this year, January through the current month.</summary>
     public static List<BucketStat> Buckets(ReportPeriod period)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
@@ -68,7 +73,7 @@ public static class ReportData
 
         if (period == ReportPeriod.Month)
         {
-            var start = today.AddDays(-29);
+            var start = PeriodStart(ReportPeriod.Month, today);
             // Ordered week buckets keyed by the Monday of each week.
             var weeks = new SortedDictionary<string, (DateOnly WeekStart, int On, int Off)>();
             for (var d = start; d <= today; d = d.AddDays(1))
@@ -99,12 +104,13 @@ public static class ReportData
                 w.On, w.Off)).ToList();
         }
 
-        // Year — group by calendar month. Raw time_diary only covers the
-        // retained window (Database.DiaryRetentionDays), so anything older
-        // in a 365-day span comes from diary_daily_rollup instead — the two
-        // never overlap (a date only gets a rollup row once its raw rows are
-        // pruned), so summing both sources is safe.
-        var fromStr = today.AddDays(-364).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        // Year — group by calendar month, January through the current month.
+        // Raw time_diary only covers the retained window
+        // (Database.DiaryRetentionDays), so earlier months of the year come
+        // from diary_daily_rollup instead — the two never overlap (a date
+        // only gets a rollup row once its raw rows are pruned), so summing
+        // both sources is safe.
+        var fromStr = PeriodStart(ReportPeriod.Year, today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         cmd.CommandText =
             "SELECT strftime('%Y-%m', date) AS mo, category, SUM(duration_min) " +
             "FROM time_diary WHERE date >= $from GROUP BY mo, category ORDER BY mo";
@@ -249,6 +255,24 @@ public static class ReportData
 
     private static SqliteConnection Open() => AppPaths.OpenConnection();
 
+    /// <summary>Monday of the week containing <paramref name="d"/>.</summary>
+    internal static DateOnly MondayOf(DateOnly d) => d.AddDays(-(((int)d.DayOfWeek + 6) % 7));
+
+    /// <summary>
+    /// First day of the calendar period containing today — Monday of this
+    /// week, the 1st of this month, or 1 January of this year. Periods are
+    /// *calendar* windows ("this week/month/year"), not rolling look-backs
+    /// ("the last 7/30/365 days"), so a Monday report shows only Monday's
+    /// data rather than dragging in the tail of the previous week.
+    /// </summary>
+    internal static DateOnly PeriodStart(ReportPeriod period, DateOnly today) => period switch
+    {
+        ReportPeriod.Day => today,
+        ReportPeriod.Month => new DateOnly(today.Year, today.Month, 1),
+        ReportPeriod.Year => new DateOnly(today.Year, 1, 1),
+        _ => MondayOf(today),
+    };
+
     /// <summary>SQL date predicate for the period; adds its parameter to cmd.</summary>
     private static string DateFilter(ReportPeriod period, SqliteCommand cmd)
     {
@@ -259,14 +283,8 @@ public static class ReportData
                 today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             return "date = $pd";
         }
-        var days = period switch
-        {
-            ReportPeriod.Month => 30,
-            ReportPeriod.Year => 365,
-            _ => 7,
-        };
         cmd.Parameters.AddWithValue("$pd",
-            today.AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            PeriodStart(period, today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         return "date >= $pd";
     }
 }

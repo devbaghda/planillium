@@ -44,6 +44,15 @@ public partial class App : Application
             Environment.Exit(0);
         }
 
+        // MainWindow's constructor subscribes to AppNotificationManager
+        // .NotificationInvoked (so a clicked toast can reopen the right
+        // dialog) — that subscription must happen before Register() below,
+        // matching Microsoft's documented ordering; subscribing after
+        // Register() threw a COMException (0x80070490 "Element not found")
+        // that crashed the app at launch on 2026-07-13.
+        var window = new MainWindow();
+        MainWindow = window;
+
         // Required before Show() for unpackaged apps — without it every toast
         // throws and focus alerts silently never appear (audit finding #3).
         try
@@ -55,8 +64,6 @@ public partial class App : Application
             Log.Error("AppNotificationManager.Register", ex);
         }
 
-        var window = new MainWindow();
-        MainWindow = window;
         // --minimized (autostart at boot): start straight into the tray.
         if (Environment.GetCommandLineArgs().Contains("--minimized"))
             window.HideToTray();

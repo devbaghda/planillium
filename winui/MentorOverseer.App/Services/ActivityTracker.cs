@@ -62,6 +62,17 @@ public sealed class ActivityTracker : IDisposable
     private DateTime? _idleSince;
     private DateTime? _lastPollAt;
 
+    // Rest-day (recurring day off) status, resolved from the plans once per
+    // calendar day rather than on every poll — the plan files barely change.
+    private DateOnly? _restCheckDate;
+    private bool _restDayToday;
+
+    // High-water mark of time already written to the diary by an out-of-band
+    // reconcile (the evening review's gap sweep). The return-from-idle handler
+    // clamps against it so it never re-asks about, or re-logs, a stretch the
+    // sweep already covered.
+    private DateTime? _accountedUntil;
+
     public volatile bool Running;
     public DateTime? PaidUntil;  // set by UI thread when entertainment time is bought
 
@@ -308,6 +319,63 @@ public sealed class ActivityTracker : IDisposable
         return DiaryStart <= now && now <= DiaryEnd;
     }
 
+    /// <summary>
+    /// Whether today is a recurring rest day (all active plans exclude this
+    /// weekday). Cached per calendar day so the plan files are read once a
+    /// day, not on every 60-second poll.
+    /// </summary>
+    private bool IsRestDayToday()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (_restCheckDate != today)
+        {
+            _restCheckDate = today;
+            try { _restDayToday = PlanStore.IsRestDay(today); }
+            catch (Exception ex) { Log.Error("ActivityTracker.IsRestDay", ex); _restDayToday = false; }
+        }
+        return _restDayToday;
+    }
+
+    /// <summary>
+    /// If the user was active earlier today but then stopped well before the
+    /// tracked day ends, there's a stretch between their last logged activity
+    /// and now (capped at the day's diary end) that was never asked about.
+    /// Returns that gap as (minutes, start) when it's longer than the idle
+    /// threshold, so the evening review can ask "where have you been?" and
+    /// close the day out honestly. Null when the day is already accounted for,
+    /// when today had no activity at all, or on a rest day.
+    /// </summary>
+    public (int Minutes, DateTime Start)? PendingDayGap(Database db)
+    {
+        if (IsRestDayToday()) return null;
+        var now = DateTime.Now;
+        var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
+        var diaryEndToday = now.Date + DiaryEnd.ToTimeSpan();
+        var gapEnd = now < diaryEndToday ? now : diaryEndToday;
+        if (gapEnd <= diaryStartToday) return null;
+
+        // Only reconcile a day the user actually worked: the last diary row
+        // must be from today. A last row from an earlier day means they simply
+        // weren't at the machine today — not a "finished early" gap to ask about.
+        if (db.LastDiaryEnd() is not DateTime lastEnd || lastEnd.Date != now.Date) return null;
+
+        var gapStart = lastEnd > diaryStartToday ? lastEnd : diaryStartToday;
+        if (gapStart >= gapEnd) return null;
+
+        var mins = (int)(gapEnd - gapStart).TotalMinutes;
+        return mins >= _idleThresholdMin ? (mins, gapStart) : null;
+    }
+
+    /// <summary>
+    /// Records that the diary is now filled through <paramref name="end"/> by
+    /// an out-of-band reconcile (the review's gap sweep), so the poll loop's
+    /// return-from-idle path won't ask about or re-log that same stretch.
+    /// </summary>
+    public void MarkAccountedThrough(DateTime end)
+    {
+        if (_accountedUntil is not DateTime cur || end > cur) _accountedUntil = end;
+    }
+
     private void CheckAlert(string cls)
     {
         var now = DateTime.Now;
@@ -341,6 +409,23 @@ public sealed class ActivityTracker : IDisposable
     private void PollOnce()
     {
         var now = DateTime.Now;
+
+        // Rest day (a recurring day off): hold no tracking at all. Behave as
+        // if fully outside the tracked hours — drop any open session without
+        // logging it (that time is the user's own), clear alert/idle state so
+        // nothing fires, and show a "Day off" pill. Nothing is written to the
+        // diary, so days off stay blank instead of full of idle rows.
+        if (IsRestDayToday())
+        {
+            _sessionStart = null; _sessionApp = null; _sessionClass = null;
+            _offSince = null; _lastAlert = null;
+            _idleNotified = false; _idleSince = null;
+            _lastPollAt = now;
+            _currentClass = "dayoff"; _currentWindow = "";
+            OnStatus?.Invoke("dayoff", "");
+            return;
+        }
+
         var title = ActiveWindowTitle();
         var idleS = IdleSeconds();
         var cls = EffectiveClass(Classify(title));
@@ -377,11 +462,18 @@ public sealed class ActivityTracker : IDisposable
             var idleStart = _idleSince ?? now.AddSeconds(-idleS);
             var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
             if (idleStart < diaryStartToday) idleStart = diaryStartToday;
+            // Don't re-cover time the evening-review gap sweep already logged.
+            if (_accountedUntil is DateTime acc && idleStart < acc) idleStart = acc;
 
             if (idleStart < idleEnd)
             {
                 var actualMin = Math.Max(1, (int)(idleEnd - idleStart).TotalMinutes);
-                if (InDiaryHours() && OnIdleReturn != null)
+                // Ask on return from idle at ANY hour, not only during diary
+                // hours — someone who finishes and steps away in the evening
+                // should still be asked where they were. idleStart/idleEnd are
+                // already clamped to the diary window just above, so a purely
+                // night-time gap collapses to nothing and never reaches here.
+                if (OnIdleReturn != null)
                     OnIdleReturn.Invoke(actualMin, idleStart);
                 else if (idleStart < diaryEndToday)
                     LogDiarySession(conn, idleStart, idleEnd, "idle", "idle");

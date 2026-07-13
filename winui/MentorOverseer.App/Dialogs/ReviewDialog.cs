@@ -17,6 +17,26 @@ public static class ReviewDialog
 {
     public static async Task ShowAsync(MainWindow window)
     {
+        // Before reviewing, reconcile any stretch where the user finished and
+        // stepped away before the day's end but was never asked about it —
+        // ask "where have you been?" once here so that time is accounted for
+        // instead of vanishing into an unlabelled idle gap.
+        if (window.Tracker is { } tracker)
+        {
+            try
+            {
+                using var gapDb = new Database();
+                if (tracker.PendingDayGap(gapDb) is { } gap)
+                {
+                    await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start);
+                    // The whole gap is now written to the diary (even a skipped
+                    // dialog logs it as idle) — stop the poll loop re-asking.
+                    tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));
+                }
+            }
+            catch (Exception ex) { Log.Error("ReviewDialog.PendingDayGap", ex); }
+        }
+
         var plans = PlanStore.LoadActivePlans();
         using var db = new Database();
         using var score = new ScoreService(plans, db);

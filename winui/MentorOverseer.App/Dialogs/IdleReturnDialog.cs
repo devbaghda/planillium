@@ -20,6 +20,29 @@ public static class IdleReturnDialog
 
     private const int ChipsPerRow = 4;
 
+    /// <summary>
+    /// Poll-loop entry point: shows the interactive dialog directly when the
+    /// window is actually on screen, otherwise raises a "welcome back" toast
+    /// so the prompt still reaches the user on PC activation after an
+    /// absence even while the app sits in the tray — this fires from
+    /// ActivityTracker's background poll, so most of the time nobody is
+    /// looking at the (hidden) main window. If the toast is never clicked,
+    /// nothing is lost: the evening review's gap sweep (ActivityTracker.
+    /// PendingDayGap) picks up the same unaccounted stretch later.
+    /// </summary>
+    public static Task Trigger(MainWindow window, int idleMinutes, DateTime idleStart)
+    {
+        if (window.IsOnScreen())
+            return ShowAsync(window, idleMinutes, idleStart);
+
+        ToastNotifier.Show("Welcome back.",
+            $"You were away {idleMinutes} min. Click to say where.",
+            ("action", "idlereturn"),
+            ("mins", idleMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("start", idleStart.ToString("o", System.Globalization.CultureInfo.InvariantCulture)));
+        return Task.CompletedTask;
+    }
+
     public static async Task ShowAsync(MainWindow window, int idleMinutes, DateTime idleStart)
     {
         if (window.Tracker is not { } tracker) return;

@@ -128,7 +128,10 @@ public sealed partial class ReportsPage : Page
 
             // ── time by app (expandable groups) ───────────────────────────
             Body.Children.Add(Section($"TIME BY APP — {periodName}"));
-            var breakdown = ReportData.AppBreakdown(_period);
+            // Top 3 show by default; the rest sit behind "Show more", so pull a
+            // generous slice rather than the default handful — the point of the
+            // expander is to reveal the full picture on demand.
+            var breakdown = ReportData.AppBreakdown(_period, limit: 100);
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
@@ -550,11 +553,20 @@ public sealed partial class ReportsPage : Page
 
     // ── time by app ──────────────────────────────────────────────────────
 
+    /// <summary>Number of top apps shown before "Show more" is needed.</summary>
+    private const int DefaultAppsShown = 3;
+
     private static StackPanel AppBreakdownPanel(List<(string App, ReportData.AppUsage Usage)> breakdown)
     {
         var maxTotal = Math.Max(breakdown[0].Usage.Total, 1);
         var panel = new StackPanel { Spacing = 4 };
-        foreach (var (app, usage) in breakdown)
+
+        // Everything past the top few apps goes into this collapsed container,
+        // revealed by the "Show more" button below. Default view stays short —
+        // the three biggest time sinks — with the full list one click away.
+        var overflow = new StackPanel { Spacing = 4, Visibility = Visibility.Collapsed };
+
+        void AddAppRow(StackPanel target, string app, ReportData.AppUsage usage)
         {
             var subs = usage.Subs?
                 .OrderByDescending(kv => kv.Value.Total)
@@ -571,8 +583,8 @@ public sealed partial class ReportsPage : Page
 
             if (subs.Count == 0)
             {
-                panel.Children.Add(header);
-                continue;
+                target.Children.Add(header);
+                return;
             }
 
             var subPanel = new StackPanel
@@ -593,8 +605,29 @@ public sealed partial class ReportsPage : Page
                 chevron.Glyph = expanded ? "\uE70D" : "\uE70E";
             };
 
-            panel.Children.Add(header);
-            panel.Children.Add(subPanel);
+            target.Children.Add(header);
+            target.Children.Add(subPanel);
+        }
+
+        for (var i = 0; i < breakdown.Count; i++)
+            AddAppRow(i < DefaultAppsShown ? panel : overflow, breakdown[i].App, breakdown[i].Usage);
+
+        if (overflow.Children.Count > 0)
+        {
+            panel.Children.Add(overflow);
+            var hidden = breakdown.Count - DefaultAppsShown;
+            var moreBtn = new HyperlinkButton
+            {
+                Content = $"Show {hidden} more",
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+            moreBtn.Click += (_, _) =>
+            {
+                var showing = overflow.Visibility == Visibility.Visible;
+                overflow.Visibility = showing ? Visibility.Collapsed : Visibility.Visible;
+                moreBtn.Content = showing ? $"Show {hidden} more" : "Show fewer";
+            };
+            panel.Children.Add(moreBtn);
         }
         return panel;
     }

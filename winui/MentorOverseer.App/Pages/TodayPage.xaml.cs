@@ -30,8 +30,7 @@ public sealed partial class TodayPage : Page
         {
             if (NameSetupDialog.ShouldShow())
                 await NameSetupDialog.ShowAsync(win);
-            if (KickoffDialog.ShouldShow())
-                await KickoffDialog.ShowAsync(win);
+            await KickoffDialog.Trigger(win);
         }
     }
 

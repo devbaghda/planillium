@@ -34,6 +34,19 @@ public static class PlanStore
     }
 
     /// <summary>
+    /// True when <paramref name="d"/> is a recurring rest day — every active
+    /// plan treats that weekday as an excluded (non-advancing) day. Used to
+    /// pause activity tracking on the user's days off. Returns false when no
+    /// plans are loaded, so tracking never quietly stops just because a plan
+    /// file failed to load or none exists yet.
+    /// </summary>
+    public static bool IsRestDay(DateOnly d)
+    {
+        var plans = LoadActivePlans();
+        return plans.Count > 0 && plans.All(p => p.IsExcluded(d));
+    }
+
+    /// <summary>
     /// All tasks of a plan with override-adjusted assigned days, completion
     /// state, and overdue flags — same rules as the Python app: assigned day
     /// comes from task_overrides (fallback: the task's own day); overdue =

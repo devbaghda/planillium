@@ -32,6 +32,33 @@ public static class KickoffDialog
                DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Background-watcher entry point: shows the interactive dialog directly
+    /// when the window is actually on screen, otherwise raises a toast so the
+    /// prompt still reaches the user while the app sits in the tray — a bare
+    /// ContentDialog inside a hidden window is invisible and never seen.
+    /// </summary>
+    public static async Task Trigger(MainWindow window)
+    {
+        if (!ShouldShow()) return;
+        if (window.IsOnScreen())
+        {
+            await ShowAsync(window);
+            return;
+        }
+        MarkShownToday();
+        ToastNotifier.Show("Good morning.",
+            "Time to start your day — click to see today's plan.",
+            ("action", "kickoff"));
+    }
+
+    public static void MarkShownToday()
+    {
+        var state = StateService.Load();
+        state.LastKickoff = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        StateService.Save(state);
+    }
+
     public static async Task ShowAsync(MainWindow window)
     {
         _showing = true;
@@ -144,8 +171,6 @@ public static class KickoffDialog
         };
         await DialogGate.ShowAsync(dialog);
 
-        var state = StateService.Load();
-        state.LastKickoff = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        StateService.Save(state);
+        MarkShownToday();
     }
 }

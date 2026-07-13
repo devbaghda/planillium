@@ -83,9 +83,9 @@ public static class ReportExport
             <div class="sub">Weekly Report · generated {{DateTime.Now.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)}}</div>
             <h2>The week</h2>
             <table><tr><th>Day</th><th>Tasks</th><th>On-plan</th><th>Off-plan</th><th>Score</th></tr>{{dayRows}}</table>
-            <h2>Top distractions (7 days)</h2>
+            <h2>Top distractions (this week)</h2>
             <table>{{distRows}}</table>
-            <h2>Time by app (7 days)</h2>
+            <h2>Time by app (this week)</h2>
             <table><tr><th>App</th><th>On-plan</th><th>Off-plan</th><th>Total</th></tr>{{appRows}}</table>
             <h2>Suggestions</h2>
             <ul>{{hintItems}}</ul>

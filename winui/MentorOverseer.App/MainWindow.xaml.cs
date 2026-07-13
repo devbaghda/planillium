@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
@@ -6,7 +7,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
 using MentorOverseer.App.Dialogs;
 using MentorOverseer.App.Pages;
 using MentorOverseer.App.Services;
@@ -107,6 +107,23 @@ public sealed partial class MainWindow : Window
         StartKickoffWatcher();
 
         InitTray();
+        // Click-to-reopen for kickoff/idle-return toasts. Best-effort: if this
+        // throws (seen once as a COMException 0x80070490 "Element not found"
+        // — likely sensitive to being subscribed before AppNotificationManager
+        // .Register(), which App.OnLaunched now does deliberately after
+        // constructing this window), the toasts themselves still work via
+        // ToastNotifier — losing click-through isn't worth crashing the whole
+        // app over, since an unhandled exception here previously took the
+        // entire tracker down at launch.
+        try
+        {
+            AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
+            _notificationActivationWired = true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("NotificationInvoked subscribe (toast click-through disabled)", ex);
+        }
 
         // Closing the window hides to the tray — tracking and focus alerts
         // continue. Actually quitting is the tray menu's job.
@@ -121,7 +138,51 @@ public sealed partial class MainWindow : Window
         {
             Tracker?.Stop();
             _tray?.Dispose();
+            if (_notificationActivationWired)
+                AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
         };
+    }
+
+    private bool _notificationActivationWired;
+
+    /// <summary>
+    /// Whether the window is actually something the user can currently see —
+    /// not hidden to the tray, and not minimized. Kickoff/idle-return prompts
+    /// use this to decide between opening their interactive ContentDialog
+    /// directly versus routing through a toast notification instead; a
+    /// ContentDialog inside a hidden or minimized window renders but is never
+    /// seen, which is exactly the gap toast routing exists to close.
+    /// </summary>
+    public bool IsOnScreen() =>
+        AppWindow.IsVisible &&
+        (AppWindow.Presenter as OverlappedPresenter)?.State != OverlappedPresenterState.Minimized;
+
+    /// <summary>Bring the window forward, then open the dialog a clicked
+    /// toast (kickoff or welcome-back) was standing in for.</summary>
+    private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+    {
+        if (!args.Arguments.TryGetValue("action", out var action)) return;
+        _dq.TryEnqueue(() => _ = HandleNotificationActivation(action, args.Arguments));
+    }
+
+    private async Task HandleNotificationActivation(string action, IDictionary<string, string> args)
+    {
+        ShowFromTray();
+        switch (action)
+        {
+            case "kickoff":
+                await KickoffDialog.ShowAsync(this);
+                break;
+            case "idlereturn":
+                if (args.TryGetValue("mins", out var minsStr) && int.TryParse(minsStr, out var mins) &&
+                    args.TryGetValue("start", out var startStr) &&
+                    DateTime.TryParse(startStr, CultureInfo.InvariantCulture,
+                        DateTimeStyles.RoundtripKind, out var start))
+                {
+                    await IdleReturnDialog.ShowAsync(this, mins, start);
+                }
+                break;
+        }
     }
 
     // ── tray ──────────────────────────────────────────────────────────────
@@ -344,11 +405,7 @@ public sealed partial class MainWindow : Window
     {
         var timer = _dq.CreateTimer();
         timer.Interval = TimeSpan.FromMinutes(1);
-        timer.Tick += async (_, _) =>
-        {
-            if (KickoffDialog.ShouldShow())
-                await KickoffDialog.ShowAsync(this);
-        };
+        timer.Tick += async (_, _) => await KickoffDialog.Trigger(this);
         timer.Start();
     }
 
@@ -395,7 +452,7 @@ public sealed partial class MainWindow : Window
             Tracker.OnStatus += (cls, window) => _dq.TryEnqueue(() => UpdatePill(cls, window));
             Tracker.OnAlert += (title, msg) => _dq.TryEnqueue(() => Notify(title, msg));
             Tracker.OnIdleReturn += (mins, start) =>
-                _dq.TryEnqueue(() => _ = IdleReturnDialog.ShowAsync(this, mins, start));
+                _dq.TryEnqueue(() => _ = IdleReturnDialog.Trigger(this, mins, start));
             DateTime? lastDiaryEnd = null;
             try
             {
@@ -419,6 +476,7 @@ public sealed partial class MainWindow : Window
             "on_plan" => ("On plan", "SystemFillColorSuccessBrush"),
             "off_plan" => ("Off plan", "SystemFillColorCriticalBrush"),
             "paid" => ("Paid time", "AccentFillColorDefaultBrush"),
+            "dayoff" => ("Day off", "TextFillColorTertiaryBrush"),
             _ => ("Neutral", "TextFillColorTertiaryBrush"),
         };
         ActivityText.Text = Tracker?.OffPlanMinutes is int m and > 0
@@ -429,23 +487,7 @@ public sealed partial class MainWindow : Window
         ActivityWindow.Text = app.Length > 60 ? app[..60] : app;
     }
 
-    private static void Notify(string title, string message)
-    {
-        try
-        {
-            var toast = new AppNotificationBuilder()
-                .AddText(title)
-                .AddText(message)
-                .BuildNotification();
-            AppNotificationManager.Default.Show(toast);
-        }
-        catch (Exception ex)
-        {
-            // Pill still shows the off-plan state, but a broken toast path is
-            // a broken core feature — leave a trace.
-            Log.Error("Notify (toast)", ex);
-        }
-    }
+    private static void Notify(string title, string message) => ToastNotifier.Show(title, message);
 
     private async void BuyTime_Click(object sender, RoutedEventArgs e) =>
         await Dialogs.SpendDialog.ShowBuyAsync(this);
