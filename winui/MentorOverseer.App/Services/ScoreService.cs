@@ -30,6 +30,11 @@ public sealed class ScoreService : IDisposable
     public const int ReplanFlatFee = -10;
     public const int ReplanDailyBudgetMin = 240;
 
+    /// <summary>The "strong day" bar Reports/ReviewDialog/ReportExport all
+    /// use to color/celebrate a score — named once so the three copies can't
+    /// silently drift out of agreement if it's ever tuned.</summary>
+    public const int GreatDayThreshold = 20;
+
     private readonly SqliteConnection _conn;
     private readonly List<Plan> _plans;
     private readonly Database _db;

@@ -24,6 +24,13 @@ public static class KickoffDialog
     // queuing two kickoff dialogs back to back through DialogGate.
     private static bool _showing;
 
+    // Separate from StateService.LastKickoff (which now means "the real
+    // dialog was actually shown," not "we tried") — this only exists to
+    // stop the per-minute watcher from re-sending the toast every single
+    // minute the window stays hidden. In-memory/per-run is fine: a restart
+    // re-nudging once is an acceptable, arguably correct, edge case.
+    private static string? _toastSentOn;
+
     public static bool ShouldShow()
     {
         if (_showing) return false;
@@ -37,19 +44,34 @@ public static class KickoffDialog
     /// when the window is actually on screen, otherwise raises a toast so the
     /// prompt still reaches the user while the app sits in the tray — a bare
     /// ContentDialog inside a hidden window is invisible and never seen.
+    /// Deliberately does NOT call <see cref="MarkShownToday"/> on the toast
+    /// path: only the real dialog actually being opened counts as "shown."
+    /// A toast that's missed or dismissed unseen must not silently burn the
+    /// day's one kickoff — <see cref="ShouldShow"/> keeps returning true
+    /// (so opening the app later that day still offers the real card), and
+    /// <see cref="_toastSentOn"/> alone stops the per-minute watcher from
+    /// re-nudging every single minute in the meantime.
     /// </summary>
     public static async Task Trigger(MainWindow window)
     {
         if (!ShouldShow()) return;
         if (window.IsOnScreen())
         {
+            // IsOnScreen only means "not hidden/minimized" — the window could
+            // still be buried behind whatever's actually in front. Bring it
+            // forward so the dialog that's about to open isn't opening
+            // unseen behind another app.
+            window.Activate();
             await ShowAsync(window);
             return;
         }
-        MarkShownToday();
-        ToastNotifier.Show("Good morning.",
+        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (_toastSentOn == today) return;
+        _toastSentOn = today;
+        var name = ConfigService.UserName is { Length: > 0 } n ? n : "there";
+        ToastNotifier.Show($"Good morning, {name}.",
             "Time to start your day — click to see today's plan.",
-            ("action", "kickoff"));
+            (ToastArgs.Action, ToastArgs.Kickoff));
     }
 
     public static void MarkShownToday()

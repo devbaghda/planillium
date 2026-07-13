@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppNotifications;
 using MentorOverseer.App.Services;
@@ -59,7 +60,34 @@ public partial class App : Application
         // matching Microsoft's documented ordering; subscribing after
         // Register() threw a COMException (0x80070490 "Element not found")
         // that crashed the app at launch on 2026-07-13.
-        var window = new MainWindow();
+        //
+        // The constructor also resolves AppPaths.Root (config.json/plans/
+        // the database) as one of its very first steps — if that folder
+        // can't be found (a moved install, a bad MENTOR_ROOT), the
+        // exception used to propagate out with nothing to catch it here,
+        // leaving a process that already holds the single-instance mutex
+        // alive with no window and no tray icon: invisible, unreachable
+        // except via Task Manager, and blocking any real launch attempt.
+        // A plain Win32 MessageBox needs no window/XamlRoot to exist, so it
+        // works even when the thing that failed IS the window.
+        MainWindow window;
+        try
+        {
+            window = new MainWindow();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("MainWindow construction failed — exiting", ex);
+            MessageBoxW(IntPtr.Zero,
+                "Planillium couldn't find its data folder and can't start.\n\n" +
+                "If you moved the install, or set MENTOR_ROOT, check that it " +
+                "points at a folder containing config.json and plans\\.\n\n" +
+                $"Details: {ex.Message}",
+                "Planillium — startup failed", MbIconError);
+            _instanceMutex?.ReleaseMutex();
+            Environment.Exit(1);
+            return;
+        }
         MainWindow = window;
 
         // Required before Show() for unpackaged apps — without it every toast
@@ -79,4 +107,8 @@ public partial class App : Application
         else
             window.Activate();
     }
+
+    private const uint MbIconError = 0x10;
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }

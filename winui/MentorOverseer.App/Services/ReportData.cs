@@ -65,10 +65,9 @@ public static class ReportData
 
     /// <summary>Month → week buckets within this calendar month; Year → the
     /// calendar months of this year, January through the current month.</summary>
-    public static List<BucketStat> Buckets(ReportPeriod period)
+    public static List<BucketStat> Buckets(ReportPeriod period, SqliteConnection conn)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        using var conn = Open();
         using var cmd = conn.CreateCommand();
 
         if (period == ReportPeriod.Month)
@@ -165,10 +164,10 @@ public static class ReportData
         window == "idle" && description is { Length: > 0 } ? description : window;
 
     /// <summary>Off-plan minutes grouped by "App - sub" label, biggest first.</summary>
-    public static List<(string Label, int Minutes)> TopDistractions(ReportPeriod period, int limit = 8)
+    public static List<(string Label, int Minutes)> TopDistractions(ReportPeriod period,
+        SqliteConnection conn, int limit = 8)
     {
         var aggregated = new Dictionary<string, int>();
-        using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT window, description, SUM(duration_min) FROM time_diary " +
@@ -190,10 +189,10 @@ public static class ReportData
     }
 
     /// <summary>All time grouped app → sub-item, biggest app first.</summary>
-    public static List<(string App, AppUsage Usage)> AppBreakdown(ReportPeriod period, int limit = 12)
+    public static List<(string App, AppUsage Usage)> AppBreakdown(ReportPeriod period,
+        SqliteConnection conn, int limit = 12)
     {
         var groups = new Dictionary<string, AppUsage>();
-        using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT window, category, description, SUM(duration_min) FROM time_diary " +
@@ -226,12 +225,21 @@ public static class ReportData
     public sealed record DiaryEntry(long Id, DateOnly Date, string Start, string End,
         int Dur, string Cat, string Window, string? Desc);
 
-    /// <summary>Raw time_diary rows in a date range, newest first — backs the
-    /// diary search/list view. Moved out of ReportsPage's code-behind, which
-    /// had been opening its own ambient DB connection directly.</summary>
+    /// <summary>
+    /// Raw time_diary rows in a date range, newest first — backs the diary
+    /// search/list view. Deliberately opens its own short-lived connection
+    /// (unlike Buckets/TopDistractions/AppBreakdown, which now take the
+    /// caller's) — this is called from RenderDiaryResults, a closure that
+    /// outlives ReportsPage.Render's own `db` (every keystroke in the
+    /// search box, every mark-selected/select-all click fires it again,
+    /// long after Render has returned and disposed its connection).
+    /// Microsoft.Data.Sqlite pools connections by default, so repeated
+    /// Open/Dispose cycles here are cheap — reusing a connection would
+    /// require holding one open for the page's whole lifetime instead.
+    /// </summary>
     public static List<DiaryEntry> DiaryInRange(DateOnly from, DateOnly to)
     {
-        using var conn = Open();
+        using var conn = AppPaths.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT id, date, start_time, end_time, duration_min, category, window, description " +
@@ -252,8 +260,6 @@ public static class ReportData
 
     public static string FmtMins(int mins) =>
         mins >= 60 ? $"{mins / 60}h {mins % 60:00}m" : $"{mins}m";
-
-    private static SqliteConnection Open() => AppPaths.OpenConnection();
 
     /// <summary>Monday of the week containing <paramref name="d"/>.</summary>
     internal static DateOnly MondayOf(DateOnly d) => d.AddDays(-(((int)d.DayOfWeek + 6) % 7));

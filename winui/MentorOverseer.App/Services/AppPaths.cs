@@ -52,7 +52,10 @@ public static class AppPaths
         var conn = new SqliteConnection($"Data Source={DbPath}");
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "PRAGMA busy_timeout=2000;";
+        // WAL lets a reader (e.g. Reports opening mid-poll) proceed
+        // alongside a writer instead of blocking on it — busy_timeout alone
+        // only bounds how long that wait can take, it doesn't avoid it.
+        cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=2000;";
         cmd.ExecuteNonQuery();
         return conn;
     }

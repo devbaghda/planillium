@@ -193,12 +193,27 @@ public sealed partial class SettingsPage : Page
             return;
         }
 
+        // This only clears the database — any report/data export the user
+        // already saved to disk (data/report.html, report.csv,
+        // full-export.json) is a second, untouched copy of some of the same
+        // information. Rather than silently delete files the user may have
+        // deliberately kept, name the ones that currently exist so "cleared"
+        // doesn't quietly mean "except for that export from last week."
+        var exportNames = new[] { "report.html", "report.csv", "full-export.json" }
+            .Where(f => File.Exists(Path.Combine(AppPaths.Root, "data", f)))
+            .ToList();
+        var exportWarning = exportNames.Count > 0
+            ? $"\n\nNote: {string.Join(", ", exportNames)} in your data folder still holds a copy " +
+              "of some of this — delete those separately if you want them gone too."
+            : "";
+
         var confirm = new ContentDialog
         {
             Title = "Clear activity history?",
             Content = $"Deletes {diaryRows} diary session(s) and {rollupDays} day(s) of " +
                       "rolled-up totals — the tracked window-activity record. Your plans, " +
-                      "task completions, notes, and score are not affected. This cannot be undone.",
+                      "task completions, notes, and score are not affected. This cannot be undone." +
+                      exportWarning,
             PrimaryButtonText = "Clear history",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,

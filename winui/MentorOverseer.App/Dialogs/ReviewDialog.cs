@@ -28,7 +28,8 @@ public static class ReviewDialog
                 using var gapDb = new Database();
                 if (tracker.PendingDayGap(gapDb) is { } gap)
                 {
-                    await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start);
+                    await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start,
+                        leadIn: "One gap to fill in before today's review —");
                     // The whole gap is now written to the diary (even a skipped
                     // dialog logs it as idle) — stop the poll loop re-asking.
                     tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));
@@ -73,8 +74,8 @@ public static class ReviewDialog
         // The EOD "designed ending" the dialog never actually had: every day
         // got identical neutral framing regardless of how it went. A day
         // that clears every task, or scores the same "great day" bar Reports
-        // uses (>=20), earns a line that says so instead of just numbers —
-        // a completed comeback week takes priority, being the rarer event.
+        // uses, earns a line that says so instead of just numbers — a
+        // completed comeback week takes priority, being the rarer event.
         var finalTotal = dayTotal + accrual + comeback;
         var perfect = total > 0 && done == total;
         if (comeback > 0)
@@ -84,7 +85,7 @@ public static class ReviewDialog
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
             });
-        else if (perfect || finalTotal >= 20)
+        else if (perfect || finalTotal >= ScoreService.GreatDayThreshold)
             panel.Children.Add(new TextBlock
             {
                 Text = perfect

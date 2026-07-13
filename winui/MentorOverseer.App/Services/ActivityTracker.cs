@@ -52,10 +52,10 @@ public sealed class ActivityTracker : IDisposable
     private static readonly TimeOnly DiaryEnd = new(20, 0);
     private readonly int _graceMin, _repeatMin, _idleThresholdMin;
 
-    // state (poll thread only — PaidUntil is lock-protected and
-    // _lockPending is volatile precisely because they're the two fields
-    // written from the UI thread; everything else here is never touched
-    // outside PollOnce)
+    // state (poll thread only — PaidUntil and the rest-day/accounted-until
+    // fields below are lock-protected, and _lockPending is volatile,
+    // precisely because those are the fields also touched from the UI
+    // thread; everything else here is never touched outside PollOnce)
     private string _currentClass = "neutral";
     private string _currentWindow = "";
     private DateTime? _offSince;
@@ -66,6 +66,15 @@ public sealed class ActivityTracker : IDisposable
     private bool _idleNotified;
     private DateTime? _idleSince;
     private DateTime? _lastPollAt;
+
+    // Rest-day status and the evening-review gap-sweep high-water mark are
+    // no longer poll-thread-only: ReviewDialog reads/writes both directly
+    // from the UI thread (PendingDayGap/MarkAccountedThrough), concurrently
+    // with PollOnce on the timer thread. Lock-protected for the same reason
+    // PaidUntil is above — an unguarded read here could see a torn write
+    // and, worst case, show a flickering "Day off" pill for one poll or
+    // re-ask about a stretch the review already accounted for.
+    private readonly object _dayStateLock = new();
 
     // Rest-day (recurring day off) status, resolved from the plans once per
     // calendar day rather than on every poll — the plan files barely change.
@@ -377,13 +386,16 @@ public sealed class ActivityTracker : IDisposable
     private bool IsRestDayToday()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        if (_restCheckDate != today)
+        lock (_dayStateLock)
         {
-            _restCheckDate = today;
-            try { _restDayToday = PlanStore.IsRestDay(today); }
-            catch (Exception ex) { Log.Error("ActivityTracker.IsRestDay", ex); _restDayToday = false; }
+            if (_restCheckDate != today)
+            {
+                _restCheckDate = today;
+                try { _restDayToday = PlanStore.IsRestDay(today); }
+                catch (Exception ex) { Log.Error("ActivityTracker.IsRestDay", ex); _restDayToday = false; }
+            }
+            return _restDayToday;
         }
-        return _restDayToday;
     }
 
     /// <summary>
@@ -423,7 +435,10 @@ public sealed class ActivityTracker : IDisposable
     /// </summary>
     public void MarkAccountedThrough(DateTime end)
     {
-        if (_accountedUntil is not DateTime cur || end > cur) _accountedUntil = end;
+        lock (_dayStateLock)
+        {
+            if (_accountedUntil is not DateTime cur || end > cur) _accountedUntil = end;
+        }
     }
 
     private void CheckAlert(string cls)
@@ -545,7 +560,9 @@ public sealed class ActivityTracker : IDisposable
             var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
             if (idleStart < diaryStartToday) idleStart = diaryStartToday;
             // Don't re-cover time the evening-review gap sweep already logged.
-            if (_accountedUntil is DateTime acc && idleStart < acc) idleStart = acc;
+            DateTime? accountedUntil;
+            lock (_dayStateLock) { accountedUntil = _accountedUntil; }
+            if (accountedUntil is DateTime acc && idleStart < acc) idleStart = acc;
 
             if (idleStart < idleEnd)
             {

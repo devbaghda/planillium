@@ -178,7 +178,7 @@ public sealed partial class MainWindow : Window
     /// toast (kickoff or welcome-back) was standing in for.</summary>
     private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
     {
-        if (!args.Arguments.TryGetValue("action", out var action)) return;
+        if (!args.Arguments.TryGetValue(ToastArgs.Action, out var action)) return;
         _dq.TryEnqueue(() => _ = HandleNotificationActivation(action, args.Arguments));
     }
 
@@ -187,12 +187,12 @@ public sealed partial class MainWindow : Window
         ShowFromTray();
         switch (action)
         {
-            case "kickoff":
+            case ToastArgs.Kickoff:
                 await KickoffDialog.ShowAsync(this);
                 break;
-            case "idlereturn":
-                if (args.TryGetValue("mins", out var minsStr) && int.TryParse(minsStr, out var mins) &&
-                    args.TryGetValue("start", out var startStr) &&
+            case ToastArgs.IdleReturn:
+                if (args.TryGetValue(ToastArgs.Mins, out var minsStr) && int.TryParse(minsStr, out var mins) &&
+                    args.TryGetValue(ToastArgs.Start, out var startStr) &&
                     DateTime.TryParse(startStr, CultureInfo.InvariantCulture,
                         DateTimeStyles.RoundtripKind, out var start))
                 {
@@ -560,7 +560,10 @@ public sealed partial class MainWindow : Window
             "on_plan" => ("On plan", "SystemFillColorSuccessBrush"),
             "off_plan" => ("Off plan", "SystemFillColorCriticalBrush"),
             "paid" => ("Paid time", "AccentFillColorDefaultBrush"),
-            "dayoff" => ("Day off", "TextFillColorTertiaryBrush"),
+            // A deliberate, known state (not "nothing detected" like Neutral)
+            // gets the more visible of the two calibrated grays so the pill
+            // isn't pixel-identical to Neutral at a glance.
+            "dayoff" => ("Day off", "TextFillColorSecondaryBrush"),
             _ => ("Neutral", "TextFillColorTertiaryBrush"),
         };
         ActivityText.Text = Tracker?.OffPlanMinutes is int m and > 0

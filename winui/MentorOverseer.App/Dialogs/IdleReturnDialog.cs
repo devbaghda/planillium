@@ -1,3 +1,4 @@
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MentorOverseer.App.Services;
@@ -33,17 +34,28 @@ public static class IdleReturnDialog
     public static Task Trigger(MainWindow window, int idleMinutes, DateTime idleStart)
     {
         if (window.IsOnScreen())
+        {
+            // See KickoffDialog.Trigger's comment — IsOnScreen doesn't mean
+            // "in front," so bring the window forward before opening a
+            // dialog that would otherwise render unseen behind another app.
+            window.Activate();
             return ShowAsync(window, idleMinutes, idleStart);
+        }
 
         ToastNotifier.Show("Welcome back.",
             $"You were away {idleMinutes} min. Click to say where.",
-            ("action", "idlereturn"),
-            ("mins", idleMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            ("start", idleStart.ToString("o", System.Globalization.CultureInfo.InvariantCulture)));
+            (ToastArgs.Action, ToastArgs.IdleReturn),
+            (ToastArgs.Mins, idleMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            (ToastArgs.Start, idleStart.ToString("o", System.Globalization.CultureInfo.InvariantCulture)));
         return Task.CompletedTask;
     }
 
-    public static async Task ShowAsync(MainWindow window, int idleMinutes, DateTime idleStart)
+    /// <param name="leadIn">Optional context line shown above the usual
+    /// question — used when this dialog is standing in for something other
+    /// than a plain return-from-idle (e.g. the evening review's gap sweep),
+    /// so it doesn't read as an unrelated, unexplained interruption.</param>
+    public static async Task ShowAsync(MainWindow window, int idleMinutes, DateTime idleStart,
+        string? leadIn = null)
     {
         if (window.Tracker is not { } tracker) return;
 
@@ -64,6 +76,13 @@ public static class IdleReturnDialog
             .ToArray();
 
         var root = new StackPanel { Spacing = 12, MinWidth = 460 };
+        if (leadIn is { Length: > 0 })
+            root.Children.Add(new TextBlock
+            {
+                Text = leadIn,
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+            });
         root.Children.Add(new TextBlock
         {
             Text = $"You were away {idleMinutes} min. What was it, roughly?",
@@ -199,7 +218,7 @@ public static class IdleReturnDialog
 
         if (chosen is null && result != ContentDialogResult.Primary)
         {
-            tracker.LogIdleAnswer(idleStart, idleMinutes, "dismissed");
+            tracker.LogIdleAnswer(idleStart, idleMinutes, "unaccounted time");
             return;
         }
 
@@ -216,6 +235,6 @@ public static class IdleReturnDialog
         }
 
         var text = chosen ?? input.Text.Trim();
-        tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : "dismissed");
+        tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : "unaccounted time");
     }
 }

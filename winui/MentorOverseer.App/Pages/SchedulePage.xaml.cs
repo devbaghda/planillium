@@ -419,7 +419,10 @@ public sealed partial class SchedulePage : Page
         }
         catch (Exception ex)
         {
-            Log.Error($"SchedulePage.ToggleDone '{t.Task.Text}'", ex);
+            // Plan ID + day, not the task text — the log file has no
+            // retention/redaction of its own, unlike the diary it sits
+            // alongside (privacy audit finding).
+            Log.Error($"SchedulePage.ToggleDone '{plan.Id}' day {t.AssignedDay}", ex);
             SaveErrorBar.IsOpen = true;
         }
         Render();

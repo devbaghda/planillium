@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Data.Sqlite;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -116,11 +117,11 @@ public sealed partial class ReportsPage : Page
             Body.Children.Add(Section(periodName));
             Body.Children.Add(Card(_period is ReportPeriod.Day or ReportPeriod.Week
                 ? DayTable(weekStats)
-                : BucketTable(ReportData.Buckets(_period))));
+                : BucketTable(ReportData.Buckets(_period, db.Conn))));
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────
             Body.Children.Add(Section($"TOP DISTRACTIONS — {periodName}"));
-            var distractions = ReportData.TopDistractions(_period);
+            var distractions = ReportData.TopDistractions(_period, db.Conn);
             if (distractions.Count == 0)
                 Body.Children.Add(Dim("No off-plan time logged. Impressive."));
             else
@@ -131,7 +132,7 @@ public sealed partial class ReportsPage : Page
             // Top 3 show by default; the rest sit behind "Show more", so pull a
             // generous slice rather than the default handful — the point of the
             // expander is to reveal the full picture on demand.
-            var breakdown = ReportData.AppBreakdown(_period, limit: 100);
+            var breakdown = ReportData.AppBreakdown(_period, db.Conn, limit: 100);
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
@@ -144,7 +145,7 @@ public sealed partial class ReportsPage : Page
             }
 
             Body.Children.Add(Section("INSIGHTS"));
-            Body.Children.Add(Card(InsightsPanel(weekStats)));
+            Body.Children.Add(Card(InsightsPanel(weekStats, db.Conn)));
 
             BuildDiarySection(today, score);
         }
@@ -214,11 +215,11 @@ public sealed partial class ReportsPage : Page
     }
 
     /// <summary>Week-based rule-of-thumb suggestions, same period as the score card.</summary>
-    private static StackPanel InsightsPanel(List<ReportData.DayStat> weekStats)
+    private static StackPanel InsightsPanel(List<ReportData.DayStat> weekStats, SqliteConnection conn)
     {
         var hints = ReportExport.Suggestions(
             weekStats.Sum(s => s.OnMin), weekStats.Sum(s => s.OffMin),
-            ReportData.TopDistractions(ReportPeriod.Week));
+            ReportData.TopDistractions(ReportPeriod.Week, conn));
         var hintPanel = new StackPanel { Spacing = 6 };
         foreach (var hint in hints)
         {
@@ -613,11 +614,34 @@ public sealed partial class ReportsPage : Page
 
             var chevron = (FontIcon)header.Children.Last();
             header.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            header.Tapped += (_, _) =>
+
+            // A plain Tapped-only Grid is mouse-only: unreachable by Tab and
+            // silent to a screen reader (no indication it's interactive, or
+            // of its current state). IsTabStop + a Space/Enter handler makes
+            // it keyboard-operable; the accessible name is kept in sync with
+            // the visible expand/collapse state on every toggle.
+            header.IsTabStop = true;
+            void SetExpandedState(bool expanded)
+            {
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(header,
+                    $"{app}, {(expanded ? "expanded" : "collapsed")}");
+            }
+            SetExpandedState(false);
+            void Toggle()
             {
                 var expanded = subPanel.Visibility == Visibility.Visible;
                 subPanel.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
                 chevron.Glyph = expanded ? "\uE70D" : "\uE70E";
+                SetExpandedState(!expanded);
+            }
+            header.Tapped += (_, _) => Toggle();
+            header.KeyDown += (_, e) =>
+            {
+                if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
+                {
+                    Toggle();
+                    e.Handled = true;
+                }
             };
 
             target.Children.Add(header);
@@ -631,16 +655,17 @@ public sealed partial class ReportsPage : Page
         {
             panel.Children.Add(overflow);
             var hidden = breakdown.Count - DefaultAppsShown;
+            var moreLabel = $"Show {hidden} more app{(hidden == 1 ? "" : "s")}";
             var moreBtn = new HyperlinkButton
             {
-                Content = $"Show {hidden} more",
+                Content = moreLabel,
                 Margin = new Thickness(0, 4, 0, 0),
             };
             moreBtn.Click += (_, _) =>
             {
                 var showing = overflow.Visibility == Visibility.Visible;
                 overflow.Visibility = showing ? Visibility.Collapsed : Visibility.Visible;
-                moreBtn.Content = showing ? $"Show {hidden} more" : "Show fewer";
+                moreBtn.Content = showing ? moreLabel : "Show fewer";
             };
             panel.Children.Add(moreBtn);
         }
@@ -971,7 +996,7 @@ public sealed partial class ReportsPage : Page
 
     private static Brush ScoreBrush(int score) =>
         (Brush)Application.Current.Resources[
-            score >= 20 ? "SystemFillColorSuccessBrush"
+            score >= ScoreService.GreatDayThreshold ? "SystemFillColorSuccessBrush"
             : score < 0 ? "SystemFillColorCriticalBrush"
             : "SystemFillColorCautionBrush"];
 

@@ -28,8 +28,19 @@ public sealed partial class TodayPage : Page
         _ = Views.TickTickSection.LoadAsync(TickTickHost);
         if (App.MainWindow is MainWindow win)
         {
-            await NameSetupDialog.EnsureShownAsync(win);
-            await KickoffDialog.Trigger(win);
+            // Render() already succeeded (or was caught) above — a failure
+            // in either of these await calls must not look identical to
+            // "the prompt just isn't due today," so it gets its own log
+            // context instead of only reaching the app-wide handler.
+            try
+            {
+                await NameSetupDialog.EnsureShownAsync(win);
+                await KickoffDialog.Trigger(win);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("TodayPage.OnNavigatedTo (first-run/kickoff prompts)", ex);
+            }
         }
     }
 
@@ -478,8 +489,10 @@ public sealed partial class TodayPage : Page
             // Likely: the poll thread's own connection briefly held the
             // write lock. Logged either way, but a failed completion write
             // must not vanish silently — the checkbox would otherwise just
-            // revert on next render with no explanation.
-            Log.Error($"Toggle completion '{item.Task.Text}'", ex);
+            // revert on next render with no explanation. Plan ID + day, not
+            // the task text — the log file has no retention/redaction of
+            // its own, unlike the diary it sits alongside (privacy audit).
+            Log.Error($"Toggle completion '{plan.Id}' day {item.AssignedDay}", ex);
             SaveErrorBar.IsOpen = true;
         }
     }

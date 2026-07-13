@@ -29,20 +29,20 @@ public static class ReportExport
         var dayRows = new StringBuilder();
         foreach (var s in stats)
         {
-            var col = s.Score >= 20 ? "#30d158" : s.Score < 0 ? "#ff453a" : "#ff9f0a";
+            var col = s.Score >= ScoreService.GreatDayThreshold ? "#30d158" : s.Score < 0 ? "#ff453a" : "#ff9f0a";
             dayRows.Append(
                 $"<tr><td>{s.Date.ToString("ddd dd.MM", CultureInfo.InvariantCulture)}</td>" +
                 $"<td>{s.Done}/{s.Total}</td><td>{s.OnMin}m</td><td>{s.OffMin}m</td>" +
                 $"<td style='color:{col};font-weight:bold'>{s.Score}</td></tr>");
         }
 
-        var distractions = ReportData.TopDistractions(ReportPeriod.Week);
+        var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn);
         var distRows = distractions.Count == 0
             ? "<tr><td colspan='2'>No distractions logged.</td></tr>"
             : string.Join("", distractions.Select(d =>
                 $"<tr><td>{WebUtility.HtmlEncode(d.Label)}</td><td>{d.Minutes}m</td></tr>"));
 
-        var breakdown = ReportData.AppBreakdown(ReportPeriod.Week);
+        var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn);
         var appRows = new StringBuilder();
         foreach (var (app, usage) in breakdown)
         {
@@ -133,7 +133,7 @@ public static class ReportExport
         else
         {
             sb.AppendLine(Csv("Period", "On-plan (min)", "Off-plan (min)", "Total (min)"));
-            foreach (var b in ReportData.Buckets(period))
+            foreach (var b in ReportData.Buckets(period, db.Conn))
                 sb.AppendLine(Csv(b.Label,
                     b.OnMin.ToString(CultureInfo.InvariantCulture),
                     b.OffMin.ToString(CultureInfo.InvariantCulture),
@@ -143,14 +143,14 @@ public static class ReportExport
         sb.AppendLine();
         sb.AppendLine(Csv("Top distractions — " + name));
         sb.AppendLine(Csv("Application", "Minutes"));
-        foreach (var (label, minutes) in ReportData.TopDistractions(period))
+        foreach (var (label, minutes) in ReportData.TopDistractions(period, db.Conn))
             sb.AppendLine(Csv(label, minutes.ToString(CultureInfo.InvariantCulture)));
 
         sb.AppendLine();
         sb.AppendLine(Csv("Time by app — " + name));
         sb.AppendLine(Csv("Application", "Sub-item",
             "On-plan (min)", "Off-plan (min)", "Neutral (min)", "Total (min)"));
-        foreach (var (app, usage) in ReportData.AppBreakdown(period))
+        foreach (var (app, usage) in ReportData.AppBreakdown(period, db.Conn))
         {
             sb.AppendLine(Csv(app, "",
                 usage.On.ToString(CultureInfo.InvariantCulture),
@@ -173,8 +173,16 @@ public static class ReportExport
         return outPath;
     }
 
+    // Window titles are attacker-controlled content (any foreground app,
+    // including a hostile web page via document.title) and flow into this
+    // CSV untouched — a title starting with =/+/-/@ would otherwise be read
+    // as a formula by Excel on open (CSV/"Dangerous Data" injection). A
+    // leading apostrophe forces spreadsheet tools to treat it as text.
+    private static string EscapeFormula(string f) =>
+        f.Length > 0 && (f[0] is '=' or '+' or '-' or '@') ? "'" + f : f;
+
     private static string Csv(params string[] fields) =>
-        string.Join(",", fields.Select(f =>
+        string.Join(",", fields.Select(EscapeFormula).Select(f =>
             f.Contains(',') || f.Contains('"') || f.Contains('\n')
                 ? "\"" + f.Replace("\"", "\"\"") + "\"" : f));
 
