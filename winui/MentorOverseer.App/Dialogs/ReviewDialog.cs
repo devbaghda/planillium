@@ -15,6 +15,58 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class ReviewDialog
 {
+    // Guards MainWindow's per-minute EOD watcher from re-offering the review
+    // every tick once it's actually been shown today — "Later" means later
+    // by choice, so this shouldn't nag every minute for the rest of the day.
+    // Deliberately separate from StateService.LastReview (only set once the
+    // day is actually closed via "Close the day") and only set once the
+    // dialog has actually opened, not merely offered — mirrors
+    // KickoffDialog's _toastSentOn/MarkShownToday split, for the same
+    // reason: a missed toast must not silently burn the day's one review
+    // offer for the rest of the day.
+    private static string? _offeredOn;
+
+    // Throttles the fallback toast itself to once per day while the window
+    // stays hidden, same rationale as KickoffDialog._toastSentOn.
+    private static string? _toastSentOn;
+
+    private static bool ShouldOffer()
+    {
+        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (_offeredOn == today) return false;
+        // ">=" via negated "<", not "==": an exact-minute match on a
+        // drifting 1-minute timer can skip the minute and never offer the
+        // review that day.
+        if (DateTime.Now.TimeOfDay < MainWindow.EodTime()) return false;
+        return StateService.Load().LastReview != today;
+    }
+
+    /// <summary>
+    /// Background-watcher entry point: shows the interactive dialog directly
+    /// when the window is actually on screen, otherwise raises a toast so the
+    /// prompt still reaches the user while the app sits in the tray — opening
+    /// this dialog unconditionally (as the EOD watcher used to) risked it
+    /// rendering inside a hidden window and then never resolving, which
+    /// would wedge every other dialog in the app behind it via DialogGate's
+    /// single process-wide queue.
+    /// </summary>
+    public static async Task Trigger(MainWindow window)
+    {
+        if (!ShouldOffer()) return;
+        if (window.IsOnScreen())
+        {
+            window.Activate();
+            await ShowAsync(window);
+            return;
+        }
+        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (_toastSentOn == today) return;
+        _toastSentOn = today;
+        ToastNotifier.Show("Day review ready.",
+            "See how today went — click to close out the day.",
+            (ToastArgs.Action, ToastArgs.Review));
+    }
+
     public static async Task ShowAsync(MainWindow window)
     {
         // Before reviewing, reconcile any stretch where the user finished and
@@ -188,7 +240,9 @@ public static class ReviewDialog
             XamlRoot = window.Content.XamlRoot,
         };
 
-        if (await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary)
+        var result = await DialogGate.ShowAsync(dialog);
+        _offeredOn = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (result == ContentDialogResult.Primary)
         {
             score.CreditDayScoreIfMissing(today);
             score.CreditOverdueAccrualIfMissing(today);

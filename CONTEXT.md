@@ -215,7 +215,7 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   GreatDayThreshold` constant; explicit `asInvoker` manifest; WAL mode).
   **Round-2 audit** (5 fresh passes against the merged+fixed code, not trusting round 1's or
   the remediation commit's own descriptions) confirmed all 4 round-1 Highs genuinely fixed,
-  but found **1 new High, not yet fixed**: `StartEodWatcher` (`MainWindow.xaml.cs:459`) was
+  but found **1 new High, fixed later the same session**: `StartEodWatcher` (`MainWindow.xaml.cs:459`) was
   never given the `IsOnScreen()`/toast-fallback routing the kickoff/idle-return fixes got, so
   it can open `ReviewDialog` while the window's hidden to tray and wedge `DialogGate`'s single
   process-wide semaphore for every other dialog in the app until someone manually finds it.
@@ -235,7 +235,13 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   --prune=now --aggressive` (the user's explicit confirmation) to finish the incomplete
   2026-07-09 secret cleanup — 0 dangling objects now; left the new
   `plans/active/claude-code-10-level-mastery.json` untracked, consistent with the gitignore
-  decision. **Next session's first job: fix the `StartEodWatcher` dialog-gate wedge.**
+  decision. **Fixed the `StartEodWatcher` wedge same session**: added `ReviewDialog.Trigger`
+  (mirrors `KickoffDialog.Trigger`) with its own `_offeredOn`/`_toastSentOn` split — offered-once
+  bookkeeping now moved from `MainWindow` into `ReviewDialog` and only set once the dialog has
+  actually shown, not merely offered, same fix shape as the round-1 kickoff-toast bug. Added
+  `ToastArgs.Review` + click-through in `HandleNotificationActivation`. Rebuilt Debug (0
+  warnings, 4/4 tests pass) and Release, redeployed to the live instance, verified via `wmic` +
+  log tail + UI Automation.
 - **Standing lesson**: when wiring any `AppNotificationManager` event subscription, subscribe
   *before* calling `.Register()` — the reverse order throws at the WinRT layer for this
   unpackaged app. Separately: any new "show a prompt on a timer" trigger must route through
@@ -312,11 +318,6 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
     new copies, it doesn't purge old ones. Full purge (if wanted before any public push) needs
     `git filter-repo` across every branch + a force-push of each, a deliberately separate,
     bigger step from the untracking done tonight.
-  - **Fix the `StartEodWatcher` dialog-gate wedge** (round-2 audit, new High,
-    `MainWindow.xaml.cs:459`): route it through the same `IsOnScreen()`/toast-fallback pattern
-    `KickoffDialog.Trigger`/`IdleReturnDialog.Trigger` already use, and don't mark
-    `_eodOfferedOn` until the review dialog is actually shown. See Session handoff notes above
-    for why this matters — it can wedge every dialog in the app, not just the review itself.
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").

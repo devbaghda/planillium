@@ -199,6 +199,9 @@ public sealed partial class MainWindow : Window
                     await IdleReturnDialog.ShowAsync(this, mins, start);
                 }
                 break;
+            case ToastArgs.Review:
+                await ReviewDialog.ShowAsync(this);
+                break;
         }
     }
 
@@ -386,7 +389,6 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _reallyClose;
-    private string? _eodOfferedOn;
 
     /// <summary>
     /// CatchUpScores (up to 7 days of scoring math) and PruneOldDiary (a
@@ -445,20 +447,7 @@ public sealed partial class MainWindow : Window
     {
         var timer = _dq.CreateTimer();
         timer.Interval = TimeSpan.FromMinutes(1);
-        timer.Tick += async (_, _) =>
-        {
-            // ">=" not "==": an exact-minute match on a drifting 1-minute
-            // timer can skip the minute and never offer the review that day.
-            var today = DateTime.Today.ToString("yyyy-MM-dd",
-                System.Globalization.CultureInfo.InvariantCulture);
-            if (DateTime.Now.TimeOfDay >= EodTime() &&
-                _eodOfferedOn != today &&
-                StateService.Load().LastReview != today)
-            {
-                _eodOfferedOn = today;  // offer once per day; "Later" means later by choice
-                await Dialogs.ReviewDialog.ShowAsync(this);
-            }
-        };
+        timer.Tick += async (_, _) => await ReviewDialog.Trigger(this);
         timer.Start();
     }
 

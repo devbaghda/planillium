@@ -44,11 +44,12 @@ going forward; the original Python/Tkinter version is retired.
 - If you finish and step away before your end-of-day, the evening review
   now reconciles that unaccounted stretch — asking where you were — before
   closing the day, so early finishes don't vanish into an unlabelled gap
-- The morning "start your day" prompt and the "where have you been?" prompt
-  now arrive as a tray notification whenever the app window isn't actually
-  on screen (hidden to the tray, or minimized), instead of silently opening
-  inside a window nobody's looking at; clicking the notification brings the
-  app forward and opens the same interactive dialog as before
+- The morning "start your day" prompt, the "where have you been?" prompt,
+  and now the evening review too all arrive as a tray notification
+  whenever the app window isn't actually on screen (hidden to the tray, or
+  minimized), instead of silently opening inside a window nobody's looking
+  at; clicking the notification brings the app forward and opens the same
+  interactive dialog as before
 
 **Startup**
 - Fixed the window opening partially off-screen (or oversized) when a

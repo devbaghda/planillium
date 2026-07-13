@@ -25,6 +25,7 @@ public static class ToastArgs
     public const string Action = "action";
     public const string Kickoff = "kickoff";
     public const string IdleReturn = "idlereturn";
+    public const string Review = "review";
     public const string Mins = "mins";
     public const string Start = "start";
 }
