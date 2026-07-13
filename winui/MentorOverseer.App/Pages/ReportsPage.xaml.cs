@@ -135,12 +135,18 @@ public sealed partial class ReportsPage : Page
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
+            {
+                // The bars below are colored with no other label — without
+                // this, the only way to know what a color means is to
+                // already know it (2026-07-09 audit finding #18).
+                Body.Children.Add(TimeByAppLegend());
                 Body.Children.Add(Card(AppBreakdownPanel(breakdown)));
+            }
 
             Body.Children.Add(Section("INSIGHTS"));
             Body.Children.Add(Card(InsightsPanel(weekStats)));
 
-            BuildDiarySection(today);
+            BuildDiarySection(today, score);
         }
         catch (Exception ex)
         {
@@ -237,18 +243,27 @@ public sealed partial class ReportsPage : Page
 
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
-    /// everything still retained (Database.DiaryRetentionDays) instead of
-    /// just the day on screen. Kept as one method (not further split) since
+    /// everything still retained (ConfigService.DiaryRetentionDays(),
+    /// user-configurable — see Settings) instead of just the day on screen.
+    /// Kept as one method (not further split) since
     /// its closures share a lot of local state (selection, search text,
     /// the toolbar) that's specific to this one widget.
     /// </summary>
-    private void BuildDiarySection(DateOnly today)
+    private void BuildDiarySection(DateOnly today, ScoreService score)
     {
         Body.Children.Add(DiaryHeader());
 
+        // Reflections (the evening review's one-line answers) were
+        // previously write-only — saved but never shown back anywhere in
+        // the app (2026-07-09 audit finding #12). Shown for whichever day
+        // the diary is currently viewing, same as everything else on this
+        // section.
+        if (_diarySearch.Trim().Length == 0 && score.LoadReflection(_diaryDate) is { Length: > 0 } reflection)
+            Body.Children.Add(ReflectionCallout(reflection));
+
         var searchBox = new TextBox
         {
-            PlaceholderText = $"Search the last {Database.DiaryRetentionDays} days' diary (app or description)…",
+            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary (app or description)…",
             Text = _diarySearch,
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -327,7 +342,7 @@ public sealed partial class ReportsPage : Page
             var q = _diarySearch.Trim();
             var searching = q.Length > 0;
             var rows = searching
-                ? ReportData.DiaryInRange(today.AddDays(-(Database.DiaryRetentionDays - 1)), today)
+                ? ReportData.DiaryInRange(today.AddDays(-(ConfigService.DiaryRetentionDays() - 1)), today)
                 : ReportData.DiaryInRange(_diaryDate, _diaryDate);
             var filtered = !searching ? rows : rows.Where(e =>
                 AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -337,7 +352,7 @@ public sealed partial class ReportsPage : Page
             if (filtered.Count == 0)
             {
                 diaryResults.Children.Add(Dim(searching
-                    ? $"No entries match your search in the last {Database.DiaryRetentionDays} days."
+                    ? $"No entries match your search in the last {ConfigService.DiaryRetentionDays()} days."
                     : (_diaryDate == today
                         ? "No diary entries yet today. Tracking runs 06:00–20:00."
                         : "No diary entries on this day.")));
@@ -369,7 +384,7 @@ public sealed partial class ReportsPage : Page
                 foreach (var id in selectedIds)
                 {
                     var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row.Id != id) continue;
+                    if (row is null || row.Id != id) continue;
                     db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
                     var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
                     if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
@@ -632,6 +647,38 @@ public sealed partial class ReportsPage : Page
         return panel;
     }
 
+    /// <summary>Color key for AppUsageRow's stacked bars — same three
+    /// brush keys, same order, so this can never drift from what the bars
+    /// actually use.</summary>
+    private static StackPanel TimeByAppLegend()
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new Thickness(2, 0, 0, 8) };
+        foreach (var (label, brushKey) in new[]
+        {
+            ("On-plan", "SystemFillColorSuccessBrush"),
+            ("Off-plan", "SystemFillColorCriticalBrush"),
+            ("Neutral", "AccentFillColorDefaultBrush"),
+        })
+        {
+            var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            item.Children.Add(new Border
+            {
+                Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = (Brush)Application.Current.Resources[brushKey],
+            });
+            item.Children.Add(new TextBlock
+            {
+                Text = label,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+            row.Children.Add(item);
+        }
+        return row;
+    }
+
     /// <summary>Name + stacked on/off/neutral bar + total minutes.</summary>
     private static Grid AppUsageRow(string name, ReportData.AppUsage u, int maxTotal, bool bold,
         bool expandable = false)
@@ -712,12 +759,28 @@ public sealed partial class ReportsPage : Page
 
     // ── diary ────────────────────────────────────────────────────────────
 
+    private static Border ReflectionCallout(string text) => new()
+    {
+        Background = (Brush)Application.Current.Resources["CardBackgroundFillColorSecondaryBrush"],
+        CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(12, 8, 12, 8),
+        Margin = new Thickness(0, 0, 0, 10),
+        Child = new TextBlock
+        {
+            Text = "💭 " + text,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        },
+    };
+
     private Grid DiaryHeader()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var searching = _diarySearch.Trim().Length > 0;
         var caption = searching
-            ? $"TIME DIARY · SEARCH (LAST {Database.DiaryRetentionDays} DAYS)"
+            ? $"TIME DIARY · SEARCH (LAST {ConfigService.DiaryRetentionDays()} DAYS)"
             : "TIME DIARY";
 
         var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 10 };
@@ -768,7 +831,7 @@ public sealed partial class ReportsPage : Page
         var datePicker = new CalendarDatePicker
         {
             Date = ToOffset(_diaryDate),
-            MinDate = ToOffset(today.AddDays(-Database.DiaryRetentionDays)),
+            MinDate = ToOffset(today.AddDays(-ConfigService.DiaryRetentionDays())),
             MaxDate = ToOffset(today),
             DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
             IsEnabled = !searching,
@@ -868,7 +931,6 @@ public sealed partial class ReportsPage : Page
                 MinHeight = 0,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            ((FontIcon)edit.Content).Glyph = "";
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(edit, "Edit diary entry");
             edit.Click += async (_, _) =>
             {

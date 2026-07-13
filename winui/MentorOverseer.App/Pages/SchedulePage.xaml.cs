@@ -52,7 +52,28 @@ public sealed partial class SchedulePage : Page
 
         if (plans.Count == 0)
         {
+            // Matches Today's empty state instead of a dead end with
+            // nothing to click (2026-07-09 audit finding #33).
             Subtitle.Text = "No active plans.";
+            var addPanel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 12, 0, 0) };
+            addPanel.Children.Add(new TextBlock
+            {
+                Text = "Add a plan on the Plans page, or right here, to see it on your schedule.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            var add = new Button
+            {
+                Content = "+ Add Plan",
+                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+                Margin = new Thickness(0, 8, 0, 0),
+            };
+            add.Click += async (_, _) =>
+            {
+                if (await Dialogs.AddPlanDialog.ShowAsync(this)) Render();
+            };
+            addPanel.Children.Add(add);
+            Sections.Children.Add(addPanel);
             return;
         }
         Subtitle.Text = "Move tasks, take days off — the plan flexes, the goal doesn't.";
@@ -295,16 +316,17 @@ public sealed partial class SchedulePage : Page
         {
             Text = t.Task.Text,
             TextWrapping = TextWrapping.Wrap,
-            // Overdue reads red here now that the warning glyph gave way to
-            // the checkbox.
-            Foreground = t.Completed ? Res("TextFillColorTertiaryBrush")
-                       : t.Overdue ? Res("SystemFillColorCriticalBrush")
-                       : Res("TextFillColorPrimaryBrush"),
+            Foreground = TaskRowStyle.TitleForeground(t),
         };
         textPanel.Children.Add(title);
         var meta = new List<string>();
         if (t.Task.DurationMin is int dur) meta.Add($"{dur} min");
         if (t.AssignedDay != t.OriginalDay) meta.Add($"moved from day {t.OriginalDay}");
+        // Same "N day(s) late" caption Today shows — overdue used to be
+        // color-only here, which loses the signal for anyone who can't
+        // rely on color (2026-07-09 audit finding #17).
+        if (t.Overdue)
+            meta.Add($"{planDay - t.AssignedDay} day(s) late — from day {t.AssignedDay}");
         if (meta.Count > 0)
             textPanel.Children.Add(new TextBlock
             {
@@ -312,15 +334,7 @@ public sealed partial class SchedulePage : Page
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = Res("TextFillColorTertiaryBrush"),
             });
-        textPanel.Children.Add(TaskNoteView.Build(note, text =>
-        {
-            try
-            {
-                using var db = new Database();
-                db.SetTaskNote(plan.Id, t.Task.Text, text);
-            }
-            catch (Exception ex) { Log.Error("SchedulePage.SetTaskNote", ex); }
-        }));
+        textPanel.Children.Add(TaskNoteView.Build(note, plan.Id, t.Task.Text, "SchedulePage.SetTaskNote"));
         Grid.SetColumn(textPanel, 1);
         row.Children.Add(textPanel);
 

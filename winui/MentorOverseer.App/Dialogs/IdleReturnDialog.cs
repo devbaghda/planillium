@@ -76,6 +76,7 @@ public static class IdleReturnDialog
         {
             PlaceholderText = "…or type it (matches your idle-answer library)",
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(input, "What you were doing");
 
         string? chosen = null;
         ContentDialog dialog = null!;
@@ -155,7 +156,9 @@ public static class IdleReturnDialog
                 PlaceholderText = "e.g. lunch, walked the dog…",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
             };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(removeBtn, "Remove this activity");
 
             var row = new Grid { ColumnSpacing = 8 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

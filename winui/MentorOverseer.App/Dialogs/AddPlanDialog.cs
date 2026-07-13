@@ -48,14 +48,22 @@ public static class AddPlanDialog
         var modeBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var m in Modes) modeBox.Items.Add(m.Label);
         modeBox.SelectedIndex = 0;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(modeBox, "Mode");
 
         var field1Label = new TextBlock { Text = Modes[0].Field1Label, FontSize = 12 };
         var subject = new TextBox { PlaceholderText = Modes[0].Field1Hint };
+        // field1Label's text changes with the selected mode (below), so this
+        // is a live label association rather than a static Header — a
+        // screen reader announces whatever field1Label currently says
+        // (2026-07-09 audit finding #15: this box previously had no
+        // accessible name at all, only an adjacent, unassociated TextBlock).
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetLabeledBy(subject, field1Label);
         var role = new TextBox { PlaceholderText = Modes[0].Field2Hint, Header = "Claude's role" };
         var area = new TextBox { PlaceholderText = Modes[0].Field3Hint, Header = "Area of expertise" };
         var ownPlan = new TextBox
         {
             AcceptsReturn = true, Height = 120, TextWrapping = TextWrapping.Wrap,
+            Header = "Your own plan text",
             PlaceholderText = "Paste your own plan text here — or load it from a file below…",
             Visibility = Visibility.Collapsed,
         };
@@ -69,6 +77,7 @@ public static class AddPlanDialog
         {
             AcceptsReturn = true, IsReadOnly = true, Height = 110,
             TextWrapping = TextWrapping.Wrap,
+            Header = "Generated prompt",
             PlaceholderText = "Generated prompt appears here — copy it into claude.ai",
         };
         var genRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -80,6 +89,7 @@ public static class AddPlanDialog
         var reply = new TextBox
         {
             AcceptsReturn = true, Height = 110, TextWrapping = TextWrapping.Wrap,
+            Header = "Claude's reply",
             PlaceholderText = "…then paste Claude's whole reply (with the ```json block) here",
         };
         var error = new TextBlock

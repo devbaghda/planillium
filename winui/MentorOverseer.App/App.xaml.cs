@@ -37,7 +37,16 @@ public partial class App : Application
     {
         Log.Info($"Planillium v{AppVersion.Current} starting");
 
-        _instanceMutex = new Mutex(true, AppInfo.SingleInstanceMutex, out var createdNew);
+        // Optional test-only isolation: MENTOR_INSTANCE_SUFFIX lets a build
+        // running from a separate worktree/branch (e.g. this audit-fixes
+        // testing environment) use its own single-instance mutex, so it can
+        // run side by side with the real app instead of being silently
+        // blocked and exiting. Unset in normal/production use — same
+        // pattern as the existing MENTOR_ROOT/MENTOR_PAGE debug hooks.
+        var mutexName = AppInfo.SingleInstanceMutex +
+            (Environment.GetEnvironmentVariable("MENTOR_INSTANCE_SUFFIX") is { Length: > 0 } suffix
+                ? "_" + suffix : "");
+        _instanceMutex = new Mutex(true, mutexName, out var createdNew);
         if (!createdNew)
         {
             Log.Info("Second instance blocked by mutex — exiting.");

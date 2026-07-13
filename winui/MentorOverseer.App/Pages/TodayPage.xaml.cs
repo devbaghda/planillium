@@ -28,8 +28,7 @@ public sealed partial class TodayPage : Page
         _ = Views.TickTickSection.LoadAsync(TickTickHost);
         if (App.MainWindow is MainWindow win)
         {
-            if (NameSetupDialog.ShouldShow())
-                await NameSetupDialog.ShowAsync(win);
+            await NameSetupDialog.EnsureShownAsync(win);
             await KickoffDialog.Trigger(win);
         }
     }
@@ -170,7 +169,16 @@ public sealed partial class TodayPage : Page
                             .Where(t => t.AssignedDay == tomorrowDay && !t.Completed).ToList();
                         if (tomorrowTasks.Count > 0)
                         {
-                            Sections.Children.Add(GroupLabel("GET A HEAD START ON TOMORROW?"));
+                            // Today.Count == 0 or done == today.Count means
+                            // today is genuinely clear — confident copy.
+                            // Otherwise this is firing on partial progress
+                            // (as little as one task done), so the header
+                            // shouldn't read as if today were finished
+                            // (2026-07-09 audit finding #13).
+                            var todayClear = today.Count == 0 || done == today.Count;
+                            Sections.Children.Add(GroupLabel(todayClear
+                                ? "GET A HEAD START ON TOMORROW?"
+                                : "ALSO ON DECK FOR TOMORROW"));
                             Sections.Children.Add(GetAheadCard(tomorrowTasks, plan));
                         }
                     }
@@ -396,11 +404,8 @@ public sealed partial class TodayPage : Page
             Text = item.Task.Text,
             TextWrapping = TextWrapping.Wrap,
             FontWeight = item.Completed ? FontWeights.Normal : FontWeights.SemiBold,
+            Foreground = Views.TaskRowStyle.TitleForeground(item),
         };
-        if (item.Completed)
-            name.Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
-        else if (item.Overdue)
-            name.Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
         textCol.Children.Add(name);
 
         // Overdue status and the mentor note are independent facts — an
@@ -422,15 +427,7 @@ public sealed partial class TodayPage : Page
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             });
-        textCol.Children.Add(Views.TaskNoteView.Build(note, text =>
-        {
-            try
-            {
-                using var db = new Database();
-                db.SetTaskNote(plan.Id, item.Task.Text, text);
-            }
-            catch (Exception ex) { Log.Error("TodayPage.SetTaskNote", ex); }
-        }));
+        textCol.Children.Add(Views.TaskNoteView.Build(note, plan.Id, item.Task.Text, "TodayPage.SetTaskNote"));
         Grid.SetColumn(textCol, 1);
         grid.Children.Add(textCol);
 

@@ -134,12 +134,13 @@ public sealed class Database : IDisposable
             "  window       TEXT NOT NULL," +
             "  description  TEXT" +
             ");" +
-            "CREATE TABLE IF NOT EXISTS activity_log (" +
-            "  id        INTEGER PRIMARY KEY AUTOINCREMENT," +
-            "  logged_at TEXT NOT NULL," +
-            "  window    TEXT NOT NULL," +
-            "  class     TEXT NOT NULL" +
-            ");" +
+            // activity_log (id, logged_at, window, class) used to be
+            // created here too, but nothing in this codebase has ever
+            // written to it — it was the retired Python app's per-poll log.
+            // Removed rather than kept as always-empty schema noise
+            // (2026-07-09 audit finding #35); an existing database that
+            // already has the table from an older build is unaffected,
+            // SQLite doesn't mind an unused table sitting there.
             // One row per day, written just before that day's raw time_diary
             // rows age out of retention — keeps Year-view minute totals
             // accurate forever even though the per-entry detail is gone.

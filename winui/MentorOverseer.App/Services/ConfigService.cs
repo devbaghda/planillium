@@ -78,6 +78,13 @@ public static class ConfigService
         return TimeSpan.TryParse(start, out var t) ? t : new TimeSpan(8, 0, 0);
     }
 
+    /// <summary>How many days of detailed diary history to keep before it's
+    /// rolled up (Database.DiaryRetentionDays is only the default now —
+    /// this makes it user-configurable, 2026-07-09 audit finding #34).</summary>
+    public static int DiaryRetentionDays() =>
+        Root.TryGetProperty("diary_retention_days", out var v) && v.TryGetInt32(out var n) && n > 0
+            ? n : Database.DiaryRetentionDays;
+
     /// <summary>Empty until the first-launch NameSetupDialog asks and saves it.</summary>
     public static string UserName =>
         Root.TryGetProperty("user_name", out var v) ? v.GetString() ?? "" : "";

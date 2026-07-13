@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using MentorOverseer.App.Services;
 
 namespace MentorOverseer.App.Views;
 
@@ -13,6 +14,23 @@ namespace MentorOverseer.App.Views;
 /// </summary>
 public static class TaskNoteView
 {
+    /// <summary>Convenience overload that also owns the save-to-database
+    /// closure (open a Database, call SetTaskNote, log on failure) — this
+    /// exact block used to be copy-pasted, unchanged apart from the log
+    /// tag, into both TodayPage and SchedulePage (2026-07-09 audit finding
+    /// #6). Prefer this over the delegate overload unless a caller needs
+    /// genuinely different save behavior.</summary>
+    public static FrameworkElement Build(string? initialNote, string planId, string taskText, string logTag) =>
+        Build(initialNote, text =>
+        {
+            try
+            {
+                using var db = new Database();
+                db.SetTaskNote(planId, taskText, text);
+            }
+            catch (Exception ex) { Log.Error(logTag, ex); }
+        });
+
     public static FrameworkElement Build(string? initialNote, Action<string> onSave)
     {
         var root = new StackPanel { Spacing = 4 };

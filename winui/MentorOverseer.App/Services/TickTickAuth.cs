@@ -23,6 +23,13 @@ public static class TickTickAuth
     private const string AuthUrl = "https://ticktick.com/oauth/authorize";
     private const string TokenUrl = "https://ticktick.com/oauth/token";
 
+    // Reused across calls rather than a new HttpClient per request — the
+    // earlier "share one HttpClient" fix (TickTickService.SharedClient)
+    // only touched that file, missing this one (2026-07-09 audit finding
+    // #20). Low-traffic (login/refresh only), but the same socket-churn
+    // reasoning applies.
+    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+
     public static string ClientId => ConfigService.TickTickClientId;
     public static string? ClientSecret => CredentialStore.Read("ticktick_client_secret");
     public static bool IsConfigured =>
@@ -43,6 +50,14 @@ public static class TickTickAuth
             return (false, "Enter the client ID and client secret first.");
 
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        // PKCE (RFC 8252's recommended hardening for loopback-redirect
+        // native-app OAuth flows like this one): a random secret generated
+        // here and never sent until the token exchange, so a code
+        // intercepted in between is useless without it (2026-07-09 audit
+        // finding #9). codeVerifier must be 43-128 chars of the unreserved
+        // set — base64url of 32 random bytes (43 chars, no padding) fits.
+        var codeVerifier = Base64Url(RandomNumberGenerator.GetBytes(32));
+        var codeChallenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)));
         TcpListener listener;
         try
         {
@@ -61,7 +76,9 @@ public static class TickTickAuth
                 "response_type=code",
                 $"redirect_uri={Uri.EscapeDataString(RedirectUri)}",
                 $"scope={Uri.EscapeDataString("tasks:read tasks:write")}",
-                $"state={state}");
+                $"state={state}",
+                $"code_challenge={codeChallenge}",
+                "code_challenge_method=S256");
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(120));
@@ -79,13 +96,29 @@ public static class TickTickAuth
                 using (client)
                 {
                     var stream = client.GetStream();
-                    var buffer = new byte[8192];
-                    var read = await stream.ReadAsync(buffer, timeout.Token);
-                    var requestLine = Encoding.ASCII.GetString(buffer, 0, read)
-                        .Split('\r', '\n').FirstOrDefault() ?? "";
-                    var parts = requestLine.Split(' ');
-                    var path = parts.Length > 1 ? parts[1] : "";
-                    var query = HttpUtility.ParseQueryString(new Uri("http://x" + path).Query);
+                    System.Collections.Specialized.NameValueCollection query;
+                    try
+                    {
+                        var buffer = new byte[8192];
+                        var read = await stream.ReadAsync(buffer, timeout.Token);
+                        var requestLine = Encoding.ASCII.GetString(buffer, 0, read)
+                            .Split('\r', '\n').FirstOrDefault() ?? "";
+                        var parts = requestLine.Split(' ');
+                        var path = parts.Length > 1 ? parts[1] : "";
+                        query = HttpUtility.ParseQueryString(new Uri("http://x" + path).Query);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Any local process can connect to this loopback
+                        // listener during the auth window and send garbage —
+                        // treat a malformed request the same as a stray one
+                        // (answer, keep waiting) instead of letting a parse
+                        // exception escape the whole auth flow (2026-07-09
+                        // audit finding #23).
+                        Log.Warn("TickTickAuth", $"malformed callback request: {ex.Message}");
+                        await Respond(stream, 400, "Bad request", "Waiting for TickTick…");
+                        continue;
+                    }
 
                     if (query["code"] is null && query["error"] is null)
                     {
@@ -109,7 +142,7 @@ public static class TickTickAuth
 
                     var code = query["code"]!;
                     await Respond(stream, 200, "Authorized!", "Return to Mentor Overseer.");
-                    return await ExchangeCodeAsync(code);
+                    return await ExchangeCodeAsync(code, codeVerifier);
                 }
             }
         }
@@ -129,18 +162,23 @@ public static class TickTickAuth
         await stream.WriteAsync(bytes);
     }
 
-    private static async Task<(bool, string)> ExchangeCodeAsync(string code)
+    private static async Task<(bool, string)> ExchangeCodeAsync(string code, string codeVerifier)
     {
         var result = await TokenRequestAsync(new Dictionary<string, string>
         {
             ["code"] = code,
             ["grant_type"] = "authorization_code",
             ["redirect_uri"] = RedirectUri,
+            ["code_verifier"] = codeVerifier,
         });
         return result is null
             ? (false, "Token exchange failed — check the client ID/secret and retry.")
             : (true, "Connected — tasks will appear on the Today page.");
     }
+
+    /// <summary>RFC 4648 §5 base64url, no padding — PKCE's required encoding.</summary>
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     /// <summary>Refresh the access token in place; false if that's impossible.</summary>
     public static async Task<bool> RefreshAsync()
@@ -158,10 +196,13 @@ public static class TickTickAuth
     {
         try
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ClientId}:{ClientSecret}"));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", creds);
-            var resp = await client.PostAsync(TokenUrl, new FormUrlEncodedContent(form));
+            using var request = new HttpRequestMessage(HttpMethod.Post, TokenUrl)
+            {
+                Content = new FormUrlEncodedContent(form),
+                Headers = { Authorization = new AuthenticationHeaderValue("Basic", creds) },
+            };
+            var resp = await SharedClient.SendAsync(request);
             var body = await resp.Content.ReadAsStringAsync();
             if (!resp.IsSuccessStatusCode)
             {

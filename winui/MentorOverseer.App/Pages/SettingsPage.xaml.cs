@@ -57,6 +57,7 @@ public sealed partial class SettingsPage : Page
         GraceMin.Value = Num(cfg, "reminder_grace_minutes", 15);
         RepeatMin.Value = Num(cfg, "reminder_interval_minutes", 5);
         IdleMin.Value = Num(cfg, "idle_threshold_minutes", 10);
+        RetentionDays.Value = Num(cfg, "diary_retention_days", Database.DiaryRetentionDays);
         RulesOn.Text = Words(cfg, "activity_rules", "on_plan");
         RulesOff.Text = Words(cfg, "activity_rules", "off_plan");
         RulesNeutral.Text = Words(cfg, "activity_rules", "neutral");
@@ -96,6 +97,10 @@ public sealed partial class SettingsPage : Page
                 cfg["reminder_grace_minutes"] = (int)GraceMin.Value;
                 cfg["reminder_interval_minutes"] = (int)RepeatMin.Value;
                 cfg["idle_threshold_minutes"] = (int)IdleMin.Value;
+                // User-configurable retention (2026-07-09 audit finding
+                // #34) — Database.DiaryRetentionDays remains the fallback
+                // default, read via ConfigService.DiaryRetentionDays().
+                cfg["diary_retention_days"] = (int)RetentionDays.Value;
                 cfg["activity_rules"] = new System.Text.Json.Nodes.JsonObject
                 {
                     ["on_plan"] = Lines(RulesOn),
@@ -201,16 +206,95 @@ public sealed partial class SettingsPage : Page
         };
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
+        // VACUUM rewrites the whole database file, not just the deleted
+        // rows, so its cost scales with total file size — on months of
+        // history this can take a perceptible moment. Running it inline on
+        // the click handler used to freeze the window for that whole time
+        // (2026-07-09 audit finding #8); moved off the UI thread, with the
+        // button disabled and a status message so a slow clear still reads
+        // as "working," not "stuck."
+        ClearHistoryBtn.IsEnabled = false;
+        SaveStatus.Text = "Clearing…";
         try
         {
-            using var db = new Database();
-            db.ClearActivityHistory();
+            await Task.Run(() =>
+            {
+                using var db = new Database();
+                db.ClearActivityHistory();
+            });
             SaveStatus.Text = "Activity history cleared.";
         }
         catch (Exception ex)
         {
             Log.Error("SettingsPage.ClearHistory", ex);
             SaveStatus.Text = "Couldn't clear activity history: " + ex.Message;
+        }
+        finally
+        {
+            ClearHistoryBtn.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Reflections (the evening review's one-line answers) previously had
+    /// no delete path anywhere in the app — a deliberately separate action
+    /// from "Clear activity history" above, since reflections are the
+    /// user's own reflective text, not tracked window-activity data
+    /// (2026-07-09 audit finding #12).
+    /// </summary>
+    private async void ClearReflections_Click(object sender, RoutedEventArgs e)
+    {
+        int count;
+        try
+        {
+            using var db = new Database();
+            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+            count = score.CountReflections();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearReflections.Count", ex);
+            SaveStatus.Text = "Couldn't read reflections: " + ex.Message;
+            return;
+        }
+        if (count == 0)
+        {
+            SaveStatus.Text = "No reflections to clear.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "Clear my reflections?",
+            Content = $"Deletes {count} evening-review reflection(s). Your plans, task " +
+                      "completions, activity diary, and score are not affected. This cannot be undone.",
+            PrimaryButtonText = "Clear reflections",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        ClearReflectionsBtn.IsEnabled = false;
+        SaveStatus.Text = "Clearing…";
+        try
+        {
+            await Task.Run(() =>
+            {
+                using var db = new Database();
+                using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+                score.ClearReflections();
+            });
+            SaveStatus.Text = "Reflections cleared.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearReflections", ex);
+            SaveStatus.Text = "Couldn't clear reflections: " + ex.Message;
+        }
+        finally
+        {
+            ClearReflectionsBtn.IsEnabled = true;
         }
     }
 

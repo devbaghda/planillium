@@ -35,7 +35,21 @@ public sealed partial class PlansPage : Page
         Dictionary<(string, int, string), bool> completions;
         try
         {
-            plans = PlanStore.LoadActivePlans();
+            plans = PlanStore.LoadActivePlans(out var failedFiles);
+            if (failedFiles.Count > 0)
+            {
+                LoadErrorBar.Title = failedFiles.Count == 1
+                    ? $"Couldn't load '{failedFiles[0]}'"
+                    : $"Couldn't load {failedFiles.Count} plan files";
+                LoadErrorBar.Message = $"{string.Join(", ", failedFiles)} — the file's JSON " +
+                    "may be malformed. Fix it manually or re-generate the plan; it won't " +
+                    "appear here until then. See the log for details.";
+                LoadErrorBar.IsOpen = true;
+            }
+            else
+            {
+                LoadErrorBar.IsOpen = false;
+            }
             using var db = new Database();
             completions = db.LoadCompletions();
 
@@ -119,7 +133,11 @@ public sealed partial class PlansPage : Page
             grid.Children.Add(briefing);
         }
 
-        var addStep = new Button { Content = "+ Add step", VerticalAlignment = VerticalAlignment.Center };
+        // "task" everywhere else in the app (Today/Schedule/Reports); this
+        // used to say "step" here and in the dialog title, while the
+        // dialog's own field was already headered "Task" three lines below
+        // it (2026-07-09 audit finding #32).
+        var addStep = new Button { Content = "+ Add task", VerticalAlignment = VerticalAlignment.Center };
         addStep.Click += async (_, _) =>
         {
             if (await AddTaskDialog.ShowAsync(XamlRoot, plan)) Render();
@@ -186,7 +204,15 @@ public sealed partial class PlansPage : Page
             name = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file))
                 .RootElement.GetProperty("name").GetString() ?? Path.GetFileName(file);
         }
-        catch { name = Path.GetFileName(file); }
+        catch (Exception ex)
+        {
+            // Runs once per archived plan file on page render, not a hot
+            // loop, so logging every occurrence is fine here — unlike the
+            // tracker's per-minute poll catches, this doesn't need
+            // once-per-run suppression (2026-07-09 audit finding #26).
+            Log.Warn("PlansPage.ArchivedRow", $"couldn't read name from {Path.GetFileName(file)}: {ex.Message}");
+            name = Path.GetFileName(file);
+        }
 
         var grid = new Grid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

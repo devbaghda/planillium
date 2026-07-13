@@ -85,6 +85,24 @@ public sealed partial class MainWindow : Window
             // the OS theme changes while running.
             root.Loaded += (_, _) => ThemeSync.Apply(root.ActualTheme);
             root.ActualThemeChanged += (sender, _) => ThemeSync.Apply(sender.ActualTheme);
+            // InitTrackingAsync (which may show the first-run disclosure
+            // ContentDialog) also has to wait for Loaded — Content.XamlRoot
+            // isn't valid until the visual tree is actually loaded, and
+            // calling ContentDialog.ShowAsync before that throws
+            // ArgumentException ("This element does not have a XamlRoot"),
+            // which on a fire-and-forget task is silently swallowed by the
+            // UnobservedTaskException handler — so the tracker would never
+            // start on first run at all, not just start too early. Caught
+            // by testing this in the isolated environment before this fix
+            // shipped; see CONTEXT.md.
+            root.Loaded += (_, _) => _ = InitTrackingAsync();
+        }
+        else
+        {
+            // Defensive fallback — shouldn't happen for a XAML-defined
+            // Window, but without this branch a null/non-FrameworkElement
+            // Content would mean the tracker never starts at all.
+            _ = InitTrackingAsync();
         }
 
         // Debug/verification hook: MENTOR_PAGE=reports|plans|settings|schedule
@@ -100,9 +118,7 @@ public sealed partial class MainWindow : Window
                 .FirstOrDefault(i => (string?)i.Tag == page)
                 ?? Nav.MenuItems.OfType<NavigationViewItem>().First();
         RefreshScore();
-        StartTracker();
-        CatchUpScores();
-        PruneOldDiary();
+        RunStartupCatchUp();
         StartEodWatcher();
         StartKickoffWatcher();
 
@@ -140,6 +156,7 @@ public sealed partial class MainWindow : Window
             _tray?.Dispose();
             if (_notificationActivationWired)
                 AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
+            if (_hwnd != IntPtr.Zero) WTSUnRegisterSessionNotification(_hwnd);
         };
     }
 
@@ -278,14 +295,26 @@ public sealed partial class MainWindow : Window
     private const int GwlpWndProc = -4;
     private const uint WmGetMinMaxInfo = 0x0024;
 
+    // Windows session lock/unlock notifications (2026-07-09 audit finding
+    // #11) — piggybacks on the same WndProc subclass hook the min-size fix
+    // already installs, rather than adding a second one.
+    private const uint WmWtsSessionChange = 0x02B1;
+    private const int WtsSessionLock = 0x7;
+    private const int NotifyForThisSession = 0;
+
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     private WndProcDelegate? _wndProcDelegate;
     private IntPtr _origWndProc;
+    private IntPtr _hwnd;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr CallWindowProcW(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hWnd);
+    [System.Runtime.InteropServices.DllImport("wtsapi32.dll", SetLastError = true)]
+    private static extern bool WTSRegisterSessionNotification(IntPtr hWnd, int dwFlags);
+    [System.Runtime.InteropServices.DllImport("wtsapi32.dll", SetLastError = true)]
+    private static extern bool WTSUnRegisterSessionNotification(IntPtr hWnd);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct Point { public int X; public int Y; }
@@ -302,7 +331,7 @@ public sealed partial class MainWindow : Window
 
     private void InstallMinSizeHook()
     {
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         _wndProcDelegate = (hWnd2, msg, wParam, lParam) =>
         {
             if (msg == WmGetMinMaxInfo)
@@ -314,10 +343,22 @@ public sealed partial class MainWindow : Window
                 System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, false);
                 return IntPtr.Zero;
             }
+            // Session lock (Win+L, screen-saver): tell the tracker to close
+            // out the current session right away instead of waiting out the
+            // full idle threshold before noticing the user is gone
+            // (2026-07-09 audit finding #11). Still forwarded to the
+            // original WndProc below — this is observation, not a message
+            // we need to override the default handling of.
+            if (msg == WmWtsSessionChange && wParam.ToInt32() == WtsSessionLock)
+                Tracker?.NotifySessionLocked();
             return CallWindowProcW(_origWndProc, hWnd2, msg, wParam, lParam);
         };
-        _origWndProc = SetWindowLongPtrW(hwnd, GwlpWndProc,
+        _origWndProc = SetWindowLongPtrW(_hwnd, GwlpWndProc,
             System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
+        if (!WTSRegisterSessionNotification(_hwnd, NotifyForThisSession))
+            Log.Error("InstallMinSizeHook.WTSRegisterSessionNotification",
+                new InvalidOperationException(
+                    $"Win32 error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}"));
     }
 
     private void SaveWindowSize()
@@ -347,6 +388,27 @@ public sealed partial class MainWindow : Window
     private bool _reallyClose;
     private string? _eodOfferedOn;
 
+    /// <summary>
+    /// CatchUpScores (up to 7 days of scoring math) and PruneOldDiary (a
+    /// rollup INSERT + DELETE) used to run synchronously on the constructor
+    /// before the window ever appeared — real, if usually small, delay
+    /// added directly to how long the app takes to become visible on
+    /// launch (2026-07-09 audit finding #7). Both already open their own
+    /// Database/ScoreService connections (the same per-call-connection
+    /// pattern ActivityTracker's background poll already uses), so running
+    /// them off the UI thread is safe. RefreshScore runs again afterward in
+    /// case catch-up added score for a missed day.
+    /// </summary>
+    private void RunStartupCatchUp()
+    {
+        _ = Task.Run(() =>
+        {
+            CatchUpScores();
+            PruneOldDiary();
+            _dq.TryEnqueue(RefreshScore);
+        });
+    }
+
     private static void CatchUpScores()
     {
         try
@@ -367,7 +429,10 @@ public sealed partial class MainWindow : Window
         try
         {
             using var db = new Database();
-            db.PruneAndRollupDiary();
+            // The parameter default is only a fallback — the actual
+            // retention window is user-configurable (Settings, 2026-07-09
+            // audit finding #34).
+            db.PruneAndRollupDiary(ConfigService.DiaryRetentionDays());
         }
         catch (Exception ex)
         {
@@ -439,6 +504,25 @@ public sealed partial class MainWindow : Window
     {
         Tracker?.Stop();
         Tracker = null;
+        StartTracker();
+    }
+
+    /// <summary>
+    /// The first-run tracking disclosure must finish — be shown and
+    /// dismissed by the user — before the tracker's poll timer can capture
+    /// anything. Previously this only happened to hold true by incidental
+    /// timing (TodayPage's OnNavigatedTo requested the dialog, but this
+    /// constructor's call to StartTracker() didn't wait on it — an async
+    /// void method returns control to its caller at the first await, so the
+    /// constructor carried on and started tracking regardless). A slow
+    /// first launch could start capturing/logging the foreground window
+    /// before the user had seen or dismissed the notice (2026-07-09 privacy
+    /// audit finding #2). This makes the ordering an actual code dependency
+    /// instead of a coincidence.
+    /// </summary>
+    private async Task InitTrackingAsync()
+    {
+        await NameSetupDialog.EnsureShownAsync(this);
         StartTracker();
     }
 

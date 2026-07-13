@@ -24,6 +24,10 @@ public static class RescheduleTaskDialog
             Date = minOffset,
             PlaceholderText = "Pick a date",
             FirstDayOfWeek = Windows.Globalization.DayOfWeek.Monday,
+            // Numeric-only, zero-padded dd.MM.yyyy — avoids Cyrillic month
+            // names on a non-English OS locale (app language is English;
+            // same fix as ReportsPage's diary date picker).
+            DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
         };
 
         var dialog = new ContentDialog

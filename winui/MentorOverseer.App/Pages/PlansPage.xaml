@@ -15,6 +15,8 @@
                 <Button x:Name="AddButton" Grid.Column="1" Content="+ Add Plan"
                         Style="{StaticResource AccentButtonStyle}" Click="Add_Click"/>
             </Grid>
+            <InfoBar x:Name="LoadErrorBar" Severity="Warning" IsClosable="True"
+                     Margin="0,0,0,12"/>
             <StackPanel x:Name="ActiveList" Spacing="10"/>
             <TextBlock Text="ARCHIVED" FontSize="11" FontWeight="SemiBold"
                        CharacterSpacing="60" Margin="2,26,0,8"

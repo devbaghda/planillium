@@ -12,6 +12,17 @@ namespace MentorOverseer.App.Services;
 ///   • overdue accrual capped at 3 days per task, then the task goes stale,
 ///   • "Replan all overdue" — one flat −10 instead of per-task bleeding.
 /// </summary>
+/// <summary>The day-score formula's individual terms, for display (the
+/// evening review's ledger) — see ScoreService.ComputeDayScore, the single
+/// place this formula is written.</summary>
+public sealed record DayScoreBreakdown(
+    int TaskPoints, int MultiTaskBonus, int OnPlanPoints, int OffPlanPoints,
+    int MissedPoints, int StreakBonus)
+{
+    public int RawTotal => TaskPoints + MultiTaskBonus + OnPlanPoints + OffPlanPoints + MissedPoints + StreakBonus;
+    public int FlooredTotal => Math.Max(RawTotal, ScoreService.DailyFloor);
+}
+
 public sealed class ScoreService : IDisposable
 {
     public const int DailyFloor = -10;
@@ -130,17 +141,29 @@ public sealed class ScoreService : IDisposable
     /// one on the same day adds a "multi-task" bonus — rewards a day where
     /// more than one task got done (working ahead included, now that a
     /// pulled-forward task counts as done for the day it was actually
-    /// finished on) on top of the linear per-task credit.</summary>
-    public int DayScore(int done, int total, int onMin, int offMin, int streak = 0)
-    {
-        var raw = done * ConfigService.ScoringRate("task_completed", 10)
-                + Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3)
-                + Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5)
-                + (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3))
-                + (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2))
-                + streak * ConfigService.ScoringRate("streak_bonus_per_day", 5);
-        return Math.Max(raw, DailyFloor);
-    }
+    /// finished on) on top of the linear per-task credit.
+    ///
+    /// This is a thin wrapper over ComputeDayScore — the single source of
+    /// truth for the formula. Kept as its own method (rather than having
+    /// every caller unpack a breakdown) because most callers (e.g.
+    /// CreditDayScoreIfMissing) only ever need the final number; ReviewDialog
+    /// is the one caller that needs the per-term breakdown and calls
+    /// ComputeDayScore directly instead of re-deriving these terms itself
+    /// (2026-07-09 audit finding #4 — the two had been computed
+    /// independently and could silently drift out of sync).</summary>
+    public int DayScore(int done, int total, int onMin, int offMin, int streak = 0) =>
+        ComputeDayScore(done, total, onMin, offMin, streak).FlooredTotal;
+
+    /// <summary>Same formula as DayScore, broken into its individual terms
+    /// for display (the evening review's line-by-line ledger).</summary>
+    public DayScoreBreakdown ComputeDayScore(int done, int total, int onMin, int offMin, int streak = 0) =>
+        new(
+            TaskPoints: done * ConfigService.ScoringRate("task_completed", 10),
+            MultiTaskBonus: Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3),
+            OnPlanPoints: (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3)),
+            OffPlanPoints: (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2)),
+            MissedPoints: Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5),
+            StreakBonus: streak * ConfigService.ScoringRate("streak_bonus_per_day", 5));
 
     public int CurrentStreak()
     {
@@ -390,15 +413,28 @@ public sealed class ScoreService : IDisposable
     }
 
     /// <summary>
-    /// Move a single overdue task to a specific future day. Whatever was
-    /// already on that day — and everything after it — shifts forward by
-    /// one day first, so the rescheduled task gets its own slot instead of
-    /// doubling up with whatever was already there (same "insert, don't
-    /// overlap" semantics as MoveTaskToToday/MarkDayOff). Already-completed
-    /// tasks are excluded from the shift for the same reason as
+    /// Move a single overdue task to a specific, user-picked future day.
+    /// Whatever was already on that day — and everything after it — shifts
+    /// forward by one day first, so the rescheduled task gets its own slot
+    /// instead of doubling up with whatever was already there. Already-
+    /// completed tasks are excluded from the shift for the same reason as
     /// MoveTaskToToday — see its doc comment. The overdue penalty already
     /// accrued for the days it was late stands; this only stops it from
     /// accruing further.
+    ///
+    /// Deliberately NOT the same shift-avoidance rule MoveTaskToToday uses
+    /// (confirmed with the user 2026-07-09, after an audit flagged the
+    /// difference as a possible inconsistency): the two actions represent
+    /// different intents. MoveTaskToToday means "I got ahead of schedule" —
+    /// pulling work earlier should compress the remaining plan, so it closes
+    /// the gap it leaves instead of pushing other days later. RescheduleTask
+    /// means "place this specific task on this specific day" — the user's
+    /// stated preference is a strict one-task-per-day steady state (a day
+    /// holding two tasks should only ever be a transient "I did extra today"
+    /// fact, not a permanent state a manual reschedule creates), so this
+    /// still needs to push the target day's existing task later rather than
+    /// double up on it. Don't "fix" this to match MoveTaskToToday without
+    /// re-confirming intent first.
     /// </summary>
     public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay)
     {
@@ -482,6 +518,41 @@ public sealed class ScoreService : IDisposable
         cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$t", text);
         cmd.ExecuteNonQuery();
+    }
+
+    public int CountReflections()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM reflections";
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>Read back a day's reflection, if any — previously written but
+    /// never read anywhere in the app (2026-07-09 audit finding #12).</summary>
+    public string? LoadReflection(DateOnly d)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT text FROM reflections WHERE date=$d";
+        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        return cmd.ExecuteScalar() as string;
+    }
+
+    /// <summary>Deliberately separate from Database.ClearActivityHistory —
+    /// reflections are the user's own reflective text, not tracked activity
+    /// data (see that method's doc comment), so clearing them is its own
+    /// explicit choice, not folded into "clear activity history"
+    /// (2026-07-09 audit finding #12: reflections previously had no delete
+    /// path anywhere in the app).</summary>
+    public void ClearReflections()
+    {
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM reflections";
+            cmd.ExecuteNonQuery();
+        }
+        using var vacuum = _conn.CreateCommand();
+        vacuum.CommandText = "VACUUM";
+        vacuum.ExecuteNonQuery();
     }
 }
 
