@@ -5,6 +5,13 @@ it has the actual project facts (architecture, schema, business rules, history).
 is about *how* to work here, not what the app does; keep the two separate rather than
 letting either one absorb the other's job.
 
+## Session start
+**Read `CONTEXT.md` in full at the start of every session, before doing anything else** —
+not just when a task seems to need it. It carries the Session handoff notes (what the last
+session left mid-flight, standing lessons from past bugs, open TODOs) and the business
+rules that aren't derivable from the code alone. Skipping it risks repeating a mistake
+that's already documented there or missing that something is already in progress.
+
 ## Repo & branches
 - `winui-rebuild` is the working branch; `master` is the default branch. History shows they're
   kept in fast-forward-only sync (`git merge --ff-only`, never a merge commit) — check

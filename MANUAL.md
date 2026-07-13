@@ -87,9 +87,19 @@ The app can monitor activity patterns and classify time as:
 
 This creates a fuller picture of how time is actually spent.
 
-### Weekly reports
+Tracking rests on your recurring days off. On any weekday you've excluded from your plan, nothing is written to the diary and no focus nudges appear — the tracker treats the whole day as time off.
 
-Weekly reporting summarizes progress and highlights where effort was spent. This helps the user see patterns rather than only isolated task completion.
+If you step away from the computer, the app asks "where have you been?" when you return, at any time of day. And if you finish and stop before your configured end-of-day, the evening review asks about that unaccounted stretch before it closes the day, so time you spent away is still recorded rather than left blank.
+
+The morning "start your day" prompt and the "where have you been?" prompt only open directly inside the app window when that window is actually visible. If it's hidden in the tray (or minimized), you'll get a tray notification instead — click it to open the app and answer.
+
+### Reports
+
+Reporting summarizes progress and highlights where effort was spent. This helps the user see patterns rather than only isolated task completion.
+
+Reports cover the current calendar period: the weekly view runs from this Monday through Sunday, the monthly view spans this calendar month, and the yearly view spans this year — not a rolling look-back over the last several days.
+
+The "time by app" breakdown shows your three biggest time sinks by default, with a "Show more" link to reveal the full list.
 
 The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained.
 

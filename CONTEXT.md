@@ -139,16 +139,24 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
    applies once for the day-of miss (folded into that day's `daily_score`) and again
    *every subsequent day* it stays outstanding (`overdue_accrual`, capped at 3 days).
    Rescheduling doesn't refund penalties already taken.
-7. Reschedule / Day-off still use the "insert, don't overlap" forward shift: whatever's
-   already on the target day (and everything after it) shifts forward one day first,
-   rather than doubling up. **Move-to-today no longer works this way** (changed
-   2026-07-09): pulling a future task to today just adds it alongside whatever's
-   already there (multiple tasks per day is normal); if that empties out the task's old
-   day, everything after it shifts *back* one day to close the gap instead — finishing
-   something ahead of schedule compresses the remaining plan rather than leaving a dead
-   day in the middle of it. **Already-completed tasks are never shifted** by any of
-   these four operations (fixed 2026-07-09; see Session handoff notes — shifting a
-   completed task orphaned its `task_completions` row, keyed by assigned day, silently
+7. **the user's steady-state rule: one task per day.** A day holding two tasks is only ever
+   a transient fact ("I did two things today"), never a permanent state a scheduling
+   action should create. This is *why* Reschedule/Day-off and Move-to-today deliberately
+   behave differently (clarified with the user 2026-07-09, after an audit flagged the
+   difference as a possible inconsistency — it isn't one):
+   - **Reschedule / Day-off** use the "insert, don't overlap" forward shift: whatever's
+     already on the target day (and everything after it) shifts forward one day first,
+     rather than doubling up — because these are "place this specific task on this
+     specific day" actions, and the one-task-per-day rule must hold going forward.
+   - **Move-to-today** does *not* shift forward (changed 2026-07-09): pulling a future
+     task to today just adds it alongside today's own task (a deliberate, transient
+     exception to the rule — you really did finish two things today). If that empties
+     out the task's old day, everything after it shifts *back* one day to close the gap
+     — finishing something ahead of schedule compresses the remaining plan back down to
+     one-task-per-day, rather than leaving a dead day in the middle of it.
+   - **Already-completed tasks are never shifted** by any of these four operations
+     (fixed 2026-07-09; see Session handoff notes — shifting a completed task orphaned
+     its `task_completions` row, keyed by assigned day, silently
    unmarking it and moving it to tomorrow).
 8. Archive: plan moves to `plans/archive/` when ALL tasks done; frees a slot (max 2
    active plans)
@@ -190,6 +198,74 @@ archive — full blow-by-blow detail for any entry lives in git log/commit messa
 Compress aggressively rather than letting this grow forever (compressed 852→224 lines on
 2026-07-06; compressed again, ~230→~50 lines, on 2026-07-09)._
 
+- **2026-07-13 (full audit, no fixes applied yet)**: full 5-category audit of `winui-rebuild`
+  (the actual live/deployed branch, not `audit-fixes-2026-07-09` which is still unmerged) —
+  4 High, 15 Medium, 18 Low, 4 Info. Findings-only, report not yet acted on. Full report:
+  artifact at https://claude.ai/code/artifact/7cb9538b-4859-4eea-ac1a-396b6f722282. Highlights:
+  (1) `KickoffDialog.Trigger` marks the day's kickoff "shown" the instant the toast is *sent*,
+  not when actually seen — a missed toast silently loses the whole morning-kickoff ritual for
+  the day (self-inflicted by today's earlier tray-notification work). (2) `new MainWindow()`
+  in `App.OnLaunched` has no try/catch — if the data folder can't be resolved, the app can end
+  up alive-but-invisible (mutex held, no window, no tray icon). (3) TickTick OAuth still lacks
+  PKCE on this branch (fixed on the unmerged `audit-fixes-2026-07-09` branch, never merged
+  here). (4) `config.json`/`plans/active/*.json` are git-tracked, not gitignored — sharpens the
+  existing "scrub before going public" Open TODO into a concrete action (gitignore + history
+  rewrite before any public push). Also: a new, unguarded cross-thread race in
+  `ActivityTracker` (`_restCheckDate`/`_restDayToday`/`_accountedUntil` now touched from both
+  the poll thread and the UI thread), a reintroduced N+1-connection perf regression in the
+  rewritten `ReportData.cs`, CSV-export formula-injection risk, 72 unreachable git objects from
+  an incomplete cleanup (verified — no live secret in them), and confirmation that several
+  `audit-fixes-2026-07-09` fixes (PKCE, `ReportsPage` decomposition, score-formula dedup,
+  `PlanStore` error surfacing) are genuinely absent from `winui-rebuild` since that branch was
+  never merged. **Decision needed next session: fix findings here directly, or finally merge
+  `audit-fixes-2026-07-09` first** (which would resolve several Mediums as a side effect)
+  before layering more fixes on top.
+
+- **2026-07-13** (`winui-rebuild`, built Debug+Release clean, **deployed to the live
+  Release instance, not yet committed** at time of writing): six feature changes. (1)
+  Reports are now *calendar* periods, not rolling windows — Week = Mon→today of this week,
+  Month = 1st→today, Year = Jan→now (`ReportData.PeriodStart`/`WeekStats`/`Buckets`/
+  `DateFilter`; HTML export labels updated). (2) "Time by app" shows top 3 with a "Show
+  more" toggle (`AppBreakdownPanel`, fetch limit raised to 100). (3) No tracking on
+  recurring rest days — `PlanStore.IsRestDay` (all active plans exclude the weekday);
+  `ActivityTracker.PollOnce` early-returns with a "Day off" pill, logs nothing, no nudges
+  (day-off definition confirmed with the user: *recurring excluded weekdays only*, not manual
+  mark-day-off). (4) "Where have you been?" now (a) fires on return from idle at any hour
+  (removed the 6am–8pm gate; the diary-window clamps already suppress bogus night prompts)
+  and (b) sweeps any unaccounted early-finish gap at the evening review
+  (`ActivityTracker.PendingDayGap`, shown before `ReviewDialog`). Guard added against the
+  sweep + return-handler double-logging the same span (`_accountedUntil`/
+  `MarkAccountedThrough`). (5) Morning kickoff and "where have you been?" now route through
+  a tray toast notification (new `Services/ToastNotifier.cs`, reusing the
+  `AppNotificationManager` mechanism already proven for focus alerts) whenever the window
+  isn't actually on screen (`MainWindow.IsOnScreen()` — hidden to tray OR
+  `OverlappedPresenterState.Minimized`), instead of silently opening a ContentDialog inside
+  a window nobody can see; clicking the toast (`AppNotificationManager.NotificationInvoked`,
+  wired in `MainWindow`) brings the window forward and opens the same interactive dialog,
+  carrying idle-return's minutes/start through the toast's arguments
+  (`KickoffDialog.Trigger`/`IdleReturnDialog.Trigger` are the new orchestrating entry
+  points; `ShowAsync` on both is now the "definitely show the real dialog" path used both
+  directly and from the notification-click handler). **Caused and fixed a live crash**: the
+  first deploy subscribed `AppNotificationManager.Default.NotificationInvoked` in
+  `MainWindow`'s constructor *after* `App.OnLaunched` had already called
+  `AppNotificationManager.Default.Register()` — threw `COMException 0x80070490 "Element not
+  found"` on every launch, taking the whole app (and tracking) down. Root cause: Microsoft's
+  own quickstart subscribes before `Register()`; fixed by reordering `App.OnLaunched` to
+  construct `MainWindow` (which subscribes) before calling `Register()`, plus wrapping the
+  subscription in try/catch (`MainWindow._notificationActivationWired`) so this class of bug
+  degrades to "toast click-through disabled" instead of crashing the app outright. Verified
+  via a throwaway Debug launch before touching the live Release instance a second time.
+  Live-instance restart to deploy: stopped old PID well before the 20:00 EOD time, confirmed
+  via `wmic`; confirmed the fixed build stays up (checked twice, ~5s apart) before ending
+  the session on it. Pre-existing warning at `ReportsPage.xaml.cs:372` (diary `row.Id`
+  null-deref) left as-is — it's fixed on the unmerged `audit-fixes-2026-07-09` branch. That
+  audit branch (33/40 findings) is still unmerged; merge decision still open. **None of
+  today's changes are committed yet.**
+- **Standing lesson**: when wiring any `AppNotificationManager` event subscription
+  (`NotificationInvoked` or future ones), subscribe *before* calling `.Register()` — the
+  reverse order throws at the WinRT layer for this unpackaged app. If a next session adds
+  another such subscription, put it in `MainWindow`'s constructor alongside the existing one
+  (before `App.OnLaunched`'s `Register()` call), not after.
 - **2026-07-09** (three rounds, `winui-rebuild` kept in sync with `master`, both pushed):
   Reports diary column width is now computed deterministically in code-behind from
   `RootScroller`'s `ActualWidth` (three XAML-only attempts didn't hold — see `1e7dc07`).

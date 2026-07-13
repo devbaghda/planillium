@@ -26,6 +26,29 @@ going forward; the original Python/Tkinter version is retired.
   the full text available on hover
 - Added a date picker to the diary header to jump straight to a specific
   day instead of stepping through one at a time
+- Reports now cover the actual calendar period rather than a rolling
+  window: the weekly view is this Monday through Sunday, the monthly view
+  is this calendar month, and the yearly view is this year — so a report
+  opened on Monday shows Monday's data alone instead of dragging in the
+  tail of the previous week
+- "Time by app" now shows your three biggest time sinks by default, with a
+  "Show more" link that expands the full list on demand
+
+**Activity tracking**
+- Your recurring days off are no longer tracked. On any weekday you've
+  excluded from your plan, the diary stays blank and no focus nudges fire —
+  the tracker simply rests with you
+- You're now asked "where have you been?" whenever you return from being
+  away, at any hour — previously the question only appeared between 6am and
+  8pm, so evening returns went unrecorded
+- If you finish and step away before your end-of-day, the evening review
+  now reconciles that unaccounted stretch — asking where you were — before
+  closing the day, so early finishes don't vanish into an unlabelled gap
+- The morning "start your day" prompt and the "where have you been?" prompt
+  now arrive as a tray notification whenever the app window isn't actually
+  on screen (hidden to the tray, or minimized), instead of silently opening
+  inside a window nobody's looking at; clicking the notification brings the
+  app forward and opens the same interactive dialog as before
 
 **Startup**
 - Fixed the window opening partially off-screen (or oversized) when a
