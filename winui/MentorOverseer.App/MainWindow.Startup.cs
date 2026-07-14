@@ -107,15 +107,17 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Short sidebar status line per active plan, mirroring the Plans page's
+    /// Short sidebar status block per active plan, mirroring the Plans page's
     /// own drift readout (originally-due date vs. where the plan will now
     /// actually finish, from reschedules/day-offs pushing it later or early
     /// finishes pulling it earlier). Unlike the Plans page card, every active
-    /// plan gets a line here — on-track and ahead-of-plan show green so a
+    /// plan gets a block here — on-track and ahead-of-plan show green so a
     /// glance at the sidebar confirms things are fine, not just flags when
-    /// they aren't. Called from the same places RefreshScore is, since every
-    /// action that can move a plan's finish date (reschedule, replan-overdue,
-    /// completing/pulling a task) already calls RefreshScore.
+    /// they aren't. Each block is a truncated plan name (regular sidebar text)
+    /// over a colored status line (larger, since that's the part worth
+    /// noticing at a glance). Called from the same places RefreshScore is,
+    /// since every action that can move a plan's finish date (reschedule,
+    /// replan-overdue, completing/pulling a task) already calls RefreshScore.
     /// </summary>
     private void RefreshPlanDrift()
     {
@@ -138,14 +140,24 @@ public sealed partial class MainWindow
                     < 0 => $"{-driftDays}d ahead of plan",
                     _ => "On track",
                 };
-                PlanDriftPanel.Children.Add(new TextBlock
+
+                var block = new StackPanel { Spacing = 1 };
+                block.Children.Add(new TextBlock
                 {
-                    Text = $"{plan.Name}: {status}",
+                    Text = plan.Name,
                     FontSize = 11,
-                    TextWrapping = TextWrapping.Wrap,
+                    TextWrapping = TextWrapping.NoWrap,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                });
+                block.Children.Add(new TextBlock
+                {
+                    Text = status,
+                    FontSize = 13,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                     Foreground = (Brush)Application.Current.Resources[
                         driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"],
                 });
+                PlanDriftPanel.Children.Add(block);
             }
         }
         catch (Exception ex)
