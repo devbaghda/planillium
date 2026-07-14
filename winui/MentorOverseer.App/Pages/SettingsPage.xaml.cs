@@ -260,15 +260,19 @@ public sealed partial class SettingsPage : Page
                     try { File.Delete(Path.Combine(AppPaths.Root, "data", f)); }
                     catch (Exception ex) { Log.Error($"SettingsPage.ClearHistory.DeleteExport({f})", ex); }
                 }
-        }, "Activity history cleared.", "SettingsPage.ClearHistory");
+        }, "Activity history cleared.", "activity history", "SettingsPage.ClearHistory");
     }
 
     /// <summary>Shared busy-state sequence for the two "clear my data"
     /// buttons below — confirm dialog already shown by the caller; this
     /// covers disable-button → "Clearing…" → run off the UI thread →
     /// status message → re-enable, so the two buttons can't drift apart on
-    /// this shared shape while still owning their own confirm copy/dbAction.</summary>
-    private async Task RunClearActionAsync(Button trigger, Action dbAction, string successMessage, string logTag)
+    /// this shared shape while still owning their own confirm copy/dbAction.
+    /// <paramref name="whatFailed"/> keeps the failure message specific
+    /// ("Couldn't clear reflections" vs "Couldn't clear activity history")
+    /// instead of a single generic one that reads the same for both.</summary>
+    private async Task RunClearActionAsync(Button trigger, Action dbAction, string successMessage,
+        string whatFailed, string logTag)
     {
         trigger.IsEnabled = false;
         SaveStatus.Text = "Clearing…";
@@ -280,7 +284,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             Log.Error(logTag, ex);
-            SaveStatus.Text = "Couldn't clear: " + ex.Message;
+            SaveStatus.Text = $"Couldn't clear {whatFailed}: " + ex.Message;
         }
         finally
         {
@@ -333,7 +337,7 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
             score.ClearReflections();
-        }, "Reflections cleared.", "SettingsPage.ClearReflections");
+        }, "Reflections cleared.", "reflections", "SettingsPage.ClearReflections");
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
