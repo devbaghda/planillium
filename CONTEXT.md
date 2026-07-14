@@ -267,15 +267,59 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   Confirmed clean (no fix needed): the partial-class decomposition is byte-for-byte identical to
   pre-split, no Critical/High in the app's own code, no auto-updater/telemetry, all SQL
   parameterized, memory-protection flags on in the built exe.
+- **2026-07-14 (round 5)**: Full 5-pass independent re-audit right after round-4's remediation
+  ("fix all"), requested as a standalone "full audit" (not paired with a fix-all this time —
+  findings recorded, **not yet remediated**). 0 Critical, 3 High, 17 Medium, 13 Low, 8 Info;
+  report: https://claude.ai/code/artifact/e54a2317-7406-49ab-bc77-7607b9920860. All round 1-4
+  fixes re-verified holding, no regressions. The 3 Highs: (1) `SplitDiaryEntryDialog.ShowAsync`
+  deletes the original diary entry before inserting its replacement rows with **no SQL
+  transaction** — a failure mid-loop (e.g. a lock race with the tracker's poll thread) loses
+  that time-diary data permanently, no undo (`Dialogs/SplitDiaryEntryDialog.cs:129-151`); (2)
+  `KickoffDialog.ShowAsync` never actually sets/checks its own `_showing` guard despite the
+  class's own doc comment saying that's what it's for — mirror-image regression of the round-3
+  `ReviewDialog` finding, three call paths (per-minute watcher, `TodayPage.OnNavigatedTo`, toast
+  click-through) can double-queue the morning dialog (`Dialogs/KickoffDialog.cs:73-84`); (3) a
+  date parse in `ReportData.cs:91` (feeds `WeeklyOnOffMinutes`) is missing
+  `CultureInfo.InvariantCulture` — the exact locale-bug class this app already shipped and fixed
+  once, unfixed 164 lines from its own already-correct sibling at `ReportData.cs:255`. Notable
+  Mediums: `TodayPage.Toggle` doesn't re-render after a failed completion save (checkbox can lie);
+  `TickTickSection.LoadAsync` has no overlap guard (fast nav can duplicate/stale TickTick rows);
+  diary search range is off-by-one vs. actual retention boundary; Today's `SaveErrorBar` can never
+  be dismissed/cleared once shown; `PlanScoreAction.Run`'s three callers (Day off/Move-to-today/
+  Start now) give no user feedback on a failed write; Reports' Time-by-App color legend and the
+  Diary list's colors assign **opposite** meanings to Paid/Neutral on the same page (Time-by-App's
+  legend was only added last round, never cross-checked against the diary's existing colors);
+  `MentorOverseer.App.Tests.csproj` ships 3 High-CVE transitive packages (same SQLite CVE class
+  round 4 pinned in the main app — missed in the sibling test project, the exact "fix one sibling,
+  miss the other" pattern flagged again); `ReviewDialog.ShowCore` is now the largest function in
+  the codebase (187 lines, 5 mixed concerns) — the same shape `ActivityTracker.PollOnce` was in
+  before round 4 split it. Full finding list, explanations, and fixes are in the report; not
+  applied this session — next session should treat this as the fix-all queue if requested.
 - **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH (a) the
   `IsOnScreen()`-check-then-toast-fallback pattern, and (b) an "already showing, don't
   reopen" guard — `StartEodWatcher` was missing (a) in round 2, `ReviewDialog` was missing
-  (b) in round 3, same underlying lesson two rounds running: when one dialog (kickoff) has a
-  safety pattern another sibling (review) doesn't, grep for the *whole* pattern — not just
-  the piece the current bug report mentions — across every sibling before calling it done.
-  Also: subscribe to any `AppNotificationManager` event *before* calling `.Register()` — the
-  reverse order throws at the WinRT layer for this unpackaged app.
-- **2026-07-09** (three rounds): diary column width now computed from `RootScroller.ActualWidth`
+  (b) in round 3, `KickoffDialog` was missing (b) in round 5 (opposite direction from round 3):
+  three rounds running on the same underlying lesson — when one dialog has a safety pattern a
+  sibling doesn't, grep for the *whole* pattern across every sibling before calling it done, and
+  re-check it again on the *next* audit too, since a fix applied to one sibling doesn't
+  inoculate the other from ever regressing back out of sync. Also: subscribe to any
+  `AppNotificationManager` event *before* calling `.Register()` — the reverse order throws at
+  the WinRT layer for this unpackaged app. Also (round 5, new): a helper added to kill one class
+  of duplication (e.g. `DateExtensions.ToIsoDate()` for dates) needs a second pass to check
+  *adjacent* formats (timestamps) didn't get left behind uncovered by the same helper.
+- **2026-07-07 to 2026-07-09**: WinUI rebuild's first two audit rounds + a mid-stream feature
+  session. **07-07**: full audit of the freshly-rebuilt app, all 18 findings applied (global
+  exception handlers, single-instance mutex, `DialogGate` semaphore, `InvariantCulture`
+  everywhere — OS locale Russian, app language English); WinUI became the sole app; v1.0.0
+  shipped (Inno Setup installer). **07-08**: full 5-category audit + remediation (`2a7b31f`) —
+  Critical: TickTick secret was in git history twice, rewritten out via `filter-branch` (secret
+  rotated 07-09); High: first-run activity-tracking disclosure added; 8M/4L fixed (retention,
+  `ReportsPage.Render` decomposed, SQLite lock-error surfacing, shared `HttpClient`, in-app
+  export/clear-history, dead Python-detection code removed); renamed app to "Planillium"
+  (display/build identity only — repo/namespace stay `MentorOverseer`); caught a
+  `CredentialStore` target-name bug before it could orphan the stored TickTick token; repo
+  consolidated (`master` fast-forwarded to `winui-rebuild`, ~430MB cruft removed, Python
+  retired). **07-09** (three rounds): diary column width computed from `RootScroller.ActualWidth`
   in code-behind (XAML-only attempts didn't hold, `1e7dc07`); window clamped to
   `DisplayArea.WorkArea` at launch; zero-padded `CalendarDatePicker` added to jump to a diary
   date; fixed a data-loss bug where shifting an already-completed task's day orphaned its
@@ -285,18 +329,6 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   live-data repair applied directly (`task_overrides`, `claude-code-10-level-mastery`, 20 rows)
   only after the user's explicit reviewed confirmation; pulled the session's testing/architecture
   lessons into the `windows-app-tester`/`windows-app-auditor` global skills.
-- **2026-07-08**: Full 5-category audit + remediation (`2a7b31f`). Critical: TickTick secret
-  was in git history twice, rewritten out via `filter-branch` (secret itself rotated
-  2026-07-09). High: first-run activity-tracking disclosure added. 8M/4L fixed (retention,
-  `ReportsPage.Render` decomposed, SQLite lock-error surfacing, shared `HttpClient`, in-app
-  export/clear-history, dead Python-detection code removed). Renamed app to "Planillium"
-  (display/build identity only — repo/namespace stay `MentorOverseer`); caught a
-  `CredentialStore` target-name bug before it could orphan the stored TickTick token; repo
-  consolidated (`master` fast-forwarded to `winui-rebuild`, ~430MB cruft removed, Python retired).
-- **2026-07-07**: Full audit of the freshly-rebuilt WinUI app, all 18 findings applied (global
-  exception handlers, single-instance mutex, `DialogGate` semaphore, `InvariantCulture`
-  everywhere — OS locale Russian, app language English). WinUI became the sole app; v1.0.0
-  shipped (Inno Setup installer).
 - **Standing lessons** (apply every session, not just the one that taught them):
   - Check `end_of_day_summary_time` before killing a live instance near EOD — killing it
     early can skip the evening-review popup entirely for that day.
@@ -312,6 +344,10 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
     use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons,
     UI Automation `BoundingRectangle` beats pixel-diffing screenshots.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **Round-5 audit findings not yet remediated**: 3 High, 17 Medium, 13 Low, 8 Info — see the
+    2026-07-14 (round 5) entry above and the full report at
+    https://claude.ai/code/artifact/e54a2317-7406-49ab-bc77-7607b9920860. Highest-value fix is
+    the `SplitDiaryEntryDialog` data-loss bug (no transaction around delete+insert).
   - ~~Rotate the TickTick OAuth client secret~~ — **the user confirmed done 2026-07-09**
     (rotated at developer.ticktick.com). One follow-up remains, not yet done: the app's
     Windows Credential Manager entry still holds the *old* secret until the user reconnects
