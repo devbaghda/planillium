@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Dialogs;
 
 /// <summary>Small shared control factories for the multi-row split editors
@@ -32,7 +33,7 @@ internal static class DialogControls
         // multi-row list), but still needs a name for screen readers —
         // PlaceholderText alone isn't exposed as one (2026-07-09 audit
         // finding #15).
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, "Minutes");
+        AutomationProperties.SetName(box, "Minutes");
         return box;
     }
 }

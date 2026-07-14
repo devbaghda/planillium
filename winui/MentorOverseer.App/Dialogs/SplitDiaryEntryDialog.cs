@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MentorOverseer.App.Services;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Dialogs;
 
 /// <summary>
@@ -24,7 +25,7 @@ public static class SplitDiaryEntryDialog
     public static async Task<bool> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
         string start, string end, int durationMin, string category, string window, string? description)
     {
-        if (!TimeOnly.TryParseExact(start, "HH:mm", out var startTime))
+        if (!TimeOnly.TryParseExact(start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
             return false;
 
         var root = new StackPanel { Spacing = 10, MinWidth = 460 };
@@ -77,16 +78,16 @@ public static class SplitDiaryEntryDialog
             foreach (var (label, value) in Categories)
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
             catBox.SelectedIndex = Array.FindIndex(Categories, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(catBox, "Category");
+            AutomationProperties.SetName(catBox, "Category");
             var descBox = new TextBox
             {
                 PlaceholderText = "description",
                 Text = prefillDesc ?? "",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(descBox, "Activity description");
+            AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(removeBtn, "Remove this activity");
+            AutomationProperties.SetName(removeBtn, "Remove this activity");
 
             var row = new Grid { ColumnSpacing = 8 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -129,19 +130,26 @@ public static class SplitDiaryEntryDialog
         try
         {
             using var db = new Database();
-            db.DeleteDiaryEntry(id);
-            var t = startTime;
-            var dateStr = date.ToIsoDate();
-            foreach (var (dur, cat, desc, _) in rows)
+            // Delete + reinsert must be one transaction, not sequential calls — a failure
+            // partway through the loop (e.g. a lock race with the tracker's poll thread)
+            // used to leave the original entry already deleted with only some of its
+            // replacements written, permanently losing the rest (round-5 audit finding #1).
+            db.RunInTransaction(() =>
             {
-                var mins = (int)dur.Value;
-                var segEnd = t.AddMinutes(mins);
-                var catValue = ((ComboBoxItem)cat.SelectedItem).Tag as string ?? category;
-                db.InsertDiaryEntry(dateStr, t.ToString("HH:mm", CultureInfo.InvariantCulture),
-                    segEnd.ToString("HH:mm", CultureInfo.InvariantCulture), mins, catValue, window,
-                    desc.Text.Trim() is { Length: > 0 } d ? d : null);
-                t = segEnd;
-            }
+                db.DeleteDiaryEntry(id);
+                var t = startTime;
+                var dateStr = date.ToIsoDate();
+                foreach (var (dur, cat, desc, _) in rows)
+                {
+                    var mins = (int)dur.Value;
+                    var segEnd = t.AddMinutes(mins);
+                    var catValue = ((ComboBoxItem)cat.SelectedItem).Tag as string ?? category;
+                    db.InsertDiaryEntry(dateStr, t.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        segEnd.ToString("HH:mm", CultureInfo.InvariantCulture), mins, catValue, window,
+                        desc.Text.Trim() is { Length: > 0 } d ? d : null);
+                    t = segEnd;
+                }
+            });
             return true;
         }
         catch (Exception ex)

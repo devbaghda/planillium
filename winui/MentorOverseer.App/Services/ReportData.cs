@@ -19,7 +19,7 @@ public static class ReportData
 
     public sealed class AppUsage
     {
-        public int Total, On, Off, Neutral, Paid;
+        public int Total, On, Off, Neutral, Paid, Idle;
         public SortedDictionary<string, AppUsage>? Subs;
 
         public void Add(string category, int mins)
@@ -31,6 +31,11 @@ public static class ReportData
                 case "off_plan": Off += mins; break;
                 case "neutral": Neutral += mins; break;
                 case "paid": Paid += mins; break;
+                // Previously uncounted here — Total (and so the row's minutes label)
+                // included idle time, but no bucket did, so an idle-heavy row's bar
+                // visibly fell short of its own label with no explanation why
+                // (round-5 audit finding #22).
+                case "idle": Idle += mins; break;
             }
         }
     }
@@ -88,7 +93,8 @@ public static class ReportData
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
-                if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", out var d)) continue;
+                if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                        DateTimeStyles.None, out var d)) continue;
                 var cat = r.GetString(1);
                 if (cat != "on_plan" && cat != "off_plan") continue;
                 var ws = MondayOf(d);

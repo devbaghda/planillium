@@ -120,7 +120,8 @@ ticktick_sync    (id, plan_day, task_text, ticktick_task_id, ticktick_proj_id, p
 time_diary       (id, date, start_time, end_time, duration_min, category, window, description)
   -- category: on_plan | off_plan | neutral | idle | paid
 diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
-  -- written just before a day's raw time_diary rows age out (365-day retention), keeps
+  -- written just before a day's raw time_diary rows age out (90-day retention, user-
+  -- configurable in Settings), keeps
   -- Year-view totals accurate forever after per-entry detail is gone
 ```
 
@@ -197,138 +198,75 @@ archive — full blow-by-blow detail for any entry lives in git log/commit messa
 Compress aggressively rather than letting this grow forever (compressed 852→224 lines on
 2026-07-06; compressed again, ~230→~50 lines, on 2026-07-09)._
 
-- **2026-07-13**: Six feature changes (calendar-period reports; day-off pause, confirmed
-  *recurring excluded weekdays only*; "where have you been" any hour + evening-review gap
-  sweep; tray-toast routing via new `Services/ToastNotifier.cs`) → round-1 audit (4H/15M/18L/4I,
-  https://claude.ai/code/artifact/7cb9538b-4859-4eea-ac1a-396b6f722282) → merged with the
-  long-unmerged `audit-fixes-2026-07-09` branch → remediation commit `4014b00` (both round-1
-  Highs + 9M/9L) → round-2 audit (1 new High: `StartEodWatcher` could wedge `DialogGate` by
-  opening `ReviewDialog` while hidden to tray, fixed same session via `ReviewDialog.Trigger`
-  mirroring `KickoffDialog.Trigger`; 14M/13L, https://claude.ai/code/artifact/1f5b15bb-c6d5-4ea0-a1db-a46b984db19e).
-  Also: `config.json`/`plans/active/*.json` gitignored + untracked going forward (commit
-  `9be8515`, history NOT purged — see Open TODOs); finished the incomplete 2026-07-09 secret
-  cleanup (`git gc`, 0 dangling objects).
-- **2026-07-14**: Applied all 27 round-2 findings, deferred 2 (God-Object decomposition,
-  WindowsAppSDK bump) — commit `1724e14`. Added `ScoreServiceScoringTests.cs` (`ComputeDayScore`
-  had zero coverage) and `Dialogs/PromptRouter.cs` (extracted show-dialog-or-toast routing 3
-  dialogs duplicated). **Round-3 audit** found all 27 fixes held + **1 new High**: `ReviewDialog`
-  never got `KickoffDialog`'s "already showing, don't reopen" guard, so leaving it open past
-  one EOD-watcher tick (1 min) could queue a duplicate — fixed via the same `_showing`/`ShowCore`
-  split, enforced in both `Trigger` and `ShowAsync` since `TodayPage`'s manual Review button
-  bypasses `Trigger` (report: https://claude.ai/code/artifact/8bcbfc6d-c998-4084-840c-23e8641483c2).
-  Mid-round, the user requested two scheduling features (verified live via UIA): (1) "Reschedule…"
-  (pick any day; that day + everything after shifts forward one) now on every open task, not
-  just overdue — `SchedulePage.xaml.cs`. (2) "Replan all overdue" is no longer automatic; new
-  `Dialogs/ReplanOverdueDialog` shows one date-picker per overdue task via
-  `ScoreService.ReplanOverdueTo` (removed unused `ReplanAllOverdue`/`ReplanDailyBudgetMin`).
-  Plans page now shows each plan's originally-due date + drift days — `PlansPage.xaml.cs`.
-  **Later the same day**, the user asked to clear both deferred items. WindowsAppSDK
-  `1.5.240627000`→`1.8.260529003` (+ `Microsoft.Windows.SDK.BuildTools` `1742`→`4654`, a
-  transitive floor from the new WindowsAppSDK.Base) — release-notes review first found no
-  breaking changes applicable to this app (unpackaged, no MSIX/wapproj, no custom FontFamily
-  weight/stretch); behavior changes are opt-in via `RuntimeCompatibilityOptions`. God-Object
-  decomposition: split `MainWindow.xaml.cs` (633→238) into `+Tray/+NativeInterop/+Startup/
-  +Tracker.cs` and `ReportsPage.xaml.cs` (1069→255) into `+Tables/+TimeByApp/+Diary/+Styling.cs`
-  — plain C# partial-class file splits along the file's own existing section comments, zero
-  logic changes, chosen because the original deferral reason was regression risk and a pure
-  file-move carries none; the Diary split was extracted byte-for-byte via `git show HEAD:...` +
-  `sed` rather than retyped, since it contains literal (non-`\u`-escaped) Segoe Fluent Icons
-  codepoints invisible in any terminal/diff and easy to corrupt by hand. Both verified with a
-  full Debug+Release build, all 10 tests, and a live UIA pass across every page. Also added a
-  short plan-drift note in the sidebar (`PlanDriftPanel`/`MainWindow.RefreshPlanDrift()`)
-  mirroring the Plans page's own readout — refined moments later per the user's request to show
-  a status line for *every* active plan, not just off-track ones: green "On track"/"Nd ahead
-  of plan" or red "Nd late from plan".
-- **2026-07-14 (round 4)**: Full 5-pass independent audit right after the SDK bump/decomposition/
-  sidebar work above, plus a same-day UX refinement (sidebar plan block is now name-on-top +
-  larger colored status line below, spacing between plans — commit `481c95b`). 0 Critical/High,
-  8 Medium, 14 Low, 9 Info; report: https://claude.ai/code/artifact/edcb4afc-aea5-429d-bb30-4889c3b04ba6.
-  **All 22 Medium/Low findings fixed same session** ("fix all"), verified with a full Debug+Release
-  build, all 10 tests, `dotnet list package --vulnerable` (clean), and a live UIA pass. Key fixes:
-  (1) `Plan.DriftDays(tasks)` is now the one shared formula the sidebar and Plans page both call,
-  replacing two independently-typed copies; (2) `MainWindow.RefreshScore()` (which also refreshes
-  the sidebar drift note) is now called after Schedule's day-off toggle, move-to-today, and
-  reschedule, and after Plans' excluded-weekdays editor — previously none of those four refreshed
-  it; (3) pinned `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3 directly (overrides the older transitive
-  version `Microsoft.Data.Sqlite` 8.0.6 pulls), clearing CVE-2025-6965; (4) Reports' drift-shaped
-  card renamed `DriftCard`→`ExclusionImpactCard`, heading "SCHEDULE DRIFT"→"EXCLUSION IMPACT", so
-  it no longer reads as contradicting the sidebar/Plans "drift" status it measures differently
-  from; (5) sidebar plan name now has a tooltip, sits in a chip matching the pill/score-chip above
-  it, and Plans page's on-track color now matches the sidebar's (green). Also: decomposed
-  `ActivityTracker.PollOnce` (~130 tangled lines) into 5 named methods (`HandleSessionLock`,
-  `HandleSleepGap`, `HandleIdleReturn`, `HandleActiveSession`, `HandleOutsideDiaryHours`) —
-  behavior-preserving, verified line-by-line against the original control flow; added
-  `Services/DateExtensions.cs`'s `ToIsoDate()` replacing 26 hand-typed copies of the date-key
-  format string across 8 files (needed a `<Compile Include>` link added to the Tests project too);
-  `Pages/PlanScoreAction.cs` and `Pages/TaskDetailsLink.cs` collapse three more duplicated
-  boilerplate shapes (Today/Schedule score-mutating actions; the "Details" button). TickTick
-  Connect dialog no longer pre-fills the saved secret into a revealable password box; the
-  installer's default `config.default.json` no longer bakes in the user's real TickTick client ID.
-  Confirmed clean (no fix needed): the partial-class decomposition is byte-for-byte identical to
-  pre-split, no Critical/High in the app's own code, no auto-updater/telemetry, all SQL
-  parameterized, memory-protection flags on in the built exe.
-- **2026-07-14 (round 5)**: Full 5-pass independent re-audit right after round-4's remediation
-  ("fix all"), requested as a standalone "full audit" (not paired with a fix-all this time —
-  findings recorded, **not yet remediated**). 0 Critical, 3 High, 17 Medium, 13 Low, 8 Info;
-  report: https://claude.ai/code/artifact/e54a2317-7406-49ab-bc77-7607b9920860. All round 1-4
-  fixes re-verified holding, no regressions. The 3 Highs: (1) `SplitDiaryEntryDialog.ShowAsync`
-  deletes the original diary entry before inserting its replacement rows with **no SQL
-  transaction** — a failure mid-loop (e.g. a lock race with the tracker's poll thread) loses
-  that time-diary data permanently, no undo (`Dialogs/SplitDiaryEntryDialog.cs:129-151`); (2)
-  `KickoffDialog.ShowAsync` never actually sets/checks its own `_showing` guard despite the
-  class's own doc comment saying that's what it's for — mirror-image regression of the round-3
-  `ReviewDialog` finding, three call paths (per-minute watcher, `TodayPage.OnNavigatedTo`, toast
-  click-through) can double-queue the morning dialog (`Dialogs/KickoffDialog.cs:73-84`); (3) a
-  date parse in `ReportData.cs:91` (feeds `WeeklyOnOffMinutes`) is missing
-  `CultureInfo.InvariantCulture` — the exact locale-bug class this app already shipped and fixed
-  once, unfixed 164 lines from its own already-correct sibling at `ReportData.cs:255`. Notable
-  Mediums: `TodayPage.Toggle` doesn't re-render after a failed completion save (checkbox can lie);
-  `TickTickSection.LoadAsync` has no overlap guard (fast nav can duplicate/stale TickTick rows);
-  diary search range is off-by-one vs. actual retention boundary; Today's `SaveErrorBar` can never
-  be dismissed/cleared once shown; `PlanScoreAction.Run`'s three callers (Day off/Move-to-today/
-  Start now) give no user feedback on a failed write; Reports' Time-by-App color legend and the
-  Diary list's colors assign **opposite** meanings to Paid/Neutral on the same page (Time-by-App's
-  legend was only added last round, never cross-checked against the diary's existing colors);
-  `MentorOverseer.App.Tests.csproj` ships 3 High-CVE transitive packages (same SQLite CVE class
-  round 4 pinned in the main app — missed in the sibling test project, the exact "fix one sibling,
-  miss the other" pattern flagged again); `ReviewDialog.ShowCore` is now the largest function in
-  the codebase (187 lines, 5 mixed concerns) — the same shape `ActivityTracker.PollOnce` was in
-  before round 4 split it. Full finding list, explanations, and fixes are in the report; not
-  applied this session — next session should treat this as the fix-all queue if requested.
-- **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH (a) the
-  `IsOnScreen()`-check-then-toast-fallback pattern, and (b) an "already showing, don't
-  reopen" guard — `StartEodWatcher` was missing (a) in round 2, `ReviewDialog` was missing
-  (b) in round 3, `KickoffDialog` was missing (b) in round 5 (opposite direction from round 3):
-  three rounds running on the same underlying lesson — when one dialog has a safety pattern a
-  sibling doesn't, grep for the *whole* pattern across every sibling before calling it done, and
-  re-check it again on the *next* audit too, since a fix applied to one sibling doesn't
-  inoculate the other from ever regressing back out of sync. Also: subscribe to any
-  `AppNotificationManager` event *before* calling `.Register()` — the reverse order throws at
-  the WinRT layer for this unpackaged app. Also (round 5, new): a helper added to kill one class
-  of duplication (e.g. `DateExtensions.ToIsoDate()` for dates) needs a second pass to check
-  *adjacent* formats (timestamps) didn't get left behind uncovered by the same helper.
-- **2026-07-07 to 2026-07-09**: WinUI rebuild's first two audit rounds + a mid-stream feature
-  session. **07-07**: full audit of the freshly-rebuilt app, all 18 findings applied (global
-  exception handlers, single-instance mutex, `DialogGate` semaphore, `InvariantCulture`
-  everywhere — OS locale Russian, app language English); WinUI became the sole app; v1.0.0
-  shipped (Inno Setup installer). **07-08**: full 5-category audit + remediation (`2a7b31f`) —
-  Critical: TickTick secret was in git history twice, rewritten out via `filter-branch` (secret
-  rotated 07-09); High: first-run activity-tracking disclosure added; 8M/4L fixed (retention,
-  `ReportsPage.Render` decomposed, SQLite lock-error surfacing, shared `HttpClient`, in-app
-  export/clear-history, dead Python-detection code removed); renamed app to "Planillium"
-  (display/build identity only — repo/namespace stay `MentorOverseer`); caught a
-  `CredentialStore` target-name bug before it could orphan the stored TickTick token; repo
-  consolidated (`master` fast-forwarded to `winui-rebuild`, ~430MB cruft removed, Python
-  retired). **07-09** (three rounds): diary column width computed from `RootScroller.ActualWidth`
-  in code-behind (XAML-only attempts didn't hold, `1e7dc07`); window clamped to
-  `DisplayArea.WorkArea` at launch; zero-padded `CalendarDatePicker` added to jump to a diary
-  date; fixed a data-loss bug where shifting an already-completed task's day orphaned its
-  `task_completions` row (completed tasks now excluded from every such shift, business rule 7);
-  move-to-today changed from forward-shift to backward compaction; "head start on tomorrow?"
-  now offers after *any* task today is done; added `multi_task_bonus_per_extra_task`; one
-  live-data repair applied directly (`task_overrides`, `claude-code-10-level-mastery`, 20 rows)
-  only after the user's explicit reviewed confirmation; pulled the session's testing/architecture
-  lessons into the `windows-app-tester`/`windows-app-auditor` global skills.
+- **2026-07-07 to 2026-07-13**: Five audit rounds (1-4 numbered; round 1 folded into round 2's
+  count) plus feature work, all on the freshly-rebuilt WinUI app. **07-07**: initial audit, all
+  18 findings applied (exception handlers, single-instance mutex, `DialogGate`, `InvariantCulture`
+  throughout); v1.0.0 shipped. **07-08**: Critical — TickTick secret was in git history twice,
+  purged via `filter-branch` (rotated 07-09); 8M/4L fixed; app renamed "Planillium" (display only).
+  **07-09** (3 rounds): diary column width fix, window-clamp-to-monitor, data-loss fix for shifting
+  a completed task's day (business rule 7), move-to-today → backward compaction,
+  `multi_task_bonus_per_extra_task` added. **07-13**: calendar-period reports, day-off pause,
+  "where have you been" any-hour, tray-toast routing → round-1 audit (4H/15M/18L/4I) → merged with
+  a long-unmerged branch → fixed (`4014b00`) → round-2 audit (1 new High: `StartEodWatcher` could
+  wedge `DialogGate`, fixed via `ReviewDialog.Trigger`; 14M/13L,
+  https://claude.ai/code/artifact/1f5b15bb-c6d5-4ea0-a1db-a46b984db19e). `config.json`/
+  `plans/active/*.json` gitignored + untracked (commit `9be8515`, history NOT purged — Open TODOs).
+- **2026-07-14**: All 27 round-2 findings fixed (`1724e14`); added `ScoreServiceScoringTests.cs`
+  and `Dialogs/PromptRouter.cs`. **Round 3**: 1 new High (`ReviewDialog` missing `KickoffDialog`'s
+  reentrancy guard, fixed; report https://claude.ai/code/artifact/8bcbfc6d-c998-4084-840c-23e8641483c2).
+  Added per-task "Reschedule…" to every open task, `Dialogs/ReplanOverdueDialog` (per-task
+  date-pickers replacing automatic spread), Plans page original-due-date + drift. **Same day**:
+  WindowsAppSDK bumped `1.5.240627000`→`1.8.260529003`; God-Object split (`MainWindow.xaml.cs`
+  633→238, `ReportsPage.xaml.cs` 1069→255, plain partial-class file splits, zero logic change);
+  sidebar plan-drift note added (`PlanDriftPanel`).
+- **2026-07-14 (round 4)**: 0 Critical/High, 8M/14L/9I
+  (https://claude.ai/code/artifact/edcb4afc-aea5-429d-bb30-4889c3b04ba6). **All 22 fixed same
+  session**: `Plan.DriftDays(tasks)` unified (sidebar+Plans were 2 copies); `RefreshScore()` now
+  called after every schedule-mutating action; `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3 pinned
+  (CVE-2025-6965); Reports' "SCHEDULE DRIFT"→"EXCLUSION IMPACT" rename; `ActivityTracker.PollOnce`
+  split into 5 named methods; `DateExtensions.ToIsoDate()` added (replaced 26 hand-typed copies);
+  `PlanScoreAction`/`TaskDetailsLink` dedup helpers; TickTick Connect dialog stopped
+  pre-filling the saved secret.
+- **2026-07-14 (round 5)**: 0 Critical, 3H/17M/13L/8I
+  (https://claude.ai/code/artifact/e54a2317-7406-49ab-bc77-7607b9920860). All rounds 1-4 fixes
+  held. **All 39 fixable findings applied same session** (2 deferred: TickTick client_id in
+  unpurged git history — already tracked; `PlanDayForDate`'s O(days) walk — auditor said profile
+  first, not acted on). The 3 Highs: (1) `SplitDiaryEntryDialog` deleted the original diary entry
+  before reinserting replacements with no SQL transaction — real data loss on a mid-loop failure;
+  (2) `KickoffDialog.ShowAsync` never actually checked its own `_showing` guard despite the doc
+  comment saying that's its job — mirror of round-3's `ReviewDialog` gap, could double-queue the
+  morning dialog; (3) `ReportData.cs:91` was missing `InvariantCulture` on a date parse, 164 lines
+  from its own already-correct sibling — the exact locale-bug class this app already shipped once.
+  Fix highlights: `Database.RunInTransaction`/`CreateCommand` (transaction-aware wrapper shared
+  with `ScoreService`) now wraps every multi-step schedule write; `DateExtensions.ToIsoTimestamp()`
+  added alongside `ToIsoDate()`; `TickTickSection.LoadAsync` gained a generation-token guard;
+  `PlanScoreAction.Run`'s callback now carries a success bool so Day-off/Move-to-today/Start-now
+  can surface failures like task checkboxes already do; `ReportsPage.Styling.cs` gained one shared
+  `CategoryBrushKey()` (Diary and Time-by-App had silently opposite Paid/Neutral colors) and
+  `AppUsage` gained an `Idle` bucket; `ReviewDialog.ShowCore` (187 lines) split into
+  `ReconcilePendingGap`/`ComputeReviewStats`/`BuildReviewPanel`/`PersistReview`; `TodayPage`'s
+  get-ahead rule extracted to `GetAheadEligibility`; shared `Views/EmptyPlansState.cs` replaces
+  Today/Schedule's independently-drifted empty states; `AssignedTask.OverdueCaption()` replaces a
+  duplicated string; `ActivityTracker.ExeAppNames` gained Teams (was missing vs.
+  `AppNames.Messengers`); `MENTOR_PAGE`/`MENTOR_INSTANCE_SUFFIX` now `#if DEBUG`-gated
+  (`MENTOR_ROOT` deliberately left alone — real user-facing recovery mechanism, not a debug hook);
+  `Log.cs` capped at 5MB; `TickTickAuth` logs only `error`/`error_description`, never the raw
+  response body. Test project needed 2 more pins beyond SQLite (`System.Net.Http`/
+  `System.Text.RegularExpressions` — only its plain `net8.0` TFM pulled these, not the main app's
+  `net8.0-windows` one). Verified: full Debug+Release build, all 10 tests, `dotnet list package
+  --vulnerable` clean on both projects, live UIA pass across all 5 pages.
+- **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH the
+  `IsOnScreen()`-check-then-toast-fallback pattern AND an "already showing, don't reopen" guard —
+  `StartEodWatcher` was missing the first in round 2, `ReviewDialog` was missing the second in
+  round 3, `KickoffDialog` was missing it too (opposite direction) in round 5: three rounds
+  running on the same lesson — when one dialog has a safety pattern a sibling doesn't, grep the
+  *whole* pattern across every sibling before calling it done, and re-check on the *next* audit
+  too, since a fix on one sibling doesn't inoculate the other from ever drifting back out of sync.
+  Also: subscribe to `AppNotificationManager` events *before* `.Register()` (reverse order throws
+  at the WinRT layer). Also (round 5): a dedup helper (e.g. `ToIsoDate()`) needs a second pass to
+  check *adjacent* formats (e.g. timestamps) didn't get left uncovered by the same helper. Also
+  (round 5): a "fix one sibling, miss the other" gap can hide across *projects* too, not just
+  files — the test project's `.csproj` needed the identical CVE pin the main app's already had.
 - **Standing lessons** (apply every session, not just the one that taught them):
   - Check `end_of_day_summary_time` before killing a live instance near EOD — killing it
     early can skip the evening-review popup entirely for that day.
@@ -344,10 +282,9 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
     use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons,
     UI Automation `BoundingRectangle` beats pixel-diffing screenshots.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **Round-5 audit findings not yet remediated**: 3 High, 17 Medium, 13 Low, 8 Info — see the
-    2026-07-14 (round 5) entry above and the full report at
-    https://claude.ai/code/artifact/e54a2317-7406-49ab-bc77-7607b9920860. Highest-value fix is
-    the `SplitDiaryEntryDialog` data-loss bug (no transaction around delete+insert).
+  - `Plan.PlanDayForDate`/`DateForPlanDay`'s day-by-day walk for plans with excluded weekdays is
+    O(days-elapsed), called on nearly every render/click (round-5 audit finding #28, deferred —
+    profile before prioritizing per the auditor's own note; no evidence yet it's actually slow).
   - ~~Rotate the TickTick OAuth client secret~~ — **the user confirmed done 2026-07-09**
     (rotated at developer.ticktick.com). One follow-up remains, not yet done: the app's
     Windows Credential Manager entry still holds the *old* secret until the user reconnects

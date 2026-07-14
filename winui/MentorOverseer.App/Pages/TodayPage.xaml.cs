@@ -7,6 +7,7 @@ using MentorOverseer.App.Dialogs;
 using MentorOverseer.App.Models;
 using MentorOverseer.App.Services;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Pages;
 
 public sealed partial class TodayPage : Page
@@ -75,6 +76,10 @@ public sealed partial class TodayPage : Page
     private void Render()
     {
         Sections.Children.Clear();
+        // Every render clears any stale error from a previous failed save —
+        // otherwise the banner outlives the failure it reported, even once
+        // later actions succeed fine (round-5 audit finding #7).
+        SaveErrorBar.IsOpen = false;
         // App language is English — don't let the OS locale mix in Cyrillic
         // day names (audit finding #16).
         Subtitle.Text = DateTime.Today.ToString("dddd dd.MM.yyyy",
@@ -92,7 +97,8 @@ public sealed partial class TodayPage : Page
 
             if (plans.Count == 0)
             {
-                Sections.Children.Add(EmptyState());
+                Sections.Children.Add(Views.EmptyPlansState.Build(this,
+                    "Generate one with Claude, paste your own, or load a plan file.", Render));
                 return;
             }
 
@@ -154,34 +160,12 @@ public sealed partial class TodayPage : Page
                     Sections.Children.Add(Muted("No tasks scheduled for today."));
                 }
 
-                // No overdue work, and at least one task today is already
-                // done (or there was never anything scheduled) — offer to
-                // pull tomorrow's tasks forward instead of making the user
-                // dig for "Move to today" on the Schedule page. Used to
-                // require *every* task today to be done first; now any
-                // amount of progress is enough to ask.
-                if (overdue.Count == 0 && (today.Count == 0 || done > 0))
+                if (GetAheadEligibility(plan, tasks, overdue.Count, today.Count, done) is { } eligible)
                 {
-                    var tomorrowDay = planDay + 1;
-                    if (!plan.IsExcluded(plan.DateForPlanDay(tomorrowDay)))
-                    {
-                        var tomorrowTasks = tasks
-                            .Where(t => t.AssignedDay == tomorrowDay && !t.Completed).ToList();
-                        if (tomorrowTasks.Count > 0)
-                        {
-                            // Today.Count == 0 or done == today.Count means
-                            // today is genuinely clear — confident copy.
-                            // Otherwise this is firing on partial progress
-                            // (as little as one task done), so the header
-                            // shouldn't read as if today were finished
-                            // (2026-07-09 audit finding #13).
-                            var todayClear = today.Count == 0 || done == today.Count;
-                            Sections.Children.Add(GroupLabel(todayClear
-                                ? "GET A HEAD START ON TOMORROW?"
-                                : "ALSO ON DECK FOR TOMORROW"));
-                            Sections.Children.Add(GetAheadCard(tomorrowTasks, plan));
-                        }
-                    }
+                    Sections.Children.Add(GroupLabel(eligible.TodayClear
+                        ? "GET A HEAD START ON TOMORROW?"
+                        : "ALSO ON DECK FOR TOMORROW"));
+                    Sections.Children.Add(GetAheadCard(eligible.TomorrowTasks, plan));
                 }
             }
 
@@ -203,6 +187,33 @@ public sealed partial class TodayPage : Page
                 "Couldn't load plan data.\n" + ex.Message +
                 "\nIf the app isn't next to the data folder, set MENTOR_ROOT."));
         }
+    }
+
+    /// <summary>The "offer tomorrow's tasks early" business rule, pulled out of Render()
+    /// so a purely visual change to that method can no longer accidentally shift when
+    /// this fires (round-5 audit finding #18) — this rule alone has already been tuned
+    /// more than once (2026-07-09 audit finding #13). Returns null when not eligible.</summary>
+    private static (List<AssignedTask> TomorrowTasks, bool TodayClear)? GetAheadEligibility(
+        Plan plan, List<AssignedTask> tasks, int overdueCount, int todayCount, int done)
+    {
+        // No overdue work, and at least one task today is already done (or there was
+        // never anything scheduled) — offer to pull tomorrow's tasks forward instead of
+        // making the user dig for "Move to today" on the Schedule page. Used to require
+        // *every* task today to be done first; now any amount of progress is enough to ask.
+        if (overdueCount != 0 || (todayCount != 0 && done == 0)) return null;
+
+        var tomorrowDay = plan.PlanDay + 1;
+        if (plan.IsExcluded(plan.DateForPlanDay(tomorrowDay))) return null;
+
+        var tomorrowTasks = tasks.Where(t => t.AssignedDay == tomorrowDay && !t.Completed).ToList();
+        if (tomorrowTasks.Count == 0) return null;
+
+        // today.Count == 0 or done == today.Count means today is genuinely clear —
+        // confident copy. Otherwise this is firing on partial progress (as little as
+        // one task done), so the header shouldn't read as if today were finished
+        // (2026-07-09 audit finding #13).
+        var todayClear = todayCount == 0 || done == todayCount;
+        return (tomorrowTasks, todayClear);
     }
 
     // ── section building blocks ──────────────────────────────────────────
@@ -233,33 +244,20 @@ public sealed partial class TodayPage : Page
         Margin = new Thickness(2, 8, 0, 8),
     };
 
-    private StackPanel EmptyState()
-    {
-        var panel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 24, 0, 0) };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "No active plans yet.",
-            Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
-        });
-        panel.Children.Add(Muted("Generate one with Claude, paste your own, or load a plan file."));
-        var add = new Button
-        {
-            Content = "+ Add Plan",
-            Style = (Style)Application.Current.Resources["AccentButtonStyle"],
-            Margin = new Thickness(0, 8, 0, 0),
-        };
-        add.Click += async (_, _) =>
-        {
-            if (await Dialogs.AddPlanDialog.ShowAsync(this)) Render();
-        };
-        panel.Children.Add(add);
-        return panel;
-    }
+    private Border TaskCard(List<AssignedTask> tasks, Plan plan, Dictionary<string, string> notes) =>
+        Card(tasks, t => TaskRow(t, plan, notes.GetValueOrDefault(t.Task.Text)));
 
-    private Border TaskCard(List<AssignedTask> tasks, Plan plan, Dictionary<string, string> notes)
+    private Border GetAheadCard(List<AssignedTask> tomorrowTasks, Plan plan) =>
+        Card(tomorrowTasks, t => GetAheadRow(t, plan));
+
+    /// <summary>Shared card-building logic TaskCard and GetAheadCard used to each
+    /// reimplement by hand — any future visual tweak (border color, divider spacing)
+    /// now only has one place to update instead of two that could quietly drift apart
+    /// (round-5 audit finding #30).</summary>
+    private static Border Card<T>(List<T> items, Func<T, UIElement> rowBuilder)
     {
         var list = new StackPanel();
-        for (var i = 0; i < tasks.Count; i++)
+        for (var i = 0; i < items.Count; i++)
         {
             if (i > 0)
                 list.Children.Add(new Border
@@ -267,31 +265,7 @@ public sealed partial class TodayPage : Page
                     Height = 1,
                     Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
                 });
-            list.Children.Add(TaskRow(tasks[i], plan, notes.GetValueOrDefault(tasks[i].Task.Text)));
-        }
-
-        return new Border
-        {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Child = list,
-        };
-    }
-
-    private Border GetAheadCard(List<AssignedTask> tomorrowTasks, Plan plan)
-    {
-        var list = new StackPanel();
-        for (var i = 0; i < tomorrowTasks.Count; i++)
-        {
-            if (i > 0)
-                list.Children.Add(new Border
-                {
-                    Height = 1,
-                    Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
-                });
-            list.Children.Add(GetAheadRow(tomorrowTasks[i], plan));
+            list.Children.Add(rowBuilder(items[i]));
         }
 
         return new Border
@@ -341,7 +315,7 @@ public sealed partial class TodayPage : Page
         var start = new Button { Content = "Start now", VerticalAlignment = VerticalAlignment.Center };
         start.Click += (_, _) => PlanScoreAction.Run(plan,
             (score, p) => score.MoveTaskToToday(p, item.Task.Text), "TodayPage.GetAhead",
-            () => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); });
+            ok => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); if (!ok) SaveErrorBar.IsOpen = true; });
         Grid.SetColumn(start, 2);
         grid.Children.Add(start);
 
@@ -375,7 +349,7 @@ public sealed partial class TodayPage : Page
             VerticalAlignment = VerticalAlignment.Center,
         };
         // Without a name a screen reader announces 75 bare "checkbox"es.
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(check, item.Task.Text);
+        AutomationProperties.SetName(check, item.Task.Text);
         check.Checked += (_, _) => Toggle(item, plan, true);
         check.Unchecked += (_, _) => Toggle(item, plan, false);
         Grid.SetColumn(check, 0);
@@ -397,7 +371,7 @@ public sealed partial class TodayPage : Page
         if (item.Overdue)
             textCol.Children.Add(new TextBlock
             {
-                Text = $"{plan.PlanDay - item.AssignedDay} day(s) late — from day {item.AssignedDay}",
+                Text = item.OverdueCaption(plan.PlanDay),
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
@@ -455,10 +429,14 @@ public sealed partial class TodayPage : Page
             // Likely: the poll thread's own connection briefly held the
             // write lock. Logged either way, but a failed completion write
             // must not vanish silently — the checkbox would otherwise just
-            // revert on next render with no explanation. Plan ID + day, not
-            // the task text — the log file has no retention/redaction of
-            // its own, unlike the diary it sits alongside (privacy audit).
+            // stay showing the new, unsaved state forever, since without
+            // this Render() call nothing here ever refreshes it back to
+            // what's actually in the database (round-5 audit finding #4).
+            // Plan ID + day, not the task text — the log file has no
+            // retention/redaction of its own, unlike the diary it sits
+            // alongside (privacy audit).
             Log.Error($"Toggle completion '{plan.Id}' day {item.AssignedDay}", ex);
+            Render();
             SaveErrorBar.IsOpen = true;
         }
     }

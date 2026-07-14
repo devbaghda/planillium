@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Services;
 using Windows.ApplicationModel.DataTransfer;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Dialogs;
 
 /// <summary>
@@ -48,7 +49,7 @@ public static class AddPlanDialog
         var modeBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var m in Modes) modeBox.Items.Add(m.Label);
         modeBox.SelectedIndex = 0;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(modeBox, "Mode");
+        AutomationProperties.SetName(modeBox, "Mode");
 
         var field1Label = new TextBlock { Text = Modes[0].Field1Label, FontSize = 12 };
         var subject = new TextBox { PlaceholderText = Modes[0].Field1Hint };
@@ -57,7 +58,7 @@ public static class AddPlanDialog
         // screen reader announces whatever field1Label currently says
         // (2026-07-09 audit finding #15: this box previously had no
         // accessible name at all, only an adjacent, unassociated TextBlock).
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetLabeledBy(subject, field1Label);
+        AutomationProperties.SetLabeledBy(subject, field1Label);
         var role = new TextBox { PlaceholderText = Modes[0].Field2Hint, Header = "Claude's role" };
         var area = new TextBox { PlaceholderText = Modes[0].Field3Hint, Header = "Area of expertise" };
         var ownPlan = new TextBox
@@ -109,38 +110,7 @@ public static class AddPlanDialog
             loadBtn.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
         };
 
-        loadBtn.Click += async (_, _) =>
-        {
-            try
-            {
-                var picker = new Windows.Storage.Pickers.FileOpenPicker();
-                WinRT.Interop.InitializeWithWindow.Initialize(picker,
-                    WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
-                foreach (var ext in new[] { ".docx", ".txt", ".md", ".json" })
-                    picker.FileTypeFilter.Add(ext);
-                var file = await picker.PickSingleFileAsync();
-                if (file is null) return;
-
-                var ext2 = Path.GetExtension(file.Path).ToLowerInvariant();
-                if (ext2 == ".json")
-                {
-                    // Already-structured plan: goes straight into the import box.
-                    reply.Text = await File.ReadAllTextAsync(file.Path);
-                    Show(error, "JSON loaded — press 'Import plan' to add it directly " +
-                                "(no Claude round-trip needed).");
-                    return;
-                }
-                ownPlan.Text = ext2 == ".docx"
-                    ? ExtractDocxText(file.Path)
-                    : await File.ReadAllTextAsync(file.Path);
-                error.Visibility = Visibility.Collapsed;
-            }
-            catch (Exception ex)
-            {
-                Log.Error("AddPlanDialog.LoadFile", ex);
-                Show(error, "Couldn't read that file: " + ex.Message);
-            }
-        };
+        loadBtn.Click += async (_, _) => await LoadFromFileAsync(reply, ownPlan, error);
 
         genBtn.Click += (_, _) =>
         {
@@ -198,6 +168,44 @@ public static class AddPlanDialog
         };
 
         return await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
+    }
+
+    /// <summary>The "Load from file" button's handler, pulled out of ShowAsync's field
+    /// wiring so it reads as its own step rather than one more closure sharing that
+    /// method's local state (round-5 audit finding #29). Picks a file, routes .json
+    /// straight to the reply box (no Claude round-trip needed) and everything else into
+    /// the "own plan text" box, via ExtractDocxText for .docx specifically.</summary>
+    private static async Task LoadFromFileAsync(TextBox reply, TextBox ownPlan, TextBlock error)
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker,
+                WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
+            foreach (var ext in new[] { ".docx", ".txt", ".md", ".json" })
+                picker.FileTypeFilter.Add(ext);
+            var file = await picker.PickSingleFileAsync();
+            if (file is null) return;
+
+            var ext2 = Path.GetExtension(file.Path).ToLowerInvariant();
+            if (ext2 == ".json")
+            {
+                // Already-structured plan: goes straight into the import box.
+                reply.Text = await File.ReadAllTextAsync(file.Path);
+                Show(error, "JSON loaded — press 'Import plan' to add it directly " +
+                            "(no Claude round-trip needed).");
+                return;
+            }
+            ownPlan.Text = ext2 == ".docx"
+                ? ExtractDocxText(file.Path)
+                : await File.ReadAllTextAsync(file.Path);
+            error.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("AddPlanDialog.LoadFile", ex);
+            Show(error, "Couldn't read that file: " + ex.Message);
+        }
     }
 
     /// <summary>Plain text from a .docx (zip of XML) — port of main.py's
@@ -259,7 +267,7 @@ public static class AddPlanDialog
             var output = new Dictionary<string, object?>();
             foreach (var (k, v) in dict) output[k] = v;
             if (!dict.ContainsKey("start_date"))
-                output["start_date"] = DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                output["start_date"] = DateTime.Today.ToIsoDate();
             if (!dict.ContainsKey("color"))
                 output["color"] = "#bf5af2";
 

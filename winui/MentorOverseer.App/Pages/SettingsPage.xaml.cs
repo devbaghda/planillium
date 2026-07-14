@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MentorOverseer.App.Services;
@@ -72,7 +73,7 @@ public sealed partial class SettingsPage : Page
         foreach (var (box, label) in new[]
                  { (WorkStart, "Work start"), (WorkEnd, "Work end"), (EodTimeBox, "Day review at") })
         {
-            if (!TimeOnly.TryParseExact(box.Text.Trim(), "HH:mm", out _))
+            if (!TimeOnly.TryParseExact(box.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             {
                 SaveStatus.Text = $"{label} must be HH:MM (e.g. 08:00).";
                 return;

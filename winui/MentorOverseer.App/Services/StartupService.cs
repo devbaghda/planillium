@@ -38,7 +38,16 @@ public static class StartupService
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-            if (key is null) return;
+            if (key is null)
+            {
+                // Unlike every other failure path in this file, this used to return
+                // silently — the toggle would appear to save with no error and nothing
+                // in the log explaining why it didn't actually take (round-5 audit
+                // finding #35). Narrow in practice (a policy-restricted HKCU), but worth
+                // a trace if it ever happens.
+                Log.Warn("StartupService.SetEnabled", $"couldn't open '{RunKey}' as writable");
+                return;
+            }
             foreach (var legacy in LegacyNames)
                 key.DeleteValue(legacy, throwOnMissingValue: false);
             if (enabled) key.SetValue(ValueName, Command);

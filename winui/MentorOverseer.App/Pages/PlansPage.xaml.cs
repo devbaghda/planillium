@@ -250,6 +250,11 @@ public sealed partial class PlansPage : Page
         grid.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
 
         var restore = new Button { Content = "Restore", IsEnabled = activeCount < 2 };
+        // Mirrors Archive's own tooltip pattern above — a disabled Restore used to give
+        // no reason why (round-5 audit finding #21).
+        ToolTipService.SetToolTip(restore, activeCount < 2
+            ? "Bring this plan back to your active list"
+            : "Archive an active plan first — max 2 active.");
         restore.Click += (_, _) =>
         {
             var dst = Path.Combine(AppPaths.ActivePlansDir, Path.GetFileName(file));

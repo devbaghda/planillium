@@ -15,6 +15,16 @@ public static class TickTickSection
 {
     public static async Task LoadAsync(StackPanel host)
     {
+        // A generation token stashed on the host itself (TodayPage's TickTickHost panel
+        // is reused across navigations under NavigationCacheMode="Enabled") — if the user
+        // navigates away and back (or hits Reconnect) before this call's network fetch
+        // resolves, a newer LoadAsync bumps the token, and this older call's continuation
+        // becomes a no-op instead of painting stale/duplicate rows over the newer render
+        // (round-5 audit finding #5).
+        var generation = (int)(host.Tag ?? 0) + 1;
+        host.Tag = generation;
+        bool Current() => (int)host.Tag! == generation;
+
         host.Children.Clear();
         host.Children.Add(Header());
 
@@ -36,6 +46,7 @@ public static class TickTickSection
         try
         {
             var tasks = await TickTickService.TasksDueTodayAsync();
+            if (!Current()) return;
             host.Children.Remove(loading);
             if (tasks.Count == 0)
             {
@@ -66,6 +77,7 @@ public static class TickTickSection
         catch (Exception ex)
         {
             Log.Error("TickTickSection.Load", ex);
+            if (!Current()) return;
             host.Children.Remove(loading);
             host.Children.Add(Muted(
                 "TickTick sync failed. (" + ex.Message + ")"));

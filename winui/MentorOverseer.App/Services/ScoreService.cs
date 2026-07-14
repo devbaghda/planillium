@@ -58,28 +58,24 @@ public sealed class ScoreService : IDisposable
         _db = db;
         _completions = db.LoadCompletions();
         _conn = db.Conn; // shared with Database — see Database.Conn's doc comment
+        // reflections is now created by Database.EnsureSchema (round-5 audit finding #26 —
+        // it used to be created only here, a hidden dependency that made "Export all my
+        // data" quietly depend on a ScoreService having been constructed first).
         lock (SchemaGate)
         {
             if (!_schemaEnsured)
             {
-                _conn.CreateCommand()
-                    .Also(c => c.CommandText =
-                        "CREATE TABLE IF NOT EXISTS reflections (" +
-                        "  id   INTEGER PRIMARY KEY AUTOINCREMENT," +
-                        "  date TEXT NOT NULL UNIQUE," +
-                        "  text TEXT NOT NULL)")
-                    .ExecuteNonQuery();
                 // Belt-and-suspenders no-op: Database's constructor (already
                 // run via db.LoadCompletions() above) owns creating/migrating
                 // this index — see Database.EnsureSchema for the drop-and-
                 // recreate logic needed because "CREATE INDEX IF NOT EXISTS"
                 // won't widen an existing one.
-                _conn.CreateCommand()
-                    .Also(c => c.CommandText =
-                        "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
-                        "ON score_ledger(reason, date) " +
-                        "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')")
-                    .ExecuteNonQuery();
+                using var indexCmd = _conn.CreateCommand();
+                indexCmd.CommandText =
+                    "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
+                    "ON score_ledger(reason, date) " +
+                    "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')";
+                indexCmd.ExecuteNonQuery();
                 _schemaEnsured = true;
             }
         }
@@ -136,7 +132,7 @@ public sealed class ScoreService : IDisposable
     public (int OnMin, int OffMin) DayDiaryMinutes(DateOnly d)
     {
         int on = 0, off = 0;
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT category, SUM(duration_min) FROM time_diary " +
                           "WHERE date=$d GROUP BY category";
         cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
@@ -200,7 +196,7 @@ public sealed class ScoreService : IDisposable
 
     private bool LedgerHas(string reason, DateOnly d)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT 1 FROM score_ledger WHERE reason=$r AND date=$d";
         cmd.Parameters.AddWithValue("$r", reason);
         cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
@@ -209,10 +205,10 @@ public sealed class ScoreService : IDisposable
 
     public void AddLedger(int delta, string reason, string? detail = null, DateOnly? forDate = null)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "INSERT INTO score_ledger (ts, date, delta, reason, detail) " +
                           "VALUES ($ts, $d, $delta, $r, $x)";
-        cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
         cmd.Parameters.AddWithValue("$d", (forDate ?? DateOnly.FromDateTime(DateTime.Today)).ToIsoDate());
         cmd.Parameters.AddWithValue("$delta", delta);
         cmd.Parameters.AddWithValue("$r", reason);
@@ -307,7 +303,7 @@ public sealed class ScoreService : IDisposable
 
     private int SumLedgerRange(DateOnly from, DateOnly to)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM score_ledger WHERE date >= $from AND date <= $to";
         cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
         cmd.Parameters.AddWithValue("$to", to.ToIsoDate());
@@ -364,10 +360,16 @@ public sealed class ScoreService : IDisposable
     public void ReplanOverdueTo(List<(Plan Plan, string TaskText, int OriginalDay, int NewDay)> assignments)
     {
         if (assignments.Count == 0) return;
-        foreach (var (plan, taskText, originalDay, newDay) in assignments)
-            RescheduleTask(plan, taskText, originalDay, newDay);
-        AddLedger(ReplanFlatFee, "replan_overdue",
-            $"replanned {assignments.Count} overdue task(s), flat fee, user-picked days");
+        // One transaction for the whole batch (RescheduleTask nests safely inside it) — a
+        // failure partway through used to leave some tasks re-keyed and others not, or the
+        // flat fee charged even though not every reschedule in the batch actually landed.
+        _db.RunInTransaction(() =>
+        {
+            foreach (var (plan, taskText, originalDay, newDay) in assignments)
+                RescheduleTask(plan, taskText, originalDay, newDay);
+            AddLedger(ReplanFlatFee, "replan_overdue",
+                $"replanned {assignments.Count} overdue task(s), flat fee, user-picked days");
+        });
     }
 
     // ── schedule operations (ports of _swap_task_to_today / _mark_day_off) ──
@@ -437,20 +439,25 @@ public sealed class ScoreService : IDisposable
     /// </summary>
     public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay)
     {
-        var tasks = PlanStore.TasksFor(plan, _db, _completions);
-        foreach (var t in tasks)
+        // All-or-nothing: a failure partway through the shift loop used to leave some
+        // tasks re-keyed to their new day and others not (round-5 audit finding #27).
+        _db.RunInTransaction(() =>
         {
-            if (t.Task.Text == taskText || t.Completed) continue;
-            if (t.AssignedDay >= newAssignedDay)
-                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
-        }
-        SaveOverride(plan.Id, taskText, originalDay, newAssignedDay);
+            var tasks = PlanStore.TasksFor(plan, _db, _completions);
+            foreach (var t in tasks)
+            {
+                if (t.Task.Text == taskText || t.Completed) continue;
+                if (t.AssignedDay >= newAssignedDay)
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+            }
+            SaveOverride(plan.Id, taskText, originalDay, newAssignedDay);
+        });
     }
 
     public HashSet<int> DaysOff(string planId)
     {
         var result = new HashSet<int>();
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT day FROM plan_days_off WHERE plan_id=$pid";
         cmd.Parameters.AddWithValue("$pid", planId);
         using var r = cmd.ExecuteReader();
@@ -462,38 +469,43 @@ public sealed class ScoreService : IDisposable
     /// Completed tasks are excluded — see MoveTaskToToday's doc comment.</summary>
     public void MarkDayOff(Plan plan, int day)
     {
-        foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
-            if (!t.Completed && t.AssignedDay >= day)
-                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO plan_days_off (plan_id, day, marked_at) VALUES ($pid, $day, $ts) " +
-            "ON CONFLICT(plan_id, day) DO NOTHING";
-        cmd.Parameters.AddWithValue("$pid", plan.Id);
-        cmd.Parameters.AddWithValue("$day", day);
-        cmd.Parameters.AddWithValue("$ts",
-            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
-        cmd.ExecuteNonQuery();
+        _db.RunInTransaction(() =>
+        {
+            foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
+                if (!t.Completed && t.AssignedDay >= day)
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText =
+                "INSERT INTO plan_days_off (plan_id, day, marked_at) VALUES ($pid, $day, $ts) " +
+                "ON CONFLICT(plan_id, day) DO NOTHING";
+            cmd.Parameters.AddWithValue("$pid", plan.Id);
+            cmd.Parameters.AddWithValue("$day", day);
+            cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
+            cmd.ExecuteNonQuery();
+        });
     }
 
     /// <summary>Inverse of MarkDayOff: tasks after the day shift back −1.
     /// Completed tasks are excluded — see MoveTaskToToday's doc comment.</summary>
     public void UnmarkDayOff(Plan plan, int day)
     {
-        foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
-            if (!t.Completed && t.AssignedDay > day)
-                SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM plan_days_off WHERE plan_id=$pid AND day=$day";
-        cmd.Parameters.AddWithValue("$pid", plan.Id);
-        cmd.Parameters.AddWithValue("$day", day);
-        cmd.ExecuteNonQuery();
+        _db.RunInTransaction(() =>
+        {
+            foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
+                if (!t.Completed && t.AssignedDay > day)
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "DELETE FROM plan_days_off WHERE plan_id=$pid AND day=$day";
+            cmd.Parameters.AddWithValue("$pid", plan.Id);
+            cmd.Parameters.AddWithValue("$day", day);
+            cmd.ExecuteNonQuery();
+        });
     }
 
     /// <summary>Same upsert as main.py _save_override.</summary>
     private void SaveOverride(string planId, string taskText, int originalDay, int assignedDay)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText =
             "INSERT INTO task_overrides (plan_id, task_text, original_day, assigned_day) " +
             "VALUES ($pid, $text, $orig, $day) " +
@@ -510,7 +522,7 @@ public sealed class ScoreService : IDisposable
 
     public void SaveReflection(DateOnly d, string text)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText =
             "INSERT INTO reflections (date, text) VALUES ($d, $t) " +
             "ON CONFLICT(date) DO UPDATE SET text=excluded.text";
@@ -521,7 +533,7 @@ public sealed class ScoreService : IDisposable
 
     public int CountReflections()
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM reflections";
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
@@ -530,7 +542,7 @@ public sealed class ScoreService : IDisposable
     /// never read anywhere in the app (2026-07-09 audit finding #12).</summary>
     public string? LoadReflection(DateOnly d)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT text FROM reflections WHERE date=$d";
         cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
         return cmd.ExecuteScalar() as string;
@@ -544,18 +556,13 @@ public sealed class ScoreService : IDisposable
     /// path anywhere in the app).</summary>
     public void ClearReflections()
     {
-        using (var cmd = _conn.CreateCommand())
+        using (var cmd = _db.CreateCommand())
         {
             cmd.CommandText = "DELETE FROM reflections";
             cmd.ExecuteNonQuery();
         }
-        using var vacuum = _conn.CreateCommand();
+        using var vacuum = _db.CreateCommand();
         vacuum.CommandText = "VACUUM";
         vacuum.ExecuteNonQuery();
     }
-}
-
-internal static class ObjectExtensions
-{
-    public static T Also<T>(this T self, Action<T> block) { block(self); return self; }
 }

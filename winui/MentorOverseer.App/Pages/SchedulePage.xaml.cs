@@ -7,6 +7,7 @@ using MentorOverseer.App.Models;
 using MentorOverseer.App.Services;
 using MentorOverseer.App.Views;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Pages;
 
 /// <summary>
@@ -37,6 +38,10 @@ public sealed partial class SchedulePage : Page
     private void Render()
     {
         Sections.Children.Clear();
+        // Every render clears any stale error from a previous failed save —
+        // otherwise the banner outlives the failure it reported, even once
+        // later actions succeed fine (round-5 audit finding #7).
+        SaveErrorBar.IsOpen = false;
 
         List<Plan> plans;
         try
@@ -52,28 +57,12 @@ public sealed partial class SchedulePage : Page
 
         if (plans.Count == 0)
         {
-            // Matches Today's empty state instead of a dead end with
-            // nothing to click (2026-07-09 audit finding #33).
+            // Shares Today's exact empty-state panel now, rather than a hand-built
+            // near-copy that had already drifted in wording (round-5 audit finding #19;
+            // originally added to match Today per 2026-07-09 audit finding #33).
             Subtitle.Text = "No active plans.";
-            var addPanel = new StackPanel { Spacing = 6, Margin = new Thickness(0, 12, 0, 0) };
-            addPanel.Children.Add(new TextBlock
-            {
-                Text = "Add a plan on the Plans page, or right here, to see it on your schedule.",
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            });
-            var add = new Button
-            {
-                Content = "+ Add Plan",
-                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
-                Margin = new Thickness(0, 8, 0, 0),
-            };
-            add.Click += async (_, _) =>
-            {
-                if (await Dialogs.AddPlanDialog.ShowAsync(this)) Render();
-            };
-            addPanel.Children.Add(add);
-            Sections.Children.Add(addPanel);
+            Sections.Children.Add(Views.EmptyPlansState.Build(this,
+                "Add a plan on the Plans page, or right here, to see it on your schedule.", Render));
             return;
         }
         Subtitle.Text = "Move tasks, take days off — the plan flexes, the goal doesn't.";
@@ -262,7 +251,7 @@ public sealed partial class SchedulePage : Page
             toggle.Click += (_, _) => PlanScoreAction.Run(plan,
                 (score, p) => { if (isOff) score.UnmarkDayOff(p, d); else score.MarkDayOff(p, d); },
                 "SchedulePage.DayOff",
-                () => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); });
+                ok => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); if (!ok) SaveErrorBar.IsOpen = true; });
             Grid.SetColumn(toggle, 1);
             grid.Children.Add(toggle);
         }
@@ -295,7 +284,7 @@ public sealed partial class SchedulePage : Page
             Margin = new Thickness(0, -4, 2, 0),
             VerticalAlignment = VerticalAlignment.Top,
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(check, t.Task.Text);
+        AutomationProperties.SetName(check, t.Task.Text);
         check.Checked += (_, _) => ToggleDone(plan, t, true);
         check.Unchecked += (_, _) => ToggleDone(plan, t, false);
         Grid.SetColumn(check, 0);
@@ -314,9 +303,11 @@ public sealed partial class SchedulePage : Page
         if (t.AssignedDay != t.OriginalDay) meta.Add($"moved from day {t.OriginalDay}");
         // Same "N day(s) late" caption Today shows — overdue used to be
         // color-only here, which loses the signal for anyone who can't
-        // rely on color (2026-07-09 audit finding #17).
+        // rely on color (2026-07-09 audit finding #17). Now the identical
+        // shared method, not a second hand-typed copy (round-5 audit
+        // finding #31).
         if (t.Overdue)
-            meta.Add($"{planDay - t.AssignedDay} day(s) late — from day {t.AssignedDay}");
+            meta.Add(t.OverdueCaption(planDay));
         if (meta.Count > 0)
             textPanel.Children.Add(new TextBlock
             {
@@ -346,7 +337,7 @@ public sealed partial class SchedulePage : Page
                 };
                 move.Click += (_, _) => PlanScoreAction.Run(plan,
                     (score, p) => score.MoveTaskToToday(p, t.Task.Text), "SchedulePage.MoveToToday",
-                    () => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); });
+                    ok => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); if (!ok) SaveErrorBar.IsOpen = true; });
                 actions.Children.Add(move);
             }
 
@@ -392,6 +383,7 @@ public sealed partial class SchedulePage : Page
 
     private void ToggleDone(Plan plan, AssignedTask t, bool done)
     {
+        var ok = true;
         try
         {
             using var db = new Database();
@@ -405,9 +397,11 @@ public sealed partial class SchedulePage : Page
             // retention/redaction of its own, unlike the diary it sits
             // alongside (privacy audit finding).
             Log.Error($"SchedulePage.ToggleDone '{plan.Id}' day {t.AssignedDay}", ex);
-            SaveErrorBar.IsOpen = true;
+            ok = false;
         }
+        // Render() resets SaveErrorBar — set it after, not before, or the reset wipes it.
         Render();
+        if (!ok) SaveErrorBar.IsOpen = true;
     }
 
     private static Border Chip(string text, string brushKey, bool onAccent = false) => new()

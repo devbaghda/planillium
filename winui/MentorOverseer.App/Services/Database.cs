@@ -13,6 +13,50 @@ public sealed class Database : IDisposable
     /// per-render overhead (measured ~200ms of a ~550ms Reports render).</summary>
     internal SqliteConnection Conn => _conn;
 
+    private SqliteTransaction? _activeTransaction;
+
+    /// <summary>Creates a command on the shared connection, automatically attached to
+    /// whatever transaction RunInTransaction currently has open (or none). ScoreService
+    /// shares this connection (via Conn) and must go through this too — Microsoft.Data.Sqlite
+    /// throws if a command runs against a connection with a pending transaction but doesn't
+    /// have that transaction explicitly assigned.</summary>
+    internal SqliteCommand CreateCommand()
+    {
+        var cmd = _conn.CreateCommand();
+        if (_activeTransaction is not null) cmd.Transaction = _activeTransaction;
+        return cmd;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> as one all-or-nothing database transaction — committed
+    /// only if it returns without throwing, otherwise rolled back — so a multi-statement
+    /// write (e.g. delete-then-reinsert, or shifting several tasks' assigned days) can never
+    /// be left half-applied by a failure partway through (round-5 audit finding #1: exactly
+    /// this shape of bug in SplitDiaryEntryDialog lost diary data on a mid-loop failure).
+    /// Nest-safe: a call while already inside a transaction just runs work() as part of the
+    /// outer one, so callers don't need to know whether they're the outermost caller.
+    /// </summary>
+    public void RunInTransaction(Action work)
+    {
+        if (_activeTransaction is not null) { work(); return; }
+        using var tx = _conn.BeginTransaction();
+        _activeTransaction = tx;
+        try
+        {
+            work();
+            tx.Commit();
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
+        finally
+        {
+            _activeTransaction = null;
+        }
+    }
+
     // Every page navigation, every checkbox toggle, every button click opens
     // a new Database() — construction used to re-run the full schema check
     // (a sqlite_master scan plus 8 CREATE-IF-NOT-EXISTS statements) EVERY
@@ -55,18 +99,18 @@ public sealed class Database : IDisposable
         // name regardless of definition, so adding weekly_comeback_bonus to
         // the guard needs an explicit drop-and-recreate, not just a wider
         // CREATE statement below.
-        using (var check = _conn.CreateCommand())
+        using (var check = CreateCommand())
         {
             check.CommandText = "SELECT sql FROM sqlite_master WHERE type='index' AND name='sl_reason_date'";
             if (check.ExecuteScalar() is string sql && !sql.Contains("weekly_comeback_bonus"))
             {
-                using var drop = _conn.CreateCommand();
+                using var drop = CreateCommand();
                 drop.CommandText = "DROP INDEX sl_reason_date";
                 drop.ExecuteNonQuery();
             }
         }
 
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText =
             "CREATE TABLE IF NOT EXISTS task_completions (" +
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -152,6 +196,17 @@ public sealed class Database : IDisposable
             "  paid_min    INTEGER NOT NULL DEFAULT 0," +
             "  idle_min    INTEGER NOT NULL DEFAULT 0" +
             ");" +
+            // Evening-review free text. Used to be created only in ScoreService's own
+            // constructor rather than here — meaning Database claimed to own/export this
+            // table (see ExportedTables below) without actually being the thing that
+            // creates it, a hidden dependency on ScoreService having run first that would
+            // break "Export all my data" if that ordering ever changed (round-5 audit
+            // finding #26).
+            "CREATE TABLE IF NOT EXISTS reflections (" +
+            "  id   INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  date TEXT NOT NULL UNIQUE," +
+            "  text TEXT NOT NULL" +
+            ");" +
             // Read-only reporting views — nothing in either app queries
             // these, they exist purely so an external tool (Power Query,
             // Excel, a BI dashboard) can point straight at progress.db
@@ -187,7 +242,7 @@ public sealed class Database : IDisposable
         var cutoff = DateOnly.FromDateTime(DateTime.Today).AddDays(-retentionDays)
             .ToIsoDate();
 
-        using (var rollup = _conn.CreateCommand())
+        using (var rollup = CreateCommand())
         {
             rollup.CommandText =
                 "INSERT INTO diary_daily_rollup (date, on_min, off_min, neutral_min, paid_min, idle_min) " +
@@ -204,7 +259,7 @@ public sealed class Database : IDisposable
             rollup.Parameters.AddWithValue("$cutoff", cutoff);
             rollup.ExecuteNonQuery();
         }
-        using (var del = _conn.CreateCommand())
+        using (var del = CreateCommand())
         {
             del.CommandText = "DELETE FROM time_diary WHERE date < $cutoff";
             del.Parameters.AddWithValue("$cutoff", cutoff);
@@ -221,7 +276,7 @@ public sealed class Database : IDisposable
     public List<string> MostFrequentIdleAnswers(int topN = 6)
     {
         var result = new List<string>();
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText =
             "SELECT description FROM time_diary " +
             "WHERE window='idle' AND description IS NOT NULL AND description <> '' " +
@@ -239,7 +294,7 @@ public sealed class Database : IDisposable
     /// session, instead of silently dropping that span from the diary.</summary>
     public DateTime? LastDiaryEnd()
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "SELECT date, end_time FROM time_diary ORDER BY date DESC, end_time DESC LIMIT 1";
         using var r = cmd.ExecuteReader();
         if (!r.Read()) return null;
@@ -255,7 +310,7 @@ public sealed class Database : IDisposable
     public void InsertDiaryEntry(string date, string startTime, string endTime, int durationMin,
         string category, string window, string? description)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText =
             "INSERT INTO time_diary (date, start_time, end_time, duration_min, category, window, description) " +
             "VALUES ($d, $s, $e, $m, $c, $w, $x)";
@@ -272,7 +327,7 @@ public sealed class Database : IDisposable
     /// <summary>Rows that ClearActivityHistory would delete — for the confirmation dialog.</summary>
     public (int DiaryRows, int RollupDays) CountActivityHistory()
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "SELECT (SELECT COUNT(*) FROM time_diary), (SELECT COUNT(*) FROM diary_daily_rollup)";
         using var r = cmd.ExecuteReader();
         r.Read();
@@ -289,12 +344,12 @@ public sealed class Database : IDisposable
     /// </summary>
     public void ClearActivityHistory()
     {
-        using (var cmd = _conn.CreateCommand())
+        using (var cmd = CreateCommand())
         {
             cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup;";
             cmd.ExecuteNonQuery();
         }
-        using var vacuum = _conn.CreateCommand();
+        using var vacuum = CreateCommand();
         vacuum.CommandText = "VACUUM";
         vacuum.ExecuteNonQuery();
     }
@@ -318,7 +373,7 @@ public sealed class Database : IDisposable
         foreach (var table in ExportedTables)
         {
             var rows = new List<Dictionary<string, object?>>();
-            using var cmd = _conn.CreateCommand();
+            using var cmd = CreateCommand();
             cmd.CommandText = $"SELECT * FROM {table}";
             using var r = cmd.ExecuteReader();
             while (r.Read())
@@ -336,7 +391,7 @@ public sealed class Database : IDisposable
     public Dictionary<(string PlanId, int Day, string Text), bool> LoadCompletions()
     {
         var result = new Dictionary<(string, int, string), bool>();
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "SELECT plan_id, plan_day, task_text, completed FROM task_completions";
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -349,8 +404,8 @@ public sealed class Database : IDisposable
     {
         // Invariant culture: these strings live in the SQLite file shared with
         // the Python app — a non-Gregorian OS calendar must never leak in.
-        var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        using var cmd = _conn.CreateCommand();
+        var now = DateTime.Now.ToIsoTimestamp();
+        using var cmd = CreateCommand();
         cmd.CommandText =
             "INSERT INTO task_completions " +
             "  (plan_id, plan_day, task_text, completed, completed_at, last_updated) " +
@@ -372,7 +427,7 @@ public sealed class Database : IDisposable
     public Dictionary<string, int> LoadOverrides(string planId)
     {
         var result = new Dictionary<string, int>();
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "SELECT task_text, assigned_day FROM task_overrides WHERE plan_id=$pid";
         cmd.Parameters.AddWithValue("$pid", planId);
         using var r = cmd.ExecuteReader();
@@ -385,7 +440,7 @@ public sealed class Database : IDisposable
     public void UpdateDiaryEntry(long id, string startTime, string endTime, int durationMin,
         string category, string? description)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText =
             "UPDATE time_diary SET start_time=$start, end_time=$end, duration_min=$dur, " +
             "category=$cat, description=$desc WHERE id=$id";
@@ -401,7 +456,7 @@ public sealed class Database : IDisposable
     /// <summary>Same DELETE as main.py's _delete_diary_entry.</summary>
     public void DeleteDiaryEntry(long id)
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "DELETE FROM time_diary WHERE id=$id";
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
@@ -411,7 +466,7 @@ public sealed class Database : IDisposable
     public Dictionary<string, string> LoadTaskNotes(string planId)
     {
         var result = new Dictionary<string, string>();
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "SELECT task_text, note FROM task_notes WHERE plan_id=$pid";
         cmd.Parameters.AddWithValue("$pid", planId);
         using var r = cmd.ExecuteReader();
@@ -424,7 +479,7 @@ public sealed class Database : IDisposable
     public void SetTaskNote(string planId, string taskText, string note)
     {
         note = note.Trim();
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         if (note.Length == 0)
         {
             cmd.CommandText = "DELETE FROM task_notes WHERE plan_id=$pid AND task_text=$text";
@@ -438,7 +493,7 @@ public sealed class Database : IDisposable
                 "  note=excluded.note, updated_at=excluded.updated_at";
             cmd.Parameters.AddWithValue("$note", note);
             cmd.Parameters.AddWithValue("$now",
-                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                DateTime.Now.ToIsoTimestamp());
         }
         cmd.Parameters.AddWithValue("$pid", planId);
         cmd.Parameters.AddWithValue("$text", taskText);
@@ -447,7 +502,7 @@ public sealed class Database : IDisposable
 
     public long ScoreBalance()
     {
-        using var cmd = _conn.CreateCommand();
+        using var cmd = CreateCommand();
         cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM score_ledger";
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }

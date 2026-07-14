@@ -41,18 +41,37 @@ public static class Log
 
     public static void Info(string message) => Write("INFO", message);
 
+    // Uncapped before this — the log file just grew forever for as long as the app
+    // was installed, and sat outside every other privacy tool (Settings' Export/Clear
+    // buttons never touched it) — round-5 audit finding #13.
+    private const long MaxSizeBytes = 5 * 1024 * 1024;
+
     private static void Write(string level, string message)
     {
         try
         {
-            var line = $"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)} " +
+            var line = $"{DateTime.Now.ToIsoTimestamp()} " +
                        $"[{level}] {message}{Environment.NewLine}";
             lock (Gate)
+            {
+                RotateIfTooBig();
                 File.AppendAllText(PathOf, line);
+            }
         }
         catch
         {
             // Logging must never take the app down.
         }
+    }
+
+    /// <summary>Trims the file back to its newer half once it crosses MaxSizeBytes —
+    /// a debug trail, not data worth preserving across the cap, so discarding the
+    /// oldest half in place is enough; no archived .old file to also grow forever.</summary>
+    private static void RotateIfTooBig()
+    {
+        if (!File.Exists(PathOf)) return;
+        if (new FileInfo(PathOf).Length <= MaxSizeBytes) return;
+        var lines = File.ReadAllLines(PathOf);
+        File.WriteAllLines(PathOf, lines.Skip(lines.Length / 2));
     }
 }

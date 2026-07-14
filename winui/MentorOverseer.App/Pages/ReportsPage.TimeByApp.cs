@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Services;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Pages;
 
 // Top-distractions list and the "time by app" expandable bar breakdown —
@@ -112,11 +113,11 @@ public sealed partial class ReportsPage
             // subclass — HelpText is the lightest honest way to tell Narrator
             // users Enter/Space does something, since the peer still reports
             // as a generic group/pane.
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(header,
+            AutomationProperties.SetHelpText(header,
                 "Press Enter or Space to expand or collapse.");
             void SetExpandedState(bool expanded)
             {
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(header,
+                AutomationProperties.SetName(header,
                     $"{app}, {(expanded ? "expanded" : "collapsed")}");
             }
             SetExpandedState(false);
@@ -173,10 +174,11 @@ public sealed partial class ReportsPage
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new Thickness(2, 0, 0, 8) };
         foreach (var (label, brushKey) in new[]
         {
-            ("On-plan", "SystemFillColorSuccessBrush"),
-            ("Off-plan", "SystemFillColorCriticalBrush"),
-            ("Neutral", "AccentFillColorDefaultBrush"),
-            ("Paid", "SystemFillColorCautionBrush"),
+            ("On-plan", CategoryBrushKey("on_plan")),
+            ("Off-plan", CategoryBrushKey("off_plan")),
+            ("Neutral", CategoryBrushKey("neutral")),
+            ("Paid", CategoryBrushKey("paid")),
+            ("Idle", CategoryBrushKey("idle")),
         })
         {
             var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
@@ -236,10 +238,11 @@ public sealed partial class ReportsPage
         };
         foreach (var (mins, brushKey) in new[]
         {
-            (u.On, "SystemFillColorSuccessBrush"),
-            (u.Off, "SystemFillColorCriticalBrush"),
-            (u.Neutral, "AccentFillColorDefaultBrush"),
-            (u.Paid, "SystemFillColorCautionBrush"),
+            (u.On, CategoryBrushKey("on_plan")),
+            (u.Off, CategoryBrushKey("off_plan")),
+            (u.Neutral, CategoryBrushKey("neutral")),
+            (u.Paid, CategoryBrushKey("paid")),
+            (u.Idle, CategoryBrushKey("idle")),
         })
         {
             var w = barWidth * mins / maxTotal;

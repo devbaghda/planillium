@@ -27,6 +27,8 @@ purpose.
 | SQLitePCLRaw.core / .lib.e_sqlite3 / .provider.e_sqlite3 | Apache-2.0 |
 | SQLite (native engine, bundled via SQLitePCLRaw) | Public domain |
 | System.Drawing.Common, System.Memory, Microsoft.Win32.SystemEvents | MIT (.NET runtime libraries) |
+| Microsoft.Web.WebView2 (WebView2Loader.dll) | Microsoft Edge WebView2 SDK license (not MIT) — pulled in transitively via Microsoft.WindowsAppSDK.WinUI; confirmed physically shipped in the Release build output (round-5 audit finding #14, previously undocumented here) |
 
-All licenses above are permissive (MIT/Apache-2.0/public domain) — no copyleft (GPL/AGPL)
-obligations apply to this app.
+Everything above is permissive (MIT/Apache-2.0/public domain) with one exception —
+Microsoft.Web.WebView2 ships under Microsoft's own WebView2/Edge redistribution terms, not
+MIT/Apache-2.0. Nothing here carries copyleft (GPL/AGPL) obligations.

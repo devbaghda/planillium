@@ -26,6 +26,12 @@ public sealed class ActivityTracker : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
 
+    // Keep this in sync with AppNames.Messengers below — that set (used to group
+    // Reports rows) already recognized Teams; this one (used to decorate the live
+    // window title while tracking) didn't, so Teams was classified as a messenger
+    // after the fact but not while it was actually happening (round-5 audit
+    // finding #20). Both Teams exe names covered: classic desktop client and the
+    // newer "ms-teams.exe" client.
     private static readonly Dictionary<string, string> ExeAppNames = new()
     {
         ["telegram.exe"] = "Telegram",
@@ -35,6 +41,8 @@ public sealed class ActivityTracker : IDisposable
         ["signal.exe"] = "Signal",
         ["viber.exe"] = "Viber",
         ["skype.exe"] = "Skype",
+        ["teams.exe"] = "Microsoft Teams",
+        ["ms-teams.exe"] = "Microsoft Teams",
     };
 
     private readonly Dictionary<uint, string> _pidAppCache = new();

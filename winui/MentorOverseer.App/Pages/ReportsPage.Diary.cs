@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Services;
 
+using Microsoft.UI.Xaml.Automation;
 namespace MentorOverseer.App.Pages;
 
 // The time-diary section (search, mark-selected, edit/split) — see
@@ -129,8 +130,13 @@ public sealed partial class ReportsPage
             diaryResults.Children.Clear();
             var q = _diarySearch.Trim();
             var searching = q.Length > 0;
+            // Matches the date-picker's own MinDate and Database.PruneAndRollupDiary's
+            // actual cutoff (rows older than today − N are pruned, so today − N is the
+            // oldest day still genuinely present) — this used to be one day short,
+            // silently excluding the single oldest day still on disk (round-5 audit
+            // finding #6).
             var rows = searching
-                ? ReportData.DiaryInRange(today.AddDays(-(ConfigService.DiaryRetentionDays() - 1)), today)
+                ? ReportData.DiaryInRange(today.AddDays(-ConfigService.DiaryRetentionDays()), today)
                 : ReportData.DiaryInRange(_diaryDate, _diaryDate);
             var filtered = !searching ? rows : rows.Where(e =>
                 AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -281,7 +287,7 @@ public sealed partial class ReportsPage
                 MinHeight = 0,
                 IsEnabled = enabled,
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, name);
+            AutomationProperties.SetName(btn, name);
             btn.Click += (_, _) => onClick();
             return btn;
         }
@@ -322,7 +328,7 @@ public sealed partial class ReportsPage
             FontSize = 12,
             Padding = new Thickness(8, 4, 8, 4),
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(datePicker, "Jump to date");
+        AutomationProperties.SetName(datePicker, "Jump to date");
         datePicker.DateChanged += (_, e) =>
         {
             if (e.NewDate is { } picked && DateOnly.FromDateTime(picked.DateTime) != _diaryDate)
@@ -371,7 +377,7 @@ public sealed partial class ReportsPage
                 MinWidth = 0, VerticalAlignment = VerticalAlignment.Center,
                 IsChecked = selectedIds.Contains(id),
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(select,
+            AutomationProperties.SetName(select,
                 $"Select entry: {AppNames.Label(window)}, {start}–{end}");
             select.Checked += (_, _) => { selectedIds.Add(id); onSelectionChanged(); };
             select.Unchecked += (_, _) => { selectedIds.Remove(id); onSelectionChanged(); };
@@ -384,14 +390,7 @@ public sealed partial class ReportsPage
                 Text = cat.Replace('_', '-'),
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources[cat switch
-                {
-                    "on_plan" => "SystemFillColorSuccessBrush",
-                    "off_plan" => "SystemFillColorCriticalBrush",
-                    "idle" => "SystemFillColorCautionBrush",
-                    "paid" => "AccentTextFillColorPrimaryBrush",
-                    _ => "TextFillColorSecondaryBrush",
-                }],
+                Foreground = (Brush)Application.Current.Resources[CategoryBrushKey(cat)],
                 VerticalAlignment = VerticalAlignment.Center,
             };
             // "Application - name" display, same grouping labels as above.
@@ -414,7 +413,7 @@ public sealed partial class ReportsPage
                 MinHeight = 0,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(edit, "Edit diary entry");
+            AutomationProperties.SetName(edit, "Edit diary entry");
             edit.Click += async (_, _) =>
             {
                 if (await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc))
@@ -428,7 +427,7 @@ public sealed partial class ReportsPage
                 MinHeight = 0,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(split, "Split into several activities");
+            AutomationProperties.SetName(split, "Split into several activities");
             split.Click += async (_, _) =>
             {
                 if (await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc))

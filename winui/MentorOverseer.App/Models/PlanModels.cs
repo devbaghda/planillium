@@ -138,4 +138,9 @@ public class AssignedTask
     public required int AssignedDay { get; init; }
     public bool Completed { get; set; }
     public bool Overdue { get; set; }
+
+    /// <summary>"N day(s) late — from day N" — Today and Schedule each built this
+    /// caption by hand with the identical format string (round-5 audit finding #31;
+    /// Schedule's own code comment already flagged the duplication without fixing it).</summary>
+    public string OverdueCaption(int planDay) => $"{planDay - AssignedDay} day(s) late — from day {AssignedDay}";
 }

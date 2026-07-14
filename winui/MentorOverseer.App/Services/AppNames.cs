@@ -16,6 +16,8 @@ public static class AppNames
         "brave", "brave browser", "chromium",
     };
 
+    // Keep this in sync with ActivityTracker.ExeAppNames — see its comment
+    // (round-5 audit finding #20).
     private static readonly HashSet<string> Messengers = new(StringComparer.OrdinalIgnoreCase)
     {
         "telegram", "whatsapp", "slack", "discord",

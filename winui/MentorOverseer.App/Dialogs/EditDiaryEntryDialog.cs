@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MentorOverseer.App.Services;
@@ -57,8 +58,10 @@ public static class EditDiaryEntryDialog
         // overwrites the duration field.
         void Recalc()
         {
-            if (TimeOnly.TryParseExact(startBox.Text.Trim(), "HH:mm", out var s) &&
-                TimeOnly.TryParseExact(endBox.Text.Trim(), "HH:mm", out var e))
+            if (TimeOnly.TryParseExact(startBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var s) &&
+                TimeOnly.TryParseExact(endBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var e))
             {
                 var diff = (e.ToTimeSpan() - s.ToTimeSpan()).TotalMinutes;
                 if (diff > 0) durBox.Value = diff;
@@ -80,8 +83,10 @@ public static class EditDiaryEntryDialog
 
         dialog.PrimaryButtonClick += (sender, args) =>
         {
-            if (!TimeOnly.TryParseExact(startBox.Text.Trim(), "HH:mm", out _) ||
-                !TimeOnly.TryParseExact(endBox.Text.Trim(), "HH:mm", out _))
+            if (!TimeOnly.TryParseExact(startBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _) ||
+                !TimeOnly.TryParseExact(endBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _))
             {
                 error.Text = "Start and end must be HH:MM (e.g. 08:00).";
                 args.Cancel = true;

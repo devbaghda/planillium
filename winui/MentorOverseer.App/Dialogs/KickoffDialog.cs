@@ -72,6 +72,9 @@ public static class KickoffDialog
 
     public static async Task ShowAsync(MainWindow window)
     {
+        // The guard this field exists for (see its doc comment above) was never actually
+        // wired up here — round-5 audit finding #2, mirror of the round-3 ReviewDialog gap.
+        if (_showing) return;
         _showing = true;
         try
         {

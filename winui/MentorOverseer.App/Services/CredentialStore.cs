@@ -34,7 +34,15 @@ public static class CredentialStore
 
     public static string? Read(string key)
     {
-        foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}", Service, key })
+        // Only the two forms actually documented above: current name, and the
+        // pre-rename name for a token an older build already wrote. Two more —
+        // the bare service name and the bare key — used to be checked too with
+        // no comment explaining why; since Windows credentials aren't scoped per
+        // requesting app, that meant this app would happily read (and treat as
+        // its own secret) any unrelated credential on the machine that happened
+        // to be saved under one of those two generic names (round-5 audit
+        // finding #23).
+        foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}" })
         {
             if (!CredRead(target, 1 /* CRED_TYPE_GENERIC */, 0, out var ptr)) continue;
             try

@@ -6,6 +6,23 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Scheduling & scoring**
+- Splitting a diary entry into several activities no longer risks losing the
+  original if the save is interrupted partway through — it's now one
+  all-or-nothing save instead of delete-then-insert-one-at-a-time
+- Rescheduling a task, marking a day off, and "replan all overdue" are now
+  each one all-or-nothing save too, so an interrupted save can't leave the
+  schedule half-shifted
+- Fixed a bug where the morning "Good morning" prompt could occasionally
+  show twice in a row back to back
+- A task checkbox that fails to save now snaps back to its real state
+  immediately, instead of sitting there showing the wrong thing until you
+  navigate away and back
+- "Day off," "Move to today," and "Start now" now show the same "couldn't
+  save" warning as a failed task checkbox if the save fails, instead of
+  looking identical to a successful click
+- The "couldn't save that change" warning on Today and Schedule now clears
+  itself once things are working again, instead of staying up indefinitely
+  after a single failed save
 - Fixed a bug where completing a task today, then pulling a future task to
   today ("get a head start on tomorrow"), silently unmarked today's already-
   completed task and pushed it to tomorrow instead
@@ -61,8 +78,21 @@ going forward; the original Python/Tkinter version is retired.
   own total-minutes label
 - The diary search box now waits for a brief pause in typing before
   searching, instead of re-querying on every keystroke
+- Diary search now actually reaches every day still on file — it was
+  silently excluding the single oldest day within the retention window
 - Selecting "Year" on a brand-new install now shows "No activity logged
   yet" instead of a bare, unexplained empty table
+- Weekly on-plan/off-plan totals no longer risk quietly coming out wrong on
+  a non-English Windows install
+- "Time by app" and the time diary now agree on what each color means —
+  Paid and Neutral used to be swapped between the two views on the same
+  page
+- "Time by app" bars now include idle time in their own color, instead of
+  a row's bar visibly falling short of its own minutes label
+- Loading your TickTick tasks while quickly switching pages (or hitting
+  Reconnect) no longer risks showing duplicate or outdated task rows
+- The disabled "Restore" button on an archived plan now explains why it's
+  disabled, matching "Archive"'s existing tooltip
 - Renamed the "SCHEDULE DRIFT" card to "EXCLUSION IMPACT" — it measures
   something different from the Plans page/sidebar's "drift" status (how
   much excluded days have pushed the calendar back, not how the plan's
@@ -85,6 +115,8 @@ going forward; the original Python/Tkinter version is retired.
   minimized), instead of silently opening inside a window nobody's looking
   at; clicking the notification brings the app forward and opens the same
   interactive dialog as before
+- Microsoft Teams is now recognized as a messaging app while you're
+  actually using it, not just after the fact in your weekly report
 
 **Startup**
 - Fixed the window opening partially off-screen (or oversized) when a
@@ -130,6 +162,14 @@ going forward; the original Python/Tkinter version is retired.
 - Patched a known vulnerability in the bundled SQLite database engine
   (CVE-2025-6965); nothing in this app ever triggered it, but the fix
   costs nothing to take
+- A failed TickTick connection no longer writes TickTick's raw response
+  text into the local debug log — only the two standard error fields are
+  recorded now
+- The debug log file is now capped at 5 MB instead of growing forever, and
+  Settings now mentions it explains what it does (and doesn't) contain
+- Fixed several places where typed times (e.g. saving your work hours, or
+  editing a diary entry's start/end time) could be read incorrectly on a
+  non-English Windows install
 
 ## v1.0.0 — 2026-07-07
 

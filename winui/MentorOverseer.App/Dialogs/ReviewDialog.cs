@@ -86,33 +86,89 @@ public static class ReviewDialog
         }
     }
 
+    /// <summary>
+    /// The four jobs this used to do in one 187-line block — reconciling a
+    /// pending unaccounted-time gap, computing the day's numbers, building the
+    /// dialog's UI, and persisting the result — are now each their own named
+    /// step, the same shape round 4 split ActivityTracker.PollOnce into
+    /// (round-5 audit finding #17: this had grown into the largest, most
+    /// tangled function in the app, on the highest-stakes daily action).
+    /// </summary>
     private static async Task ShowCore(MainWindow window)
     {
-        // Before reviewing, reconcile any stretch where the user finished and
-        // stepped away before the day's end but was never asked about it —
-        // ask "where have you been?" once here so that time is accounted for
-        // instead of vanishing into an unlabelled idle gap.
-        if (window.Tracker is { } tracker)
-        {
-            try
-            {
-                using var gapDb = new Database();
-                if (tracker.PendingDayGap(gapDb) is { } gap)
-                {
-                    await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start,
-                        leadIn: "Some unaccounted time to fill in before today's review —");
-                    // The whole gap is now written to the diary (even a skipped
-                    // dialog logs it as idle) — stop the poll loop re-asking.
-                    tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));
-                }
-            }
-            catch (Exception ex) { Log.Error("ReviewDialog.PendingDayGap", ex); }
-        }
+        await ReconcilePendingGap(window);
 
         var plans = PlanStore.LoadActivePlans();
         using var db = new Database();
         using var score = new ScoreService(plans, db);
 
+        var stats = ComputeReviewStats(score);
+        var (panel, reflection) = BuildReviewPanel(stats);
+
+        // "Close the day" locks the daily_score ledger row — before the
+        // configured end-of-day this is a preview only, otherwise an early
+        // click would freeze the score and later work would never count.
+        var beforeEod = DateTime.Now.TimeOfDay < MainWindow.EodTime();
+        if (beforeEod)
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"Preview — the day can be closed after " +
+                       $"{MainWindow.EodTime():hh\\:mm}, so work until then still counts.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+
+        var dialog = new ContentDialog
+        {
+            Title = $"{DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture)} — day review",
+            Content = panel,
+            PrimaryButtonText = $"Close the day · {(stats.FinalTotal >= 0 ? "+" : "")}{stats.FinalTotal} pts",
+            CloseButtonText = beforeEod ? "Close" : "Later",
+            IsPrimaryButtonEnabled = !beforeEod,
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = window.Content.XamlRoot,
+        };
+
+        var result = await DialogGate.ShowAsync(dialog);
+        _offeredOn = DateTime.Today.ToIsoDate();
+        if (result == ContentDialogResult.Primary)
+            PersistReview(score, stats.Today, reflection, window);
+    }
+
+    /// <summary>
+    /// Before reviewing, reconcile any stretch where the user finished and
+    /// stepped away before the day's end but was never asked about it —
+    /// ask "where have you been?" once here so that time is accounted for
+    /// instead of vanishing into an unlabelled idle gap.
+    /// </summary>
+    private static async Task ReconcilePendingGap(MainWindow window)
+    {
+        if (window.Tracker is not { } tracker) return;
+        try
+        {
+            using var gapDb = new Database();
+            if (tracker.PendingDayGap(gapDb) is { } gap)
+            {
+                await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start,
+                    leadIn: "Some unaccounted time to fill in before today's review —");
+                // The whole gap is now written to the diary (even a skipped
+                // dialog logs it as idle) — stop the poll loop re-asking.
+                tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));
+            }
+        }
+        catch (Exception ex) { Log.Error("ReviewDialog.PendingDayGap", ex); }
+    }
+
+    /// <summary>Every number the review panel and the persist step both need —
+    /// computed once so the two can't drift out of sync with each other.</summary>
+    private sealed record ReviewStats(
+        DateOnly Today, int Done, int Total, int OnMin, int OffMin, int Streak,
+        DayScoreBreakdown Breakdown, bool Floored, int OverdueCapped, int Accrual,
+        int Comeback, int FinalTotal, bool Perfect);
+
+    private static ReviewStats ComputeReviewStats(ScoreService score)
+    {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var (total, done) = score.DayTaskCounts(today);
         var (onMin, offMin) = score.DayDiaryMinutes(today);
@@ -123,12 +179,6 @@ public static class ReviewDialog
         // recomputed by hand here, independently of ScoreService.DayScore,
         // and could silently drift out of sync with it).
         var breakdown = score.ComputeDayScore(done, total, onMin, offMin, streak);
-        var taskPt = breakdown.TaskPoints;
-        var multiTaskPt = breakdown.MultiTaskBonus;
-        var onPt = breakdown.OnPlanPoints;
-        var offPt = breakdown.OffPlanPoints;
-        var missPt = breakdown.MissedPoints;
-        var streakPt = breakdown.StreakBonus;
         var dayTotal = breakdown.FlooredTotal;
         var floored = dayTotal != breakdown.RawTotal;
 
@@ -140,6 +190,15 @@ public static class ReviewDialog
         // recovered from the week before it closing negative.
         var comeback = score.ComputeWeeklyComeback(today);
 
+        var finalTotal = dayTotal + accrual + comeback;
+        var perfect = total > 0 && done == total;
+
+        return new ReviewStats(today, done, total, onMin, offMin, streak, breakdown,
+            floored, overdueCapped, accrual, comeback, finalTotal, perfect);
+    }
+
+    private static (StackPanel Panel, TextBox Reflection) BuildReviewPanel(ReviewStats s)
+    {
         var panel = new StackPanel { Spacing = 12, MinWidth = 460 };
 
         // The EOD "designed ending" the dialog never actually had: every day
@@ -147,19 +206,17 @@ public static class ReviewDialog
         // that clears every task, or scores the same "great day" bar Reports
         // uses, earns a line that says so instead of just numbers — a
         // completed comeback week takes priority, being the rarer event.
-        var finalTotal = dayTotal + accrual + comeback;
-        var perfect = total > 0 && done == total;
-        if (comeback > 0)
+        if (s.Comeback > 0)
             panel.Children.Add(new TextBlock
             {
                 Text = "🎉 Comeback week — back in the green after a losing one.",
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"],
             });
-        else if (perfect || finalTotal >= ScoreService.GreatDayThreshold)
+        else if (s.Perfect || s.FinalTotal >= ScoreService.GreatDayThreshold)
             panel.Children.Add(new TextBlock
             {
-                Text = perfect
+                Text = s.Perfect
                     ? "🎉 Perfect day — every task done."
                     : "🎉 Strong day — well above the line.",
                 FontWeight = FontWeights.SemiBold,
@@ -169,7 +226,7 @@ public static class ReviewDialog
         var ring = new ProgressRing
         {
             IsIndeterminate = false,
-            Value = total > 0 ? done * 100.0 / total : 0,
+            Value = s.Total > 0 ? s.Done * 100.0 / s.Total : 0,
             Width = 72, Height = 72,
         };
         var ringRow = new StackPanel
@@ -178,12 +235,12 @@ public static class ReviewDialog
         var ringText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         ringText.Children.Add(new TextBlock
         {
-            Text = $"{done}/{total} tasks done",
+            Text = $"{s.Done}/{s.Total} tasks done",
             Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
         });
         ringText.Children.Add(new TextBlock
         {
-            Text = $"{onMin / 60}h {onMin % 60:00}m on-plan · {offMin}m off-plan",
+            Text = $"{s.OnMin / 60}h {s.OnMin % 60:00}m on-plan · {s.OffMin}m off-plan",
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         });
         ringRow.Children.Add(ringText);
@@ -209,15 +266,15 @@ public static class ReviewDialog
             g.Children.Add(v);
             ledger.Children.Add(g);
         }
-        Row($"{done} task(s) completed", taskPt);
-        Row("Multi-task bonus (more than 1 done today)", multiTaskPt);
-        Row("On-plan focus", onPt);
-        Row($"{streak}-day streak bonus", streakPt);
-        Row($"{Math.Max(0, total - done)} task(s) missed today", missPt);
-        Row($"Overdue carry ({overdueCapped} task(s), 3-day cap)", accrual);
-        Row("Weekly comeback bonus (last week recovered)", comeback);
-        Row(floored ? "Day total — floored at −10, it can't get worse" : "Day total",
-            finalTotal, always: true);
+        Row($"{s.Done} task(s) completed", s.Breakdown.TaskPoints);
+        Row("Multi-task bonus (more than 1 done today)", s.Breakdown.MultiTaskBonus);
+        Row("On-plan focus", s.Breakdown.OnPlanPoints);
+        Row($"{s.Streak}-day streak bonus", s.Breakdown.StreakBonus);
+        Row($"{Math.Max(0, s.Total - s.Done)} task(s) missed today", s.Breakdown.MissedPoints);
+        Row($"Overdue carry ({s.OverdueCapped} task(s), 3-day cap)", s.Accrual);
+        Row("Weekly comeback bonus (last week recovered)", s.Comeback);
+        Row(s.Floored ? "Day total — floored at −10, it can't get worse" : "Day total",
+            s.FinalTotal, always: true);
         panel.Children.Add(new Border
         {
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
@@ -234,44 +291,19 @@ public static class ReviewDialog
         };
         panel.Children.Add(reflection);
 
-        // "Close the day" locks the daily_score ledger row — before the
-        // configured end-of-day this is a preview only, otherwise an early
-        // click would freeze the score and later work would never count.
-        var beforeEod = DateTime.Now.TimeOfDay < MainWindow.EodTime();
-        if (beforeEod)
-            panel.Children.Add(new TextBlock
-            {
-                Text = $"Preview — the day can be closed after " +
-                       $"{MainWindow.EodTime():hh\\:mm}, so work until then still counts.",
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            });
+        return (panel, reflection);
+    }
 
-        var dialog = new ContentDialog
-        {
-            Title = $"{DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture)} — day review",
-            Content = panel,
-            PrimaryButtonText = $"Close the day · {(finalTotal >= 0 ? "+" : "")}{finalTotal} pts",
-            CloseButtonText = beforeEod ? "Close" : "Later",
-            IsPrimaryButtonEnabled = !beforeEod,
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = window.Content.XamlRoot,
-        };
-
-        var result = await DialogGate.ShowAsync(dialog);
-        _offeredOn = DateTime.Today.ToIsoDate();
-        if (result == ContentDialogResult.Primary)
-        {
-            score.CreditDayScoreIfMissing(today);
-            score.CreditOverdueAccrualIfMissing(today);
-            score.CreditWeeklyComebackIfMissing(today);
-            if (reflection.Text.Trim() is { Length: > 0 } text)
-                score.SaveReflection(today, text);
-            var state = StateService.Load();
-            state.LastReview = DateTime.Today.ToIsoDate();
-            StateService.Save(state);
-            window.RefreshScore();
-        }
+    private static void PersistReview(ScoreService score, DateOnly today, TextBox reflection, MainWindow window)
+    {
+        score.CreditDayScoreIfMissing(today);
+        score.CreditOverdueAccrualIfMissing(today);
+        score.CreditWeeklyComebackIfMissing(today);
+        if (reflection.Text.Trim() is { Length: > 0 } text)
+            score.SaveReflection(today, text);
+        var state = StateService.Load();
+        state.LastReview = DateTime.Today.ToIsoDate();
+        StateService.Save(state);
+        window.RefreshScore();
     }
 }

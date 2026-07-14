@@ -27,7 +27,7 @@ public sealed class TickTickService
     // only ever happen sequentially in this app (Today-page load), so a
     // per-request Authorization header (not DefaultRequestHeaders) is all
     // that's needed to keep this safe to share.
-    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(TickTickAuth.HttpTimeoutSeconds) };
 
     private static async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url)
     {

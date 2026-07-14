@@ -18,8 +18,20 @@ namespace MentorOverseer.App.Services;
 /// </summary>
 public static class TickTickAuth
 {
+    /// <summary>Shared with TickTickService.SharedClient — both used to hardcode this
+    /// same value as an independent literal, low risk today since they happened to agree,
+    /// but nothing stopped a future tuning change from updating only one (round-5 audit
+    /// finding #32).</summary>
+    internal const int HttpTimeoutSeconds = 15;
+
     private const int RedirectPort = 8765;
-    private const string RedirectUri = $"http://localhost:8765/callback";
+    // Built from RedirectPort rather than typed out separately — the two used to be
+    // independent literals, so changing one without noticing the other would make the
+    // app listen on a different port than it told TickTick to answer on, hanging
+    // "Connect TickTick" for the full 2-minute timeout with no clue why (round-5 audit
+    // finding #15). static readonly, not const: C#'s constant string interpolation only
+    // covers string-typed holes, not an int constant needing ToString().
+    private static readonly string RedirectUri = $"http://localhost:{RedirectPort}/callback";
     private const string AuthUrl = "https://ticktick.com/oauth/authorize";
     private const string TokenUrl = "https://ticktick.com/oauth/token";
 
@@ -28,7 +40,7 @@ public static class TickTickAuth
     // only touched that file, missing this one (2026-07-09 audit finding
     // #20). Low-traffic (login/refresh only), but the same socket-churn
     // reasoning applies.
-    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
 
     public static string ClientId => ConfigService.TickTickClientId;
     public static string? ClientSecret => CredentialStore.Read("ticktick_client_secret");
@@ -176,6 +188,24 @@ public static class TickTickAuth
             : (true, "Connected — tasks will appear on the Today page.");
     }
 
+    /// <summary>Pulls only the standard OAuth "error"/"error_description" fields out of a
+    /// token-endpoint error body — never returns the raw text, so an unvetted response
+    /// can't end up in the log file (see TokenRequestAsync's catch above).</summary>
+    private static (string? Error, string? Description) TryParseOAuthError(string body)
+    {
+        try
+        {
+            var root = JsonDocument.Parse(body).RootElement;
+            var err = root.TryGetProperty("error", out var e) ? e.GetString() : null;
+            var desc = root.TryGetProperty("error_description", out var d) ? d.GetString() : null;
+            return (err, desc);
+        }
+        catch (JsonException)
+        {
+            return (null, null);
+        }
+    }
+
     /// <summary>RFC 4648 §5 base64url, no padding — PKCE's required encoding.</summary>
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -206,7 +236,15 @@ public static class TickTickAuth
             var body = await resp.Content.ReadAsStringAsync();
             if (!resp.IsSuccessStatusCode)
             {
-                Log.Warn("TickTickAuth", $"token endpoint {(int)resp.StatusCode}: {body[..Math.Min(body.Length, 200)]}");
+                // Log only the two fields TickTick documents for an error response, never
+                // the raw body — the raw body used to go straight into the local log file
+                // unfiltered and unbounded (Log.cs has no cap/rotation), so anything
+                // account-identifying TickTick's servers ever happened to echo back would
+                // sit on disk indefinitely with nothing in the app able to find or clear it
+                // (round-5 audit finding #12).
+                var (err, desc) = TryParseOAuthError(body);
+                Log.Warn("TickTickAuth", $"token endpoint {(int)resp.StatusCode}: {err ?? "(unparseable)"}" +
+                    (desc is null ? "" : $" — {desc}"));
                 return null;
             }
             var doc = JsonDocument.Parse(body);

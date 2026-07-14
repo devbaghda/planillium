@@ -42,11 +42,14 @@ public partial class App : Application
         // running from a separate worktree/branch (e.g. this audit-fixes
         // testing environment) use its own single-instance mutex, so it can
         // run side by side with the real app instead of being silently
-        // blocked and exiting. Unset in normal/production use — same
-        // pattern as the existing MENTOR_ROOT/MENTOR_PAGE debug hooks.
-        var mutexName = AppInfo.SingleInstanceMutex +
-            (Environment.GetEnvironmentVariable("MENTOR_INSTANCE_SUFFIX") is { Length: > 0 } suffix
-                ? "_" + suffix : "");
+        // blocked and exiting. #if DEBUG-gated (round-5 audit finding #24) —
+        // a real user running the shipped Release exe has no reason to run
+        // two instances side by side, so this has no business being live there.
+        var mutexName = AppInfo.SingleInstanceMutex;
+#if DEBUG
+        mutexName += Environment.GetEnvironmentVariable("MENTOR_INSTANCE_SUFFIX") is { Length: > 0 } suffix
+            ? "_" + suffix : "";
+#endif
         _instanceMutex = new Mutex(true, mutexName, out var createdNew);
         if (!createdNew)
         {

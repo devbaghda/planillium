@@ -15,4 +15,10 @@ internal static class DateExtensions
 {
     public static string ToIsoDate(this DateTime d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     public static string ToIsoDate(this DateOnly d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>Same reasoning as ToIsoDate, for the "date + time" format used in ts/
+    /// completed_at/marked_at/updated_at columns — round 4's ToIsoDate helper didn't
+    /// cover this closely related format, which was still hand-typed in 5 separate
+    /// places (round-5 audit finding #16).</summary>
+    public static string ToIsoTimestamp(this DateTime d) => d.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 }

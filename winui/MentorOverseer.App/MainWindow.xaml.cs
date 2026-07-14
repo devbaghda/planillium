@@ -114,8 +114,13 @@ public sealed partial class MainWindow : Window
 
         // Debug/verification hook: MENTOR_PAGE=reports|plans|settings|schedule
         // opens straight on that page (default: Today). Drives the nav
-        // selection so the rail highlight and page can't disagree.
-        var page = Environment.GetEnvironmentVariable("MENTOR_PAGE") ?? "today";
+        // selection so the rail highlight and page can't disagree. #if DEBUG-
+        // gated (round-5 audit finding #24) — unlike MENTOR_ROOT, this has no
+        // legitimate purpose for a real user running the shipped Release exe.
+        var page = "today";
+#if DEBUG
+        page = Environment.GetEnvironmentVariable("MENTOR_PAGE") ?? "today";
+#endif
         if (page == "settings")
             // Nav.SettingsItem isn't materialized until the template applies —
             // navigate the frame directly (rail highlight not needed here).

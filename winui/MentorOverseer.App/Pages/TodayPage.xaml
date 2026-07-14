@@ -33,6 +33,7 @@
             <InfoBar x:Name="SaveErrorBar"
                      Severity="Error"
                      IsOpen="False"
+                     IsClosable="True"
                      Title="Couldn't save that change"
                      Message="The database was briefly busy — try again in a moment."
                      Margin="0,0,0,8"/>

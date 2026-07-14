@@ -31,6 +31,21 @@
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.6" />
+    <!-- Same pin as MentorOverseer.App.csproj, same reason: 8.0.6 alone still pulls
+         SQLitePCLRaw.lib.e_sqlite3 2.1.6 (CVE-2025-6965). The main app was patched in
+         round 4; this test project was missed then — round-5 audit finding #10, the
+         "fix one sibling, miss the other" pattern this project keeps re-learning. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <!-- SQLitePCLRaw.core (pulled in above) also drags in these two ancient
+         netstandard1.1-era compat shims — .NET 8 already provides both types in the
+         shared framework, but NuGet still resolves and flags the old transitive
+         versions (GHSA-7jgj-8wvc-jh57 / GHSA-cmhx-cq75-c4mj) unless something pins
+         newer ones directly. Only surfaces for this project's plain net8.0 TFM; the
+         main app's net8.0-windows TFM resolves a different asset group that never
+         pulls these in at all (confirmed via the NuGet vulnerability scan on both
+         projects — round-5 audit finding #10, same fix batch). -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
 
   <ItemGroup>
