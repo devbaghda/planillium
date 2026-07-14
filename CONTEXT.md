@@ -51,7 +51,7 @@ mentor-overseer/
 ---
 
 ## Tech stack
-- **Framework:** WinUI 3 / .NET 8 (`net8.0-windows10.0.19041.0`), Windows App SDK 1.5.240627000
+- **Framework:** WinUI 3 / .NET 8 (`net8.0-windows10.0.19041.0`), Windows App SDK 1.8.260529003
 - **Build:** `dotnet build -p:Platform=x64 -c Release` from `winui/MentorOverseer.App/` —
   no Visual Studio required. Unpackaged, self-contained (`WindowsPackageType=None`,
   `WindowsAppSDKSelfContained=true`), no admin rights needed.
@@ -208,27 +208,35 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   Also: `config.json`/`plans/active/*.json` gitignored + untracked going forward (commit
   `9be8515`, history NOT purged — see Open TODOs); finished the incomplete 2026-07-09 secret
   cleanup (`git gc`, 0 dangling objects).
-- **2026-07-14**: Applied all 27 round-2 findings except the 2 the user explicitly deferred
-  (ReportsPage/MainWindow God-Object decomposition, WindowsAppSDK version bump — both
-  accepted debt, see Open TODOs) — commit `1724e14`. Added `ScoreServiceScoringTests.cs`
-  (`ComputeDayScore` had zero test coverage despite being the formula 3 UI surfaces depend
-  on) and `Dialogs/PromptRouter.cs` (extracted the show-dialog-or-toast routing 3 dialogs had
-  each duplicated). **Round-3 audit** (2 full agent passes — architecture, security — plus
-  3 done by hand after an agent session-limit interruption) found all 27 fixes held, plus
-  **1 new High, fixed same session**: `ReviewDialog` never got `KickoffDialog`'s
-  "already showing, don't reopen" guard, so leaving the review dialog open past one
-  EOD-watcher tick (1 min) could queue a duplicate behind it — fixed via the same
-  `_showing`/`ShowCore` split `KickoffDialog` uses, enforced in both `Trigger` and
-  `ShowAsync` directly since `TodayPage`'s manual Review button bypasses `Trigger`. Full
-  report: https://claude.ai/code/artifact/8bcbfc6d-c998-4084-840c-23e8641483c2. Mid-round,
-  the user asked for two scheduling features, both shipped and verified live via read-only UI
-  Automation: (1) "Reschedule…" (pick any day; that day's task + everything after shifts
-  forward one) is now on every open task, not just overdue ones — `SchedulePage.xaml.cs`.
-  (2) "Replan all overdue" is no longer automatic; new `Dialogs/ReplanOverdueDialog` shows
-  one date-picker per overdue task, applied via `ScoreService.ReplanOverdueTo` (removed the
-  now-unused `ReplanAllOverdue`/`ReplanDailyBudgetMin`). Also added: Plans page shows each
-  plan's originally-due date (from un-overridden `Day`/`total_days`, fixed by construction)
-  alongside how many days it's drifted from reschedules/early finishes — `PlansPage.xaml.cs`.
+- **2026-07-14**: Applied all 27 round-2 findings, deferred 2 (God-Object decomposition,
+  WindowsAppSDK bump) — commit `1724e14`. Added `ScoreServiceScoringTests.cs` (`ComputeDayScore`
+  had zero coverage) and `Dialogs/PromptRouter.cs` (extracted show-dialog-or-toast routing 3
+  dialogs duplicated). **Round-3 audit** found all 27 fixes held + **1 new High**: `ReviewDialog`
+  never got `KickoffDialog`'s "already showing, don't reopen" guard, so leaving it open past
+  one EOD-watcher tick (1 min) could queue a duplicate — fixed via the same `_showing`/`ShowCore`
+  split, enforced in both `Trigger` and `ShowAsync` since `TodayPage`'s manual Review button
+  bypasses `Trigger` (report: https://claude.ai/code/artifact/8bcbfc6d-c998-4084-840c-23e8641483c2).
+  Mid-round, the user requested two scheduling features (verified live via UIA): (1) "Reschedule…"
+  (pick any day; that day + everything after shifts forward one) now on every open task, not
+  just overdue — `SchedulePage.xaml.cs`. (2) "Replan all overdue" is no longer automatic; new
+  `Dialogs/ReplanOverdueDialog` shows one date-picker per overdue task via
+  `ScoreService.ReplanOverdueTo` (removed unused `ReplanAllOverdue`/`ReplanDailyBudgetMin`).
+  Plans page now shows each plan's originally-due date + drift days — `PlansPage.xaml.cs`.
+  **Later the same day**, the user asked to clear both deferred items. WindowsAppSDK
+  `1.5.240627000`→`1.8.260529003` (+ `Microsoft.Windows.SDK.BuildTools` `1742`→`4654`, a
+  transitive floor from the new WindowsAppSDK.Base) — release-notes review first found no
+  breaking changes applicable to this app (unpackaged, no MSIX/wapproj, no custom FontFamily
+  weight/stretch); behavior changes are opt-in via `RuntimeCompatibilityOptions`. God-Object
+  decomposition: split `MainWindow.xaml.cs` (633→238) into `+Tray/+NativeInterop/+Startup/
+  +Tracker.cs` and `ReportsPage.xaml.cs` (1069→255) into `+Tables/+TimeByApp/+Diary/+Styling.cs`
+  — plain C# partial-class file splits along the file's own existing section comments, zero
+  logic changes, chosen because the original deferral reason was regression risk and a pure
+  file-move carries none; the Diary split was extracted byte-for-byte via `git show HEAD:...` +
+  `sed` rather than retyped, since it contains literal (non-`\u`-escaped) Segoe Fluent Icons
+  codepoints invisible in any terminal/diff and easy to corrupt by hand. Both verified with a
+  full Debug+Release build, all 10 tests, and a live UIA pass across every page. Also added a
+  short plan-drift note in the sidebar (`PlanDriftPanel`/`MainWindow.RefreshPlanDrift()`)
+  mirroring the Plans page's own readout, shown only for plans actually off-date.
 - **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH (a) the
   `IsOnScreen()`-check-then-toast-fallback pattern, and (b) an "already showing, don't
   reopen" guard — `StartEodWatcher` was missing (a) in round 2, `ReviewDialog` was missing
@@ -307,12 +315,3 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
-  - **`ReportsPage.xaml.cs` (~1050 lines) / `MainWindow.xaml.cs` (~610 lines) decomposition**:
-    both flagged as God Objects across rounds 1-3 of the audit; the user explicitly deferred
-    splitting them (2026-07-14, via AskUserQuestion) — real regression risk on a live app
-    with no UI test coverage, revisit with dedicated time for manual smoke-testing, not
-    folded into a larger fix batch.
-  - **`Microsoft.WindowsAppSDK` version bump**: pinned to `1.5.240627000` (~2 years old as of
-    2026-07-14), no known CVE tied to it. the user explicitly deferred upgrading — real
-    compatibility risk (WinUI has had breaking changes between minor versions), needs a
-    dedicated task with time to fully re-test afterward.

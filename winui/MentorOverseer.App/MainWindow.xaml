@@ -71,6 +71,7 @@
                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                         </StackPanel>
                     </Border>
+                    <StackPanel x:Name="PlanDriftPanel" Spacing="2"/>
                     <StackPanel Spacing="0" Margin="2,0,0,0">
                         <HyperlinkButton Content="Buy entertainment time"
                                          FontSize="12" Padding="4,2"
