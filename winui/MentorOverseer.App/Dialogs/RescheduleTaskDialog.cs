@@ -6,9 +6,13 @@ using MentorOverseer.App.Services;
 namespace MentorOverseer.App.Dialogs;
 
 /// <summary>
-/// Move one overdue task to a specific future date without touching any
-/// other task's slot — the WinUI port of main.py's
-/// _reschedule_task_dialog / _reassign_task_day.
+/// Move one task — overdue, today's, or any future one — to a specific
+/// future date, pushing whatever's already on that day (and everything
+/// after it) forward by one instead of doubling up. Originally the WinUI
+/// port of main.py's _reschedule_task_dialog / _reassign_task_day
+/// (overdue-only); opened up to every open task per the user's request
+/// 2026-07-14, since "Move to today" only ever targets today and a future
+/// task's own day can turn out to be inconvenient too.
 /// </summary>
 public static class RescheduleTaskDialog
 {

@@ -109,6 +109,36 @@ public sealed class ScoreServiceSchedulingTests
     }
 
     [Fact]
+    public void ReplanOverdueTo_CascadesShiftsWhenTwoTasksTargetTheSameDay()
+    {
+        // Backs Dialogs/ReplanOverdueDialog (added 2026-07-14, replacing the
+        // old automatic time-budget spread): the caller picks a day per
+        // overdue task and each goes through RescheduleTask in order, so
+        // two overdue tasks independently picked for the same day must
+        // cascade correctly rather than colliding — the second assignment's
+        // shift has to account for the first assignment having already
+        // moved into that slot.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: -5,
+            (1, "Overdue task 1"), (2, "Overdue task 2"), (6, "Existing day-6 task"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.ReplanOverdueTo(new List<(Plan, string, int, int)>
+        {
+            (plan, "Overdue task 1", 1, 6),
+            (plan, "Overdue task 2", 2, 6),
+        });
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(6, tasks.Single(t => t.Task.Text == "Overdue task 2").AssignedDay);
+        Assert.Equal(7, tasks.Single(t => t.Task.Text == "Overdue task 1").AssignedDay);
+        Assert.Equal(8, tasks.Single(t => t.Task.Text == "Existing day-6 task").AssignedDay);
+    }
+
+    [Fact]
     public void MoveTaskToToday_NeverShiftsCompletedTasksDuringCompaction()
     {
         // The compaction that closes a vacated day's gap only ever touches

@@ -15,6 +15,17 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class ReviewDialog
 {
+    // Guards against two review dialogs queuing back-to-back through
+    // DialogGate — the per-minute EOD watcher re-invokes Trigger every tick
+    // while the review's own dialog is still open (round-3 audit finding:
+    // unlike KickoffDialog, ReviewDialog had no equivalent guard, so a
+    // review left open past one tick would have a second one pop up the
+    // instant the first was dismissed). Checked in ShouldOffer() so the
+    // watcher doesn't even try while showing, and enforced again at the top
+    // of ShowAsync itself since the manual "Review" button on Today
+    // (TodayPage.xaml.cs) calls ShowAsync directly, bypassing ShouldOffer.
+    private static bool _showing;
+
     // Guards MainWindow's per-minute EOD watcher from re-offering the review
     // every tick once it's actually been shown today — "Later" means later
     // by choice, so this shouldn't nag every minute for the rest of the day.
@@ -32,6 +43,7 @@ public static class ReviewDialog
 
     private static bool ShouldOffer()
     {
+        if (_showing) return false;
         var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         if (_offeredOn == today) return false;
         // ">=" via negated "<", not "==": an exact-minute match on a
@@ -61,6 +73,20 @@ public static class ReviewDialog
     }
 
     public static async Task ShowAsync(MainWindow window)
+    {
+        if (_showing) return;
+        _showing = true;
+        try
+        {
+            await ShowCore(window);
+        }
+        finally
+        {
+            _showing = false;
+        }
+    }
+
+    private static async Task ShowCore(MainWindow window)
     {
         // Before reviewing, reconcile any stretch where the user finished and
         // stepped away before the day's end but was never asked about it —

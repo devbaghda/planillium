@@ -343,35 +343,39 @@ public sealed partial class SchedulePage : Page
         // action column instead of competing for it.
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
 
-        if (!t.Completed && t.AssignedDay > planDay)
+        if (!t.Completed)
         {
-            var move = new HyperlinkButton
+            if (t.AssignedDay > planDay)
             {
-                Content = "Move to today",
-                FontSize = 12,
-                Padding = new Thickness(6, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            move.Click += (_, _) =>
-            {
-                try
+                var move = new HyperlinkButton
                 {
-                    var plans = PlanStore.LoadActivePlans();
-                    var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
-                    using var db = new Database();
-                    using var score = new ScoreService(plans, db);
-                    score.MoveTaskToToday(p, t.Task.Text);
-                }
-                catch (Exception ex) { Log.Error("SchedulePage.MoveToToday", ex); }
-                Render();
-            };
-            actions.Children.Add(move);
-        }
-        else if (!t.Completed && t.Overdue)
-        {
-            // Overdue tasks skip "Move to today" (that's what Replan-all is
-            // for) but still need a way out of the past — pick a new date,
-            // the accrued penalty for the late days stands.
+                    Content = "Move to today",
+                    FontSize = 12,
+                    Padding = new Thickness(6, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Top,
+                };
+                move.Click += (_, _) =>
+                {
+                    try
+                    {
+                        var plans = PlanStore.LoadActivePlans();
+                        var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
+                        using var db = new Database();
+                        using var score = new ScoreService(plans, db);
+                        score.MoveTaskToToday(p, t.Task.Text);
+                    }
+                    catch (Exception ex) { Log.Error("SchedulePage.MoveToToday", ex); }
+                    Render();
+                };
+                actions.Children.Add(move);
+            }
+
+            // Reschedule to a specific day is available for every open task,
+            // not just overdue ones — a future task's own day can turn out
+            // to be inconvenient too, and this is the only action that lets
+            // you pick exactly which day, whereas "Move to today" only ever
+            // targets today. The accrued penalty for any already-late days
+            // stands; this only stops it from accruing further.
             var reschedule = new HyperlinkButton
             {
                 Content = "Reschedule…",

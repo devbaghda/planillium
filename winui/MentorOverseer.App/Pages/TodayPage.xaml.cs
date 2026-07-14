@@ -56,28 +56,17 @@ public sealed partial class TodayPage : Page
     private async void Replan_Click(object sender, RoutedEventArgs e)
     {
         var plans = PlanStore.LoadActivePlans();
-        using var db = new Database();
-        using var score = new ScoreService(plans, db);
-        var overdue = score.OverdueAsOf(DateOnly.FromDateTime(DateTime.Today));
+        List<(Plan Plan, AssignedTask Task, int DaysOverdue)> overdue;
+        using (var db = new Database())
+        using (var score = new ScoreService(plans, db))
+            overdue = score.OverdueAsOf(DateOnly.FromDateTime(DateTime.Today));
         if (overdue.Count == 0) return;
 
-        var confirm = new ContentDialog
+        if (await ReplanOverdueDialog.ShowAsync(XamlRoot, plans, overdue))
         {
-            Title = "Replan all overdue?",
-            Content = $"{overdue.Count} overdue task(s) will be spread across the coming days " +
-                      $"(≤{ScoreService.ReplanDailyBudgetMin / 60}h of planned work per day), " +
-                      $"for one flat {ScoreService.ReplanFlatFee} pts. " +
-                      "Penalties already taken are not refunded — but the daily bleeding stops.",
-            PrimaryButtonText = $"Replan · {ScoreService.ReplanFlatFee} pts",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
-        if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
-
-        score.ReplanAllOverdue();
-        (App.MainWindow as MainWindow)?.RefreshScore();
-        Render();
+            (App.MainWindow as MainWindow)?.RefreshScore();
+            Render();
+        }
     }
 
     // TickTick section lives in Views/TickTickSection (network I/O out of

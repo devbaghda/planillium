@@ -28,7 +28,6 @@ public sealed class ScoreService : IDisposable
     public const int DailyFloor = -10;
     public const int OverdueAccrualCapDays = 3;
     public const int ReplanFlatFee = -10;
-    public const int ReplanDailyBudgetMin = 240;
 
     /// <summary>The "strong day" bar Reports/ReviewDialog/ReportExport all
     /// use to color/celebrate a score — named once so the three copies can't
@@ -348,37 +347,21 @@ public sealed class ScoreService : IDisposable
     // ── replan all overdue (the "declare bankruptcy" move) ───────────────
 
     /// <summary>
-    /// Redistributes every overdue task across the coming days (starting
-    /// tomorrow), at most ReplanDailyBudgetMin planned minutes per day, for a
-    /// single flat fee. Returns the number of tasks moved.
+    /// Moves every overdue task to the caller-picked day for it — see
+    /// Dialogs/ReplanOverdueDialog, the only caller. Each entry goes through
+    /// RescheduleTask (so the day it lands on, and everything after, shifts
+    /// forward by one instead of doubling up), applied in the order given;
+    /// the flat fee then covers the whole batch once, same as the old
+    /// automatic version this replaced (2026-07-14 — the user wanted to choose
+    /// the days himself instead of an automatic time-budget spread).
     /// </summary>
-    public int ReplanAllOverdue()
+    public void ReplanOverdueTo(List<(Plan Plan, string TaskText, int OriginalDay, int NewDay)> assignments)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var overdue = OverdueAsOf(today).OrderBy(x => x.Task.AssignedDay).ToList();
-        if (overdue.Count == 0) return 0;
-
-        foreach (var group in overdue.GroupBy(x => x.Plan.Id))
-        {
-            var plan = group.First().Plan;
-            var day = plan.PlanDay + 1;
-            var budget = ReplanDailyBudgetMin;
-            foreach (var (_, item, _) in group)
-            {
-                var dur = item.Task.DurationMin ?? 30;
-                if (budget - dur < 0 && budget < ReplanDailyBudgetMin)
-                {
-                    day++;
-                    budget = ReplanDailyBudgetMin;
-                }
-                SaveOverride(plan.Id, item.Task.Text, item.OriginalDay, day);
-                budget -= dur;
-            }
-        }
-
+        if (assignments.Count == 0) return;
+        foreach (var (plan, taskText, originalDay, newDay) in assignments)
+            RescheduleTask(plan, taskText, originalDay, newDay);
         AddLedger(ReplanFlatFee, "replan_overdue",
-            $"replanned {overdue.Count} overdue task(s), flat fee");
-        return overdue.Count;
+            $"replanned {assignments.Count} overdue task(s), flat fee, user-picked days");
     }
 
     // ── schedule operations (ports of _swap_task_to_today / _mark_day_off) ──
