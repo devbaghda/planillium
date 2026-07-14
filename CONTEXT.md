@@ -262,40 +262,28 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   the piece the current bug report mentions — across every sibling before calling it done.
   Also: subscribe to any `AppNotificationManager` event *before* calling `.Register()` — the
   reverse order throws at the WinRT layer for this unpackaged app.
-- **2026-07-09** (three rounds, `winui-rebuild` kept in sync with `master`, both pushed):
-  Reports diary column width is now computed deterministically in code-behind from
-  `RootScroller`'s `ActualWidth` (three XAML-only attempts didn't hold — see `1e7dc07`).
-  Window size/position now clamped to `DisplayArea.WorkArea` at launch (was opening
-  off-screen with a stale saved size). Added a zero-padded (`dd.MM.yyyy`)
-  `CalendarDatePicker` to jump to a diary date. Fixed a real data-loss bug: shifting an
-  already-completed task's assigned day (move-to-today/reschedule/day-off) orphaned its
-  `task_completions` row, silently un-marking it — completed tasks are now excluded from
-  every such shift (business rule 7). Replaced move-to-today's forward-shift with backward
-  compaction — pulling a future task to today now closes the gap it leaves instead of
-  abandoning a dead day. "Get a head start on tomorrow?" now offers after *any* task today
-  is done, not only after all of them. Added a `multi_task_bonus_per_extra_task` scoring
-  rate. One live-data repair applied directly (`task_overrides` for
-  `claude-code-10-level-mastery`, 20 rows), only after the user's explicit reviewed
-  confirmation — see Standing lessons below. Deleted two stale `CLAUDE_HANDOFF.md` files
-  another tool left behind (already-merged rename instructions). Pulled the
-  testing/architecture lessons from this session into the `windows-app-tester` and
-  `windows-app-auditor` global skills (UIA-over-screenshots, `PrintWindow` flag 2,
-  reorder-shift-vs-completion-keying).
-- **2026-07-08**: Full 5-category audit + remediation (`2a7b31f`). Critical: TickTick
-  secret was in git history twice, rewritten out via `filter-branch` (the user still needs to
-  **rotate the actual secret** — history rewrite doesn't invalidate the value, see Open
-  TODOs). High: first-run activity-tracking disclosure added. 8 Medium/4 Low fixed
-  (activity_log retention, `ReportsPage.Render` decomposed, SQLite lock-error surfacing,
-  shared `HttpClient`, in-app data export/clear-history, dead Python-detection code
-  removed). Renamed app to "Planillium" (display/build identity only — repo folder/C#
-  namespace stay `MentorOverseer`); caught a `CredentialStore` target-name bug before it
-  could silently orphan the stored TickTick token. Repo consolidated: `master`
-  fast-forwarded to `winui-rebuild`, stale branches removed, ~430MB build cruft removed,
-  Python source retired.
-- **2026-07-07**: Full audit of the freshly-rebuilt WinUI app, all 18 findings applied
-  (global exception handlers, single-instance mutex, `DialogGate` semaphore,
-  `InvariantCulture` everywhere — OS locale is Russian, app language English). WinUI became
-  the sole app (Python retired the next day). v1.0.0 shipped (Inno Setup installer).
+- **2026-07-09** (three rounds): diary column width now computed from `RootScroller.ActualWidth`
+  in code-behind (XAML-only attempts didn't hold, `1e7dc07`); window clamped to
+  `DisplayArea.WorkArea` at launch; zero-padded `CalendarDatePicker` added to jump to a diary
+  date; fixed a data-loss bug where shifting an already-completed task's day orphaned its
+  `task_completions` row (completed tasks now excluded from every such shift, business rule 7);
+  move-to-today changed from forward-shift to backward compaction; "head start on tomorrow?"
+  now offers after *any* task today is done; added `multi_task_bonus_per_extra_task`; one
+  live-data repair applied directly (`task_overrides`, `claude-code-10-level-mastery`, 20 rows)
+  only after the user's explicit reviewed confirmation; pulled the session's testing/architecture
+  lessons into the `windows-app-tester`/`windows-app-auditor` global skills.
+- **2026-07-08**: Full 5-category audit + remediation (`2a7b31f`). Critical: TickTick secret
+  was in git history twice, rewritten out via `filter-branch` (secret itself rotated
+  2026-07-09). High: first-run activity-tracking disclosure added. 8M/4L fixed (retention,
+  `ReportsPage.Render` decomposed, SQLite lock-error surfacing, shared `HttpClient`, in-app
+  export/clear-history, dead Python-detection code removed). Renamed app to "Planillium"
+  (display/build identity only — repo/namespace stay `MentorOverseer`); caught a
+  `CredentialStore` target-name bug before it could orphan the stored TickTick token; repo
+  consolidated (`master` fast-forwarded to `winui-rebuild`, ~430MB cruft removed, Python retired).
+- **2026-07-07**: Full audit of the freshly-rebuilt WinUI app, all 18 findings applied (global
+  exception handlers, single-instance mutex, `DialogGate` semaphore, `InvariantCulture`
+  everywhere — OS locale Russian, app language English). WinUI became the sole app; v1.0.0
+  shipped (Inno Setup installer).
 - **Standing lessons** (apply every session, not just the one that taught them):
   - Check `end_of_day_summary_time` before killing a live instance near EOD — killing it
     early can skip the evening-review popup entirely for that day.
@@ -332,3 +320,8 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
+  - **Round-4 audit findings not yet remediated** (0 Critical/High, 8 Medium, 14 Low, 9 Info —
+    see the 2026-07-14 round-4 entry above and the full report for details): sidebar drift note
+    can go stale, drift-days formula duplicated, `SQLitePCLRaw` CVE-2025-6965, Reports/sidebar
+    "drift" naming collision, missing sidebar tooltip, plus assorted Low code-quality/polish
+    items. Awaiting the user's go-ahead to enter the fix loop.
