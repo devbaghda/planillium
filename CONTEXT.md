@@ -239,6 +239,21 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   mirroring the Plans page's own readout — refined moments later per the user's request to show
   a status line for *every* active plan, not just off-track ones: green "On track"/"Nd ahead
   of plan" or red "Nd late from plan".
+- **2026-07-14 (round 4)**: Full 5-pass independent audit right after the SDK bump/decomposition/
+  sidebar work above, plus a same-day UX refinement (sidebar plan block is now name-on-top +
+  larger colored status line below, spacing between plans — commit `481c95b`). 0 Critical/High,
+  8 Medium, 14 Low, 9 Info; report: https://claude.ai/code/artifact/edcb4afc-aea5-429d-bb30-4889c3b04ba6.
+  Not yet remediated — awaiting go-ahead. Headline findings: (1) the new sidebar drift note only
+  refreshes via `RefreshScore()`, which Schedule's day-off/move-to-today/reschedule and Plans'
+  excluded-weekdays editor never call, so it can show stale status; (2) the plan-drift-days formula
+  is duplicated verbatim in `MainWindow.Startup.cs` and `PlansPage.xaml.cs`; (3) `SQLitePCLRaw.lib.e_sqlite3`
+  2.1.6 (transitive via `Microsoft.Data.Sqlite`) carries CVE-2025-6965, not exploitable through any
+  query this app builds but a one-line `SQLitePCLRaw.bundle_e_sqlite3` pin fixes it; (4) Reports'
+  "SCHEDULE DRIFT" card uses a different formula than the sidebar/Plans-page "drift" despite sharing
+  the word, reading as a contradiction; (5) the sidebar's truncated plan name has no tooltip
+  (every other truncated-text spot in the app has one). Confirmed clean: the partial-class
+  decomposition is byte-for-byte identical to pre-split, no Critical/High in the app's own code,
+  no auto-updater/telemetry, all SQL parameterized, memory-protection flags on in the built exe.
 - **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH (a) the
   `IsOnScreen()`-check-then-toast-fallback pattern, and (b) an "already showing, don't
   reopen" guard — `StartEodWatcher` was missing (a) in round 2, `ReviewDialog` was missing
