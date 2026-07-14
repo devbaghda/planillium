@@ -236,7 +236,9 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   codepoints invisible in any terminal/diff and easy to corrupt by hand. Both verified with a
   full Debug+Release build, all 10 tests, and a live UIA pass across every page. Also added a
   short plan-drift note in the sidebar (`PlanDriftPanel`/`MainWindow.RefreshPlanDrift()`)
-  mirroring the Plans page's own readout, shown only for plans actually off-date.
+  mirroring the Plans page's own readout — refined moments later per the user's request to show
+  a status line for *every* active plan, not just off-track ones: green "On track"/"Nd ahead
+  of plan" or red "Nd late from plan".
 - **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH (a) the
   `IsOnScreen()`-check-then-toast-fallback pattern, and (b) an "already showing, don't
   reopen" guard — `StartEodWatcher` was missing (a) in round 2, `ReviewDialog` was missing

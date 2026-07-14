@@ -107,14 +107,15 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Short sidebar heads-up mirroring the Plans page's own drift readout
-    /// (originally-due date vs. where the plan will now actually finish,
-    /// from reschedules/day-offs pushing it later or early finishes pulling
-    /// it earlier) — only shown for plans actually off their original date,
-    /// so the pane stays quiet when nothing needs attention. Called from the
-    /// same places RefreshScore is, since every action that can move a
-    /// plan's finish date (reschedule, replan-overdue, completing/pulling a
-    /// task) already calls RefreshScore.
+    /// Short sidebar status line per active plan, mirroring the Plans page's
+    /// own drift readout (originally-due date vs. where the plan will now
+    /// actually finish, from reschedules/day-offs pushing it later or early
+    /// finishes pulling it earlier). Unlike the Plans page card, every active
+    /// plan gets a line here — on-track and ahead-of-plan show green so a
+    /// glance at the sidebar confirms things are fine, not just flags when
+    /// they aren't. Called from the same places RefreshScore is, since every
+    /// action that can move a plan's finish date (reschedule, replan-overdue,
+    /// completing/pulling a task) already calls RefreshScore.
     /// </summary>
     private void RefreshPlanDrift()
     {
@@ -131,10 +132,15 @@ public sealed partial class MainWindow
                 var currentEndDate = plan.DateForPlanDay(
                     tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : plan.TotalDaysComputed);
                 var driftDays = currentEndDate.DayNumber - originalEndDate.DayNumber;
-                if (driftDays == 0) continue;
+                var status = driftDays switch
+                {
+                    > 0 => $"{driftDays}d late from plan",
+                    < 0 => $"{-driftDays}d ahead of plan",
+                    _ => "On track",
+                };
                 PlanDriftPanel.Children.Add(new TextBlock
                 {
-                    Text = $"{plan.Name}: {(driftDays > 0 ? $"+{driftDays}d later" : $"{-driftDays}d earlier")}",
+                    Text = $"{plan.Name}: {status}",
                     FontSize = 11,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground = (Brush)Application.Current.Resources[

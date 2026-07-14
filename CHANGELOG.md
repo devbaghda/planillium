@@ -30,9 +30,10 @@ going forward; the original Python/Tkinter version is retired.
   or earlier (from finishing tasks ahead of schedule) — the original date
   never moves once a plan is created, so this is a running "am I still on
   track" readout, not a re-estimate
-- The same drift readout now also appears as a short note in the left
-  sidebar for any plan that's currently off its original date, so it's
-  visible without opening the Plans page
+- The same drift readout now also appears as a status line per active plan
+  in the left sidebar, without opening the Plans page: green "On track" or
+  "Nd ahead of plan" when you're keeping pace or running ahead, red "Nd
+  late from plan" when reschedules/excluded days have pushed it behind
 
 **Reports**
 - Fixed the diary list's column width visibly resizing depending on that
