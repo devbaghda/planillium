@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -58,7 +59,22 @@ public sealed partial class PlansPage : Page
                 var tasks = PlanStore.TasksFor(plan, db, completions);
                 var done = tasks.Count(t => t.Completed);
                 var complete = tasks.Count > 0 && done == tasks.Count;
-                ActiveList.Children.Add(PlanCard(plan, done, tasks.Count, complete));
+
+                // The plan's originally-due date never moves on its own —
+                // it's derived from each task's un-overridden Day (or the
+                // plan's own total_days field), neither of which changes
+                // when a task is rescheduled. The currently-due date is the
+                // same calculation but from AssignedDay, which does move —
+                // later from a reschedule/day-off pushing things back,
+                // earlier from pulling a task forward and compacting the
+                // gap it leaves. The gap between the two is exactly "how
+                // many days later/earlier the plan will now finish."
+                var originalEndDate = plan.DateForPlanDay(plan.TotalDaysComputed);
+                var currentEndDate = plan.DateForPlanDay(
+                    tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : plan.TotalDaysComputed);
+                var driftDays = currentEndDate.DayNumber - originalEndDate.DayNumber;
+
+                ActiveList.Children.Add(PlanCard(plan, done, tasks.Count, complete, originalEndDate, driftDays));
             }
             if (plans.Count == 0)
                 ActiveList.Children.Add(new TextBlock
@@ -89,7 +105,8 @@ public sealed partial class PlansPage : Page
             });
     }
 
-    private Border PlanCard(Plan plan, int done, int total, bool complete)
+    private Border PlanCard(Plan plan, int done, int total, bool complete,
+        DateOnly originalEndDate, int driftDays)
     {
         var grid = new Grid { Padding = new Thickness(18, 14, 18, 14), ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -116,6 +133,25 @@ public sealed partial class PlansPage : Page
             Text = metaLine,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             FontSize = 13,
+        });
+
+        // Originally-due date is fixed the moment the plan is created — it
+        // comes from each task's un-overridden Day (or the plan's own
+        // total_days), neither of which a reschedule ever touches. The
+        // "(+Nd)"/"(-Nd)" is how far the plan's actual finish has since
+        // drifted from that: later from reschedules/day-offs pushing tasks
+        // back, earlier from pulling a task forward and compacting the gap.
+        var dueLine = $"Originally due {originalEndDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}";
+        if (driftDays != 0)
+            dueLine += driftDays > 0 ? $" — now {driftDays}d later" : $" — now {-driftDays}d earlier";
+        left.Children.Add(new TextBlock
+        {
+            Text = dueLine,
+            Foreground = (Brush)Application.Current.Resources[
+                driftDays > 0 ? "SystemFillColorCriticalBrush"
+                : driftDays < 0 ? "SystemFillColorSuccessBrush"
+                : "TextFillColorTertiaryBrush"],
+            FontSize = 12,
         });
         var bar = new ProgressBar
         {
