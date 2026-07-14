@@ -1,3 +1,4 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -17,6 +18,16 @@ public sealed partial class ReportsPage
 
     // Diary search text, same survives-navigation treatment.
     private static string _diarySearch = "";
+
+    // The debounce timer itself is created once and reused across renders
+    // (NavigationCacheMode="Enabled" reuses this page instance, and
+    // BuildDiarySection runs on every Render — page nav, period switch, diary
+    // day nav). Only _diarySearchDebounceAction is reassigned per render, so
+    // a timer armed just before a re-render fires into the CURRENT render's
+    // RenderDiaryResults closure instead of a stale one from a torn-down
+    // diary panel (round-4 audit finding).
+    private DispatcherQueueTimer? _diarySearchDebounce;
+    private Action? _diarySearchDebounceAction;
 
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
@@ -211,10 +222,15 @@ public sealed partial class ReportsPage
         // — fine at personal-DB scale today, but a free anti-pattern to fix
         // while the file's already open, before it accumulates enough
         // history to actually be felt.
-        var searchDebounce = DispatcherQueue.CreateTimer();
-        searchDebounce.Interval = TimeSpan.FromMilliseconds(250);
-        searchDebounce.IsRepeating = false;
-        searchDebounce.Tick += (_, _) => RenderDiaryResults();
+        _diarySearchDebounceAction = RenderDiaryResults;
+        if (_diarySearchDebounce is null)
+        {
+            _diarySearchDebounce = DispatcherQueue.CreateTimer();
+            _diarySearchDebounce.Interval = TimeSpan.FromMilliseconds(250);
+            _diarySearchDebounce.IsRepeating = false;
+            _diarySearchDebounce.Tick += (_, _) => _diarySearchDebounceAction?.Invoke();
+        }
+        var searchDebounce = _diarySearchDebounce;
         searchBox.TextChanged += (_, _) =>
         {
             _diarySearch = searchBox.Text;

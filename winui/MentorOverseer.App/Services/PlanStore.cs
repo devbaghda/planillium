@@ -98,13 +98,6 @@ public static class PlanStore
     }
 
     /// <summary>
-    /// Surgical patch of one plan file's excluded_weekdays — parses as a raw
-    /// JsonNode rather than round-tripping through the Plan model, so fields
-    /// the C# model doesn't know about (hand-authored plans carry extras per
-    /// phase like days_range/cost_eur/effort/key_win) survive untouched. A
-    /// full deserialize-then-reserialize would silently drop them.
-    /// </summary>
-    /// <summary>
     /// planId is always attacker-free in practice today (plan files only
     /// ever come from the user's own filesystem, per plan.Id in Plan JSON
     /// they already have write access to), but this file-path build was one
@@ -122,6 +115,13 @@ public static class PlanStore
         return Path.Combine(AppPaths.ActivePlansDir, $"{planId}.json");
     }
 
+    /// <summary>
+    /// Surgical patch of one plan file's excluded_weekdays — parses as a raw
+    /// JsonNode rather than round-tripping through the Plan model, so fields
+    /// the C# model doesn't know about (hand-authored plans carry extras per
+    /// phase like days_range/cost_eur/effort/key_win) survive untouched. A
+    /// full deserialize-then-reserialize would silently drop them.
+    /// </summary>
     public static void SetExcludedWeekdays(string planId, List<int> weekdays)
     {
         var path = PlanFilePath(planId);

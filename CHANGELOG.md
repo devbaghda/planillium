@@ -33,7 +33,13 @@ going forward; the original Python/Tkinter version is retired.
 - The same drift readout now also appears as a status line per active plan
   in the left sidebar, without opening the Plans page: green "On track" or
   "Nd ahead of plan" when you're keeping pace or running ahead, red "Nd
-  late from plan" when reschedules/excluded days have pushed it behind
+  late from plan" when reschedules/excluded days have pushed it behind;
+  a long plan name shows its full text on hover, and the Plans page now
+  colors "on track" green too, matching the sidebar
+- The sidebar's plan status now actually updates after marking a day off,
+  moving a task to today, rescheduling, or changing a plan's excluded
+  weekdays — it used to only refresh after a few other actions, so it
+  could keep showing an out-of-date status after these
 
 **Reports**
 - Fixed the diary list's column width visibly resizing depending on that
@@ -57,6 +63,11 @@ going forward; the original Python/Tkinter version is retired.
   searching, instead of re-querying on every keystroke
 - Selecting "Year" on a brand-new install now shows "No activity logged
   yet" instead of a bare, unexplained empty table
+- Renamed the "SCHEDULE DRIFT" card to "EXCLUSION IMPACT" — it measures
+  something different from the Plans page/sidebar's "drift" status (how
+  much excluded days have pushed the calendar back, not how the plan's
+  finish date compares to its original one), and sharing the word read
+  like the two were contradicting each other
 
 **Activity tracking**
 - Your recurring days off are no longer tracked. On any weekday you've
@@ -110,6 +121,15 @@ going forward; the original Python/Tkinter version is retired.
   when your in-app theme differs from your Windows theme
 - Exported CSV reports now also escape a couple of less-common
   spreadsheet-formula characters the earlier fix missed
+- Long "now doing" text in the sidebar now ends with "…" when it's cut
+  off, instead of stopping mid-word with no sign it was shortened
+- The TickTick "Connect" dialog no longer shows your already-saved client
+  secret back to you (and WinUI's own "reveal password" button no longer
+  exposes it) — leave the field blank to keep the existing one, or type a
+  new value to replace it
+- Patched a known vulnerability in the bundled SQLite database engine
+  (CVE-2025-6965); nothing in this app ever triggered it, but the fix
+  costs nothing to take
 
 ## v1.0.0 — 2026-07-07
 

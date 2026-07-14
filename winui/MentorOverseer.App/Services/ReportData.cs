@@ -79,12 +79,12 @@ public static class ReportData
             for (var d = start; d <= today; d = d.AddDays(1))
             {
                 var ws = MondayOf(d);
-                weeks.TryAdd(ws.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), (ws, 0, 0));
+                weeks.TryAdd(ws.ToIsoDate(), (ws, 0, 0));
             }
             cmd.CommandText =
                 "SELECT date, category, SUM(duration_min) FROM time_diary " +
                 "WHERE date >= $from GROUP BY date, category";
-            cmd.Parameters.AddWithValue("$from", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$from", start.ToIsoDate());
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
@@ -92,7 +92,7 @@ public static class ReportData
                 var cat = r.GetString(1);
                 if (cat != "on_plan" && cat != "off_plan") continue;
                 var ws = MondayOf(d);
-                var key = ws.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var key = ws.ToIsoDate();
                 if (!weeks.TryGetValue(key, out var w)) continue;
                 var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
                 weeks[key] = cat == "on_plan" ? (w.WeekStart, w.On + mins, w.Off)
@@ -111,7 +111,7 @@ public static class ReportData
         // from diary_daily_rollup instead — the two never overlap (a date
         // only gets a rollup row once its raw rows are pruned), so summing
         // both sources is safe.
-        var fromStr = PeriodStart(ReportPeriod.Year, today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var fromStr = PeriodStart(ReportPeriod.Year, today).ToIsoDate();
         cmd.CommandText =
             "SELECT strftime('%Y-%m', date) AS mo, category, SUM(duration_min) " +
             "FROM time_diary WHERE date >= $from GROUP BY mo, category ORDER BY mo";
@@ -246,8 +246,8 @@ public static class ReportData
         cmd.CommandText =
             "SELECT id, date, start_time, end_time, duration_min, category, window, description " +
             "FROM time_diary WHERE date BETWEEN $from AND $to ORDER BY date DESC, start_time DESC";
-        cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
+        cmd.Parameters.AddWithValue("$to", to.ToIsoDate());
         var result = new List<DiaryEntry>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -288,11 +288,11 @@ public static class ReportData
         if (period == ReportPeriod.Day)
         {
             cmd.Parameters.AddWithValue("$pd",
-                today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                today.ToIsoDate());
             return "date = $pd";
         }
         cmd.Parameters.AddWithValue("$pd",
-            PeriodStart(period, today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            PeriodStart(period, today).ToIsoDate());
         return "date >= $pd";
     }
 }

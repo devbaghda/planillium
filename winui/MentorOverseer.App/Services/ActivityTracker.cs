@@ -345,7 +345,7 @@ public sealed class ActivityTracker : IDisposable
             "INSERT INTO time_diary " +
             "(date, start_time, end_time, duration_min, category, window, description) " +
             "VALUES ($d, $s, $e, $m, $c, $w, $x)";
-        cmd.Parameters.AddWithValue("$d", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
         cmd.Parameters.AddWithValue("$s", start.ToString("HH:mm", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$e", end.ToString("HH:mm", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$m", duration);
@@ -487,6 +487,14 @@ public sealed class ActivityTracker : IDisposable
     /// </summary>
     public void NotifySessionLocked() => _lockPending = true;
 
+    /// <summary>
+    /// Runs every <see cref="PollSeconds"/>. Kept as a short dispatcher —
+    /// rest-day short-circuit, then each of the four mutually-exclusive
+    /// concerns (session-lock, sleep-gap, idle-return, normal session
+    /// bookkeeping) lives in its own method below so a fix to one doesn't
+    /// require re-reading all the others (round-4 audit finding: this used
+    /// to be one ~130-line function tangling all five together).
+    /// </summary>
     private void PollOnce()
     {
         var now = DateTime.Now;
@@ -511,9 +519,33 @@ public sealed class ActivityTracker : IDisposable
         var idleS = IdleSeconds();
         var cls = EffectiveClass(Classify(title));
         var diaryEndToday = now.Date + DiaryEnd.ToTimeSpan();
+        var idleThresholdSec = _idleThresholdMin * 60;
 
         using var conn = AppPaths.OpenConnection();
 
+        HandleSessionLock(conn, now);
+        HandleSleepGap(conn, now, idleThresholdSec);
+        _lastPollAt = now;
+
+        _currentWindow = title;
+        _currentClass = cls;
+        CheckAlert(cls);
+        OnStatus?.Invoke(cls, title);
+
+        if (_idleNotified && idleS < idleThresholdSec)
+            HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS);
+        else if (InDiaryHours())
+            HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec);
+        else if (_sessionStart is DateTime open && _sessionApp != null)
+            HandleOutsideDiaryHours(conn, now, diaryEndToday, open);
+    }
+
+    /// <summary>Windows session lock/unlock (Win+L, screen-saver): close out
+    /// the current session immediately instead of waiting out the full idle
+    /// threshold, since <see cref="NotifySessionLocked"/> already told us the
+    /// user is definitely gone.</summary>
+    private void HandleSessionLock(SqliteConnection conn, DateTime now)
+    {
         if (_lockPending && !_idleNotified)
         {
             _lockPending = false;
@@ -529,92 +561,99 @@ public sealed class ActivityTracker : IDisposable
         {
             _lockPending = false;
         }
+    }
 
-        // Sleep detection: wall-clock gap far beyond the poll interval.
-        if (_lastPollAt is DateTime last)
-        {
-            var sleepS = (now - last).TotalSeconds - PollSeconds;
-            if (sleepS >= _idleThresholdMin * 60 && !_idleNotified)
-            {
-                if (_sessionStart is DateTime ss && _sessionApp != null)
-                {
-                    LogDiarySession(conn, ss, last, _sessionClass!, _sessionApp);
-                    _sessionStart = null; _sessionApp = null; _sessionClass = null;
-                }
-                _idleSince = last;
-                _idleNotified = true;
-            }
-        }
-        _lastPollAt = now;
+    /// <summary>Sleep detection: a wall-clock gap far beyond one poll
+    /// interval means the machine was asleep, not that the user sat idle for
+    /// that whole stretch — close out the session as of the last poll we
+    /// actually saw, not "now."</summary>
+    private void HandleSleepGap(SqliteConnection conn, DateTime now, int idleThresholdSec)
+    {
+        if (_lastPollAt is not DateTime last) return;
+        var sleepS = (now - last).TotalSeconds - PollSeconds;
+        if (sleepS < idleThresholdSec || _idleNotified) return;
 
-        _currentWindow = title;
-        _currentClass = cls;
-        CheckAlert(cls);
-        OnStatus?.Invoke(cls, title);
-
-        if (_idleNotified && idleS < _idleThresholdMin * 60)
+        if (_sessionStart is DateTime ss && _sessionApp != null)
         {
-            // Returned from idle/sleep.
-            var idleEnd = now < diaryEndToday ? now : diaryEndToday;
-            var idleStart = _idleSince ?? now.AddSeconds(-idleS);
-            var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
-            if (idleStart < diaryStartToday) idleStart = diaryStartToday;
-            // Don't re-cover time the evening-review gap sweep already logged.
-            DateTime? accountedUntil;
-            lock (_dayStateLock) { accountedUntil = _accountedUntil; }
-            if (accountedUntil is DateTime acc && idleStart < acc) idleStart = acc;
-
-            if (idleStart < idleEnd)
-            {
-                var actualMin = Math.Max(1, (int)(idleEnd - idleStart).TotalMinutes);
-                // Ask on return from idle at ANY hour, not only during diary
-                // hours — someone who finishes and steps away in the evening
-                // should still be asked where they were. idleStart/idleEnd are
-                // already clamped to the diary window just above, so a purely
-                // night-time gap collapses to nothing and never reaches here.
-                if (OnIdleReturn != null)
-                    OnIdleReturn.Invoke(actualMin, idleStart);
-                else if (idleStart < diaryEndToday)
-                    LogDiarySession(conn, idleStart, idleEnd, "idle", "idle");
-            }
-            _idleNotified = false;
-            _idleSince = null;
-            if (InDiaryHours())
-            {
-                _sessionStart = now; _sessionApp = title; _sessionClass = cls;
-            }
-        }
-        else if (InDiaryHours())
-        {
-            if (idleS >= _idleThresholdMin * 60)
-            {
-                if (!_idleNotified)
-                {
-                    if (_sessionStart is DateTime ss && _sessionApp != null)
-                    {
-                        LogDiarySession(conn, ss, now, _sessionClass!, _sessionApp);
-                        _sessionStart = null; _sessionApp = null; _sessionClass = null;
-                    }
-                    _idleSince = now.AddSeconds(-idleS);
-                    _idleNotified = true;
-                }
-            }
-            else if (_sessionStart is null)
-            {
-                _sessionStart = now; _sessionApp = title; _sessionClass = cls;
-            }
-            else if (title != _sessionApp)
-            {
-                LogDiarySession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!);
-                _sessionStart = now; _sessionApp = title; _sessionClass = cls;
-            }
-        }
-        else if (_sessionStart is DateTime open && _sessionApp != null)
-        {
-            var end = now < diaryEndToday ? now : diaryEndToday;
-            if (end > open)
-                LogDiarySession(conn, open, end, _sessionClass!, _sessionApp);
+            LogDiarySession(conn, ss, last, _sessionClass!, _sessionApp);
             _sessionStart = null; _sessionApp = null; _sessionClass = null;
         }
+        _idleSince = last;
+        _idleNotified = true;
+    }
+
+    /// <summary>Returned from idle/sleep: log the gap (or ask where the user
+    /// was, if a UI handler is wired up), then resume a fresh session.</summary>
+    private void HandleIdleReturn(SqliteConnection conn, DateTime now, string title, string cls,
+        DateTime diaryEndToday, double idleS)
+    {
+        var idleEnd = now < diaryEndToday ? now : diaryEndToday;
+        var idleStart = _idleSince ?? now.AddSeconds(-idleS);
+        var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
+        if (idleStart < diaryStartToday) idleStart = diaryStartToday;
+        // Don't re-cover time the evening-review gap sweep already logged.
+        DateTime? accountedUntil;
+        lock (_dayStateLock) { accountedUntil = _accountedUntil; }
+        if (accountedUntil is DateTime acc && idleStart < acc) idleStart = acc;
+
+        if (idleStart < idleEnd)
+        {
+            var actualMin = Math.Max(1, (int)(idleEnd - idleStart).TotalMinutes);
+            // Ask on return from idle at ANY hour, not only during diary
+            // hours — someone who finishes and steps away in the evening
+            // should still be asked where they were. idleStart/idleEnd are
+            // already clamped to the diary window just above, so a purely
+            // night-time gap collapses to nothing and never reaches here.
+            if (OnIdleReturn != null)
+                OnIdleReturn.Invoke(actualMin, idleStart);
+            else if (idleStart < diaryEndToday)
+                LogDiarySession(conn, idleStart, idleEnd, "idle", "idle");
+        }
+        _idleNotified = false;
+        _idleSince = null;
+        if (InDiaryHours())
+        {
+            _sessionStart = now; _sessionApp = title; _sessionClass = cls;
+        }
+    }
+
+    /// <summary>Normal in-hours bookkeeping: notice fresh idling, start the
+    /// first session of the day, or roll over to a new session when the
+    /// foreground app changes.</summary>
+    private void HandleActiveSession(SqliteConnection conn, DateTime now, string title, string cls,
+        double idleS, int idleThresholdSec)
+    {
+        if (idleS >= idleThresholdSec)
+        {
+            if (_idleNotified) return;
+            if (_sessionStart is DateTime ss && _sessionApp != null)
+            {
+                LogDiarySession(conn, ss, now, _sessionClass!, _sessionApp);
+                _sessionStart = null; _sessionApp = null; _sessionClass = null;
+            }
+            _idleSince = now.AddSeconds(-idleS);
+            _idleNotified = true;
+        }
+        else if (_sessionStart is null)
+        {
+            _sessionStart = now; _sessionApp = title; _sessionClass = cls;
+        }
+        else if (title != _sessionApp)
+        {
+            LogDiarySession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!);
+            _sessionStart = now; _sessionApp = title; _sessionClass = cls;
+        }
+    }
+
+    /// <summary>Outside diary hours with a session still open (crossed the
+    /// end-of-diary boundary mid-session): close it out at the boundary, not
+    /// at "now" — nothing gets logged past <see cref="DiaryEnd"/>.</summary>
+    private void HandleOutsideDiaryHours(SqliteConnection conn, DateTime now, DateTime diaryEndToday,
+        DateTime open)
+    {
+        var end = now < diaryEndToday ? now : diaryEndToday;
+        if (end > open)
+            LogDiarySession(conn, open, end, _sessionClass!, _sessionApp!);
+        _sessionStart = null; _sessionApp = null; _sessionClass = null;
     }
 }

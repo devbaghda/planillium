@@ -9,7 +9,7 @@
   "idle_threshold_minutes": 10,
   "end_of_day_summary_time": "20:00",
   "ticktick": {
-    "client_id": "MaG1F9KpgmuPB81UmX"
+    "client_id": ""
   },
   "activity_rules": {
     "on_plan": [

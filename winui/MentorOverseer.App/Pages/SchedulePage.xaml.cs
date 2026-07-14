@@ -259,20 +259,10 @@ public sealed partial class SchedulePage : Page
                 VerticalAlignment = VerticalAlignment.Top,
             };
             var d = day;
-            toggle.Click += (_, _) =>
-            {
-                try
-                {
-                    var plans = PlanStore.LoadActivePlans();
-                    var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
-                    using var db = new Database();
-                    using var score = new ScoreService(plans, db);
-                    if (isOff) score.UnmarkDayOff(p, d);
-                    else score.MarkDayOff(p, d);
-                }
-                catch (Exception ex) { Log.Error("SchedulePage.DayOff", ex); }
-                Render();
-            };
+            toggle.Click += (_, _) => PlanScoreAction.Run(plan,
+                (score, p) => { if (isOff) score.UnmarkDayOff(p, d); else score.MarkDayOff(p, d); },
+                "SchedulePage.DayOff",
+                () => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); });
             Grid.SetColumn(toggle, 1);
             grid.Children.Add(toggle);
         }
@@ -354,19 +344,9 @@ public sealed partial class SchedulePage : Page
                     Padding = new Thickness(6, 0, 6, 0),
                     VerticalAlignment = VerticalAlignment.Top,
                 };
-                move.Click += (_, _) =>
-                {
-                    try
-                    {
-                        var plans = PlanStore.LoadActivePlans();
-                        var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
-                        using var db = new Database();
-                        using var score = new ScoreService(plans, db);
-                        score.MoveTaskToToday(p, t.Task.Text);
-                    }
-                    catch (Exception ex) { Log.Error("SchedulePage.MoveToToday", ex); }
-                    Render();
-                };
+                move.Click += (_, _) => PlanScoreAction.Run(plan,
+                    (score, p) => score.MoveTaskToToday(p, t.Task.Text), "SchedulePage.MoveToToday",
+                    () => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); });
                 actions.Children.Add(move);
             }
 
@@ -385,21 +365,19 @@ public sealed partial class SchedulePage : Page
             };
             reschedule.Click += async (_, _) =>
             {
-                if (await Dialogs.RescheduleTaskDialog.ShowAsync(XamlRoot, plan, t)) Render();
+                if (await Dialogs.RescheduleTaskDialog.ShowAsync(XamlRoot, plan, t))
+                {
+                    Render();
+                    (App.MainWindow as MainWindow)?.RefreshScore();
+                }
             };
             actions.Children.Add(reschedule);
         }
 
         if (t.Task.Detail is { Length: > 0 })
         {
-            var details = new HyperlinkButton
-            {
-                Content = "Details",
-                FontSize = 12,
-                Padding = new Thickness(6, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(XamlRoot, t.Task);
+            var details = TaskDetailsLink.Build(XamlRoot, t.Task,
+                new Thickness(6, 0, 6, 0), VerticalAlignment.Top);
             actions.Children.Add(details);
         }
 

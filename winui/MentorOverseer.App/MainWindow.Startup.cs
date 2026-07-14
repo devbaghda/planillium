@@ -130,10 +130,7 @@ public sealed partial class MainWindow
             foreach (var plan in plans)
             {
                 var tasks = PlanStore.TasksFor(plan, db, completions);
-                var originalEndDate = plan.DateForPlanDay(plan.TotalDaysComputed);
-                var currentEndDate = plan.DateForPlanDay(
-                    tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : plan.TotalDaysComputed);
-                var driftDays = currentEndDate.DayNumber - originalEndDate.DayNumber;
+                var driftDays = plan.DriftDays(tasks);
                 var status = driftDays switch
                 {
                     > 0 => $"{driftDays}d late from plan",
@@ -141,14 +138,17 @@ public sealed partial class MainWindow
                     _ => "On track",
                 };
 
-                var block = new StackPanel { Spacing = 1 };
-                block.Children.Add(new TextBlock
+                var nameBlock = new TextBlock
                 {
                     Text = plan.Name,
                     FontSize = 11,
                     TextWrapping = TextWrapping.NoWrap,
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                });
+                };
+                ToolTipService.SetToolTip(nameBlock, plan.Name);
+
+                var block = new StackPanel { Spacing = 1 };
+                block.Children.Add(nameBlock);
                 block.Children.Add(new TextBlock
                 {
                     Text = status,
@@ -157,7 +157,16 @@ public sealed partial class MainWindow
                     Foreground = (Brush)Application.Current.Resources[
                         driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"],
                 });
-                PlanDriftPanel.Children.Add(block);
+                // Same subtle-fill chrome the activity pill above it uses, so
+                // the footer reads as one deliberate widget stack rather than
+                // bare text bolted under two chip-styled ones.
+                PlanDriftPanel.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(10, 6, 10, 6),
+                    Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+                    Child = block,
+                });
             }
         }
         catch (Exception ex)

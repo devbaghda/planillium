@@ -36,7 +36,7 @@ public static class KickoffDialog
         if (_showing) return false;
         if (DateTime.Now.TimeOfDay < ConfigService.WorkStartTime()) return false;
         return StateService.Load().LastKickoff !=
-               DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+               DateTime.Today.ToIsoDate();
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public static class KickoffDialog
     public static Task Trigger(MainWindow window)
     {
         if (!ShouldShow()) return Task.CompletedTask;
-        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var today = DateTime.Today.ToIsoDate();
         var name = ConfigService.UserName is { Length: > 0 } n ? n : "there";
         return PromptRouter.ShowOrToast(window, () => ShowAsync(window),
             () => _toastSentOn == today, () => _toastSentOn = today,
@@ -66,7 +66,7 @@ public static class KickoffDialog
     public static void MarkShownToday()
     {
         var state = StateService.Load();
-        state.LastKickoff = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        state.LastKickoff = DateTime.Today.ToIsoDate();
         StateService.Save(state);
     }
 

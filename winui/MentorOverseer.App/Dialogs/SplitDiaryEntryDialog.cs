@@ -131,7 +131,7 @@ public static class SplitDiaryEntryDialog
             using var db = new Database();
             db.DeleteDiaryEntry(id);
             var t = startTime;
-            var dateStr = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var dateStr = date.ToIsoDate();
             foreach (var (dur, cat, desc, _) in rows)
             {
                 var mins = (int)dur.Value;

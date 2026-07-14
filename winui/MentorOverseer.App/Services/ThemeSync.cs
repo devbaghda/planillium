@@ -34,9 +34,13 @@ namespace MentorOverseer.App.Services;
 /// The real fix: stop trying to discover these values at runtime. The
 /// Fluent color tokens for a fixed, small set of brushes are stable,
 /// versioned constants — copied here directly from this project's pinned
-/// Microsoft.WindowsAppSDK 1.5.240627000 package
+/// Microsoft.WindowsAppSDK package
 /// (lib/uap10.0/Microsoft.UI/Themes/generic.xaml, Light block ~line 7487,
-/// Dark block ~line 1966). Two keys (AccentFillColorDefaultBrush,
+/// Dark block ~line 1966). Re-diffed byte-for-byte against 1.8.260529003
+/// when the SDK was bumped from 1.5.240627000 (round-4 audit, 2026-07-14) —
+/// every value below was unchanged between the two versions. If the SDK is
+/// ever bumped again, re-diff generic.xaml again rather than trusting this
+/// note — don't assume it's still current. Two keys (AccentFillColorDefaultBrush,
 /// AccentTextFillColorPrimaryBrush) derive from the user's OS accent color
 /// instead of a fixed constant; those alias SystemAccentColorLight2/3 or
 /// SystemAccentColorDark1/2, which — unlike the ThemeDictionaries-scoped

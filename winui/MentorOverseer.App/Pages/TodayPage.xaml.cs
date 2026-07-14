@@ -339,33 +339,16 @@ public sealed partial class TodayPage : Page
         }
 
         var start = new Button { Content = "Start now", VerticalAlignment = VerticalAlignment.Center };
-        start.Click += (_, _) =>
-        {
-            try
-            {
-                var plans = PlanStore.LoadActivePlans();
-                var p = plans.FirstOrDefault(x => x.Id == plan.Id) ?? plan;
-                using var db = new Database();
-                using var score = new ScoreService(plans, db);
-                score.MoveTaskToToday(p, item.Task.Text);
-            }
-            catch (Exception ex) { Log.Error("TodayPage.GetAhead", ex); }
-            Render();
-            (App.MainWindow as MainWindow)?.RefreshScore();
-        };
+        start.Click += (_, _) => PlanScoreAction.Run(plan,
+            (score, p) => score.MoveTaskToToday(p, item.Task.Text), "TodayPage.GetAhead",
+            () => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); });
         Grid.SetColumn(start, 2);
         grid.Children.Add(start);
 
         if (item.Task.Detail is { Length: > 0 })
         {
-            var details = new HyperlinkButton
-            {
-                Content = "Details",
-                FontSize = 12,
-                Padding = new Thickness(6, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(XamlRoot, item.Task);
+            var details = TaskDetailsLink.Build(XamlRoot, item.Task,
+                new Thickness(6, 0, 0, 0), VerticalAlignment.Center);
             Grid.SetColumn(details, 3);
             grid.Children.Add(details);
         }
@@ -448,14 +431,8 @@ public sealed partial class TodayPage : Page
         // (unlike the mentor note) never had anywhere to display at all.
         if (item.Task.Detail is { Length: > 0 })
         {
-            var details = new HyperlinkButton
-            {
-                Content = "Details",
-                FontSize = 12,
-                Padding = new Thickness(6, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(XamlRoot, item.Task);
+            var details = TaskDetailsLink.Build(XamlRoot, item.Task,
+                new Thickness(6, 0, 0, 0), VerticalAlignment.Center);
             Grid.SetColumn(details, 3);
             grid.Children.Add(details);
         }

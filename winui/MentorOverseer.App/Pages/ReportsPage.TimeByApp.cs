@@ -1,3 +1,4 @@
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -212,7 +213,7 @@ public sealed partial class ReportsPage
         {
             Text = name,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            FontWeight = bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
         };
         if (!bold)

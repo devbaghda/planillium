@@ -60,19 +60,8 @@ public sealed partial class PlansPage : Page
                 var done = tasks.Count(t => t.Completed);
                 var complete = tasks.Count > 0 && done == tasks.Count;
 
-                // The plan's originally-due date never moves on its own —
-                // it's derived from each task's un-overridden Day (or the
-                // plan's own total_days field), neither of which changes
-                // when a task is rescheduled. The currently-due date is the
-                // same calculation but from AssignedDay, which does move —
-                // later from a reschedule/day-off pushing things back,
-                // earlier from pulling a task forward and compacting the
-                // gap it leaves. The gap between the two is exactly "how
-                // many days later/earlier the plan will now finish."
                 var originalEndDate = plan.DateForPlanDay(plan.TotalDaysComputed);
-                var currentEndDate = plan.DateForPlanDay(
-                    tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : plan.TotalDaysComputed);
-                var driftDays = currentEndDate.DayNumber - originalEndDate.DayNumber;
+                var driftDays = plan.DriftDays(tasks);
 
                 ActiveList.Children.Add(PlanCard(plan, done, tasks.Count, complete, originalEndDate, driftDays));
             }
@@ -147,10 +136,11 @@ public sealed partial class PlansPage : Page
         left.Children.Add(new TextBlock
         {
             Text = dueLine,
+            // On-track (driftDays == 0) reads as success-green here, same as
+            // the sidebar's mirrored status line — both treat "on schedule"
+            // as good news, not a neutral non-event.
             Foreground = (Brush)Application.Current.Resources[
-                driftDays > 0 ? "SystemFillColorCriticalBrush"
-                : driftDays < 0 ? "SystemFillColorSuccessBrush"
-                : "TextFillColorTertiaryBrush"],
+                driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"],
             FontSize = 12,
         });
         var bar = new ProgressBar
@@ -184,7 +174,11 @@ public sealed partial class PlansPage : Page
         var excludeDays = new Button { Content = "Excluded days…", VerticalAlignment = VerticalAlignment.Center };
         excludeDays.Click += async (_, _) =>
         {
-            if (await ExcludedWeekdaysDialog.ShowAsync(XamlRoot, plan)) Render();
+            if (await ExcludedWeekdaysDialog.ShowAsync(XamlRoot, plan))
+            {
+                Render();
+                (App.MainWindow as MainWindow)?.RefreshScore();
+            }
         };
         Grid.SetColumn(excludeDays, 3);
         grid.Children.Add(excludeDays);

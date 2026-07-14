@@ -110,8 +110,8 @@ public sealed partial class ReportsPage : Page
             var today = DateOnly.FromDateTime(DateTime.Today);
 
             Body.Children.Add(Card(ScoreCard(todayStat)));
-            if (DriftCard(plans, score, today) is { } drift)
-                Body.Children.Add(Card(drift));
+            if (ExclusionImpactCard(plans, score, today) is { } exclusionImpact)
+                Body.Children.Add(Card(exclusionImpact));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -195,34 +195,40 @@ public sealed partial class ReportsPage : Page
     /// the whole timeline, so a pattern widened partway through (2 days/week
     /// -> 3) reads as if the wider pattern had always applied, not just from
     /// the week it changed. Null when there's nothing to report.
+    /// Deliberately named apart from "drift" (used by the Plans page card and
+    /// the sidebar status line for a different, simpler comparison — current
+    /// finish date vs. originally-due finish date, via <see cref="Plan.DriftDays"/>)
+    /// — the two numbers can legitimately differ, and sharing a name made
+    /// that read as a contradiction rather than two distinct measurements
+    /// (round-4 audit finding).
     /// </summary>
-    private static StackPanel? DriftCard(List<Plan> plans, ScoreService score, DateOnly today)
+    private static StackPanel? ExclusionImpactCard(List<Plan> plans, ScoreService score, DateOnly today)
     {
         var overdueCount = score.OverdueAsOf(today).Count;
-        var driftLines = new List<string>();
+        var impactLines = new List<string>();
         foreach (var plan in plans.Where(p => p.PlanDay >= 1))
         {
             var naiveDate = plan.StartDateParsed.AddDays(plan.PlanDay - 1);
             var shiftDays = today.DayNumber - naiveDate.DayNumber;
             if (shiftDays > 0)
-                driftLines.Add($"{plan.Name}: day {plan.PlanDay} landed on {today:dd.MM} — " +
+                impactLines.Add($"{plan.Name}: day {plan.PlanDay} landed on {today:dd.MM} — " +
                                 $"{shiftDays} day(s) later than a straight count from " +
                                 $"{plan.StartDateParsed:dd.MM.yyyy} would put it.");
         }
-        if (driftLines.Count == 0 && overdueCount == 0) return null;
+        if (impactLines.Count == 0 && overdueCount == 0) return null;
 
-        var drift = new StackPanel { Spacing = 4 };
-        drift.Children.Add(Caption("SCHEDULE DRIFT"));
-        foreach (var line in driftLines)
-            drift.Children.Add(new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap });
+        var card = new StackPanel { Spacing = 4 };
+        card.Children.Add(Caption("EXCLUSION IMPACT"));
+        foreach (var line in impactLines)
+            card.Children.Add(new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap });
         if (overdueCount > 0)
-            drift.Children.Add(new TextBlock
+            card.Children.Add(new TextBlock
             {
                 Text = $"{overdueCount} task(s) currently overdue.",
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
             });
-        return drift;
+        return card;
     }
 
     /// <summary>Week-based rule-of-thumb suggestions, same period as the score card.</summary>

@@ -29,6 +29,14 @@ public static class ReportExport
         var dayRows = new StringBuilder();
         foreach (var s in stats)
         {
+            // Deliberately raw hex, not a WinUI ThemeResource lookup: this
+            // HTML is a portable, standalone file (opened outside the app,
+            // possibly on another machine/theme), so it needs colors baked
+            // in rather than following whatever theme happened to be active
+            // at export time. Mirrors the same great/bad/warning split as
+            // ReportsPage.Styling.cs's ScoreBrush — if that threshold or
+            // color intent is ever retuned, update both (round-4 audit
+            // finding: these two had no cross-reference before).
             var col = s.Score >= ScoreService.GreatDayThreshold ? "#30d158" : s.Score < 0 ? "#ff453a" : "#ff9f0a";
             dayRows.Append(
                 $"<tr><td>{s.Date.ToString("ddd dd.MM", CultureInfo.InvariantCulture)}</td>" +
@@ -123,7 +131,7 @@ public static class ReportExport
                 "On-plan (min)", "Off-plan (min)", "Score"));
             foreach (var s in stats)
                 sb.AppendLine(Csv(
-                    s.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    s.Date.ToIsoDate(),
                     s.Done.ToString(CultureInfo.InvariantCulture),
                     s.Total.ToString(CultureInfo.InvariantCulture),
                     s.OnMin.ToString(CultureInfo.InvariantCulture),

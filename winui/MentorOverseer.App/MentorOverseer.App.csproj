@@ -26,6 +26,12 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260529003" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.6" />
+    <!-- Microsoft.Data.Sqlite 8.0.6 still pulls SQLitePCLRaw.lib.e_sqlite3 2.1.6, whose
+         bundled SQLite engine (pre-3.50.2) carries CVE-2025-6965. Pinning the bundle
+         package directly overrides that transitive version via NuGet's highest-wins
+         resolution — no app code change, no behavior change, patched engine only.
+         (3.0.3 bundles SQLite 3.50.4.5, above the 3.50.2 fix threshold.) -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="H.NotifyIcon.WinUI" Version="2.1.3" />
   </ItemGroup>
   <ItemGroup>

@@ -82,7 +82,7 @@ public sealed partial class MainWindow
         ActivityDot.Fill = (Brush)Application.Current.Resources[brushKey];
 
         var app = window.Split('–', '—', '-')[0].Trim();
-        ActivityWindow.Text = app.Length > 60 ? app[..60] : app;
+        ActivityWindow.Text = app.Length > 60 ? app[..60] + "…" : app;
     }
 
     private static void Notify(string title, string message) => ToastNotifier.Show(title, message, tag: null);

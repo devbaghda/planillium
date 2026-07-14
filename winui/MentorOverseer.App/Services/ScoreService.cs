@@ -29,6 +29,12 @@ public sealed class ScoreService : IDisposable
     public const int OverdueAccrualCapDays = 3;
     public const int ReplanFlatFee = -10;
 
+    /// <summary>SQLite's "UNIQUE/PRIMARY KEY constraint violated" error code —
+    /// what a ledger insert throws when another connection already wrote
+    /// today's row first. Named once so the three catch clauses below agree
+    /// on what they're actually checking for.</summary>
+    private const int SqliteConstraintViolation = 19;
+
     /// <summary>The "strong day" bar Reports/ReviewDialog/ReportExport all
     /// use to color/celebrate a score — named once so the three copies can't
     /// silently drift out of agreement if it's ever tuned.</summary>
@@ -133,7 +139,7 @@ public sealed class ScoreService : IDisposable
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT category, SUM(duration_min) FROM time_diary " +
                           "WHERE date=$d GROUP BY category";
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
@@ -197,7 +203,7 @@ public sealed class ScoreService : IDisposable
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT 1 FROM score_ledger WHERE reason=$r AND date=$d";
         cmd.Parameters.AddWithValue("$r", reason);
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
         return cmd.ExecuteScalar() != null;
     }
 
@@ -207,7 +213,7 @@ public sealed class ScoreService : IDisposable
         cmd.CommandText = "INSERT INTO score_ledger (ts, date, delta, reason, detail) " +
                           "VALUES ($ts, $d, $delta, $r, $x)";
         cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$d", (forDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", (forDate ?? DateOnly.FromDateTime(DateTime.Today)).ToIsoDate());
         cmd.Parameters.AddWithValue("$delta", delta);
         cmd.Parameters.AddWithValue("$r", reason);
         cmd.Parameters.AddWithValue("$x", (object?)detail ?? DBNull.Value);
@@ -225,7 +231,7 @@ public sealed class ScoreService : IDisposable
         {
             AddLedger(score, "daily_score", $"day score {score}", d);
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {
             return null;  // the other app credited this date between check and insert
         }
@@ -278,7 +284,7 @@ public sealed class ScoreService : IDisposable
         {
             AddLedger(delta, "overdue_accrual", $"{count} task(s) still overdue (3-day cap)", d);
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {
             return null;  // the other app credited this date between check and insert
         }
@@ -303,8 +309,8 @@ public sealed class ScoreService : IDisposable
     {
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM score_ledger WHERE date >= $from AND date <= $to";
-        cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
+        cmd.Parameters.AddWithValue("$to", to.ToIsoDate());
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
@@ -337,7 +343,7 @@ public sealed class ScoreService : IDisposable
             AddLedger(bonus, "weekly_comeback_bonus",
                 "recovered from a losing week", d.AddDays(-7));
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {
             return null;  // the other app credited this date between check and insert
         }
@@ -508,7 +514,7 @@ public sealed class ScoreService : IDisposable
         cmd.CommandText =
             "INSERT INTO reflections (date, text) VALUES ($d, $t) " +
             "ON CONFLICT(date) DO UPDATE SET text=excluded.text";
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
         cmd.Parameters.AddWithValue("$t", text);
         cmd.ExecuteNonQuery();
     }
@@ -526,7 +532,7 @@ public sealed class ScoreService : IDisposable
     {
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT text FROM reflections WHERE date=$d";
-        cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$d", d.ToIsoDate());
         return cmd.ExecuteScalar() as string;
     }
 

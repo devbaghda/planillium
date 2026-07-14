@@ -10,6 +10,10 @@ namespace MentorOverseer.App.Pages;
 // see ReportsPage.xaml.cs for the file split.
 public sealed partial class ReportsPage
 {
+    // Mirrors the same great/bad/warning split as ReportExport.cs's exported
+    // HTML (raw hex there, since that file has to render correctly outside
+    // this app/theme entirely) — if this threshold or color intent is ever
+    // retuned, update both (round-4 audit finding).
     private static Brush ScoreBrush(int score) =>
         (Brush)Application.Current.Resources[
             score >= ScoreService.GreatDayThreshold ? "SystemFillColorSuccessBrush"

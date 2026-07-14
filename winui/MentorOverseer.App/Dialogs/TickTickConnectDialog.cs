@@ -28,10 +28,16 @@ public static class TickTickConnectDialog
             Header = "Client ID",
             Text = ConfigService.TickTickClientId,
         };
+        // Never redisplay a secret that's already saved — WinUI's PasswordBox
+        // ships with a one-click "reveal" icon, so pre-filling it would let
+        // the real secret be read straight off this dialog (round-4 audit
+        // finding). Left blank on reopen; blank on save means "keep what's
+        // already stored," only a fresh value overwrites it.
+        var hasSavedSecret = TickTickAuth.ClientSecret is { Length: > 0 };
         var secretBox = new PasswordBox
         {
             Header = "Client secret",
-            Password = TickTickAuth.ClientSecret ?? "",
+            PlaceholderText = hasSavedSecret ? "Already saved — leave blank to keep it" : "",
         };
         var status = new TextBlock
         {
@@ -66,7 +72,7 @@ public static class TickTickConnectDialog
                 args.Cancel = true;   // stay open until the flow finishes
                 var id = idBox.Text.Trim();
                 var secret = secretBox.Password.Trim();
-                if (id.Length == 0 || secret.Length == 0)
+                if (id.Length == 0 || (secret.Length == 0 && !hasSavedSecret))
                 {
                     status.Text = "Both fields are required.";
                     return;
@@ -79,7 +85,9 @@ public static class TickTickConnectDialog
                     tt["client_id"] = id;
                     cfg["ticktick"] = tt;
                 });
-                if (!TickTickAuth.SaveClientSecret(secret))
+                // Blank means "keep the already-saved secret" — only a typed
+                // value overwrites Credential Manager.
+                if (secret.Length > 0 && !TickTickAuth.SaveClientSecret(secret))
                 {
                     status.Text = "Couldn't save the secret to Windows Credential Manager.";
                     return;

@@ -44,7 +44,7 @@ public static class ReviewDialog
     private static bool ShouldOffer()
     {
         if (_showing) return false;
-        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var today = DateTime.Today.ToIsoDate();
         if (_offeredOn == today) return false;
         // ">=" via negated "<", not "==": an exact-minute match on a
         // drifting 1-minute timer can skip the minute and never offer the
@@ -65,7 +65,7 @@ public static class ReviewDialog
     public static Task Trigger(MainWindow window)
     {
         if (!ShouldOffer()) return Task.CompletedTask;
-        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var today = DateTime.Today.ToIsoDate();
         return PromptRouter.ShowOrToast(window, () => ShowAsync(window),
             () => _toastSentOn == today, () => _toastSentOn = today,
             "Day review ready.", "See how today went — click to close out the day.",
@@ -260,7 +260,7 @@ public static class ReviewDialog
         };
 
         var result = await DialogGate.ShowAsync(dialog);
-        _offeredOn = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _offeredOn = DateTime.Today.ToIsoDate();
         if (result == ContentDialogResult.Primary)
         {
             score.CreditDayScoreIfMissing(today);
@@ -269,7 +269,7 @@ public static class ReviewDialog
             if (reflection.Text.Trim() is { Length: > 0 } text)
                 score.SaveReflection(today, text);
             var state = StateService.Load();
-            state.LastReview = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            state.LastReview = DateTime.Today.ToIsoDate();
             StateService.Save(state);
             window.RefreshScore();
         }

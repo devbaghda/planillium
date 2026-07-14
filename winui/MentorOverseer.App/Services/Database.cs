@@ -185,7 +185,7 @@ public sealed class Database : IDisposable
     public void PruneAndRollupDiary(int retentionDays = DiaryRetentionDays)
     {
         var cutoff = DateOnly.FromDateTime(DateTime.Today).AddDays(-retentionDays)
-            .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            .ToIsoDate();
 
         using (var rollup = _conn.CreateCommand())
         {

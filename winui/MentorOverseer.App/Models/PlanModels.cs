@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace MentorOverseer.App.Models;
@@ -80,6 +81,24 @@ public class Plan
                     if (task.Day > max) max = task.Day;
             return max;
         }
+    }
+
+    /// <summary>
+    /// Days late (positive) or ahead (negative) of this plan's originally-due
+    /// finish date — the single source of truth both the Plans page card and
+    /// the sidebar status line read from, so they can't drift apart from each
+    /// other the way two independently-typed copies of this formula could.
+    /// The originally-due date comes from un-overridden <see cref="TotalDaysComputed"/>,
+    /// which never moves; the currently-due date follows wherever the last
+    /// task's <see cref="AssignedTask.AssignedDay"/> has ended up after any
+    /// reschedules/day-offs/early finishes.
+    /// </summary>
+    public int DriftDays(List<AssignedTask> tasks)
+    {
+        var originalEndDate = DateForPlanDay(TotalDaysComputed);
+        var currentEndDate = DateForPlanDay(
+            tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : TotalDaysComputed);
+        return currentEndDate.DayNumber - originalEndDate.DayNumber;
     }
 }
 
