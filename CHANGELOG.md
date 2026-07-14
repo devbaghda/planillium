@@ -17,6 +17,19 @@ going forward; the original Python/Tkinter version is retired.
 - Added a multi-task bonus: each task completed beyond the first one on the
   same day now earns extra points on top of the flat per-task credit,
   shown as its own line in the evening review breakdown
+- "Reschedule…" (pick any day; whatever's already on that day, and
+  everything after it, shifts forward by one) is now available on every
+  open task on the Schedule page — previously only overdue tasks had it;
+  today's and future tasks were stuck with no way to pick a specific day
+- "Replan all overdue" no longer auto-spreads every overdue task across
+  the coming days for you — it now shows one date-picker per overdue
+  task in a single dialog, so you choose exactly which day each one lands
+  on before anything is saved
+- The Plans page now shows each plan's originally-due date alongside how
+  many days it's since drifted later (from reschedules or excluded days)
+  or earlier (from finishing tasks ahead of schedule) — the original date
+  never moves once a plan is created, so this is a running "am I still on
+  track" readout, not a re-estimate
 
 **Reports**
 - Fixed the diary list's column width visibly resizing depending on that
@@ -33,6 +46,13 @@ going forward; the original Python/Tkinter version is retired.
   tail of the previous week
 - "Time by app" now shows your three biggest time sinks by default, with a
   "Show more" link that expands the full list on demand
+- "Time by app" bars now show a fourth color for time you've manually
+  marked as paid work, instead of the bar quietly falling short of its
+  own total-minutes label
+- The diary search box now waits for a brief pause in typing before
+  searching, instead of re-querying on every keystroke
+- Selecting "Year" on a brand-new install now shows "No activity logged
+  yet" instead of a bare, unexplained empty table
 
 **Activity tracking**
 - Your recurring days off are no longer tracked. On any weekday you've
@@ -72,11 +92,20 @@ going forward; the original Python/Tkinter version is retired.
 - Exported CSV reports now escape any tracked text that starts with a
   formula character, closing the same spreadsheet-safety gap the HTML
   export already had
-- "Clear activity history" now tells you if a saved report/export file
-  still exists on disk, since clearing history doesn't remove those
-  separately-saved copies
+- "Clear activity history" now offers to delete those saved report/export
+  files in the same action, instead of only warning you they still exist
 - "Show more apps" now reads correctly whether there's one hidden app or
   several
+- Skipped "where have you been?" answers no longer occasionally show up
+  as a suggested quick-reply chip
+- Saving which weekdays a plan excludes now tells you if it fails to
+  save, instead of closing as if it worked
+- The evening review could occasionally pop up a duplicate of itself if
+  left open for more than a minute — fixed
+- Fixed a mismatched card background on the Reports page's reflection box
+  when your in-app theme differs from your Windows theme
+- Exported CSV reports now also escape a couple of less-common
+  spreadsheet-formula characters the earlier fix missed
 
 ## v1.0.0 — 2026-07-07
 

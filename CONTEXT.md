@@ -197,60 +197,46 @@ archive — full blow-by-blow detail for any entry lives in git log/commit messa
 Compress aggressively rather than letting this grow forever (compressed 852→224 lines on
 2026-07-06; compressed again, ~230→~50 lines, on 2026-07-09)._
 
-- **2026-07-13** (`winui-rebuild`, merged + remediated + re-audited, all committed and
-  deployed to the live Release instance): six feature changes (calendar-period reports;
-  day-off pause via `PlanStore.IsRestDay` — confirmed with the user as *recurring excluded
-  weekdays only*, not manual mark-day-off; "where have you been" fires any hour + sweeps
-  gaps at evening review; tray-toast routing for kickoff/idle-return via new
-  `Services/ToastNotifier.cs`) were built, then round-1 audited (4 High/15 Medium/18 Low/4
-  Info — https://claude.ai/code/artifact/7cb9538b-4859-4eea-ac1a-396b6f722282), then merged
-  with the long-unmerged `audit-fixes-2026-07-09` branch (2 conflicts, both resolved by
-  combining both branches' logic, not picking one side). Remediation commit `4014b00` fixed
-  both round-1 Highs still open post-merge (kickoff-toast marked-shown-before-seen; unguarded
-  `MainWindow()` ctor crash — now try/catch + `MessageBoxW` fallback) plus 9 Medium/9 Low
-  (cross-thread race in `ActivityTracker` via new `_dayStateLock`; CSV formula-injection
-  escaping; `ReportData.Buckets`/`TopDistractions`/`AppBreakdown` now share the caller's
-  connection — `DiaryInRange` deliberately still opens its own, see its doc comment, since a
-  long-lived UI closure calls it after `Render()`'s connection is gone; `ScoreService.
-  GreatDayThreshold` constant; explicit `asInvoker` manifest; WAL mode).
-  **Round-2 audit** (5 fresh passes against the merged+fixed code, not trusting round 1's or
-  the remediation commit's own descriptions) confirmed all 4 round-1 Highs genuinely fixed,
-  but found **1 new High, fixed later the same session**: `StartEodWatcher` (`MainWindow.xaml.cs:459`) was
-  never given the `IsOnScreen()`/toast-fallback routing the kickoff/idle-return fixes got, so
-  it can open `ReviewDialog` while the window's hidden to tray and wedge `DialogGate`'s single
-  process-wide semaphore for every other dialog in the app until someone manually finds it.
-  Plus 14 Medium/13 Low — highlights: the `'dismissed'`→`'unaccounted time'` rename missed the
-  SQL filter that hides it from suggestion chips (`Database.cs:225`); diary-row checkboxes all
-  share one generic accessible name; a theme brush (`CardBackgroundFillColorSecondaryBrush`)
-  is missing from `ThemeSync`, causing a mismatched card when in-app/Windows themes differ;
-  diary search runs a fresh query on every keystroke, undebounced; the new test suite covers
-  task-scheduling but not the `ComputeDayScore` formula it's named after; `ReportsPage`/
-  `MainWindow` grew further past their round-1 God-Object flags; clear-history still only
-  warns about leftover export files instead of offering to delete them; kickoff/idle-return
-  toasts write literal "away N min" text into Windows' Action Center with no dedup tag, so
-  they accumulate. Full report: https://claude.ai/code/artifact/1f5b15bb-c6d5-4ea0-a1db-a46b984db19e.
-  Also this session: untracked `config.json`/`plans/active/*.json` from git going forward
-  (`.gitignore` + `git rm --cached`, commit `9be8515` — history NOT purged, files still readable
-  in past commits, see Open TODOs); ran `git reflog expire --expire=now --all && git gc
-  --prune=now --aggressive` (the user's explicit confirmation) to finish the incomplete
-  2026-07-09 secret cleanup — 0 dangling objects now; left the new
-  `plans/active/claude-code-10-level-mastery.json` untracked, consistent with the gitignore
-  decision. **Fixed the `StartEodWatcher` wedge same session**: added `ReviewDialog.Trigger`
-  (mirrors `KickoffDialog.Trigger`) with its own `_offeredOn`/`_toastSentOn` split — offered-once
-  bookkeeping now moved from `MainWindow` into `ReviewDialog` and only set once the dialog has
-  actually shown, not merely offered, same fix shape as the round-1 kickoff-toast bug. Added
-  `ToastArgs.Review` + click-through in `HandleNotificationActivation`. Rebuilt Debug (0
-  warnings, 4/4 tests pass) and Release, redeployed to the live instance, verified via `wmic` +
-  log tail + UI Automation.
-- **Standing lesson**: when wiring any `AppNotificationManager` event subscription, subscribe
-  *before* calling `.Register()` — the reverse order throws at the WinRT layer for this
-  unpackaged app. Separately: any new "show a prompt on a timer" trigger must route through
-  the same `IsOnScreen()`-check-then-toast-fallback pattern as `KickoffDialog.Trigger`/
-  `IdleReturnDialog.Trigger` — `StartEodWatcher` skipping this is exactly what caused this
-  session's new High finding. When a feature adds this pattern to some triggers, grep for
-  every other timer-driven `ShowAsync`/dialog-opening call before calling it done, the same
-  "check every sibling" lesson as the regression-prevention entry below, just for a different
-  pattern shape.
+- **2026-07-13**: Six feature changes (calendar-period reports; day-off pause, confirmed
+  *recurring excluded weekdays only*; "where have you been" any hour + evening-review gap
+  sweep; tray-toast routing via new `Services/ToastNotifier.cs`) → round-1 audit (4H/15M/18L/4I,
+  https://claude.ai/code/artifact/7cb9538b-4859-4eea-ac1a-396b6f722282) → merged with the
+  long-unmerged `audit-fixes-2026-07-09` branch → remediation commit `4014b00` (both round-1
+  Highs + 9M/9L) → round-2 audit (1 new High: `StartEodWatcher` could wedge `DialogGate` by
+  opening `ReviewDialog` while hidden to tray, fixed same session via `ReviewDialog.Trigger`
+  mirroring `KickoffDialog.Trigger`; 14M/13L, https://claude.ai/code/artifact/1f5b15bb-c6d5-4ea0-a1db-a46b984db19e).
+  Also: `config.json`/`plans/active/*.json` gitignored + untracked going forward (commit
+  `9be8515`, history NOT purged — see Open TODOs); finished the incomplete 2026-07-09 secret
+  cleanup (`git gc`, 0 dangling objects).
+- **2026-07-14**: Applied all 27 round-2 findings except the 2 the user explicitly deferred
+  (ReportsPage/MainWindow God-Object decomposition, WindowsAppSDK version bump — both
+  accepted debt, see Open TODOs) — commit `1724e14`. Added `ScoreServiceScoringTests.cs`
+  (`ComputeDayScore` had zero test coverage despite being the formula 3 UI surfaces depend
+  on) and `Dialogs/PromptRouter.cs` (extracted the show-dialog-or-toast routing 3 dialogs had
+  each duplicated). **Round-3 audit** (2 full agent passes — architecture, security — plus
+  3 done by hand after an agent session-limit interruption) found all 27 fixes held, plus
+  **1 new High, fixed same session**: `ReviewDialog` never got `KickoffDialog`'s
+  "already showing, don't reopen" guard, so leaving the review dialog open past one
+  EOD-watcher tick (1 min) could queue a duplicate behind it — fixed via the same
+  `_showing`/`ShowCore` split `KickoffDialog` uses, enforced in both `Trigger` and
+  `ShowAsync` directly since `TodayPage`'s manual Review button bypasses `Trigger`. Full
+  report: https://claude.ai/code/artifact/8bcbfc6d-c998-4084-840c-23e8641483c2. Mid-round,
+  the user asked for two scheduling features, both shipped and verified live via read-only UI
+  Automation: (1) "Reschedule…" (pick any day; that day's task + everything after shifts
+  forward one) is now on every open task, not just overdue ones — `SchedulePage.xaml.cs`.
+  (2) "Replan all overdue" is no longer automatic; new `Dialogs/ReplanOverdueDialog` shows
+  one date-picker per overdue task, applied via `ScoreService.ReplanOverdueTo` (removed the
+  now-unused `ReplanAllOverdue`/`ReplanDailyBudgetMin`). Also added: Plans page shows each
+  plan's originally-due date (from un-overridden `Day`/`total_days`, fixed by construction)
+  alongside how many days it's drifted from reschedules/early finishes — `PlansPage.xaml.cs`.
+- **Standing lesson**: any "show a prompt on a timer" trigger needs BOTH (a) the
+  `IsOnScreen()`-check-then-toast-fallback pattern, and (b) an "already showing, don't
+  reopen" guard — `StartEodWatcher` was missing (a) in round 2, `ReviewDialog` was missing
+  (b) in round 3, same underlying lesson two rounds running: when one dialog (kickoff) has a
+  safety pattern another sibling (review) doesn't, grep for the *whole* pattern — not just
+  the piece the current bug report mentions — across every sibling before calling it done.
+  Also: subscribe to any `AppNotificationManager` event *before* calling `.Register()` — the
+  reverse order throws at the WinRT layer for this unpackaged app.
 - **2026-07-09** (three rounds, `winui-rebuild` kept in sync with `master`, both pushed):
   Reports diary column width is now computed deterministically in code-behind from
   `RootScroller`'s `ActualWidth` (three XAML-only attempts didn't hold — see `1e7dc07`).
@@ -321,3 +307,12 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
+  - **`ReportsPage.xaml.cs` (~1050 lines) / `MainWindow.xaml.cs` (~610 lines) decomposition**:
+    both flagged as God Objects across rounds 1-3 of the audit; the user explicitly deferred
+    splitting them (2026-07-14, via AskUserQuestion) — real regression risk on a live app
+    with no UI test coverage, revisit with dedicated time for manual smoke-testing, not
+    folded into a larger fix batch.
+  - **`Microsoft.WindowsAppSDK` version bump**: pinned to `1.5.240627000` (~2 years old as of
+    2026-07-14), no known CVE tied to it. the user explicitly deferred upgrading — real
+    compatibility risk (WinUI has had breaking changes between minor versions), needs a
+    dedicated task with time to fully re-test afterward.
