@@ -79,6 +79,9 @@ going forward; the original Python/Tkinter version is retired.
   moving a task to today, rescheduling, or changing a plan's excluded
   weekdays — it used to only refresh after a few other actions, so it
   could keep showing an out-of-date status after these
+- The sidebar now also shows each active plan's currently-expected finish
+  date under its drift status, so you can see it at a glance without
+  opening the Plans page
 
 **Reports**
 - The Day/Week/Month/Year selector now reads correctly to screen readers as
@@ -156,6 +159,9 @@ going forward; the original Python/Tkinter version is retired.
   interactive dialog as before
 - Microsoft Teams is now recognized as a messaging app while you're
   actually using it, not just after the fact in your weekly report
+- The "where have you been?" prompt now shows the actual clock time you were
+  away (e.g. "10:04–10:46"), not just the number of minutes, so you don't
+  have to do the math yourself to place it in your day
 
 **Startup**
 - Fixed the window opening partially off-screen (or oversized) when a
@@ -209,6 +215,10 @@ going forward; the original Python/Tkinter version is retired.
 - Fixed several places where typed times (e.g. saving your work hours, or
   editing a diary entry's start/end time) could be read incorrectly on a
   non-English Windows install
+- Fixed a bug in all three "Add Plan" wizard prompt templates where the
+  generated JSON's phase names silently went missing on import — the
+  templates asked Claude to label each phase with the wrong field name, so
+  the phase name never made it into the app
 
 ## v1.0.0 — 2026-07-07
 

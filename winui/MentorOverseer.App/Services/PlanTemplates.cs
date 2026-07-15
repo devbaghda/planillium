@@ -56,7 +56,7 @@ the plan, not just visible here in chat. Match this exact schema:
   },
   "phases": [
     {
-      "title": "Phase name (e.g. Foundations, Applied practice, Stress-testing)",
+      "name": "Phase name (e.g. Foundations, Applied practice, Stress-testing)",
       "tasks": [
         {
           "day": 1,
@@ -137,7 +137,7 @@ the plan, not just visible here in chat. Match this exact schema:
   },
   "phases": [
     {
-      "title": "Phase name (e.g. Research & decisions, Paperwork & logistics, Execution)",
+      "name": "Phase name (e.g. Research & decisions, Paperwork & logistics, Execution)",
       "tasks": [
         {
           "day": 1,
@@ -185,7 +185,7 @@ nothing else inside the fence, matching this exact schema:
   "total_days": 14,
   "phases": [
     {
-      "title": "Use my own phase/section names if I had them, otherwise group logically",
+      "name": "Use my own phase/section names if I had them, otherwise group logically",
       "tasks": [
         {
           "day": 1,

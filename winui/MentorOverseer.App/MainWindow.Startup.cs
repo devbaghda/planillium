@@ -115,7 +115,10 @@ public sealed partial class MainWindow
     /// glance at the sidebar confirms things are fine, not just flags when
     /// they aren't. Each block is a truncated plan name (regular sidebar text)
     /// over a colored status line (larger, since that's the part worth
-    /// noticing at a glance). Called from the same places RefreshScore is,
+    /// noticing at a glance) and a small "Finishes dd.MM.yyyy" line underneath
+    /// (the same projected finish date the status line's drift is measured
+    /// against, added 2026-07-15 so the date itself is visible without a trip
+    /// to the Plans page). Called from the same places RefreshScore is,
     /// since every action that can move a plan's finish date (reschedule,
     /// replan-overdue, completing/pulling a task) already calls RefreshScore.
     /// </summary>
@@ -137,6 +140,11 @@ public sealed partial class MainWindow
                     < 0 => $"{-driftDays}d ahead of plan",
                     _ => "On track",
                 };
+                // Same "dd.MM.yyyy" formatting the Plans page card uses for
+                // its own "Originally due" line, so the two readouts of the
+                // same underlying date don't drift apart visually.
+                var finishText = "Finishes " +
+                    plan.CurrentEndDate(tasks).ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
 
                 var nameBlock = new TextBlock
                 {
@@ -156,6 +164,12 @@ public sealed partial class MainWindow
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                     Foreground = (Brush)Application.Current.Resources[
                         driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"],
+                });
+                block.Children.Add(new TextBlock
+                {
+                    Text = finishText,
+                    FontSize = 11,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 });
                 // Same subtle-fill chrome the activity pill above it uses, so
                 // the footer reads as one deliberate widget stack rather than

@@ -93,13 +93,14 @@ public class Plan
     /// task's <see cref="AssignedTask.AssignedDay"/> has ended up after any
     /// reschedules/day-offs/early finishes.
     /// </summary>
-    public int DriftDays(List<AssignedTask> tasks)
-    {
-        var originalEndDate = DateForPlanDay(TotalDaysComputed);
-        var currentEndDate = DateForPlanDay(
-            tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : TotalDaysComputed);
-        return currentEndDate.DayNumber - originalEndDate.DayNumber;
-    }
+    public int DriftDays(List<AssignedTask> tasks) =>
+        CurrentEndDate(tasks).DayNumber - DateForPlanDay(TotalDaysComputed).DayNumber;
+
+    /// <summary>Calendar date the plan is currently projected to finish on,
+    /// after any reschedules/day-offs/early finishes — the same figure
+    /// <see cref="DriftDays"/> compares against the originally-due date.</summary>
+    public DateOnly CurrentEndDate(List<AssignedTask> tasks) =>
+        DateForPlanDay(tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : TotalDaysComputed);
 }
 
 /// <summary>The 4-point strategic briefing the plan-generation templates ask
