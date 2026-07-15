@@ -19,7 +19,11 @@ public static class EditDiaryEntryDialog
         ("Neutral", "neutral"), ("Idle", "idle"),
     };
 
-    public static async Task<bool> ShowAsync(XamlRoot xamlRoot, long id,
+    /// <returns>null if the user cancelled (either dialog), true once
+    /// saved/deleted, false if the save/delete itself failed (2026-07-14
+    /// round-6 audit finding #6: callers used to treat false the same as a
+    /// cancel).</returns>
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id,
         string start, string end, int durationMin, string category, string? description)
     {
         var panel = new StackPanel { Spacing = 10, MinWidth = 320 };
@@ -120,7 +124,7 @@ public static class EditDiaryEntryDialog
                     DefaultButton = ContentDialogButton.Close,
                     XamlRoot = xamlRoot,
                 };
-                if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return false;
+                if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;
                 db.DeleteDiaryEntry(id);
                 return true;
             }
@@ -128,7 +132,8 @@ public static class EditDiaryEntryDialog
         catch (Exception ex)
         {
             Log.Error("EditDiaryEntryDialog", ex);
+            return false;
         }
-        return false;
+        return null;
     }
 }

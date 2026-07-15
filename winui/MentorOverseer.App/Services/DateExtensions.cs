@@ -21,4 +21,21 @@ internal static class DateExtensions
     /// cover this closely related format, which was still hand-typed in 5 separate
     /// places (round-5 audit finding #16).</summary>
     public static string ToIsoTimestamp(this DateTime d) => d.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>Time-of-day only (no date), used for time_diary's start_time/end_time
+    /// columns. Same reasoning as ToIsoDate/ToIsoTimestamp — a third persisted-string
+    /// shape that was still hand-typed as "HH:mm" with InvariantCulture in 2 separate
+    /// files (2026-07-14 round-6 audit finding #12). All three currently got the
+    /// InvariantCulture argument right independently, but a shared helper is the
+    /// only thing that makes a future retyping unable to drop it.</summary>
+    public static string ToIsoTimeOfDay(this DateTime d) => d.ToString("HH:mm", CultureInfo.InvariantCulture);
+    public static string ToIsoTimeOfDay(this TimeOnly t) => t.ToString("HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>Human-facing "Tue 15.07" display format — English day names
+    /// regardless of OS locale, same InvariantCulture rule as every other
+    /// persisted/displayed date in this app. Was hand-typed identically in 3
+    /// files (2026-07-14 round-6 audit finding #11); unlike ToIsoDate this
+    /// one isn't a DB key, but the sibling-drift risk is the same.</summary>
+    public static string ToDisplayDate(this DateTime d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
+    public static string ToDisplayDate(this DateOnly d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
 }

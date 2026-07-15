@@ -18,7 +18,10 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class ReplanOverdueDialog
 {
-    public static async Task<bool> ShowAsync(XamlRoot xamlRoot,
+    /// <returns>null if the user cancelled, true once replanned, false if
+    /// the save itself failed (2026-07-14 round-6 audit finding #6: callers
+    /// used to treat false the same as a cancel).</returns>
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot,
         List<Plan> plans, List<(Plan Plan, AssignedTask Task, int DaysOverdue)> overdue)
     {
         var multiPlan = overdue.Select(o => o.Plan.Id).Distinct().Count() > 1;
@@ -73,7 +76,7 @@ public static class ReplanOverdueDialog
             XamlRoot = xamlRoot,
         };
 
-        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return false;
+        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return null;
 
         try
         {

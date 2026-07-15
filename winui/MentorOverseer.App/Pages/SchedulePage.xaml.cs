@@ -212,7 +212,7 @@ public sealed partial class SchedulePage : Page
         header.Children.Add(new TextBlock
         {
             // English day names regardless of OS locale — same rule as everywhere.
-            Text = date.ToString("ddd dd.MM", CultureInfo.InvariantCulture),
+            Text = date.ToDisplayDate(),
             Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
             Foreground = Res("TextFillColorTertiaryBrush"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -247,6 +247,8 @@ public sealed partial class SchedulePage : Page
                 Padding = new Thickness(6, 2, 6, 2),
                 VerticalAlignment = VerticalAlignment.Top,
             };
+            AutomationProperties.SetName(toggle,
+                $"{(isOff ? "Undo day off" : "Day off")}: {date.ToString("dddd dd.MM", CultureInfo.InvariantCulture)}");
             var d = day;
             toggle.Click += (_, _) => PlanScoreAction.Run(plan,
                 (score, p) => { if (isOff) score.UnmarkDayOff(p, d); else score.MarkDayOff(p, d); },
@@ -315,7 +317,8 @@ public sealed partial class SchedulePage : Page
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = Res("TextFillColorTertiaryBrush"),
             });
-        textPanel.Children.Add(TaskNoteView.Build(note, plan.Id, t.Task.Text, "SchedulePage.SetTaskNote"));
+        textPanel.Children.Add(TaskNoteView.Build(note, plan.Id, t.Task.Text, "SchedulePage.SetTaskNote",
+            onError: () => SaveErrorBar.IsOpen = true));
         Grid.SetColumn(textPanel, 1);
         row.Children.Add(textPanel);
 
@@ -335,6 +338,7 @@ public sealed partial class SchedulePage : Page
                     Padding = new Thickness(6, 0, 6, 0),
                     VerticalAlignment = VerticalAlignment.Top,
                 };
+                AutomationProperties.SetName(move, $"Move to today: {t.Task.Text}");
                 move.Click += (_, _) => PlanScoreAction.Run(plan,
                     (score, p) => score.MoveTaskToToday(p, t.Task.Text), "SchedulePage.MoveToToday",
                     ok => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); if (!ok) SaveErrorBar.IsOpen = true; });
@@ -354,12 +358,20 @@ public sealed partial class SchedulePage : Page
                 Padding = new Thickness(6, 0, 6, 0),
                 VerticalAlignment = VerticalAlignment.Top,
             };
+            AutomationProperties.SetName(reschedule, $"Reschedule: {t.Task.Text}");
             reschedule.Click += async (_, _) =>
             {
-                if (await Dialogs.RescheduleTaskDialog.ShowAsync(XamlRoot, plan, t))
+                var ok = await Dialogs.RescheduleTaskDialog.ShowAsync(XamlRoot, plan, t);
+                if (ok == true)
                 {
                     Render();
                     (App.MainWindow as MainWindow)?.RefreshScore();
+                }
+                else if (ok == false)
+                {
+                    // Render() resets SaveErrorBar — set it after, not before, or the reset wipes it.
+                    Render();
+                    SaveErrorBar.IsOpen = true;
                 }
             };
             actions.Children.Add(reschedule);

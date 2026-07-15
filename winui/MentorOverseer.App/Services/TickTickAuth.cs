@@ -237,11 +237,13 @@ public static class TickTickAuth
             if (!resp.IsSuccessStatusCode)
             {
                 // Log only the two fields TickTick documents for an error response, never
-                // the raw body — the raw body used to go straight into the local log file
-                // unfiltered and unbounded (Log.cs has no cap/rotation), so anything
-                // account-identifying TickTick's servers ever happened to echo back would
-                // sit on disk indefinitely with nothing in the app able to find or clear it
-                // (round-5 audit finding #12).
+                // the raw body — TickTick's servers could echo back anything
+                // account-identifying in an error payload, and there's no reason this app
+                // needs more than the documented error/error_description fields to act on
+                // a failed token exchange (round-5 audit finding #12; the "Log.cs has no
+                // cap" reasoning this comment used to cite stopped being true once Log.cs
+                // gained a 5MB cap + rotation the same round — narrowing what's logged is
+                // still correct, just for its own sake now, not because the file is unbounded).
                 var (err, desc) = TryParseOAuthError(body);
                 Log.Warn("TickTickAuth", $"token endpoint {(int)resp.StatusCode}: {err ?? "(unparseable)"}" +
                     (desc is null ? "" : $" — {desc}"));

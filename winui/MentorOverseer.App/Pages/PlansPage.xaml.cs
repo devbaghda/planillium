@@ -31,6 +31,7 @@ public sealed partial class PlansPage : Page
     {
         ActiveList.Children.Clear();
         ArchivedList.Children.Clear();
+        SaveErrorBar.IsOpen = false;
 
         List<Plan> plans;
         Dictionary<(string, int, string), bool> completions;
@@ -166,7 +167,17 @@ public sealed partial class PlansPage : Page
         var addStep = new Button { Content = "+ Add task", VerticalAlignment = VerticalAlignment.Center };
         addStep.Click += async (_, _) =>
         {
-            if (await AddTaskDialog.ShowAsync(XamlRoot, plan)) Render();
+            var ok = await AddTaskDialog.ShowAsync(XamlRoot, plan);
+            if (ok == true)
+            {
+                Render();
+                (App.MainWindow as MainWindow)?.RefreshScore();
+            }
+            else if (ok == false)
+            {
+                Render();
+                SaveErrorBar.IsOpen = true;
+            }
         };
         Grid.SetColumn(addStep, 2);
         grid.Children.Add(addStep);
@@ -220,10 +231,27 @@ public sealed partial class PlansPage : Page
 
         var src = Path.Combine(AppPaths.ActivePlansDir, $"{plan.Id}.json");
         var dstDir = Path.Combine(AppPaths.Root, "plans", "archive");
-        Directory.CreateDirectory(dstDir);
-        if (File.Exists(src))
-            File.Move(src, Path.Combine(dstDir, $"{plan.Id}.json"), overwrite: false);
+        try
+        {
+            Directory.CreateDirectory(dstDir);
+            if (File.Exists(src))
+                File.Move(src, Path.Combine(dstDir, $"{plan.Id}.json"), overwrite: false);
+        }
+        catch (Exception ex)
+        {
+            // overwrite:false throws IOException if a same-named file is
+            // already sitting in the archive from a previous archive/
+            // restore cycle — this used to be an unhandled exception on an
+            // async void handler, silently swallowed by the app-wide
+            // handler with no sign anything happened (2026-07-14 round-6
+            // audit finding #8).
+            Log.Error("PlansPage.ArchiveAsync", ex);
+            Render();
+            SaveErrorBar.IsOpen = true;
+            return;
+        }
         Render();
+        (App.MainWindow as MainWindow)?.RefreshScore();
     }
 
     private Grid ArchivedRow(string file, int activeCount)
@@ -257,9 +285,20 @@ public sealed partial class PlansPage : Page
             : "Archive an active plan first — max 2 active.");
         restore.Click += (_, _) =>
         {
-            var dst = Path.Combine(AppPaths.ActivePlansDir, Path.GetFileName(file));
-            if (!File.Exists(dst)) File.Move(file, dst);
+            try
+            {
+                var dst = Path.Combine(AppPaths.ActivePlansDir, Path.GetFileName(file));
+                if (!File.Exists(dst)) File.Move(file, dst);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("PlansPage.Restore", ex);
+                Render();
+                SaveErrorBar.IsOpen = true;
+                return;
+            }
             Render();
+            (App.MainWindow as MainWindow)?.RefreshScore();
         };
         Grid.SetColumn(restore, 1);
         grid.Children.Add(restore);
@@ -269,6 +308,14 @@ public sealed partial class PlansPage : Page
     private async void Add_Click(object sender, RoutedEventArgs e)
     {
         if (await AddPlanDialog.ShowAsync(this))
+        {
             Render();
+            // The sidebar's plan-drift panel used to only refresh after
+            // "Excluded days…" — Archive/Restore/Add each already change
+            // which plans are active (and thus what the sidebar should show)
+            // just as much, but didn't call this (2026-07-14 round-6 audit
+            // finding #7).
+            (App.MainWindow as MainWindow)?.RefreshScore();
+        }
     }
 }

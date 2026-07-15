@@ -30,6 +30,19 @@ public sealed partial class ReportsPage
     private DispatcherQueueTimer? _diarySearchDebounce;
     private Action? _diarySearchDebounceAction;
 
+    // Diary rows previously only ever appeared on navigation/search/edit —
+    // sitting on today's diary while the tracker keeps logging in the
+    // background never showed anything new until the page was left and
+    // reopened (2026-07-15 bug report). Polls the same read-only query the
+    // page already runs, so it's only worth doing while looking at today
+    // and not mid-search (an active search already re-renders on its own
+    // debounce, and ticking underneath a many-day search result would just
+    // be wasted work). Stopped in OnNavigatedFrom so it doesn't keep
+    // querying the DB in the background once the page is cached-but-hidden.
+    private DispatcherQueueTimer? _diaryLiveRefresh;
+    private Action? _diaryLiveRefreshAction;
+    private static readonly TimeSpan DiaryLiveRefreshInterval = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
     /// everything still retained (ConfigService.DiaryRetentionDays(),
@@ -175,14 +188,25 @@ public sealed partial class ReportsPage
             {
                 using var db = new Database();
                 var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var id in selectedIds)
+                // All-or-nothing: this used to write each selected row as its
+                // own separate statement with no shared transaction, so a
+                // failure partway through a multi-row selection (an ordinary
+                // "database briefly busy" moment, since the background
+                // tracker writes to the same file) could relabel some rows
+                // and silently leave others untouched, with no error shown
+                // (2026-07-14 round-6 audit finding #4 — found independently
+                // by two review passes).
+                db.RunInTransaction(() =>
                 {
-                    var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row is null || row.Id != id) continue;
-                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
-                    var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
-                    if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
-                }
+                    foreach (var id in selectedIds)
+                    {
+                        var row = lastRows.FirstOrDefault(e => e.Id == id);
+                        if (row is null || row.Id != id) continue;
+                        db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
+                        var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
+                        if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
+                    }
+                });
                 foreach (var keyword in learned)
                     ConfigService.LearnActivityRule(keyword, category);
                 if (learned.Count > 0)
@@ -191,6 +215,7 @@ public sealed partial class ReportsPage
             catch (Exception ex)
             {
                 Log.Error("ReportsPage.MarkSelected", ex);
+                SaveErrorBar.IsOpen = true;
             }
             selectedIds.Clear();
             RenderDiaryResults();
@@ -242,7 +267,26 @@ public sealed partial class ReportsPage
             _diarySearch = searchBox.Text;
             searchDebounce.Stop();
             searchDebounce.Start();
+            if (_diarySearch.Trim().Length == 0 && _diaryDate == today) _diaryLiveRefresh?.Start();
+            else _diaryLiveRefresh?.Stop();
         };
+
+        // Only re-poll while looking at today with no search active — a
+        // past day's diary is finished history (nothing new will ever
+        // appear), and a search already re-renders itself on its own typing
+        // debounce above.
+        _diaryLiveRefreshAction = RenderDiaryResults;
+        if (_diaryLiveRefresh is null)
+        {
+            _diaryLiveRefresh = DispatcherQueue.CreateTimer();
+            _diaryLiveRefresh.Interval = DiaryLiveRefreshInterval;
+            _diaryLiveRefresh.IsRepeating = true;
+            _diaryLiveRefresh.Tick += (_, _) => _diaryLiveRefreshAction?.Invoke();
+        }
+        if (_diaryDate == today && _diarySearch.Trim().Length == 0)
+            _diaryLiveRefresh.Start();
+        else
+            _diaryLiveRefresh.Stop();
     }
 
     // ── diary ────────────────────────────────────────────────────────────
@@ -413,11 +457,12 @@ public sealed partial class ReportsPage
                 MinHeight = 0,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            AutomationProperties.SetName(edit, "Edit diary entry");
+            AutomationProperties.SetName(edit, $"Edit entry: {windowLabel}, {start}–{end}");
             edit.Click += async (_, _) =>
             {
-                if (await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc))
-                    Render();
+                var ok = await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc);
+                if (ok == true) Render();
+                else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
             };
             var split = new Button
             {
@@ -427,7 +472,7 @@ public sealed partial class ReportsPage
                 MinHeight = 0,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            AutomationProperties.SetName(split, "Split into several activities");
+            AutomationProperties.SetName(split, $"Split into several activities: {windowLabel}, {start}–{end}");
             split.Click += async (_, _) =>
             {
                 if (await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc))

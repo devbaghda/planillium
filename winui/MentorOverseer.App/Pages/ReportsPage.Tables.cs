@@ -30,7 +30,7 @@ public sealed partial class ReportsPage
             var isToday = s.Date == today;
             var cells = new[]
             {
-                s.Date.ToString("ddd dd.MM", CultureInfo.InvariantCulture),
+                s.Date.ToDisplayDate(),
                 $"{s.Done}/{s.Total}",
                 ReportData.FmtMins(s.OnMin), ReportData.FmtMins(s.OffMin),
                 s.Score.ToString(),

@@ -242,29 +242,37 @@ public sealed class Database : IDisposable
         var cutoff = DateOnly.FromDateTime(DateTime.Today).AddDays(-retentionDays)
             .ToIsoDate();
 
-        using (var rollup = CreateCommand())
+        // Wrapped so a failure between the rollup INSERT and the raw-row
+        // DELETE can't leave a day double-counted (rolled up AND still
+        // present as raw rows) — this used to be two independent statements
+        // with no transaction around either (2026-07-14 round-6 audit
+        // finding #17).
+        RunInTransaction(() =>
         {
-            rollup.CommandText =
-                "INSERT INTO diary_daily_rollup (date, on_min, off_min, neutral_min, paid_min, idle_min) " +
-                "SELECT date," +
-                "  SUM(CASE WHEN category='on_plan' THEN duration_min ELSE 0 END)," +
-                "  SUM(CASE WHEN category='off_plan' THEN duration_min ELSE 0 END)," +
-                "  SUM(CASE WHEN category='neutral' THEN duration_min ELSE 0 END)," +
-                "  SUM(CASE WHEN category='paid' THEN duration_min ELSE 0 END)," +
-                "  SUM(CASE WHEN category='idle' THEN duration_min ELSE 0 END) " +
-                "FROM time_diary WHERE date < $cutoff GROUP BY date " +
-                "ON CONFLICT(date) DO UPDATE SET " +
-                "  on_min=excluded.on_min, off_min=excluded.off_min, neutral_min=excluded.neutral_min," +
-                "  paid_min=excluded.paid_min, idle_min=excluded.idle_min";
-            rollup.Parameters.AddWithValue("$cutoff", cutoff);
-            rollup.ExecuteNonQuery();
-        }
-        using (var del = CreateCommand())
-        {
-            del.CommandText = "DELETE FROM time_diary WHERE date < $cutoff";
-            del.Parameters.AddWithValue("$cutoff", cutoff);
-            del.ExecuteNonQuery();
-        }
+            using (var rollup = CreateCommand())
+            {
+                rollup.CommandText =
+                    "INSERT INTO diary_daily_rollup (date, on_min, off_min, neutral_min, paid_min, idle_min) " +
+                    "SELECT date," +
+                    "  SUM(CASE WHEN category='on_plan' THEN duration_min ELSE 0 END)," +
+                    "  SUM(CASE WHEN category='off_plan' THEN duration_min ELSE 0 END)," +
+                    "  SUM(CASE WHEN category='neutral' THEN duration_min ELSE 0 END)," +
+                    "  SUM(CASE WHEN category='paid' THEN duration_min ELSE 0 END)," +
+                    "  SUM(CASE WHEN category='idle' THEN duration_min ELSE 0 END) " +
+                    "FROM time_diary WHERE date < $cutoff GROUP BY date " +
+                    "ON CONFLICT(date) DO UPDATE SET " +
+                    "  on_min=excluded.on_min, off_min=excluded.off_min, neutral_min=excluded.neutral_min," +
+                    "  paid_min=excluded.paid_min, idle_min=excluded.idle_min";
+                rollup.Parameters.AddWithValue("$cutoff", cutoff);
+                rollup.ExecuteNonQuery();
+            }
+            using (var del = CreateCommand())
+            {
+                del.CommandText = "DELETE FROM time_diary WHERE date < $cutoff";
+                del.Parameters.AddWithValue("$cutoff", cutoff);
+                del.ExecuteNonQuery();
+            }
+        });
     }
 
     /// <summary>Most common past idle-answer descriptions (excludes the "no real
@@ -344,11 +352,16 @@ public sealed class Database : IDisposable
     /// </summary>
     public void ClearActivityHistory()
     {
-        using (var cmd = CreateCommand())
+        // The two DELETEs are wrapped so a failure between them can't leave
+        // raw sessions cleared but the rolled-up totals still sitting there
+        // (2026-07-14 round-6 audit finding #17) — VACUUM stays outside,
+        // SQLite refuses to run it inside any transaction.
+        RunInTransaction(() =>
         {
+            using var cmd = CreateCommand();
             cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup;";
             cmd.ExecuteNonQuery();
-        }
+        });
         using var vacuum = CreateCommand();
         vacuum.CommandText = "VACUUM";
         vacuum.ExecuteNonQuery();

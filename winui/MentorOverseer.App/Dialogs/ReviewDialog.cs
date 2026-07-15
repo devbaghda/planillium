@@ -35,6 +35,16 @@ public static class ReviewDialog
     // KickoffDialog's _toastSentOn/MarkShownToday split, for the same
     // reason: a missed toast must not silently burn the day's one review
     // offer for the rest of the day.
+    //
+    // Set only from Trigger() (the automatic watcher path), never from
+    // ShowCore itself — 2026-07-15 bug: it used to be set at the end of
+    // ShowCore unconditionally, so TodayPage's manual "Evening review"
+    // button (a same-day progress preview, ShowAsync called directly,
+    // bypassing Trigger/ShouldOffer) also marked the day as "offered." One
+    // daytime glance at that button silently disabled both the automatic
+    // pop-up and its toast fallback for the rest of the day, with no error
+    // and no visible sign anything was suppressed — the user had to notice
+    // the day never closed and do it manually.
     private static string? _offeredOn;
 
     // Throttles the fallback toast itself to once per day while the window
@@ -66,7 +76,17 @@ public static class ReviewDialog
     {
         if (!ShouldOffer()) return Task.CompletedTask;
         var today = DateTime.Today.ToIsoDate();
-        return PromptRouter.ShowOrToast(window, () => ShowAsync(window),
+        // _offeredOn is set here, not inside ShowCore, so it only ever
+        // reflects the automatic watcher having actually put the dialog in
+        // front of the user — TodayPage's manual "Evening review" button
+        // calls ShowAsync directly (bypassing Trigger/ShouldOffer) so a
+        // daytime progress-check glance can't burn the day's one automatic
+        // offer. Before this fix, opening that button even once earlier in
+        // the day silently disabled both the EOD pop-up and its toast
+        // fallback for the rest of the day, since ShowCore set _offeredOn on
+        // every close, not just the automatic one.
+        return PromptRouter.ShowOrToast(window,
+            async () => { await ShowAsync(window); _offeredOn = today; },
             () => _toastSentOn == today, () => _toastSentOn = today,
             "Day review ready.", "See how today went — click to close out the day.",
             ToastArgs.Review, (ToastArgs.Action, ToastArgs.Review));
@@ -131,9 +151,14 @@ public static class ReviewDialog
         };
 
         var result = await DialogGate.ShowAsync(dialog);
-        _offeredOn = DateTime.Today.ToIsoDate();
-        if (result == ContentDialogResult.Primary)
-            PersistReview(score, stats.Today, reflection, window);
+        if (result == ContentDialogResult.Primary && !PersistReview(db, score, stats.Today, reflection, window))
+            // The dialog itself is already gone by this point (ShowAsync just
+            // returned), so a page-level error bar isn't reachable from here —
+            // toast is the same fallback the timed prompts already use for
+            // reaching the user outside of an open dialog.
+            Services.ToastNotifier.Show("Couldn't close the day",
+                "Something went wrong saving today's review — nothing was recorded. Open “Evening review” again to retry.",
+                tag: null);
     }
 
     /// <summary>
@@ -294,16 +319,39 @@ public static class ReviewDialog
         return (panel, reflection);
     }
 
-    private static void PersistReview(ScoreService score, DateOnly today, TextBox reflection, MainWindow window)
+    /// <summary>
+    /// The app's own highest-stakes daily action — closing the day — had
+    /// neither a transaction around its four writes nor any failure handling
+    /// at all until 2026-07-14 round-6 audit findings #3: an interruption
+    /// partway through (day score written, overdue accrual not) could leave
+    /// the score ledger half-updated with the dialog closing as if nothing
+    /// was wrong. Now one all-or-nothing write (same mechanism as every
+    /// other multi-step save in the app since round 5) with the caller
+    /// deciding how to tell the user if it fails.
+    /// </summary>
+    private static bool PersistReview(Database db, ScoreService score, DateOnly today, TextBox reflection,
+        MainWindow window)
     {
-        score.CreditDayScoreIfMissing(today);
-        score.CreditOverdueAccrualIfMissing(today);
-        score.CreditWeeklyComebackIfMissing(today);
-        if (reflection.Text.Trim() is { Length: > 0 } text)
-            score.SaveReflection(today, text);
+        try
+        {
+            db.RunInTransaction(() =>
+            {
+                score.CreditDayScoreIfMissing(today);
+                score.CreditOverdueAccrualIfMissing(today);
+                score.CreditWeeklyComebackIfMissing(today);
+                if (reflection.Text.Trim() is { Length: > 0 } text)
+                    score.SaveReflection(today, text);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReviewDialog.PersistReview", ex);
+            return false;
+        }
         var state = StateService.Load();
         state.LastReview = DateTime.Today.ToIsoDate();
         StateService.Save(state);
         window.RefreshScore();
+        return true;
     }
 }

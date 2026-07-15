@@ -6,6 +6,28 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Scheduling & scoring**
+- Fixed a bug where stepping away from the computer could get double-counted:
+  the last few minutes before you were marked idle used to be logged as both
+  still on-plan/off-plan *and* as idle, so the same stretch of time (up to
+  10 minutes, however long "idle" is set to in Settings) could count toward
+  your score twice. On-plan/off-plan time now stops exactly when you
+  actually stepped away, not when the app happened to notice
+- A plan whose name contains an underscore now imports correctly instead of
+  crashing the first time you mark a day off or add a task to it
+- Editing a task's personal note now only shows it as saved once the save
+  has actually gone through — a failed save no longer looks identical to a
+  successful one
+- Closing the day ("Evening review") is now one all-or-nothing save, and
+  shows a notification if it fails, instead of silently risking a
+  half-recorded day with no warning
+- Splitting an idle-time gap into several answers, and bulk-marking several
+  diary entries at once, are now each one all-or-nothing save too
+- Rescheduling a task, adding a task, replanning overdue tasks, and editing
+  a diary entry now show the same "couldn't save" warning as everything
+  else if the save itself fails, instead of looking identical to clicking
+  Cancel
+- Archiving, restoring, or adding a plan now updates the sidebar summary
+  immediately, and shows a clear error if the file operation itself fails
 - Splitting a diary entry into several activities no longer risks losing the
   original if the save is interrupted partway through — it's now one
   all-or-nothing save instead of delete-then-insert-one-at-a-time
@@ -59,6 +81,15 @@ going forward; the original Python/Tkinter version is retired.
   could keep showing an out-of-date status after these
 
 **Reports**
+- The Day/Week/Month/Year selector now reads correctly to screen readers as
+  one set of options ("2 of 4, Week selected") instead of four separate,
+  unrelated switches
+- The diary's edit/split buttons, and Schedule's move/reschedule/day-off
+  links, now announce which specific task or entry they act on to a screen
+  reader instead of an identical generic name on every row
+- The time diary now updates itself while you're looking at today — new
+  entries appear within about 30 seconds as they're tracked, instead of
+  only showing up after you leave the page and come back
 - Fixed the diary list's column width visibly resizing depending on that
   day's content — the content column is now sized deterministically from
   the page's own scroll viewport rather than its content, so it holds
@@ -100,6 +131,14 @@ going forward; the original Python/Tkinter version is retired.
   like the two were contradicting each other
 
 **Activity tracking**
+- The morning "Good morning" card can now be dismissed with a "Later"
+  button — previously it was the only recurring prompt with no way out
+  besides "Start the day"
+- Fixed a bug where the evening review's automatic pop-up (and its tray
+  notification) could silently fail to appear for the rest of the day if
+  you'd opened "Evening review" earlier just to check your progress — that
+  daytime glance was incorrectly treated the same as the real end-of-day
+  offer, so the actual automatic reminder never came
 - Your recurring days off are no longer tracked. On any weekday you've
   excluded from your plan, the diary stays blank and no focus nudges fire —
   the tracker simply rests with you

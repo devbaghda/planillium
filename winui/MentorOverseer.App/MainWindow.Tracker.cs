@@ -46,8 +46,21 @@ public sealed partial class MainWindow
             Tracker = new ActivityTracker(ConfigService.Root);
             Tracker.OnStatus += (cls, window) => _dq.TryEnqueue(() => UpdatePill(cls, window));
             Tracker.OnAlert += (title, msg) => _dq.TryEnqueue(() => Notify(title, msg));
-            Tracker.OnIdleReturn += (mins, start) =>
-                _dq.TryEnqueue(() => _ = IdleReturnDialog.Trigger(this, mins, start));
+            // async lambda (not a discarded "_ = Trigger(...)") so a fault
+            // inside PromptRouter/ShowAsync is actually caught and logged
+            // instead of becoming an unobserved task exception — the exact
+            // silent-failure shape already seen once from this same call
+            // (2026-07-09 log: XamlRoot missing inside IdleReturnDialog,
+            // never surfaced until finalization). A prompt that silently
+            // never shows and never logs is indistinguishable from "the
+            // gap was never detected at all," which made the 2026-07-15
+            // missing-morning-prompt report hard to diagnose from the code
+            // alone — this at least closes that blind spot going forward.
+            Tracker.OnIdleReturn += (mins, start) => _dq.TryEnqueue(async () =>
+            {
+                try { await IdleReturnDialog.Trigger(this, mins, start); }
+                catch (Exception ex) { Log.Error("IdleReturnDialog.Trigger", ex); }
+            });
             DateTime? lastDiaryEnd = null;
             try
             {

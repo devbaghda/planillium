@@ -40,7 +40,6 @@ public sealed class ScoreService : IDisposable
     /// silently drift out of agreement if it's ever tuned.</summary>
     public const int GreatDayThreshold = 20;
 
-    private readonly SqliteConnection _conn;
     private readonly List<Plan> _plans;
     private readonly Database _db;
     private readonly Dictionary<(string, int, string), bool> _completions;
@@ -57,7 +56,6 @@ public sealed class ScoreService : IDisposable
         _plans = plans;
         _db = db;
         _completions = db.LoadCompletions();
-        _conn = db.Conn; // shared with Database — see Database.Conn's doc comment
         // reflections is now created by Database.EnsureSchema (round-5 audit finding #26 —
         // it used to be created only here, a hidden dependency that made "Export all my
         // data" quietly depend on a ScoreService having been constructed first).
@@ -69,8 +67,15 @@ public sealed class ScoreService : IDisposable
                 // run via db.LoadCompletions() above) owns creating/migrating
                 // this index — see Database.EnsureSchema for the drop-and-
                 // recreate logic needed because "CREATE INDEX IF NOT EXISTS"
-                // won't widen an existing one.
-                using var indexCmd = _conn.CreateCommand();
+                // won't widen an existing one. _db.CreateCommand() (not raw
+                // _conn.CreateCommand()) so this can't throw if a future
+                // caller ever constructs a ScoreService from inside an
+                // already-open RunInTransaction block (2026-07-14 round-6
+                // audit finding #15 — not reachable today since this only
+                // ever runs once per process, gated by _schemaEnsured, but
+                // every other command in this class already goes through
+                // the wrapper).
+                using var indexCmd = _db.CreateCommand();
                 indexCmd.CommandText =
                     "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
                     "ON score_ledger(reason, date) " +
@@ -81,9 +86,9 @@ public sealed class ScoreService : IDisposable
         }
     }
 
-    // No-op: _conn is shared with (owned and disposed by) the Database this
-    // instance was constructed with. Every call site disposes its own
-    // Database separately, so this is never the last reference standing.
+    // No-op: this class shares its connection with (owned and disposed by)
+    // the Database it was constructed with. Every call site disposes its
+    // own Database separately, so this is never the last reference standing.
     public void Dispose() { }
 
     // ── day stats (ports of _day_task_counts / _day_diary_minutes) ───────
@@ -287,16 +292,26 @@ public sealed class ScoreService : IDisposable
         return delta;
     }
 
+    /// <summary>Catches up to 7 missed days of scoring on launch. Each
+    /// individual credit call already self-heals (guarded by its own
+    /// UNIQUE-constraint check, so a partial run just leaves the remaining
+    /// days to catch up next launch) — wrapped in one transaction anyway for
+    /// consistency with every other multi-write sequence in this class, not
+    /// because a failure here was ever observed to lose anything
+    /// (2026-07-14 round-6 audit finding #17).</summary>
     public void EnsureScoreCaughtUp()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        for (var i = 7; i >= 1; i--)
+        _db.RunInTransaction(() =>
         {
-            var d = today.AddDays(-i);
-            CreditDayScoreIfMissing(d);
-            CreditOverdueAccrualIfMissing(d);
-            CreditWeeklyComebackIfMissing(d);
-        }
+            for (var i = 7; i >= 1; i--)
+            {
+                var d = today.AddDays(-i);
+                CreditDayScoreIfMissing(d);
+                CreditOverdueAccrualIfMissing(d);
+                CreditWeeklyComebackIfMissing(d);
+            }
+        });
     }
 
     // ── weekly comeback bonus ("amplify wins" — recovering from a losing week) ──

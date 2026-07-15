@@ -144,8 +144,8 @@ public static class SplitDiaryEntryDialog
                     var mins = (int)dur.Value;
                     var segEnd = t.AddMinutes(mins);
                     var catValue = ((ComboBoxItem)cat.SelectedItem).Tag as string ?? category;
-                    db.InsertDiaryEntry(dateStr, t.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        segEnd.ToString("HH:mm", CultureInfo.InvariantCulture), mins, catValue, window,
+                    db.InsertDiaryEntry(dateStr, t.ToIsoTimeOfDay(),
+                        segEnd.ToIsoTimeOfDay(), mins, catValue, window,
                         desc.Text.Trim() is { Length: > 0 } d ? d : null);
                     t = segEnd;
                 }

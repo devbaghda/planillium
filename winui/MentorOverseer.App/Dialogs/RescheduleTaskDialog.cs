@@ -16,7 +16,11 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class RescheduleTaskDialog
 {
-    public static async Task<bool> ShowAsync(XamlRoot xamlRoot, Plan plan, AssignedTask task)
+    /// <returns>null if the user cancelled, true on a successful move, false
+    /// if the save itself failed — callers used to treat false identically
+    /// to a cancel, so a failed reschedule showed no error at all (2026-07-14
+    /// round-6 audit finding #6).</returns>
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, Plan plan, AssignedTask task)
     {
         var minDate = plan.DateForPlanDay(plan.PlanDay + 1);  // tomorrow, exclusion-aware
         var minOffset = new DateTimeOffset(minDate.ToDateTime(TimeOnly.MinValue));
@@ -44,8 +48,8 @@ public static class RescheduleTaskDialog
             XamlRoot = xamlRoot,
         };
 
-        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return false;
-        if (picker.Date is not { } picked) return false;
+        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return null;
+        if (picker.Date is not { } picked) return null;
 
         var newDay = plan.PlanDayForDate(DateOnly.FromDateTime(picked.DateTime));
 

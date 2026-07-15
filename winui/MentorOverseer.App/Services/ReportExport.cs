@@ -39,7 +39,7 @@ public static class ReportExport
             // finding: these two had no cross-reference before).
             var col = s.Score >= ScoreService.GreatDayThreshold ? "#30d158" : s.Score < 0 ? "#ff453a" : "#ff9f0a";
             dayRows.Append(
-                $"<tr><td>{s.Date.ToString("ddd dd.MM", CultureInfo.InvariantCulture)}</td>" +
+                $"<tr><td>{s.Date.ToDisplayDate()}</td>" +
                 $"<td>{s.Done}/{s.Total}</td><td>{s.OnMin}m</td><td>{s.OffMin}m</td>" +
                 $"<td style='color:{col};font-weight:bold'>{s.Score}</td></tr>");
         }

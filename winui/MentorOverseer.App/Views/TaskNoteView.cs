@@ -19,19 +19,35 @@ public static class TaskNoteView
     /// exact block used to be copy-pasted, unchanged apart from the log
     /// tag, into both TodayPage and SchedulePage (2026-07-09 audit finding
     /// #6). Prefer this over the delegate overload unless a caller needs
-    /// genuinely different save behavior.</summary>
-    public static FrameworkElement Build(string? initialNote, string planId, string taskText, string logTag) =>
+    /// genuinely different save behavior. <paramref name="onError"/> lets
+    /// the caller light up its own SaveErrorBar the same way a failed task
+    /// completion already does.</summary>
+    public static FrameworkElement Build(string? initialNote, string planId, string taskText, string logTag,
+        Action? onError = null) =>
         Build(initialNote, text =>
         {
             try
             {
                 using var db = new Database();
                 db.SetTaskNote(planId, taskText, text);
+                return true;
             }
-            catch (Exception ex) { Log.Error(logTag, ex); }
+            catch (Exception ex)
+            {
+                Log.Error(logTag, ex);
+                onError?.Invoke();
+                return false;
+            }
         });
 
-    public static FrameworkElement Build(string? initialNote, Action<string> onSave)
+    /// <param name="onSave">Returns whether the save actually succeeded — the
+    /// displayed note only updates to the new text once this returns true
+    /// (2026-07-14 round-6 audit finding #2: this used to update the
+    /// on-screen text/visibility *before* the write was even attempted, so a
+    /// failed save still read as "saved" until the note silently reverted
+    /// the next time this task re-rendered). On failure, edit mode stays
+    /// open with what was typed so nothing already-entered is lost.</param>
+    public static FrameworkElement Build(string? initialNote, Func<string, bool> onSave)
     {
         var root = new StackPanel { Spacing = 4 };
 
@@ -102,10 +118,10 @@ public static class TaskNoteView
         save.Click += (_, _) =>
         {
             var text = editBox.Text.Trim();
+            if (!onSave(text)) return;
             noteText.Text = text;
             noteText.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             editLink.Content = text.Length == 0 ? "+ Add note" : "Edit note";
-            onSave(text);
             ExitEdit();
         };
 

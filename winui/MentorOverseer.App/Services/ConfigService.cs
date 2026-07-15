@@ -19,14 +19,11 @@ public static class ConfigService
             ? JsonNode.Parse(File.ReadAllText(ConfigPath)) as JsonObject ?? new JsonObject()
             : new JsonObject();
         change(node);
-        // A JsonSerializerOptions built from scratch (rather than copied from
-        // .Default) has no TypeInfoResolver and throws on ToJsonString as
-        // soon as the tree holds a node added via the generic JsonArray/
-        // JsonObject .Add<T>() (always routes through the "customized" path,
-        // even for plain ints/strings) — see PlanStore.SetExcludedWeekdays.
-        File.WriteAllText(ConfigPath, node.ToJsonString(new JsonSerializerOptions(JsonSerializerOptions.Default)
+        // JsonFileIO.Indented already carries the TypeInfoResolver copy-from-
+        // .Default workaround (see its own doc comment) — this just adds the
+        // one extra option config.json specifically needs on top.
+        JsonFileIO.WriteAllTextAtomic(ConfigPath, node.ToJsonString(new JsonSerializerOptions(JsonFileIO.Indented)
         {
-            WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         }));
         Invalidate();

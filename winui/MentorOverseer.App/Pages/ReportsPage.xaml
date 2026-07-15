@@ -26,7 +26,20 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </Grid>
-            <StackPanel x:Name="PeriodBar" Orientation="Horizontal" Spacing="8" Margin="0,0,0,4"/>
+            <InfoBar x:Name="SaveErrorBar"
+                     Severity="Error"
+                     IsOpen="False"
+                     IsClosable="True"
+                     Title="Couldn't save that change"
+                     Message="The database was briefly busy — try again in a moment."
+                     Margin="0,0,0,8"/>
+
+            <!-- RadioButtons (not a row of independent ToggleButtons) so a
+                 screen reader announces this as one mutually-exclusive group
+                 ("2 of 4, Week selected") the same way Settings' theme
+                 picker already does, instead of four unrelated on/off
+                 switches (2026-07-14 round-6 audit finding #25). -->
+            <RadioButtons x:Name="PeriodBar" MaxColumns="4" Margin="0,0,0,4"/>
             <StackPanel x:Name="Body" Spacing="0"/>
         </StackPanel>
     </ScrollViewer>

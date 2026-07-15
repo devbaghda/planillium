@@ -57,6 +57,7 @@
     <Compile Include="..\MentorOverseer.App\Services\ConfigService.cs" Link="App\ConfigService.cs" />
     <Compile Include="..\MentorOverseer.App\Services\Database.cs" Link="App\Database.cs" />
     <Compile Include="..\MentorOverseer.App\Services\DateExtensions.cs" Link="App\DateExtensions.cs" />
+    <Compile Include="..\MentorOverseer.App\Services\JsonFileIO.cs" Link="App\JsonFileIO.cs" />
     <Compile Include="..\MentorOverseer.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\MentorOverseer.App\Services\PlanStore.cs" Link="App\PlanStore.cs" />
     <Compile Include="..\MentorOverseer.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />

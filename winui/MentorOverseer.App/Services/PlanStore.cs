@@ -108,9 +108,19 @@ public static class PlanStore
     /// </summary>
     private static readonly System.Text.RegularExpressions.Regex ValidPlanId = new(@"^[a-z0-9-]+$");
 
+    /// <summary>
+    /// The one definition of "valid plan id" for the whole app — AddPlanDialog's
+    /// import validation used to keep its own, more permissive copy of this
+    /// pattern (allowing underscores), so a pasted plan with an underscore in
+    /// its id imported cleanly and then threw here the first time any
+    /// schedule-mutating action touched it (2026-07-14 round-6 audit finding
+    /// #1). Route every "is this id allowed" check through this one method.
+    /// </summary>
+    public static bool IsValidPlanId(string planId) => ValidPlanId.IsMatch(planId);
+
     private static string PlanFilePath(string planId)
     {
-        if (!ValidPlanId.IsMatch(planId))
+        if (!IsValidPlanId(planId))
             throw new ArgumentException($"'{planId}' isn't a valid plan id (expected kebab-case-slug).");
         return Path.Combine(AppPaths.ActivePlansDir, $"{planId}.json");
     }
@@ -130,11 +140,7 @@ public static class PlanStore
         var arr = new JsonArray();
         foreach (var d in weekdays) arr.Add(d);
         node["excluded_weekdays"] = arr;
-        // A bare `new JsonSerializerOptions { WriteIndented = true }` has no
-        // TypeInfoResolver and throws on ToJsonString in .NET 8 — copy from
-        // the pre-configured Default instance instead.
-        File.WriteAllText(path, node.ToJsonString(
-            new JsonSerializerOptions(JsonSerializerOptions.Default) { WriteIndented = true }));
+        JsonFileIO.WriteAllTextAtomic(path, node.ToJsonString(JsonFileIO.Indented));
     }
 
     /// <summary>
@@ -164,7 +170,6 @@ public static class PlanStore
         if (durationMin is int d) task["duration_min"] = d;
         tasks.Add(task);
 
-        File.WriteAllText(path, node.ToJsonString(
-            new JsonSerializerOptions(JsonSerializerOptions.Default) { WriteIndented = true }));
+        JsonFileIO.WriteAllTextAtomic(path, node.ToJsonString(JsonFileIO.Indented));
     }
 }

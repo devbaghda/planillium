@@ -216,25 +216,40 @@ public static class IdleReturnDialog
 
         var result = await DialogGate.ShowAsync(dialog);
 
-        if (chosen is null && result != ContentDialogResult.Primary)
+        try
         {
-            tracker.LogIdleAnswer(idleStart, idleMinutes, "unaccounted time");
-            return;
-        }
-
-        if (splitMode && chosen is null)
-        {
-            var t = idleStart;
-            foreach (var (dur, desc, _) in rows)
+            if (chosen is null && result != ContentDialogResult.Primary)
             {
-                var mins = (int)dur.Value;
-                tracker.LogIdleAnswer(t, mins, desc.Text.Trim());
-                t = t.AddMinutes(mins);
+                tracker.LogIdleAnswer(idleStart, idleMinutes, "unaccounted time");
+                return;
             }
-            return;
-        }
 
-        var text = chosen ?? input.Text.Trim();
-        tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : "unaccounted time");
+            if (splitMode && chosen is null)
+            {
+                var t = idleStart;
+                var segments = new List<(DateTime Start, int Minutes, string Description)>();
+                foreach (var (dur, desc, _) in rows)
+                {
+                    var mins = (int)dur.Value;
+                    segments.Add((t, mins, desc.Text.Trim()));
+                    t = t.AddMinutes(mins);
+                }
+                tracker.LogIdleAnswers(segments);
+                return;
+            }
+
+            var text = chosen ?? input.Text.Trim();
+            tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : "unaccounted time");
+        }
+        catch (Exception ex)
+        {
+            // No page is guaranteed to be on screen here (this runs from a
+            // background poll's idle-return event) — toast is the same
+            // fallback the timed prompts already use to reach the user
+            // outside of an open dialog (2026-07-14 round-6 audit finding #5).
+            Log.Error("IdleReturnDialog.LogIdleAnswer(s)", ex);
+            Services.ToastNotifier.Show("Couldn't save that",
+                "The idle-time answer didn't save — the database was likely briefly busy.", tag: null);
+        }
     }
 }

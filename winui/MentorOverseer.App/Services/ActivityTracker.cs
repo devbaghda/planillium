@@ -345,17 +345,18 @@ public sealed class ActivityTracker : IDisposable
     // ── database (same rows as the Python tracker) ───────────────────────
 
     private static void LogDiarySession(SqliteConnection conn, DateTime start, DateTime end,
-        string category, string window, string? description = null)
+        string category, string window, string? description = null, SqliteTransaction? tx = null)
     {
         var duration = Math.Max(1, (int)(end - start).TotalMinutes);
         using var cmd = conn.CreateCommand();
+        if (tx is not null) cmd.Transaction = tx;
         cmd.CommandText =
             "INSERT INTO time_diary " +
             "(date, start_time, end_time, duration_min, category, window, description) " +
             "VALUES ($d, $s, $e, $m, $c, $w, $x)";
         cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
-        cmd.Parameters.AddWithValue("$s", start.ToString("HH:mm", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$e", end.ToString("HH:mm", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
+        cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
         cmd.Parameters.AddWithValue("$m", duration);
         cmd.Parameters.AddWithValue("$c", category);
         cmd.Parameters.AddWithValue("$w", window.Length > 240 ? window[..240] : window);
@@ -370,6 +371,36 @@ public sealed class ActivityTracker : IDisposable
         var category = ClassifyIdleText(description);
         using var conn = AppPaths.OpenConnection();
         LogDiarySession(conn, idleStart, end, category, "idle", description);
+    }
+
+    /// <summary>
+    /// Batch form of LogIdleAnswer for "split into several activities" — the
+    /// idle-return dialog's split mode used to call LogIdleAnswer once per
+    /// segment, each opening its own connection with no shared transaction,
+    /// so a failure partway through a multi-segment split could leave some
+    /// segments logged and the rest silently missing with no error shown
+    /// (2026-07-14 round-6 audit finding #5). One connection, one
+    /// all-or-nothing transaction for the whole split.
+    /// </summary>
+    public void LogIdleAnswers(IEnumerable<(DateTime Start, int Minutes, string Description)> segments)
+    {
+        using var conn = AppPaths.OpenConnection();
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            foreach (var (start, minutes, description) in segments)
+            {
+                var end = start.AddMinutes(minutes);
+                var category = ClassifyIdleText(description);
+                LogDiarySession(conn, start, end, category, "idle", description, tx);
+            }
+            tx.Commit();
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
     }
 
     // ── alert escalation (port of _check_alert) ──────────────────────────
@@ -581,6 +612,13 @@ public sealed class ActivityTracker : IDisposable
         var sleepS = (now - last).TotalSeconds - PollSeconds;
         if (sleepS < idleThresholdSec || _idleNotified) return;
 
+        // 2026-07-15: a real overnight gap (PC idle since 20:07, resumed at
+        // 10:04) produced no "where were you" prompt and no idle diary row —
+        // logic tracing said it should have fired, so this and the log line
+        // in HandleIdleReturn below are diagnostic only, to catch the actual
+        // runtime values next time instead of re-guessing statically.
+        Log.Info($"ActivityTracker.HandleSleepGap: gap detected, last={last:o} now={now:o} sleepS={sleepS:F0}");
+
         if (_sessionStart is DateTime ss && _sessionApp != null)
         {
             LogDiarySession(conn, ss, last, _sessionClass!, _sessionApp);
@@ -603,6 +641,14 @@ public sealed class ActivityTracker : IDisposable
         DateTime? accountedUntil;
         lock (_dayStateLock) { accountedUntil = _accountedUntil; }
         if (accountedUntil is DateTime acc && idleStart < acc) idleStart = acc;
+
+        // Diagnostic (see HandleSleepGap above) — records exactly why a
+        // return-from-idle did or didn't produce a prompt, since the
+        // 2026-07-15 report of a silent gap couldn't be reproduced by
+        // reading the code alone.
+        Log.Info($"ActivityTracker.HandleIdleReturn: idleStart={idleStart:o} idleEnd={idleEnd:o} " +
+                 $"accountedUntil={accountedUntil:o} hasHandler={OnIdleReturn != null} " +
+                 $"willFire={idleStart < idleEnd}");
 
         if (idleStart < idleEnd)
         {
@@ -634,12 +680,25 @@ public sealed class ActivityTracker : IDisposable
         if (idleS >= idleThresholdSec)
         {
             if (_idleNotified) return;
+            // The poll that first notices idleS crossing the threshold runs
+            // up to idleThresholdSec (10 min default) AFTER the user actually
+            // stopped — closing the outgoing session through `now` instead
+            // of back-computing to the real idle-start moment logged it as
+            // still on/off-plan for that whole stretch, which then also
+            // OVERLAPPED the idle segment HandleIdleReturn logs starting
+            // from that same real idle-start point. Confirmed live
+            // (2026-07-15): an on-plan VS Code row and the idle "Break" row
+            // that followed it covered the same ~10 minutes twice, each
+            // separately counted toward the day's on-plan/idle totals and
+            // thus the score. HandleSleepGap already got this right (uses
+            // `last`, not `now`, for both); this mirrors that.
+            var idleStartPoint = now.AddSeconds(-idleS);
             if (_sessionStart is DateTime ss && _sessionApp != null)
             {
-                LogDiarySession(conn, ss, now, _sessionClass!, _sessionApp);
+                LogDiarySession(conn, ss, idleStartPoint, _sessionClass!, _sessionApp);
                 _sessionStart = null; _sessionApp = null; _sessionClass = null;
             }
-            _idleSince = now.AddSeconds(-idleS);
+            _idleSince = idleStartPoint;
             _idleNotified = true;
         }
         else if (_sessionStart is null)

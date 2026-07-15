@@ -63,6 +63,15 @@ public sealed partial class MainWindow
     // already installs, rather than adding a second one.
     private const uint WmWtsSessionChange = 0x02B1;
     private const int WtsSessionLock = 0x7;
+    // Fast User Switching (another user takes the console) and an active RDP
+    // session dropping — both leave this session just as unattended as a
+    // lock does, but neither raises WTS_SESSION_LOCK, so the tracker kept
+    // attributing elapsed time to whatever was in the foreground for up to
+    // the full idle threshold after either one (2026-07-14 round-6 audit
+    // finding #14 — the same gap WtsSessionLock was added to close, just
+    // two more triggers of it).
+    private const int WtsConsoleDisconnect = 0x2;
+    private const int WtsRemoteDisconnect = 0x4;
     private const int NotifyForThisSession = 0;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -112,7 +121,7 @@ public sealed partial class MainWindow
             // (2026-07-09 audit finding #11). Still forwarded to the
             // original WndProc below — this is observation, not a message
             // we need to override the default handling of.
-            if (msg == WmWtsSessionChange && wParam.ToInt32() == WtsSessionLock)
+            if (msg == WmWtsSessionChange && wParam.ToInt32() is WtsSessionLock or WtsConsoleDisconnect or WtsRemoteDisconnect)
                 Tracker?.NotifySessionLocked();
             return CallWindowProcW(_origWndProc, hWnd2, msg, wParam, lParam);
         };

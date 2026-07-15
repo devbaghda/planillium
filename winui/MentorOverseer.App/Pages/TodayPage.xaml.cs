@@ -63,10 +63,16 @@ public sealed partial class TodayPage : Page
             overdue = score.OverdueAsOf(DateOnly.FromDateTime(DateTime.Today));
         if (overdue.Count == 0) return;
 
-        if (await ReplanOverdueDialog.ShowAsync(XamlRoot, plans, overdue))
+        var ok = await ReplanOverdueDialog.ShowAsync(XamlRoot, plans, overdue);
+        if (ok == true)
         {
             (App.MainWindow as MainWindow)?.RefreshScore();
             Render();
+        }
+        else if (ok == false)
+        {
+            Render();
+            SaveErrorBar.IsOpen = true;
         }
     }
 
@@ -278,6 +284,37 @@ public sealed partial class TodayPage : Page
         };
     }
 
+    /// <summary>Shared by GetAheadRow and TaskRow — both used to build this
+    /// identical block by hand (2026-07-14 round-6 audit finding #10), and
+    /// had already drifted (GetAheadRow always showed it, TaskRow only for
+    /// an incomplete task) by the time that was caught.</summary>
+    private static TextBlock? DurationLabel(int? mins) =>
+        mins is int m ? new TextBlock
+        {
+            Text = $"{m}m",
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+        } : null;
+
+    private static TextBlock? MentorNoteLine(string? mentorNote) =>
+        mentorNote is { Length: > 0 } n ? new TextBlock
+        {
+            Text = "💡 " + n,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+        } : null;
+
+    private void AddDetailsLink(Grid grid, AssignedTask item, int column)
+    {
+        if (item.Task.Detail is not { Length: > 0 }) return;
+        var details = TaskDetailsLink.Build(XamlRoot, item.Task,
+            new Thickness(6, 0, 0, 0), VerticalAlignment.Center);
+        Grid.SetColumn(details, column);
+        grid.Children.Add(details);
+    }
+
     private Grid GetAheadRow(AssignedTask item, Plan plan)
     {
         var grid = new Grid { Padding = new Thickness(16, 10, 16, 10), ColumnSpacing = 12 };
@@ -288,45 +325,25 @@ public sealed partial class TodayPage : Page
 
         var textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         textCol.Children.Add(new TextBlock { Text = item.Task.Text, TextWrapping = TextWrapping.Wrap });
-        if (item.Task.MentorNote is { Length: > 0 } mentorNote)
-            textCol.Children.Add(new TextBlock
-            {
-                Text = "💡 " + mentorNote,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            });
+        if (MentorNoteLine(item.Task.MentorNote) is { } mentorLine) textCol.Children.Add(mentorLine);
         Grid.SetColumn(textCol, 0);
         grid.Children.Add(textCol);
 
-        if (item.Task.DurationMin is int mins)
+        if (DurationLabel(item.Task.DurationMin) is { } dur)
         {
-            var dur = new TextBlock
-            {
-                Text = $"{mins}m",
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            };
             Grid.SetColumn(dur, 1);
             grid.Children.Add(dur);
         }
 
         var start = new Button { Content = "Start now", VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(start, $"Start now: {item.Task.Text}");
         start.Click += (_, _) => PlanScoreAction.Run(plan,
             (score, p) => score.MoveTaskToToday(p, item.Task.Text), "TodayPage.GetAhead",
             ok => { Render(); (App.MainWindow as MainWindow)?.RefreshScore(); if (!ok) SaveErrorBar.IsOpen = true; });
         Grid.SetColumn(start, 2);
         grid.Children.Add(start);
 
-        if (item.Task.Detail is { Length: > 0 })
-        {
-            var details = TaskDetailsLink.Build(XamlRoot, item.Task,
-                new Thickness(6, 0, 0, 0), VerticalAlignment.Center);
-            Grid.SetColumn(details, 3);
-            grid.Children.Add(details);
-        }
-
+        AddDetailsLink(grid, item, column: 3);
         return grid;
     }
 
@@ -376,41 +393,21 @@ public sealed partial class TodayPage : Page
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             });
-        if (item.Task.MentorNote is { Length: > 0 } mentorNote)
-            textCol.Children.Add(new TextBlock
-            {
-                Text = "💡 " + mentorNote,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            });
-        textCol.Children.Add(Views.TaskNoteView.Build(note, plan.Id, item.Task.Text, "TodayPage.SetTaskNote"));
+        if (MentorNoteLine(item.Task.MentorNote) is { } mentorLine) textCol.Children.Add(mentorLine);
+        textCol.Children.Add(Views.TaskNoteView.Build(note, plan.Id, item.Task.Text, "TodayPage.SetTaskNote",
+            onError: () => SaveErrorBar.IsOpen = true));
         Grid.SetColumn(textCol, 1);
         grid.Children.Add(textCol);
 
-        if (item.Task.DurationMin is int mins && !item.Completed)
+        if (!item.Completed && DurationLabel(item.Task.DurationMin) is { } dur)
         {
-            var dur = new TextBlock
-            {
-                Text = $"{mins}m",
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-            };
             Grid.SetColumn(dur, 2);
             grid.Children.Add(dur);
         }
 
         // The "explanation of tasks" — detail is the concrete how-to, which
         // (unlike the mentor note) never had anywhere to display at all.
-        if (item.Task.Detail is { Length: > 0 })
-        {
-            var details = TaskDetailsLink.Build(XamlRoot, item.Task,
-                new Thickness(6, 0, 0, 0), VerticalAlignment.Center);
-            Grid.SetColumn(details, 3);
-            grid.Children.Add(details);
-        }
-
+        AddDetailsLink(grid, item, column: 3);
         return grid;
     }
 

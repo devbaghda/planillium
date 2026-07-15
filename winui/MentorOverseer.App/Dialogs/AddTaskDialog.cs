@@ -14,7 +14,10 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class AddTaskDialog
 {
-    public static async Task<bool> ShowAsync(XamlRoot xamlRoot, Plan plan)
+    /// <returns>null if the user cancelled, true once the task is added,
+    /// false if the save itself failed (2026-07-14 round-6 audit finding #6:
+    /// callers used to treat false the same as a cancel).</returns>
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, Plan plan)
     {
         var picker = new CalendarDatePicker
         {
@@ -82,7 +85,7 @@ public static class AddTaskDialog
             }
         };
 
-        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return false;
+        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return null;
 
         var day = plan.PlanDayForDate(DateOnly.FromDateTime(picker.Date!.Value.DateTime));
         try

@@ -180,6 +180,14 @@ public static class KickoffDialog
             Title = $"Good morning, {name}.",
             Content = panel,
             PrimaryButtonText = "Start the day",
+            // The only recurring dialog in the app with no secondary/close
+            // button at all — every sibling (ReviewDialog, IdleReturnDialog)
+            // offers a way out (2026-07-14 round-6 audit finding #24).
+            // "Start the day" doesn't do anything besides dismiss the card
+            // (the day's tasks are already visible on Today regardless), so
+            // this is a genuine escape hatch, not a hidden way to skip
+            // something that otherwise wouldn't happen.
+            CloseButtonText = "Later",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = window.Content.XamlRoot,
         };

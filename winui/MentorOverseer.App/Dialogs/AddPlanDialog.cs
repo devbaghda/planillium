@@ -177,6 +177,10 @@ public static class AddPlanDialog
     /// the "own plan text" box, via ExtractDocxText for .docx specifically.</summary>
     private static async Task LoadFromFileAsync(TextBox reply, TextBox ownPlan, TextBlock error)
     {
+        // Hoisted above the try so the catch block can still name which file
+        // failed without holding a reference to file.Path itself (see the
+        // catch block's own comment).
+        string? pickedFileName = null;
         try
         {
             var picker = new Windows.Storage.Pickers.FileOpenPicker();
@@ -186,6 +190,7 @@ public static class AddPlanDialog
                 picker.FileTypeFilter.Add(ext);
             var file = await picker.PickSingleFileAsync();
             if (file is null) return;
+            pickedFileName = Path.GetFileName(file.Path);
 
             var ext2 = Path.GetExtension(file.Path).ToLowerInvariant();
             if (ext2 == ".json")
@@ -203,7 +208,15 @@ public static class AddPlanDialog
         }
         catch (Exception ex)
         {
-            Log.Error("AddPlanDialog.LoadFile", ex);
+            // Not Log.Error(ctx, ex) — a file-not-found/IO exception's own
+            // Message bakes in the full picked path, which can carry a
+            // personally-named plan file plus the Windows username the path
+            // starts with. The error TextBlock (visible only to the user, on
+            // his own screen) still shows the full message; only what
+            // lands in the log file — which has no retention/redaction of
+            // its own — is narrowed (2026-07-14 round-6 audit finding #22).
+            Log.Warn("AddPlanDialog.LoadFile",
+                $"{ex.GetType().Name} reading '{pickedFileName ?? "(no file picked)"}'");
             Show(error, "Couldn't read that file: " + ex.Message);
         }
     }
@@ -256,9 +269,15 @@ public static class AddPlanDialog
 
             var id = root.GetProperty("id").GetString() ?? "";
             // The id becomes a filename — never let pasted JSON smuggle path
-            // separators or reserved characters into plans/active.
-            if (!Regex.IsMatch(id, "^[a-z0-9][a-z0-9_-]{0,63}$"))
-                return "Plan 'id' must be a short kebab-case slug (a-z, 0-9, '-' or '_').";
+            // separators or reserved characters into plans/active. Routed
+            // through PlanStore.IsValidPlanId (not a separate copy of the
+            // pattern) so import can never accept an id — e.g. one with an
+            // underscore — that PlanStore.PlanFilePath would later reject;
+            // that exact mismatch used to let an underscore-bearing id
+            // import cleanly and then crash the first time it was used
+            // (2026-07-14 round-6 audit finding #1).
+            if (!PlanStore.IsValidPlanId(id))
+                return "Plan 'id' must be a short kebab-case slug (lowercase a-z, 0-9, '-').";
             if (PlanStore.LoadActivePlans().Any(p => p.Id == id))
                 return $"A plan with id '{id}' is already active.";
 
@@ -271,10 +290,22 @@ public static class AddPlanDialog
             if (!dict.ContainsKey("color"))
                 output["color"] = "#bf5af2";
 
-            Directory.CreateDirectory(AppPaths.ActivePlansDir);
-            File.WriteAllText(
-                Path.Combine(AppPaths.ActivePlansDir, $"{id}.json"),
-                JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
+            // Uncaught here, this would throw straight out of the dialog's
+            // synchronous PrimaryButtonClick handler instead of showing
+            // inline like every other problem in this method does
+            // (2026-07-14 round-6 audit finding #8).
+            try
+            {
+                Directory.CreateDirectory(AppPaths.ActivePlansDir);
+                JsonFileIO.WriteAllTextAtomic(
+                    Path.Combine(AppPaths.ActivePlansDir, $"{id}.json"),
+                    JsonSerializer.Serialize(output, JsonFileIO.Indented));
+            }
+            catch (Exception ex)
+            {
+                Log.Error("AddPlanDialog.TryImport", ex);
+                return "Couldn't write the plan file — check the log for details and try again.";
+            }
             return null;
         }
     }

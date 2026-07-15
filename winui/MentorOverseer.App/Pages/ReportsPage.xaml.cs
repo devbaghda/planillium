@@ -59,6 +59,16 @@ public sealed partial class ReportsPage : Page
         Render();
     }
 
+    // NavigationCacheMode="Enabled" keeps this page instance alive (and its
+    // diary live-refresh timer running) even after navigating away — stop
+    // it here so it doesn't keep querying the DB every 30s while the page
+    // is cached but not on screen.
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        _diaryLiveRefresh?.Stop();
+    }
+
     private void ExportHtml_Click(object sender, RoutedEventArgs e)
     {
         try { ReportExport.ExportWeek(); }
@@ -76,28 +86,22 @@ public sealed partial class ReportsPage : Page
     private void BuildPeriodBar()
     {
         foreach (var (label, period) in PeriodOpts)
+            PeriodBar.Items.Add(new RadioButton { Content = label, Tag = period });
+        PeriodBar.SelectedIndex = Array.FindIndex(PeriodOpts, o => o.Period == _period);
+        PeriodBar.SelectionChanged += (_, _) =>
         {
-            var btn = new ToggleButton
+            if (PeriodBar.SelectedItem is RadioButton { Tag: ReportPeriod p })
             {
-                Content = label,
-                Tag = period,
-                IsChecked = period == _period,
-                MinWidth = 72,
-            };
-            btn.Click += (s, _) =>
-            {
-                _period = (ReportPeriod)((ToggleButton)s).Tag;
-                foreach (var child in PeriodBar.Children.OfType<ToggleButton>())
-                    child.IsChecked = (ReportPeriod)child.Tag == _period;
+                _period = p;
                 Render();
-            };
-            PeriodBar.Children.Add(btn);
-        }
+            }
+        };
     }
 
     private void Render()
     {
         Body.Children.Clear();
+        SaveErrorBar.IsOpen = false;
         ExportCsvItem.Text = $"CSV ({ReportData.PeriodName(_period).ToLowerInvariant()})";
         try
         {
