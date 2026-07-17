@@ -209,23 +209,30 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
-- **2026-07-18, round-8 full audit** (5 parallel passes — architecture/security/UX/code-quality/
-  privacy; report: https://claude.ai/code/artifact/016b54c5-9852-4e12-9092-c5fdb799b4e9): 0
-  Critical, 1 High, 8 Medium, 7 Low, 3 Info; not yet remediated (reported only — user hasn't
-  asked to fix). Headline finding (R8-01, High): `ScoreService.RecomputeDayScoreCore` hardcodes
-  `streak=0` for any date that isn't literally today (`ScoreService.cs:298`), so
-  `RecalculateDayScore` — called whenever a past diary entry is edited/split/bulk-recategorized —
-  silently discards whatever streak bonus that day originally earned, with no warning. Also
-  found: `MoveTaskToToday` is the one of the four schedule-shift methods still missing the
-  transaction wrap its three siblings already have (R8-03, repeat of the round-5 finding #27
-  bug class); `ScoreService.IsScoringExemptFor` and `ActivityTracker.IsFullyOffToday` compute
-  the same day-off predicate via two independent, unlinked implementations (R8-04); the evening
-  review's overdue-carry preview doesn't apply the same per-plan exemption filter the real save
-  does, so it can show a different number than what's recorded (R8-02); `SplitDiaryEntryDialog`
-  never got the `bool?` cancelled/failed/succeeded contract its three sibling dialogs already
-  have (R8-06, another "fix one sibling" instance); `ClearAllData_Click` doesn't delete
-  `report.html`/`report.csv`/`full-export.json` the way `ClearHistory_Click` already does
-  (R8-05). Full list, plain-English explanations, and quick wins in the artifact above.
+- **2026-07-18, round-8 full audit + same-day remediation** (5 parallel passes — architecture/
+  security/UX/code-quality/privacy; report — note the user's since-established preference is
+  flat-text findings in chat, not an artifact, going forward:
+  https://claude.ai/code/artifact/016b54c5-9852-4e12-9092-c5fdb799b4e9): 0 Critical, 1 High, 8
+  Medium, 7 Low, 3 Info. **All 19 fixed same day** across 4 commits (295e333, 5fb45b1, 42867f7,
+  ea37165) after the user asked to fix the findings — triaged 18 AUTO-FIX + 1 NEEDS-DECISION
+  (R8-05: unconditional export-file deletion, user chose "delete unconditionally" over an
+  opt-in checkbox). Full 5-pass re-audit afterward confirmed all 19 resolved with zero
+  regressions in 4 of the 5 categories; the privacy re-audit caught 2 new issues introduced by
+  its own R8-05 fix (both "clear data" actions silently swallowed a locked-file delete failure
+  into the log instead of telling the user — the exact "logged but not surfaced" gap the fix
+  itself should have closed) — fixed in a 4th commit, verified, no further findings. New
+  regression test: `ScoreServiceScoringTests.RecalculateDayScore_PreservesThatDaysOwnStreakBonus_NotTodays`
+  (19 tests total, up from 18). Headline fix (R8-01, High): `ScoreService.CurrentStreak` now
+  takes an optional `asOf` date instead of always anchoring on `DateTime.Today`, so
+  `RecalculateDayScore` (called whenever a past diary entry is edited/split/bulk-recategorized)
+  no longer silently zeroes a day's real streak bonus — the identical bug was also found and
+  fixed in `ReportData.WeekStats` while fixing this one. Other fixes worth remembering: new
+  `Plan.IsOffOn` unifies a day-off predicate that `ScoreService`/`ActivityTracker` used to each
+  hand-roll (R8-04); new `ScoreReason`/`DiaryCategory.EditableOptions`/`TimeByApp.StackedCategories`
+  close out three more instances of this project's recurring duplicated-lookup-table pattern
+  (R8-09/11/13); `MoveTaskToToday` now transaction-wrapped like its three siblings (R8-03,
+  repeat of the round-5 finding #27 shape). Full original list, plain-English explanations, and
+  the fix commits are in the artifact above and in git log 5f067d7..HEAD.
 - **2026-07-18, diary-overlap re-audit + git-history purge**: Two open TODOs, both resolved.
   (1) Full-history scan of `time_diary` found 42 overlapping row-pairs (06-29 through 07-16),
   not just the single 07-15 instance previously flagged — see the Open TODOs entry above for
@@ -335,6 +342,16 @@ on 2026-07-17 after the round-7 audit)._
   tests (`ScoreServiceScoringTests.cs`). Verified with full Debug+Release build + all 18 tests +
   live Release relaunch + log check.
 - **Standing lessons** (apply every session, not just the one that taught them):
+  - **A remediation's own re-audit must re-check the fix's *own* new code, not just confirm the
+    original findings are gone.** 2026-07-18 round-8: the R8-05 fix (delete export files on
+    "Clear all my data") wrapped each file-delete in its own try/catch that logged-and-swallowed
+    failures — the exact "silent failure, nothing shown to the user" shape that made R8-05 a
+    finding in the first place, now reproduced inside its own fix, plus in the untouched sibling
+    `ClearHistory_Click` that had carried the same latent bug the whole time. The full 5-pass
+    re-audit caught it because it re-ran the whole privacy checklist against the new code instead
+    of only checking "is R8-05 gone" — confirms remediation-loop.md's "re-run the FULL audit, not
+    just the touched files" instruction is protecting against a real, not hypothetical, failure
+    mode: a fix silently reintroducing (or revealing) the same bug class it was meant to close.
   - **"Fix one sibling, miss the other" — general pattern + full history now lives in the global
     `windows-app-auditor` skill (4 rounds, 4 shapes, most recently 07-17's color-table +
     messenger-list duplicates); this project's specific unfixed-until-caught instance: round-5's
