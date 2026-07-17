@@ -150,6 +150,16 @@ public static class SplitDiaryEntryDialog
                     t = segEnd;
                 }
             });
+            // Splitting can change this day's category minutes (each row picks its own
+            // category) — recompute so an already-scored day doesn't keep showing a stale
+            // figure (2026-07-17 request). Best-effort: doesn't turn an otherwise-
+            // successful split into a reported failure.
+            try
+            {
+                using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+                score.RecalculateDayScore(date);
+            }
+            catch (Exception ex) { Log.Error("SplitDiaryEntryDialog.RecalculateScore", ex); }
             return true;
         }
         catch (Exception ex)

@@ -28,8 +28,8 @@ public static class ReportExport
         var stats = ReportData.WeekStats(score);
         var weekOn = stats.Sum(s => s.OnMin);
         var weekOff = stats.Sum(s => s.OffMin);
-        var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn);
-        var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn);
+        var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn, score);
+        var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn, score);
         var hints = Suggestions(weekOn, weekOff, distractions);
         return new WeekReportData(stats, weekOn, weekOff, distractions, breakdown, hints);
     }
@@ -156,7 +156,7 @@ public static class ReportExport
         {
             sb.AppendLine(Csv("Period", "On-plan (min)", "Off-plan (min)", "Total (min)"));
             var buckets = period == ReportPeriod.Month
-                ? ReportData.MonthBuckets(db.Conn) : ReportData.YearBuckets(db.Conn);
+                ? ReportData.MonthBuckets(db.Conn, score) : ReportData.YearBuckets(db.Conn, score);
             foreach (var b in buckets)
                 sb.AppendLine(Csv(b.Label,
                     b.OnMin.ToString(CultureInfo.InvariantCulture),
@@ -167,14 +167,14 @@ public static class ReportExport
         sb.AppendLine();
         sb.AppendLine(Csv("Top distractions — " + name));
         sb.AppendLine(Csv("Application", "Minutes"));
-        foreach (var (label, minutes) in ReportData.TopDistractions(period, db.Conn))
+        foreach (var (label, minutes) in ReportData.TopDistractions(period, db.Conn, score))
             sb.AppendLine(Csv(label, minutes.ToString(CultureInfo.InvariantCulture)));
 
         sb.AppendLine();
         sb.AppendLine(Csv("Time by app — " + name));
         sb.AppendLine(Csv("Application", "Sub-item",
             "On-plan (min)", "Off-plan (min)", "Neutral (min)", "Total (min)"));
-        foreach (var (app, usage) in ReportData.AppBreakdown(period, db.Conn))
+        foreach (var (app, usage) in ReportData.AppBreakdown(period, db.Conn, score))
         {
             sb.AppendLine(Csv(app, "",
                 usage.On.ToString(CultureInfo.InvariantCulture),

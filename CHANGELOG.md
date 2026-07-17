@@ -5,6 +5,24 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Scoring & day-offs**
+- A day where every one of your active plans is off (a recurring rest day
+  or a day you've marked off) no longer earns or loses any points for
+  on-plan/off-plan time, missed tasks, or your streak — it's genuinely a
+  day off. If you bring in and finish a task on that day anyway, you still
+  get full credit for it
+- The same day-off days are now also left out of the weekly/monthly/yearly
+  totals, Top Distractions, and Time by App on the Reports page — the
+  activity is still tracked and visible in the diary itself, it just
+  doesn't skew your totals
+- Editing a diary entry's time or category (including bulk-changing
+  several at once) now updates that day's score right away, instead of
+  leaving a stale number from before the edit
+- The "you're off-plan" reminder no longer interrupts you on a day you've
+  marked off — tracking still runs normally, you just won't be nagged
+- Fixed a bug where a task moved onto a day you'd marked off (e.g. via
+  "Move to today") could silently not count toward that day's score at all
+
 **Privacy & data**
 - Added a "Clear all my data" button in Settings that wipes everything the
   app has stored about you in one action — task completions, reschedules

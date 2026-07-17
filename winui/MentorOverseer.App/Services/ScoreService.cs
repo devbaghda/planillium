@@ -114,17 +114,44 @@ public sealed class ScoreService : IDisposable
         return DaysOff(plan.Id).Contains(plan.PlanDayForDate(d));
     }
 
+    /// <summary>Whether EVERY active plan is off on d — the gate for "should today's
+    /// passive scoring (on/off-plan minutes, missed-task penalty, streak bonus) apply at
+    /// all," confirmed with the user 2026-07-17: a day off on one plan while another still
+    /// has real work due should still score normally, so this only fires when there's
+    /// truly nothing expected of you anywhere. Task-completion points are NOT gated by
+    /// this — see ComputeDayScore's isExemptDay parameter — bringing in and finishing a
+    /// task on an otherwise-off day still earns its own credit.</summary>
+    public bool AllPlansScoringExempt(DateOnly d) => _plans.Count > 0 && _plans.All(p => IsScoringExemptFor(p, d));
+
+    /// <summary>Every date in [from, to] where AllPlansScoringExempt holds — used to keep
+    /// Reports' aggregate totals (weekly/monthly/yearly, Time-by-App, distractions)
+    /// consistent with the score: day-off time is still tracked and visible in the raw
+    /// Diary list, it just doesn't count toward any total (2026-07-17 request). Unlike the
+    /// score formula's isExemptDay, there's no task-completion exception here — a
+    /// completed task earns its own score credit regardless, but doesn't make that day's
+    /// incidental on/off-plan minutes count toward a total.</summary>
+    public HashSet<DateOnly> ScoringExemptDates(DateOnly from, DateOnly to)
+    {
+        var result = new HashSet<DateOnly>();
+        for (var d = from; d <= to; d = d.AddDays(1))
+            if (AllPlansScoringExempt(d)) result.Add(d);
+        return result;
+    }
+
     public (int Total, int Done) DayTaskCounts(DateOnly d)
     {
         int total = 0, done = 0;
         foreach (var plan in _plans)
         {
-            // A day off contributes nothing either way — and for a
-            // recurring exclusion specifically, PlanDayForDate resolves an
-            // excluded date to the SAME day-number as the last valid day
-            // before it, so without this skip an excluded Saturday would
-            // silently re-count Friday's already-credited tasks.
-            if (IsScoringExemptFor(plan, d)) continue;
+            // Recurring exclusion needs skipping to avoid double-counting: PlanDayForDate
+            // resolves an excluded date to the SAME day-number as the last valid day
+            // before it, so without this skip an excluded Saturday would silently
+            // re-count Friday's already-credited tasks. Manual day-off does NOT skip here
+            // (changed 2026-07-17) — its day-number is real and unique (MarkDayOff shifts
+            // tasks away from it, it doesn't get reused), so if a task WAS deliberately
+            // brought back onto this specific day-off date (e.g. via Move-to-today), it
+            // should still be counted and credited rather than silently ignored.
+            if (plan.IsExcluded(d)) continue;
             var dayNum = plan.PlanDayForDate(d);
             var overrides = _db.LoadOverrides(plan.Id);
             foreach (var phase in plan.Phases)
@@ -173,19 +200,26 @@ public sealed class ScoreService : IDisposable
     /// ComputeDayScore directly instead of re-deriving these terms itself
     /// (2026-07-09 audit finding #4 — the two had been computed
     /// independently and could silently drift out of sync).</summary>
-    public int DayScore(int done, int total, int onMin, int offMin, int streak = 0) =>
-        ComputeDayScore(done, total, onMin, offMin, streak).FlooredTotal;
+    public int DayScore(int done, int total, int onMin, int offMin, int streak = 0, bool isExemptDay = false) =>
+        ComputeDayScore(done, total, onMin, offMin, streak, isExemptDay).FlooredTotal;
 
     /// <summary>Same formula as DayScore, broken into its individual terms
-    /// for display (the evening review's line-by-line ledger).</summary>
-    public DayScoreBreakdown ComputeDayScore(int done, int total, int onMin, int offMin, int streak = 0) =>
+    /// for display (the evening review's line-by-line ledger).
+    /// <paramref name="isExemptDay"/> (AllPlansScoringExempt — every active plan off,
+    /// 2026-07-17 request) suppresses every passive term — on/off-plan minutes, the
+    /// missed-task penalty, and the streak bonus — since nothing is actually expected of
+    /// you on a day off. TaskPoints/MultiTaskBonus are NOT suppressed: bringing in and
+    /// finishing a task on an otherwise-off day still earns its own credit, the one
+    /// explicit exception the user asked for.</summary>
+    public DayScoreBreakdown ComputeDayScore(int done, int total, int onMin, int offMin, int streak = 0,
+        bool isExemptDay = false) =>
         new(
             TaskPoints: done * ConfigService.ScoringRate("task_completed", 10),
             MultiTaskBonus: Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3),
-            OnPlanPoints: (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3)),
-            OffPlanPoints: (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2)),
-            MissedPoints: Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5),
-            StreakBonus: streak * ConfigService.ScoringRate("streak_bonus_per_day", 5));
+            OnPlanPoints: isExemptDay ? 0 : (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3)),
+            OffPlanPoints: isExemptDay ? 0 : (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2)),
+            MissedPoints: isExemptDay ? 0 : Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5),
+            StreakBonus: isExemptDay ? 0 : streak * ConfigService.ScoringRate("streak_bonus_per_day", 5));
 
     public int CurrentStreak()
     {
@@ -193,9 +227,11 @@ public sealed class ScoreService : IDisposable
         for (var i = 1; i <= LookbackDays; i++)
         {
             var d = DateOnly.FromDateTime(DateTime.Today).AddDays(-i);
-            // A day off doesn't break a streak — skip it rather than
-            // treating its (necessarily zero) task count as a miss.
-            if (_plans.Any(p => IsScoringExemptFor(p, d))) continue;
+            // A day only doesn't break a streak when EVERY plan is off — matching
+            // AllPlansScoringExempt's 2026-07-17 "every plan, not just one" scope; a day
+            // off on one plan while another still had real, unfinished work due should
+            // still break the streak, since something genuinely was expected of you.
+            if (AllPlansScoringExempt(d)) continue;
             var (total, done) = DayTaskCounts(d);
             if (total > 0 && done == total) streak++;
             else break;
@@ -230,13 +266,41 @@ public sealed class ScoreService : IDisposable
     public int? CreditDayScoreIfMissing(DateOnly d)
     {
         if (LedgerHas("daily_score", d)) return null;
+        return RecomputeDayScoreCore(d);
+    }
+
+    /// <summary>Recomputes d's daily_score from scratch and overwrites whatever ledger row
+    /// is already there — unlike CreditDayScoreIfMissing, which only ever credits a date
+    /// once. Needed because editing a diary entry's category after its day was already
+    /// scored changes that day's on/off-plan minutes without anything else re-running the
+    /// formula (2026-07-17 request) — call this from wherever a diary entry's category can
+    /// change (EditDiaryEntryDialog, SplitDiaryEntryDialog, ReportsPage.Diary.MarkSelected).
+    /// Only daily_score is affected; overdue_accrual/weekly_comeback_bonus don't depend on
+    /// diary categories, so they're untouched.</summary>
+    public int RecalculateDayScore(DateOnly d)
+    {
+        int? result = null;
+        _db.RunInTransaction(() =>
+        {
+            using var del = _db.CreateCommand();
+            del.CommandText = "DELETE FROM score_ledger WHERE reason='daily_score' AND date=$d";
+            del.Parameters.AddWithValue("$d", d.ToIsoDate());
+            del.ExecuteNonQuery();
+            result = RecomputeDayScoreCore(d);
+        });
+        return result ?? 0;
+    }
+
+    private int? RecomputeDayScoreCore(DateOnly d)
+    {
         var (total, done) = DayTaskCounts(d);
         var (on, off) = DayDiaryMinutes(d);
         var streak = d == DateOnly.FromDateTime(DateTime.Today) ? CurrentStreak() : 0;
-        var score = DayScore(done, total, on, off, streak);
+        var isExempt = AllPlansScoringExempt(d);
+        var score = DayScore(done, total, on, off, streak, isExempt);
         try
         {
-            AddLedger(score, "daily_score", $"day score {score}", d);
+            AddLedger(score, "daily_score", $"day score {score}" + (isExempt ? " (day off)" : ""), d);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {
@@ -490,15 +554,25 @@ public sealed class ScoreService : IDisposable
         });
     }
 
+    // Memoized per plan for this ScoreService instance's lifetime — AllPlansScoringExempt
+    // (2026-07-17) can now call this hundreds of times in one Reports render (once per
+    // date in a year range), and every instance of this class is short-lived and
+    // throwaway (constructed fresh per page render/action), so there's no staleness risk
+    // across instances. Callers get a defensive copy, never the cached set itself, so
+    // UnmarkDayOff's in-place .Remove() on its own local copy can't corrupt the cache.
+    private readonly Dictionary<string, HashSet<int>> _daysOffCache = new();
+
     public HashSet<int> DaysOff(string planId)
     {
+        if (_daysOffCache.TryGetValue(planId, out var cached)) return new HashSet<int>(cached);
         var result = new HashSet<int>();
         using var cmd = _db.CreateCommand();
         cmd.CommandText = "SELECT day FROM plan_days_off WHERE plan_id=$pid";
         cmd.Parameters.AddWithValue("$pid", planId);
         using var r = cmd.ExecuteReader();
         while (r.Read()) result.Add(r.GetInt32(0));
-        return result;
+        _daysOffCache[planId] = result;
+        return new HashSet<int>(result);
     }
 
     /// <summary>Mark a day as non-working: tasks on or after it shift forward
@@ -521,6 +595,7 @@ public sealed class ScoreService : IDisposable
             cmd.Parameters.AddWithValue("$day", day);
             cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
             cmd.ExecuteNonQuery();
+            _daysOffCache.Remove(plan.Id);
         });
     }
 
@@ -543,6 +618,7 @@ public sealed class ScoreService : IDisposable
             cmd.Parameters.AddWithValue("$pid", plan.Id);
             cmd.Parameters.AddWithValue("$day", day);
             cmd.ExecuteNonQuery();
+            _daysOffCache.Remove(plan.Id);
         });
     }
 

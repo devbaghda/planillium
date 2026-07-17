@@ -75,6 +75,14 @@ public sealed class ActivityTracker : IDisposable
     private DateOnly? _restCheckDate;
     private bool _restDayToday;
 
+    // "Every active plan off today" — recurring exclusion OR a manually-marked day off —
+    // resolved once per calendar day like _restDayToday above. Deliberately separate: a
+    // recurring rest day already skips tracking entirely (see PollOnce), but a manual day
+    // off should keep tracking normally (2026-07-17 request — "I want to keep the track
+    // on those days"), it just shouldn't nag with the off-plan alert.
+    private DateOnly? _fullyOffCheckDate;
+    private bool _fullyOffToday;
+
     // High-water mark of time already written to the diary by an out-of-band
     // reconcile (the evening review's gap sweep). The return-from-idle handler
     // clamps against it so it never re-asks about, or re-logs, a stretch the
@@ -427,6 +435,41 @@ public sealed class ActivityTracker : IDisposable
     }
 
     /// <summary>
+    /// Whether every active plan is off today — recurring exclusion OR a manually-marked
+    /// day off (plan_days_off). Only gates the off-plan nag alert (CheckAlert) — unlike
+    /// IsRestDayToday, this does NOT stop tracking; a manually-off day still logs its
+    /// diary normally (2026-07-17 request). Cached per calendar day like IsRestDayToday,
+    /// but needs a plan_days_off read, so it takes PollOnce's already-open connection
+    /// rather than opening a second one just for this.
+    /// </summary>
+    private bool IsFullyOffToday(SqliteConnection conn)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        lock (_dayStateLock)
+        {
+            if (_fullyOffCheckDate != today)
+            {
+                _fullyOffCheckDate = today;
+                try
+                {
+                    var plans = PlanStore.LoadActivePlans();
+                    _fullyOffToday = plans.Count > 0 && plans.All(p =>
+                    {
+                        if (p.IsExcluded(today)) return true;
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = "SELECT 1 FROM plan_days_off WHERE plan_id=$pid AND day=$day";
+                        cmd.Parameters.AddWithValue("$pid", p.Id);
+                        cmd.Parameters.AddWithValue("$day", p.PlanDayForDate(today));
+                        return cmd.ExecuteScalar() != null;
+                    });
+                }
+                catch (Exception ex) { Log.Error("ActivityTracker.IsFullyOffToday", ex); _fullyOffToday = false; }
+            }
+            return _fullyOffToday;
+        }
+    }
+
+    /// <summary>
     /// If the user was active earlier today but then stopped well before the
     /// tracked day ends, there's a stretch between their last logged activity
     /// and now (capped at the day's diary end) that was never asked about.
@@ -469,10 +512,13 @@ public sealed class ActivityTracker : IDisposable
         }
     }
 
-    private void CheckAlert(string cls)
+    private void CheckAlert(string cls, SqliteConnection conn)
     {
         var now = DateTime.Now;
-        if (cls != DiaryCategory.OffPlan || !InWorkingHours())
+        // A manually-marked day off still logs its diary normally, but shouldn't nag you
+        // about being off-plan — you're not supposed to be on-plan today at all
+        // (2026-07-17 request).
+        if (cls != DiaryCategory.OffPlan || !InWorkingHours() || IsFullyOffToday(conn))
         {
             _offSince = null;
             _lastAlert = null;
@@ -557,7 +603,7 @@ public sealed class ActivityTracker : IDisposable
 
         _currentWindow = title;
         _currentClass = cls;
-        CheckAlert(cls);
+        CheckAlert(cls, conn);
         OnStatus?.Invoke(cls, title);
 
         if (_idleNotified && idleS < idleThresholdSec)

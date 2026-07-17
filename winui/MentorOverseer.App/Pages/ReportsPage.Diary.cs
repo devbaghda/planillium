@@ -192,6 +192,7 @@ public sealed partial class ReportsPage
             {
                 using var db = new Database();
                 var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var affectedDates = new HashSet<DateOnly>();
                 // All-or-nothing: this used to write each selected row as its
                 // own separate statement with no shared transaction, so a
                 // failure partway through a multi-row selection (an ordinary
@@ -209,12 +210,23 @@ public sealed partial class ReportsPage
                         db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
                         var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
                         if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
+                        affectedDates.Add(row.Date);
                     }
                 });
                 foreach (var keyword in learned)
                     ConfigService.LearnActivityRule(keyword, category);
                 if (learned.Count > 0)
                     (App.MainWindow as MainWindow)?.RestartTracker();
+                // A bulk re-category can span several different days — recompute each
+                // affected day's score so none of them keep showing a stale figure
+                // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
+                // re-category into a reported failure.
+                try
+                {
+                    using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+                    foreach (var d in affectedDates) score.RecalculateDayScore(d);
+                }
+                catch (Exception ex) { Log.Error("ReportsPage.MarkSelected.RecalculateScore", ex); }
             }
             catch (Exception ex)
             {
@@ -464,7 +476,7 @@ public sealed partial class ReportsPage
             AutomationProperties.SetName(edit, $"Edit entry: {windowLabel}, {start}–{end}");
             edit.Click += async (_, _) =>
             {
-                var ok = await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, start, end, dur, cat, desc);
+                var ok = await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, desc);
                 if (ok == true) Render();
                 else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
             };

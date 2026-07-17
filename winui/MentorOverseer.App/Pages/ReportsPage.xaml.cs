@@ -124,7 +124,7 @@ public sealed partial class ReportsPage : Page
             else
             {
                 var buckets = _period == ReportPeriod.Month
-                    ? ReportData.MonthBuckets(db.Conn) : ReportData.YearBuckets(db.Conn);
+                    ? ReportData.MonthBuckets(db.Conn, score) : ReportData.YearBuckets(db.Conn, score);
                 // Month always has at least this-week's row seeded in,
                 // but Year only gets rows for months that actually have
                 // data — a brand-new install (or a period with zero
@@ -137,7 +137,7 @@ public sealed partial class ReportsPage : Page
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────
             Body.Children.Add(Section($"TOP DISTRACTIONS — {periodName}"));
-            var distractions = ReportData.TopDistractions(_period, db.Conn);
+            var distractions = ReportData.TopDistractions(_period, db.Conn, score);
             if (distractions.Count == 0)
                 Body.Children.Add(Dim("No off-plan time logged. Impressive."));
             else
@@ -148,7 +148,7 @@ public sealed partial class ReportsPage : Page
             // Top 3 show by default; the rest sit behind "Show more", so pull a
             // generous slice rather than the default handful — the point of the
             // expander is to reveal the full picture on demand.
-            var breakdown = ReportData.AppBreakdown(_period, db.Conn, limit: 100);
+            var breakdown = ReportData.AppBreakdown(_period, db.Conn, score, limit: 100);
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
@@ -161,7 +161,7 @@ public sealed partial class ReportsPage : Page
             }
 
             Body.Children.Add(Section("INSIGHTS"));
-            Body.Children.Add(Card(InsightsPanel(weekStats, db.Conn)));
+            Body.Children.Add(Card(InsightsPanel(weekStats, db.Conn, score)));
 
             BuildDiarySection(today, score);
         }
@@ -237,11 +237,12 @@ public sealed partial class ReportsPage : Page
     }
 
     /// <summary>Week-based rule-of-thumb suggestions, same period as the score card.</summary>
-    private static StackPanel InsightsPanel(List<ReportData.DayStat> weekStats, SqliteConnection conn)
+    private static StackPanel InsightsPanel(List<ReportData.DayStat> weekStats, SqliteConnection conn,
+        ScoreService score)
     {
         var hints = ReportExport.Suggestions(
             weekStats.Sum(s => s.OnMin), weekStats.Sum(s => s.OffMin),
-            ReportData.TopDistractions(ReportPeriod.Week, conn));
+            ReportData.TopDistractions(ReportPeriod.Week, conn, score));
         var hintPanel = new StackPanel { Spacing = 6 };
         foreach (var hint in hints)
         {

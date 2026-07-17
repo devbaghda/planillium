@@ -23,7 +23,7 @@ public static class EditDiaryEntryDialog
     /// saved/deleted, false if the save/delete itself failed (2026-07-14
     /// round-6 audit finding #6: callers used to treat false the same as a
     /// cancel).</returns>
-    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id,
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
         string start, string end, int durationMin, string category, string? description)
     {
         var panel = new StackPanel { Spacing = 10, MinWidth = 320 };
@@ -112,6 +112,7 @@ public static class EditDiaryEntryDialog
                 var cat = ((ComboBoxItem)catBox.SelectedItem).Tag as string ?? category;
                 db.UpdateDiaryEntry(id, startBox.Text.Trim(), endBox.Text.Trim(),
                     (int)durBox.Value, cat, descBox.Text.Trim() is { Length: > 0 } d ? d : null);
+                RecalculateScore(db, date);
                 return true;
             }
             if (result == ContentDialogResult.Secondary)
@@ -126,6 +127,7 @@ public static class EditDiaryEntryDialog
                 };
                 if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;
                 db.DeleteDiaryEntry(id);
+                RecalculateScore(db, date);
                 return true;
             }
         }
@@ -135,5 +137,25 @@ public static class EditDiaryEntryDialog
             return false;
         }
         return null;
+    }
+
+    /// <summary>Editing or deleting an entry changes that day's on/off-plan minutes, but
+    /// a day already scored (score_ledger's daily_score is once-per-date, not
+    /// auto-refreshing) would otherwise keep showing the stale figure forever — recompute
+    /// it right away instead of waiting for a change that never comes (2026-07-17
+    /// request, prompted by editing a diary entry's category). Best-effort: a failure
+    /// here shouldn't turn an otherwise-successful save/delete into a reported failure,
+    /// so it's logged rather than thrown.</summary>
+    private static void RecalculateScore(Database db, DateOnly date)
+    {
+        try
+        {
+            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+            score.RecalculateDayScore(date);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("EditDiaryEntryDialog.RecalculateScore", ex);
+        }
     }
 }

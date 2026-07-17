@@ -128,4 +128,110 @@ public sealed class ScoreServiceScoringTests
         Assert.Equal(0, total);
         Assert.Equal(0, done);
     }
+
+    [Fact]
+    public void DayTaskCounts_StillCountsATaskMovedOntoAManuallyOffDay()
+    {
+        // 2026-07-17 fix: DayTaskCounts used to skip a plan's WHOLE day if it was
+        // manually marked off, which meant a task deliberately moved onto that day
+        // (e.g. via Move-to-today) was silently uncounted — contradicting "no points
+        // on a day off, UNLESS I brought in and accomplished a task from a plan." A
+        // manually-off day's day-number is real and unique (unlike a recurring
+        // exclusion's, which is intentionally skipped to avoid double-counting), so
+        // it must NOT be skipped here.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, (1, "Task"));
+        using var db = new Database();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        using (var score = new ScoreService(new List<Plan> { plan }, db))
+        {
+            // Marks day 1 (today) off, which shifts "Task" to day 2 — then pulls it
+            // straight back onto today, the same "brought it in" action a user would
+            // take via the Schedule page's "Move to today" button.
+            score.MarkDayOff(plan, plan.PlanDayForDate(today));
+            score.MoveTaskToToday(plan, "Task");
+        }
+        // ScoreService caches completions at construction — SaveCompletion must happen
+        // before the ScoreService that reads it is built, matching every real call site's
+        // own ordering (construct fresh right before use).
+        db.SaveCompletion(planId, plan.PlanDay, "Task", true);
+
+        using var score2 = new ScoreService(new List<Plan> { plan }, db);
+        var (total, done) = score2.DayTaskCounts(today);
+        Assert.Equal(1, total);
+        Assert.Equal(1, done);
+    }
+
+    [Fact]
+    public void ComputeDayScore_IsExemptDay_SuppressesPassiveTermsButKeepsTaskCredit()
+    {
+        // 2026-07-17: on a day off, on/off-plan minutes, the missed-task penalty, and the
+        // streak bonus should all be suppressed — but a task actually completed that day
+        // still earns its own credit, the one explicit exception requested.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, (1, "Task"));
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+
+        var b = score.ComputeDayScore(done: 2, total: 3, onMin: 120, offMin: 60, streak: 4, isExemptDay: true);
+
+        Assert.Equal(2 * 10, b.TaskPoints);
+        Assert.Equal((2 - 1) * 3, b.MultiTaskBonus);
+        Assert.Equal(0, b.OnPlanPoints);
+        Assert.Equal(0, b.OffPlanPoints);
+        Assert.Equal(0, b.MissedPoints);
+        Assert.Equal(0, b.StreakBonus);
+    }
+
+    [Fact]
+    public void AllPlansScoringExempt_RequiresEveryPlanOff_NotJustOne()
+    {
+        // Confirmed with the user 2026-07-17: a day off on one plan while another still has
+        // real work due should still score normally — only "nothing expected of you
+        // anywhere" suppresses the day's passive scoring.
+        var planA = MakePlan("test-a-" + Guid.NewGuid(), (1, "Task A"));
+        var planB = MakePlan("test-b-" + Guid.NewGuid(), (1, "Task B"));
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { planA, planB }, db);
+
+        score.MarkDayOff(planA, planA.PlanDayForDate(today));
+        Assert.False(score.AllPlansScoringExempt(today));
+
+        score.MarkDayOff(planB, planB.PlanDayForDate(today));
+        Assert.True(score.AllPlansScoringExempt(today));
+    }
+
+    [Fact]
+    public void RecalculateDayScore_OverwritesAnAlreadyCreditedDay()
+    {
+        // 2026-07-17: editing a diary entry's category after its day was already scored
+        // used to leave the stale figure in place forever (daily_score is once-per-date).
+        // RecalculateDayScore must delete and recompute, not silently no-op like
+        // CreditDayScoreIfMissing does for an already-credited date.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, (1, "Task"));
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        using var db = new Database();
+
+        // ScoreService caches completions at construction — each SaveCompletion below
+        // needs its own fresh instance afterward, matching every real call site's own
+        // ordering (construct fresh right before use).
+        db.SaveCompletion(planId, 1, "Task", true);
+        int? firstScore;
+        using (var score = new ScoreService(new List<Plan> { plan }, db))
+        {
+            firstScore = score.CreditDayScoreIfMissing(today);
+            Assert.NotNull(firstScore);
+            // Already credited — a second call is a no-op, confirming the baseline this
+            // test is contrasting against.
+            Assert.Null(score.CreditDayScoreIfMissing(today));
+        }
+
+        db.SaveCompletion(planId, 1, "Task", false);
+        using var score2 = new ScoreService(new List<Plan> { plan }, db);
+        var recalculated = score2.RecalculateDayScore(today);
+        Assert.NotEqual(firstScore, recalculated);
+    }
 }

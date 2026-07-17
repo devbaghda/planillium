@@ -202,8 +202,12 @@ public static class ReviewDialog
         // Single source of truth for the formula — see ComputeDayScore's
         // doc comment (2026-07-09 audit finding #4: this used to be
         // recomputed by hand here, independently of ScoreService.DayScore,
-        // and could silently drift out of sync with it).
-        var breakdown = score.ComputeDayScore(done, total, onMin, offMin, streak);
+        // and could silently drift out of sync with it). isExemptDay so a
+        // day off correctly shows no on/off-plan/missed/streak lines in the
+        // ledger below, even though the ring above still shows the real
+        // tracked minutes (2026-07-17 request).
+        var isExemptDay = score.AllPlansScoringExempt(today);
+        var breakdown = score.ComputeDayScore(done, total, onMin, offMin, streak, isExemptDay);
         var dayTotal = breakdown.FlooredTotal;
         var floored = dayTotal != breakdown.RawTotal;
 

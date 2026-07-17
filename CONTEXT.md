@@ -157,6 +157,23 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
    a full week back on track after a bad stretch; a `multi_task_bonus_per_extra_task`
    (3 pts, added 2026-07-09) rewards each task completed beyond the first one on the
    same day, on top of the flat per-task rate.
+10. **Day-off scoring (added 2026-07-17)**: when EVERY active plan considers a day off
+    (recurring exclusion or manual day-off — `ScoreService.AllPlansScoringExempt`; one
+    plan off while another still has real work due does NOT trigger this), that day's
+    on/off-plan minutes, missed-task penalty, and streak bonus are all suppressed —
+    "no points calculation" is the default for a day off. The one exception: a task
+    actually brought in and completed that day (e.g. via Move-to-today onto an
+    off day) still earns its own task-completion + multi-task-bonus credit — being off
+    doesn't forfeit credit for real work done anyway. The same day-off dates are also
+    excluded from Reports' aggregate totals (weekly/monthly/yearly summary, Time-by-App,
+    Top Distractions) — tracked and still visible in the raw Diary list, just not
+    counted toward any total. Editing a diary entry's category/time (or bulk-marking
+    several) now recalculates that date's `daily_score` via `RecalculateDayScore`
+    (unlike `CreditDayScoreIfMissing`, this overwrites an already-credited day — it has
+    to, since the whole point is a stale figure needs updating). The off-plan nag alert
+    also doesn't fire on a manually-off day (`ActivityTracker.IsFullyOffToday`) — but
+    unlike a recurring rest day, tracking itself still runs normally on a manual day off
+    (diary rows keep getting written); only scoring and the alert are suppressed.
 
 ---
 
@@ -272,6 +289,28 @@ on 2026-07-17 after the round-7 audit)._
   via `dotnet list package --vulnerable`. Verified with full Debug+Release build + all 14 tests +
   live Release relaunch + log check. Deferred (see Open TODOs): git-history purge, keyboard/
   dark-mode/timing items that need a live human check, not a code change.
+- **2026-07-17, day-off scoring feature (same day, after the audit)**: the user asked for four
+  related changes to how day-offs interact with scoring — see business rule 10 for the settled
+  behavior. Confirmed two design decisions with the user first: the exemption only fires when
+  *every* active plan is off that day (not just one), and a brought-in/completed task earns only
+  its own task-completion credit, not full normal scoring for the whole day. Implementation:
+  `ScoreService.AllPlansScoringExempt` (new) gates `ComputeDayScore`'s on/off-plan/missed/streak
+  terms (TaskPoints/MultiTaskBonus never gated); `DayTaskCounts`'s per-plan skip now only fires
+  for a *recurring* exclusion, not a manual day-off (a manually-off day-number is real and
+  unique, so a task moved onto it — e.g. via Move-to-today — must still be counted, which it
+  silently wasn't before); `ScoreService.RecalculateDayScore` (new) lets `daily_score` be
+  recomputed after the fact, wired into `EditDiaryEntryDialog`/`SplitDiaryEntryDialog`/
+  `ReportsPage.Diary.MarkSelected` so editing/splitting/bulk-recategorizing a diary entry
+  refreshes that date's score instead of leaving it stale forever; `ReportData`'s
+  `WeekStats`/`MonthBuckets`/`YearBuckets`/`AppBreakdown`/`TopDistractions` all now exclude
+  exempt dates from their totals too (the user confirmed: totals, not just score) while the raw
+  Diary list stays untouched; `ActivityTracker.IsFullyOffToday` (new, separate from the existing
+  recurring-only `IsRestDayToday`) suppresses the off-plan nag alert on a manually-off day
+  without pausing tracking itself. `ScoreService.DaysOff` gained a per-instance memoization
+  (with cache invalidation on `MarkDayOff`/`UnmarkDayOff`) since `AllPlansScoringExempt` can now
+  run hundreds of times in one Reports render (once per date in a Year view). 6 new regression
+  tests (`ScoreServiceScoringTests.cs`). Verified with full Debug+Release build + all 18 tests +
+  live Release relaunch + log check.
 - **Standing lessons** (apply every session, not just the one that taught them):
   - The "fix one sibling, miss the other" class hit a 4th shape 2026-07-17: a shared color table
     (`ReportsPage.Styling.CategoryBrushKey`) was introduced round-5 specifically to stop two
