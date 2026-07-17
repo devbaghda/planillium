@@ -22,6 +22,13 @@ going forward; the original Python/Tkinter version is retired.
   marked off — tracking still runs normally, you just won't be nagged
 - Fixed a bug where a task moved onto a day you'd marked off (e.g. via
   "Move to today") could silently not count toward that day's score at all
+- Fixed a bug where editing an old diary entry (recategorizing it, splitting
+  it, or bulk-changing several from Reports) could silently erase a streak
+  bonus that day had genuinely earned — the recalculation now correctly
+  looks at what your streak actually was on that day, not today's
+- The evening review's preview of how many points you'll lose for overdue
+  tasks now always matches what actually gets recorded, including on a day
+  where one of your plans is off but another still has work due
 
 **Privacy & data**
 - Added a "Clear all my data" button in Settings that wipes everything the
@@ -36,6 +43,14 @@ going forward; the original Python/Tkinter version is retired.
 - The manual's privacy section now actually describes what's tracked
   (window titles, idle-time answers, evening reflections) and how long it's
   kept, instead of two vague sentences
+- "Clear all my data" now also removes any report or backup file
+  (report.html, report.csv, full-export.json) you'd previously exported to
+  your data folder, not just the database — and if one of those files can't
+  be removed (e.g. it's open in another program), you're told so instead of
+  seeing "cleared" when a copy of your data is still sitting on disk
+- The manual now explains the difference between a recurring rest day
+  (tracking pauses entirely) and a single day manually marked off (tracking
+  keeps running as normal — only the off-plan reminder is silenced)
 
 **Settings**
 - Work hours, reminder timing, idle threshold, retention days, and the
@@ -46,11 +61,15 @@ going forward; the original Python/Tkinter version is retired.
 **Accessibility**
 - The per-task note box and the diary search box are now properly labeled
   for screen readers — they used to announce as unlabeled edit fields
+- The evening review's "what moved the needle today" box is now labeled for
+  screen readers too
 
 **Reports**
 - The tray icon's status color and the Reports page's colors for the same
   activity type could disagree (most noticeably "Paid" time); both now
   always show the same color for the same thing
+- A day off now shows a "Day off" label in the Reports day/week table
+  instead of a bare 0m/0m that looked identical to tracking having failed
 
 **Scheduling & scoring**
 - Rescheduling an overdue or due task now lets you pick today as the new
@@ -83,6 +102,14 @@ going forward; the original Python/Tkinter version is retired.
   a diary entry now show the same "couldn't save" warning as everything
   else if the save itself fails, instead of looking identical to clicking
   Cancel
+- Splitting a diary entry now shows the same "couldn't save" warning too, if
+  the save itself fails — it used to be the one action left that still
+  looked identical to clicking Cancel
+- Rescheduling a single task now tells you up front that it'll shift
+  whatever's already on the target day (and everything after it) forward by
+  one, the same disclosure "Replan all overdue" already showed
+- Deleting a diary entry now names exactly what's being removed and notes
+  that day's score will be recalculated, instead of a bare yes/no prompt
 - Archiving, restoring, or adding a plan now updates the sidebar summary
   immediately, and shows a clear error if the file operation itself fails
 - Splitting a diary entry into several activities no longer risks losing the
