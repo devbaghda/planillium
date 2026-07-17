@@ -6,6 +6,16 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Scheduling & scoring**
+- Rescheduling an overdue or due task now lets you pick today as the new
+  date — it previously only let you pick tomorrow or later, even for a task
+  that was already overdue
+- Fixed a bug where rescheduling a task, or marking/unmarking a day off,
+  could shift another day's task right on top of a day you'd already marked
+  off, while a perfectly ordinary working day nearby was left looking empty
+  instead
+- Undoing "day off" on a day now correctly pulls the task that had rolled
+  onto the next day back onto the day you just un-marked, instead of leaving
+  it stranded
 - Fixed a bug where stepping away from the computer could get double-counted:
   the last few minutes before you were marked idle used to be logged as both
   still on-plan/off-plan *and* as idle, so the same stretch of time (up to

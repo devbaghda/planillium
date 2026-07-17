@@ -42,7 +42,10 @@ public static class ReplanOverdueDialog
         var listPanel = new StackPanel { Spacing = 10 };
         foreach (var (plan, task, daysOverdue) in overdue)
         {
-            var minDate = plan.DateForPlanDay(plan.PlanDay + 1);
+            // Today, not tomorrow — every task in this dialog is already overdue,
+            // so today must be a selectable target too (same sibling fix as
+            // RescheduleTaskDialog, 2026-07-16 bug report).
+            var minDate = plan.DateForPlanDay(plan.PlanDay);
             var minOffset = new DateTimeOffset(minDate.ToDateTime(TimeOnly.MinValue));
             var picker = new CalendarDatePicker
             {

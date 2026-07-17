@@ -251,6 +251,28 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
   All three turns verified with full Debug+Release build + all tests + live Release
   stop/rebuild/relaunch + UIA confirmation; turn 2 additionally re-swept git history for `.db`
   files (clean).
+- **2026-07-16, live bug reports (schedule shifting + reschedule dialog)**: Fixed three
+  related bugs, all in the day-off/reschedule shifting code:
+  1. `RescheduleTaskDialog`/`ReplanOverdueDialog` hard-coded `MinDate = plan.PlanDay + 1`
+     (tomorrow), so an overdue/due task could never be rescheduled to *today* — only
+     "Move to today" reaches today, and that button only shows for future tasks
+     (`AssignedDay > planDay`), so overdue tasks had no path to today at all. Both dialogs'
+     `MinDate` now use `plan.PlanDay` (today) instead.
+  2. **Root cause shared by the other two reports**: `MarkDayOff`/`UnmarkDayOff`/
+     `RescheduleTask`/`MoveTaskToToday`'s backward compaction all shifted tasks by a blind
+     `AssignedDay ± 1`, with no awareness that *another* day might already be marked off in
+     the range being shifted through. That let a shift walk a task directly onto an
+     already-off day (making it look occupied while a plain working day elsewhere was left
+     looking like an unmarked empty gap) — exactly the "Monday goes empty after rescheduling
+     around a day-off Sunday" and "undoing a day-off doesn't pull the rolled-over task back"
+     reports. Fixed with two new helpers, `NextWorkingDay`/`PrevWorkingDay` (skip over
+     `plan_days_off` entries), used by all four shift sites in `ScoreService.cs`.
+     `RescheduleTask` also now defensively bumps a picked target day forward if it happens to
+     land on an off day (the date pickers don't grey those out). 4 new regression tests added
+     to `ScoreServiceSchedulingTests.cs` (multi-day-off mark/unmark round trips). Verified with
+     full Debug+Release build, all 14 tests (10 existing + 4 new) passing, and a live
+     stop/rebuild/relaunch (confirmed via `wmic ... ExecutablePath` it was the Release exe
+     being replaced, and current time vs. `end_of_day_summary_time` before stopping it).
 - **Standing lessons** (apply every session, not just the one that taught them):
   - Any "show a prompt on a timer" trigger needs BOTH the `IsOnScreen()`-check-then-toast-fallback
     pattern AND an "already showing, don't reopen" guard — confirmed missing on three different

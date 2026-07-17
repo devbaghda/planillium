@@ -170,4 +170,115 @@ public sealed class ScoreServiceSchedulingTests
         // completed task.
         Assert.Equal(4, tasks.Single(t => t.Task.Text == "Day 5 pending task").AssignedDay);
     }
+
+    [Fact]
+    public void RescheduleTask_SkipsOverDayMarkedOff()
+    {
+        // Regression test for the 2026-07-16 bug report: a naive "+1" shift
+        // used to walk a task straight onto a day already marked off (making
+        // it look occupied) while a plain working day further along was left
+        // looking like an unmarked gap instead. Day 3 is marked off first
+        // (pushing C/D to 4/5); rescheduling A onto day 2 must then shift
+        // B/C/D forward while still hopping over day 3.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: 0,
+            (1, "A"), (2, "B"), (3, "C"), (4, "D"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 3);
+        score.RescheduleTask(plan, "A", originalDay: 1, newAssignedDay: 2);
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(2, tasks.Single(t => t.Task.Text == "A").AssignedDay);
+        Assert.Equal(4, tasks.Single(t => t.Task.Text == "B").AssignedDay);
+        Assert.Equal(5, tasks.Single(t => t.Task.Text == "C").AssignedDay);
+        Assert.Equal(6, tasks.Single(t => t.Task.Text == "D").AssignedDay);
+        Assert.Contains(3, score.DaysOff(planId));
+        Assert.DoesNotContain(3, tasks.Select(t => t.AssignedDay));
+    }
+
+    [Fact]
+    public void MarkDayOff_SkipsOverAnAlreadyMarkedOffDay()
+    {
+        // Marking a second day off while an earlier one is still off must
+        // hop the forward shift over the first day-off too, not land a task
+        // on it.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: 0,
+            (1, "T1"), (2, "T2"), (3, "T3"), (4, "T4"), (5, "T5"), (6, "T6"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 3);   // T3..T6 shift to 4..7
+        score.MarkDayOff(plan, 5);   // whatever now sits on/after day 5 shifts again, hopping day 3
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(1, tasks.Single(t => t.Task.Text == "T1").AssignedDay);
+        Assert.Equal(2, tasks.Single(t => t.Task.Text == "T2").AssignedDay);
+        Assert.Equal(4, tasks.Single(t => t.Task.Text == "T3").AssignedDay);
+        Assert.Equal(6, tasks.Single(t => t.Task.Text == "T4").AssignedDay);
+        Assert.Equal(7, tasks.Single(t => t.Task.Text == "T5").AssignedDay);
+        Assert.Equal(8, tasks.Single(t => t.Task.Text == "T6").AssignedDay);
+        Assert.Equal(new HashSet<int> { 3, 5 }, score.DaysOff(planId));
+        Assert.DoesNotContain(3, tasks.Select(t => t.AssignedDay));
+        Assert.DoesNotContain(5, tasks.Select(t => t.AssignedDay));
+    }
+
+    [Fact]
+    public void UnmarkDayOff_MovesFollowingTaskBackToTheUnmarkedDay()
+    {
+        // Regression test for the 2026-07-16 bug report: undoing a day-off
+        // should pull the task that rolled forward because of it back onto
+        // the day being un-marked, restoring the original layout.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: 0, (1, "A"), (2, "B"), (3, "C"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 2);
+        score.UnmarkDayOff(plan, 2);
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(1, tasks.Single(t => t.Task.Text == "A").AssignedDay);
+        Assert.Equal(2, tasks.Single(t => t.Task.Text == "B").AssignedDay);
+        Assert.Equal(3, tasks.Single(t => t.Task.Text == "C").AssignedDay);
+        Assert.Empty(score.DaysOff(planId));
+    }
+
+    [Fact]
+    public void UnmarkDayOff_PreservesAnotherStillMarkedOffDay()
+    {
+        // Two days marked off (3, then 5); un-marking the earlier one (3)
+        // must compact everything below the still-off day (5) back into
+        // place while leaving day 5 itself untouched — the backward
+        // counterpart of MarkDayOff_SkipsOverAnAlreadyMarkedOffDay.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: 0,
+            (1, "T1"), (2, "T2"), (3, "T3"), (4, "T4"), (5, "T5"), (6, "T6"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 3);
+        score.MarkDayOff(plan, 5);
+        score.UnmarkDayOff(plan, 3);
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(1, tasks.Single(t => t.Task.Text == "T1").AssignedDay);
+        Assert.Equal(2, tasks.Single(t => t.Task.Text == "T2").AssignedDay);
+        Assert.Equal(3, tasks.Single(t => t.Task.Text == "T3").AssignedDay);
+        Assert.Equal(4, tasks.Single(t => t.Task.Text == "T4").AssignedDay);
+        Assert.Equal(6, tasks.Single(t => t.Task.Text == "T5").AssignedDay);
+        Assert.Equal(7, tasks.Single(t => t.Task.Text == "T6").AssignedDay);
+        Assert.Equal(new HashSet<int> { 5 }, score.DaysOff(planId));
+        Assert.DoesNotContain(5, tasks.Select(t => t.AssignedDay));
+    }
 }

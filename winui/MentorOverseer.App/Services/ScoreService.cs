@@ -419,11 +419,16 @@ public sealed class ScoreService : IDisposable
         var dayNowEmpty = tasks.All(t => t.Task.Text == taskText || t.AssignedDay != oldDay);
         if (dayNowEmpty)
         {
+            // Compacting back must hop over any day marked off in between —
+            // otherwise a plain "-1" can walk a task straight onto a day-off
+            // day (making it look occupied) while the day it vacated, which
+            // was never off, is left looking like an orphaned gap instead.
+            var daysOff = DaysOff(plan.Id);
             foreach (var t in tasks)
             {
                 if (t.Task.Text == taskText || t.Completed) continue;
                 if (t.AssignedDay > oldDay)
-                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, PrevWorkingDay(t.AssignedDay - 1, daysOff));
             }
         }
     }
@@ -458,12 +463,22 @@ public sealed class ScoreService : IDisposable
         // tasks re-keyed to their new day and others not (round-5 audit finding #27).
         _db.RunInTransaction(() =>
         {
+            var daysOff = DaysOff(plan.Id);
+            // Defensive: the date picker doesn't filter out days marked off, so a
+            // picked date could land exactly on one — bump to the next working day
+            // rather than placing a task on a day meant to hold none.
+            newAssignedDay = NextWorkingDay(newAssignedDay, daysOff);
+
             var tasks = PlanStore.TasksFor(plan, _db, _completions);
             foreach (var t in tasks)
             {
                 if (t.Task.Text == taskText || t.Completed) continue;
                 if (t.AssignedDay >= newAssignedDay)
-                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+                    // Skip over any other day already marked off instead of a flat
+                    // "+1" — a naive shift can walk a task straight onto a day-off
+                    // day (making it look occupied) while a plain working day
+                    // further along is left empty instead (2026-07-16 bug report).
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, NextWorkingDay(t.AssignedDay + 1, daysOff));
             }
             SaveOverride(plan.Id, taskText, originalDay, newAssignedDay);
         });
@@ -480,15 +495,18 @@ public sealed class ScoreService : IDisposable
         return result;
     }
 
-    /// <summary>Mark a day as non-working: tasks on or after it shift +1.
-    /// Completed tasks are excluded — see MoveTaskToToday's doc comment.</summary>
+    /// <summary>Mark a day as non-working: tasks on or after it shift forward
+    /// to the next working day (skipping over any OTHER day already marked
+    /// off, rather than a flat +1 — see NextWorkingDay). Completed tasks are
+    /// excluded — see MoveTaskToToday's doc comment.</summary>
     public void MarkDayOff(Plan plan, int day)
     {
         _db.RunInTransaction(() =>
         {
+            var daysOff = DaysOff(plan.Id);
             foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
                 if (!t.Completed && t.AssignedDay >= day)
-                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay + 1);
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, NextWorkingDay(t.AssignedDay + 1, daysOff));
             using var cmd = _db.CreateCommand();
             cmd.CommandText =
                 "INSERT INTO plan_days_off (plan_id, day, marked_at) VALUES ($pid, $day, $ts) " +
@@ -500,21 +518,42 @@ public sealed class ScoreService : IDisposable
         });
     }
 
-    /// <summary>Inverse of MarkDayOff: tasks after the day shift back −1.
-    /// Completed tasks are excluded — see MoveTaskToToday's doc comment.</summary>
+    /// <summary>Inverse of MarkDayOff: tasks after the day shift back to the
+    /// previous working day (skipping over any OTHER day still marked off,
+    /// rather than a flat −1 — see PrevWorkingDay), so the task immediately
+    /// after lands exactly back on the day being un-marked. Completed tasks
+    /// are excluded — see MoveTaskToToday's doc comment.</summary>
     public void UnmarkDayOff(Plan plan, int day)
     {
         _db.RunInTransaction(() =>
         {
+            var daysOff = DaysOff(plan.Id);
+            daysOff.Remove(day);  // this day is the one being un-marked — no longer a barrier
             foreach (var t in PlanStore.TasksFor(plan, _db, _completions))
                 if (!t.Completed && t.AssignedDay > day)
-                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, t.AssignedDay - 1);
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, PrevWorkingDay(t.AssignedDay - 1, daysOff));
             using var cmd = _db.CreateCommand();
             cmd.CommandText = "DELETE FROM plan_days_off WHERE plan_id=$pid AND day=$day";
             cmd.Parameters.AddWithValue("$pid", plan.Id);
             cmd.Parameters.AddWithValue("$day", day);
             cmd.ExecuteNonQuery();
         });
+    }
+
+    /// <summary>Smallest day >= start that isn't marked off — used whenever a
+    /// task shifts forward, so it never lands on a day meant to hold none.</summary>
+    private static int NextWorkingDay(int day, HashSet<int> daysOff)
+    {
+        while (daysOff.Contains(day)) day++;
+        return day;
+    }
+
+    /// <summary>Largest day &lt;= start that isn't marked off — the backward
+    /// counterpart of NextWorkingDay, used when compacting a gap closed.</summary>
+    private static int PrevWorkingDay(int day, HashSet<int> daysOff)
+    {
+        while (daysOff.Contains(day)) day--;
+        return day;
     }
 
     /// <summary>Same upsert as main.py _save_override.</summary>

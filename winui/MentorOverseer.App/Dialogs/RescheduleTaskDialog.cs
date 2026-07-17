@@ -22,7 +22,11 @@ public static class RescheduleTaskDialog
     /// round-6 audit finding #6).</returns>
     public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, Plan plan, AssignedTask task)
     {
-        var minDate = plan.DateForPlanDay(plan.PlanDay + 1);  // tomorrow, exclusion-aware
+        // Today, not tomorrow — this dialog opens for overdue/due tasks too (any
+        // open task, per the doc comment above), and those should be movable to
+        // today. "Move to today" already covers future tasks; a due/overdue task
+        // has no other path to "today" than this dialog (2026-07-16 bug report).
+        var minDate = plan.DateForPlanDay(plan.PlanDay);
         var minOffset = new DateTimeOffset(minDate.ToDateTime(TimeOnly.MinValue));
 
         var picker = new CalendarDatePicker
