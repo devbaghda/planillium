@@ -209,6 +209,17 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-18, diary-overlap re-audit + git-history purge**: Two open TODOs, both resolved.
+  (1) Full-history scan of `time_diary` found 42 overlapping row-pairs (06-29 through 07-16),
+  not just the single 07-15 instance previously flagged — see the Open TODOs entry above for
+  the count and the user's decision to leave the data untouched rather than guess-correct 40
+  pairs with no confirmed single cause. (2) Personal-data git-history purge — see the Open
+  TODOs entry above (now struck through) for full detail; also picked up two things not
+  originally scoped: an accidentally-committed `obj/` build-artifact tree (would have risked
+  binary corruption from the name text-replace — Microsoft's own "David" Hebrew-script font
+  name inside a Windows DLL was a false-positive match) and commit-message text (filter-repo's
+  `--replace-text` only touches file blobs, not messages — needed a second `--replace-message`
+  pass to actually finish the job).
 - **2026-07-07 to 07-15, WinUI rebuild through round-6 audit** (full detail in git log; artifact
   links kept for the rounds that have them). v1.0.0 shipped 07-07 (18 findings fixed), app renamed
   "Planillium" (display only). TickTick secret purged from git history via `filter-branch` +
@@ -341,6 +352,18 @@ on 2026-07-17 after the round-7 audit)._
     it can lag by up to the full poll/threshold interval. Log/close out events at the
     back-computed real moment, not at "now," or two records meant to be back-to-back end up
     overlapping instead (see the 2026-07-15 idle-transition overlap bug below).
+  - **`git filter-repo` must never run in-place in a repo that has other live `git worktree`
+    checkouts attached** (this repo has 3) — it refuses to run at all unless the repo looks
+    like a fresh clone (or `--force`), and forcing it in-place risks corrupting the other
+    worktrees since they share the same object store. Do the rewrite in an isolated scratch
+    clone (`git init` + `git fetch <local-repo-path> branch:branch` for just the branches in
+    scope — this also cleanly excludes any other local-only branches from the rewrite), verify
+    with a git blob-level diff (`git diff <old-sha> <new-sha> --stat`, not a raw filesystem
+    diff — checkout line-ending differences between two separate clones make raw `diff -rq`
+    falsely report nearly every file as changed), then push from there and reset the real
+    working copy afterward. Also: `--replace-text` only rewrites file blob content, not commit
+    messages — a separate `--replace-message` pass is needed to actually remove a string from
+    "history" in the sense a user means it (2026-07-18).
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **A full-history scan (2026-07-17/18) found 42 overlapping diary-row pairs from 06-29 through
     07-16, not just the one 07-15 instance previously flagged, plus 2 rows with end_time before
@@ -358,14 +381,22 @@ on 2026-07-17 after the round-7 audit)._
     TickTick from Settings (disconnect → "Connect TickTick" → re-auth writes the new value
     via `TickTickAuth.SaveClientSecret`) — until then, TickTick sync will fail with an
     auth error using the now-invalid old secret.
-  - **Scrub personal data before making the repo public**: `config.json` and
-    `plans/active/*.json` were gitignored + untracked going forward on 2026-07-13 (commit
-    `9be8515`), and this file's own "The user" section still names the user directly. The GitHub
-    repo is currently **Private** (confirmed 2026-07-09), so there's no live exposure today,
-    but **history still holds the real files in every past commit** — untracking only stops
-    new copies, it doesn't purge old ones. Full purge (if wanted before any public push) needs
-    `git filter-repo` across every branch + a force-push of each, a deliberately separate,
-    bigger step from the untracking done tonight.
+  - ~~Scrub personal data before making the repo public~~ — **done 2026-07-18.** Ran
+    `git filter-repo` in an isolated scratch clone (not in-place — this repo has 3 other live
+    `git worktree` checkouts sharing its object store, and filter-repo refuses/risks corruption
+    unless it's a fresh clone) to: strip `config.json`, `plans/active/*.json`, and an
+    accidentally-committed `winui/MentorOverseer.App/obj/` build-artifact tree from every
+    commit; and replace the developer's real first name with "the user" in both file content
+    and commit messages across all 134 commits (name only appeared in comments/docs, never a
+    credential — current-tree source/docs/installer were hand-edited to match first, in the
+    same pass, so the name doesn't reappear in the next commit either). Verified before
+    pushing: tip-tree file list and content identical to pre-purge (git blob diff, one
+    intentional line), both branches + `v1.0.0` tag intact, commit count unchanged (134), zero
+    "David" hits left anywhere in history. Force-pushed `master`+`winui-rebuild`+tag to origin,
+    resynced this working copy. The 3 other worktrees (`mentor-overseer-audit-test`,
+    `-test`, `-theme-test`) are on local-only branches never pushed to origin, so they're
+    untouched by this — no action needed unless/until someone tries to reconcile them against
+    the rewritten master/winui-rebuild.
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
