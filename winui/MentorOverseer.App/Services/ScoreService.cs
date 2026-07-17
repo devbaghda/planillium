@@ -108,11 +108,8 @@ public sealed class ScoreService : IDisposable
     /// recurring exclusions only, no manual override) for a different
     /// purpose; the two rules differ on purpose, don't unify them by
     /// mistake if one is ever renamed or refactored near the other.</summary>
-    private bool IsScoringExemptFor(Plan plan, DateOnly d)
-    {
-        if (plan.IsExcluded(d)) return true;
-        return DaysOff(plan.Id).Contains(plan.PlanDayForDate(d));
-    }
+    private bool IsScoringExemptFor(Plan plan, DateOnly d) =>
+        plan.IsOffOn(d, (planId, day) => DaysOff(planId).Contains(day));
 
     /// <summary>Whether EVERY active plan is off on d — the gate for "should today's
     /// passive scoring (on/off-plan minutes, missed-task penalty, streak bonus) apply at
@@ -221,12 +218,20 @@ public sealed class ScoreService : IDisposable
             MissedPoints: isExemptDay ? 0 : Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5),
             StreakBonus: isExemptDay ? 0 : streak * ConfigService.ScoringRate("streak_bonus_per_day", 5));
 
-    public int CurrentStreak()
+    /// <summary>Consecutive fully-completed days immediately before <paramref name="asOf"/>
+    /// (defaults to today) — how long the streak was *as of that date*, not necessarily the
+    /// live streak. Needed because a day's streak bonus is part of its score at the moment
+    /// it's first credited; recomputing that same day's score later (RecalculateDayScore,
+    /// after an unrelated diary edit) must reproduce the same streak it originally saw, not
+    /// today's, or the recalculation silently changes a term the edit had nothing to do with
+    /// (2026-07-18 audit finding R8-01).</summary>
+    public int CurrentStreak(DateOnly? asOf = null)
     {
+        var anchor = asOf ?? DateOnly.FromDateTime(DateTime.Today);
         var streak = 0;
         for (var i = 1; i <= LookbackDays; i++)
         {
-            var d = DateOnly.FromDateTime(DateTime.Today).AddDays(-i);
+            var d = anchor.AddDays(-i);
             // A day only doesn't break a streak when EVERY plan is off — matching
             // AllPlansScoringExempt's 2026-07-17 "every plan, not just one" scope; a day
             // off on one plan while another still had real, unfinished work due should
@@ -295,7 +300,7 @@ public sealed class ScoreService : IDisposable
     {
         var (total, done) = DayTaskCounts(d);
         var (on, off) = DayDiaryMinutes(d);
-        var streak = d == DateOnly.FromDateTime(DateTime.Today) ? CurrentStreak() : 0;
+        var streak = CurrentStreak(d);
         var isExempt = AllPlansScoringExempt(d);
         var score = DayScore(done, total, on, off, streak, isExempt);
         try
@@ -334,6 +339,17 @@ public sealed class ScoreService : IDisposable
         return result;
     }
 
+    /// <summary>How many overdue tasks actually accrue a penalty on d — a day off (recurring
+    /// exclusion or manually marked) costs nothing for that plan's already-overdue tasks, and
+    /// only the first OverdueAccrualCapDays days of lateness count. Single source of truth for
+    /// this count: CreditOverdueAccrualIfMissing (the write path) and ReviewDialog's preview
+    /// (the display path) used to compute this independently and could show two different
+    /// numbers for the same day when a per-plan exemption was in play (2026-07-18 audit
+    /// finding R8-02). They're still shown as overdue everywhere else in the UI (OverdueAsOf
+    /// itself is untouched) and resume accruing the day after.</summary>
+    public int OverdueAccrualCount(DateOnly d) =>
+        OverdueAsOf(d).Where(x => !IsScoringExemptFor(x.Plan, d)).Count(x => x.DaysOverdue <= OverdueAccrualCapDays);
+
     /// <summary>
     /// v2 accrual: unlike the Python version, a task only bleeds points for
     /// its first 3 overdue days — after that it's stale and costs nothing
@@ -342,13 +358,7 @@ public sealed class ScoreService : IDisposable
     public int? CreditOverdueAccrualIfMissing(DateOnly d)
     {
         if (LedgerHas("overdue_accrual", d)) return null;
-        // A day off (recurring exclusion or manually marked) costs nothing —
-        // tasks a plan already had overdue don't accrue further that day.
-        // They're still shown as overdue everywhere in the UI (OverdueAsOf
-        // itself is untouched) and resume accruing the day after.
-        var count = OverdueAsOf(d)
-            .Where(x => !IsScoringExemptFor(x.Plan, d))
-            .Count(x => x.DaysOverdue <= OverdueAccrualCapDays);
+        var count = OverdueAccrualCount(d);
         if (count == 0) return 0;
         var delta = count * ConfigService.ScoringRate("task_overdue_penalty", -5);
         try
@@ -484,23 +494,31 @@ public sealed class ScoreService : IDisposable
         if (target is null || target.AssignedDay <= planDay) return;
 
         var oldDay = target.AssignedDay;
-        SaveOverride(plan.Id, taskText, target.OriginalDay, planDay);
 
-        var dayNowEmpty = tasks.All(t => t.Task.Text == taskText || t.AssignedDay != oldDay);
-        if (dayNowEmpty)
+        // All-or-nothing, same as RescheduleTask/MarkDayOff/UnmarkDayOff — this method was
+        // the one of the four shift operations still missing it (2026-07-18 audit finding
+        // R8-03); a failure partway through the compaction loop below could otherwise leave
+        // some tasks re-keyed to their compacted day and others not.
+        _db.RunInTransaction(() =>
         {
-            // Compacting back must hop over any day marked off in between —
-            // otherwise a plain "-1" can walk a task straight onto a day-off
-            // day (making it look occupied) while the day it vacated, which
-            // was never off, is left looking like an orphaned gap instead.
-            var daysOff = DaysOff(plan.Id);
-            foreach (var t in tasks)
+            SaveOverride(plan.Id, taskText, target.OriginalDay, planDay);
+
+            var dayNowEmpty = tasks.All(t => t.Task.Text == taskText || t.AssignedDay != oldDay);
+            if (dayNowEmpty)
             {
-                if (t.Task.Text == taskText || t.Completed) continue;
-                if (t.AssignedDay > oldDay)
-                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, PrevWorkingDay(t.AssignedDay - 1, daysOff));
+                // Compacting back must hop over any day marked off in between —
+                // otherwise a plain "-1" can walk a task straight onto a day-off
+                // day (making it look occupied) while the day it vacated, which
+                // was never off, is left looking like an orphaned gap instead.
+                var daysOff = DaysOff(plan.Id);
+                foreach (var t in tasks)
+                {
+                    if (t.Task.Text == taskText || t.Completed) continue;
+                    if (t.AssignedDay > oldDay)
+                        SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, PrevWorkingDay(t.AssignedDay - 1, daysOff));
+                }
             }
-        }
+        });
     }
 
     /// <summary>

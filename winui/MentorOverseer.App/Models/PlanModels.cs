@@ -28,6 +28,16 @@ public class Plan
 
     public bool IsExcluded(DateOnly d) => ExcludedWeekdays.Contains((int)d.DayOfWeek);
 
+    /// <summary>Whether this plan is off on date d — a recurring exclusion, or a manually
+    /// marked-off day. The single source of truth for that rule: ScoreService's scoring
+    /// exemption and ActivityTracker's off-plan-alert suppression used to each hand-roll this
+    /// independently and could silently drift apart (2026-07-18 audit finding R8-04). Takes
+    /// the caller's own "is planDay marked off" lookup rather than a Database/connection type,
+    /// since the two current callers query plan_days_off through different access patterns
+    /// (a cached per-plan set vs. a single-row check on an already-open connection).</summary>
+    public bool IsOffOn(DateOnly d, Func<string, int, bool> isMarkedOff) =>
+        IsExcluded(d) || isMarkedOff(Id, PlanDayForDate(d));
+
     /// <summary>Calendar date day N's tasks actually land on — walks forward
     /// from the start date counting only non-excluded days. With no
     /// exclusions this is exactly StartDateParsed.AddDays(planDay - 1).</summary>

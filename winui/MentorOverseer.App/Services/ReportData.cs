@@ -57,14 +57,17 @@ public static class ReportData
     public static List<DayStat> WeekStats(ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var streak = score.CurrentStreak();
         var rows = new List<DayStat>();
         for (var d = MondayOf(today); d <= today; d = d.AddDays(1))
         {
             var (total, done) = score.DayTaskCounts(d);
             var (on, off) = score.DayDiaryMinutes(d);
             var isExempt = score.AllPlansScoringExempt(d);
-            var s = score.DayScore(done, total, on, off, d == today ? streak : 0, isExempt);
+            // Each day's own streak-as-of-that-date, not just today's — same fix as
+            // ScoreService.RecomputeDayScoreCore (2026-07-18 audit finding R8-01); this
+            // table used to show every non-today row with a hardcoded 0 streak bonus,
+            // understating a past day's score if it really was mid-streak.
+            var s = score.DayScore(done, total, on, off, score.CurrentStreak(d), isExempt);
             // A day off is still tracked in the raw Diary list, but its on/off-plan
             // minutes don't count toward this summary table any more than they count
             // toward the score (2026-07-17 request).

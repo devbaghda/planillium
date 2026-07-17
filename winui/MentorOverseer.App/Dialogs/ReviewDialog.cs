@@ -211,8 +211,12 @@ public static class ReviewDialog
         var dayTotal = breakdown.FlooredTotal;
         var floored = dayTotal != breakdown.RawTotal;
 
-        var overdueCapped = score.OverdueAsOf(today)
-            .Count(x => x.DaysOverdue <= ScoreService.OverdueAccrualCapDays);
+        // Same count CreditOverdueAccrualIfMissing will actually apply — see
+        // ScoreService.OverdueAccrualCount's doc comment (2026-07-18 audit finding
+        // R8-02: this used to be recomputed by hand here without the per-plan
+        // exemption filter the real save applies, and could show a different
+        // number than what got recorded).
+        var overdueCapped = score.OverdueAccrualCount(today);
         var accrual = overdueCapped * ConfigService.ScoringRate("task_overdue_penalty", -5);
 
         // Only ever non-zero on a Monday, when last week (now fully closed)

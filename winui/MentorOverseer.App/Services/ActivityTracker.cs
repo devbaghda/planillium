@@ -453,15 +453,18 @@ public sealed class ActivityTracker : IDisposable
                 try
                 {
                     var plans = PlanStore.LoadActivePlans();
-                    _fullyOffToday = plans.Count > 0 && plans.All(p =>
+                    // Same rule ScoreService's scoring exemption uses (Plan.IsOffOn,
+                    // 2026-07-18 audit finding R8-04) — just backed by a single-row
+                    // check on this poll thread's own connection instead of
+                    // ScoreService's per-instance cached set.
+                    _fullyOffToday = plans.Count > 0 && plans.All(p => p.IsOffOn(today, (planId, day) =>
                     {
-                        if (p.IsExcluded(today)) return true;
                         using var cmd = conn.CreateCommand();
                         cmd.CommandText = "SELECT 1 FROM plan_days_off WHERE plan_id=$pid AND day=$day";
-                        cmd.Parameters.AddWithValue("$pid", p.Id);
-                        cmd.Parameters.AddWithValue("$day", p.PlanDayForDate(today));
+                        cmd.Parameters.AddWithValue("$pid", planId);
+                        cmd.Parameters.AddWithValue("$day", day);
                         return cmd.ExecuteScalar() != null;
-                    });
+                    }));
                 }
                 catch (Exception ex) { Log.Error("ActivityTracker.IsFullyOffToday", ex); _fullyOffToday = false; }
             }

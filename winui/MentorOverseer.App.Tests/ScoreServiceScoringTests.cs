@@ -234,4 +234,42 @@ public sealed class ScoreServiceScoringTests
         var recalculated = score2.RecalculateDayScore(today);
         Assert.NotEqual(firstScore, recalculated);
     }
+
+    [Fact]
+    public void RecalculateDayScore_PreservesThatDaysOwnStreakBonus_NotTodays()
+    {
+        // 2026-07-18 audit finding R8-01: RecomputeDayScoreCore used to hardcode streak=0
+        // for any date that wasn't literally today, so editing an old diary entry (which
+        // routes through RecalculateDayScore) silently discarded a real streak bonus that
+        // day had actually earned, with nothing to warn about it. CurrentStreak(asOf) must
+        // be computed relative to the day being recalculated, not relative to today.
+        var planId = "test-" + Guid.NewGuid();
+        var twoDaysAgo = DateOnly.FromDateTime(DateTime.Today).AddDays(-2);
+        var yesterday = DateOnly.FromDateTime(DateTime.Today).AddDays(-1);
+        var plan = MakePlan(planId, (1, "Day1 Task"), (2, "Day2 Task"));
+        plan.StartDate = twoDaysAgo.ToString("yyyy-MM-dd");
+        using var db = new Database();
+
+        // Complete day 1's task (lands on twoDaysAgo) so a real 1-day streak carries into
+        // yesterday; leave day 2 (yesterday's own task) incomplete so recalculating
+        // yesterday isn't itself a "perfect day" the streak formula would special-case.
+        db.SaveCompletion(planId, 1, "Day1 Task", true);
+
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        var expectedStreak = score.CurrentStreak(yesterday);
+        Assert.Equal(1, expectedStreak);
+
+        var (total, done) = score.DayTaskCounts(yesterday);
+        var (on, off) = score.DayDiaryMinutes(yesterday);
+        var expected = score.ComputeDayScore(done, total, on, off, expectedStreak, isExemptDay: false).FlooredTotal;
+
+        var recalculated = score.RecalculateDayScore(yesterday);
+        Assert.Equal(expected, recalculated);
+
+        // Before the fix this would have been RecalculateDayScore(yesterday) computed with
+        // streak forced to 0 — confirm the streak term is actually the nonzero part of the
+        // difference this test is protecting, not a formula that happened to net to zero.
+        var withoutStreakBug = score.ComputeDayScore(done, total, on, off, streak: 0, isExemptDay: false).FlooredTotal;
+        Assert.NotEqual(withoutStreakBug, recalculated);
+    }
 }
