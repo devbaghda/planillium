@@ -139,9 +139,10 @@ tool, not a cloud-first collaboration app. Specifically:
   everything the app has stored into one file, narrower "Clear" actions for just your activity
   history or just your evening reflections, and a "Clear all my data" action that wipes every
   data table the app keeps (completions, reschedules/day-offs, notes, score history,
-  reflections, TickTick sync links, the activity diary, and the debug log) in one go — it
-  never touches your plan definitions themselves, which are archived or removed from the
-  Plans page instead.
+  reflections, TickTick sync links, the activity diary, and the debug log) in one go, along with
+  any report or export file (report.html, report.csv, full-export.json) sitting in your data
+  folder — it never touches your plan definitions themselves, which are archived or removed from
+  the Plans page instead.
 - **TickTick.** If you connect a TickTick account, your task titles, project names, and due dates
   are sent to and from TickTick's own servers so the two stay in sync — that's the one place data
   leaves your machine. Credentials for TickTick (and any other connected service) are stored

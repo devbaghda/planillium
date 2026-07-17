@@ -277,13 +277,40 @@ public sealed partial class SettingsPage : Page
         {
             using var db = new Database();
             db.ClearActivityHistory();
-            if (deleteExports)
-                foreach (var f in exportNames)
-                {
-                    try { File.Delete(Path.Combine(AppPaths.Root, "data", f)); }
-                    catch (Exception ex) { Log.Error($"SettingsPage.ClearHistory.DeleteExport({f})", ex); }
-                }
+            if (deleteExports) ThrowIfExportFilesRemain(DeleteExportFiles(exportNames));
         }, "Activity history cleared.", "activity history", "SettingsPage.ClearHistory");
+    }
+
+    /// <summary>Deletes each named file from the data folder, best-effort — logs and
+    /// continues past a locked file instead of leaving the rest untried. Returns the
+    /// names that could NOT be removed, so the caller can decide whether to report that
+    /// (2026-07-18 audit finding, found during round-8's own re-audit: both "clear" actions
+    /// used to swallow a delete failure into the log only, so a file left open elsewhere —
+    /// report.csv in Excel, say — silently survived a "cleared" action with no error shown).</summary>
+    private static List<string> DeleteExportFiles(IEnumerable<string> names)
+    {
+        var failed = new List<string>();
+        foreach (var f in names)
+        {
+            try { File.Delete(Path.Combine(AppPaths.Root, "data", f)); }
+            catch (Exception ex)
+            {
+                Log.Error($"SettingsPage.DeleteExportFile({f})", ex);
+                failed.Add(f);
+            }
+        }
+        return failed;
+    }
+
+    /// <summary>Throws so a partial file-delete failure surfaces through
+    /// RunClearActionAsync's existing error path instead of being silently absorbed —
+    /// the database-level clear this runs alongside already succeeded by this point, so
+    /// the message is explicit that it's the leftover file(s), not the data itself.</summary>
+    private static void ThrowIfExportFilesRemain(List<string> failed)
+    {
+        if (failed.Count > 0)
+            throw new IOException(
+                $"your data was cleared, but {string.Join(", ", failed)} couldn't be removed — close it elsewhere and try again");
     }
 
     /// <summary>Shared busy-state sequence for the two "clear my data"
@@ -418,11 +445,7 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             db.ClearAllData();
             Log.Clear();
-            foreach (var f in new[] { "report.html", "report.csv", "full-export.json" })
-            {
-                try { File.Delete(Path.Combine(AppPaths.Root, "data", f)); }
-                catch (Exception ex) { Log.Error($"SettingsPage.ClearAllData.DeleteExport({f})", ex); }
-            }
+            ThrowIfExportFilesRemain(DeleteExportFiles(new[] { "report.html", "report.csv", "full-export.json" }));
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
     }
 
