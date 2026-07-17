@@ -15,9 +15,7 @@ public static class ConfigService
     /// <summary>Load-mutate-save the config; invalidates the read cache.</summary>
     public static void Mutate(Action<JsonObject> change)
     {
-        var node = File.Exists(ConfigPath)
-            ? JsonNode.Parse(File.ReadAllText(ConfigPath)) as JsonObject ?? new JsonObject()
-            : new JsonObject();
+        var node = LoadConfigNode();
         change(node);
         // JsonFileIO.Indented already carries the TypeInfoResolver copy-from-
         // .Default workaround (see its own doc comment) — this just adds the
@@ -27,6 +25,26 @@ public static class ConfigService
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         }));
         Invalidate();
+    }
+
+    /// <summary>Same "corrupted file degrades to defaults, doesn't crash" contract as
+    /// PlanStore.LoadActivePlans — a config.json truncated by a crash mid-write from some
+    /// other tool used to let a raw JsonException propagate straight out of Mutate instead
+    /// (audit finding #14). Falling back to an empty object here means the next save just
+    /// rewrites the file cleanly rather than losing the whole app to an unhandled parse
+    /// error over one bad file.</summary>
+    private static JsonObject LoadConfigNode()
+    {
+        if (!File.Exists(ConfigPath)) return new JsonObject();
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(ConfigPath)) as JsonObject ?? new JsonObject();
+        }
+        catch (JsonException ex)
+        {
+            Log.Error("ConfigService.Mutate (config.json corrupted, starting fresh)", ex);
+            return new JsonObject();
+        }
     }
 
     // Guards _doc: read from both the UI thread and ActivityTracker's
@@ -46,9 +64,23 @@ public static class ConfigService
                 if (_doc is null)
                 {
                     var path = Path.Combine(AppPaths.Root, "config.json");
-                    _doc = File.Exists(path)
-                        ? JsonDocument.Parse(File.ReadAllText(path))
-                        : JsonDocument.Parse("{}");
+                    try
+                    {
+                        _doc = File.Exists(path)
+                            ? JsonDocument.Parse(File.ReadAllText(path))
+                            : JsonDocument.Parse("{}");
+                    }
+                    catch (JsonException ex)
+                    {
+                        // This property is read from nearly everywhere (UI thread and
+                        // ActivityTracker's background poll alike) — a corrupted config.json
+                        // used to throw here unguarded, which would have taken down every
+                        // caller in the app instead of just degrading to defaults the way
+                        // PlanStore.LoadActivePlans already does for a bad plan file
+                        // (audit finding #14).
+                        Log.Error("ConfigService.Root (config.json corrupted, using defaults)", ex);
+                        _doc = JsonDocument.Parse("{}");
+                    }
                 }
                 return _doc.RootElement.Clone();
             }
@@ -113,7 +145,7 @@ public static class ConfigService
     /// </summary>
     public static void LearnActivityRule(string keyword, string category)
     {
-        if (category is not ("on_plan" or "off_plan" or "neutral")) return;
+        if (category is not (DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)) return;
         if (string.IsNullOrWhiteSpace(keyword)) return;
 
         Mutate(node =>
@@ -129,7 +161,7 @@ public static class ConfigService
                 return fresh;
             }
 
-            foreach (var cat in new[] { "on_plan", "off_plan", "neutral" })
+            foreach (var cat in new[] { DiaryCategory.OnPlan, DiaryCategory.OffPlan, DiaryCategory.Neutral })
             {
                 var arr = ArrayFor(cat);
                 for (var i = arr.Count - 1; i >= 0; i--)

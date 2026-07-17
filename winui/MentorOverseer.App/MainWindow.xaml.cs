@@ -192,7 +192,14 @@ public sealed partial class MainWindow : Window
     private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
     {
         if (!args.Arguments.TryGetValue(ToastArgs.Action, out var action)) return;
-        _dq.TryEnqueue(() => _ = HandleNotificationActivation(action, args.Arguments));
+        // Same guarded-dispatch shape as Tracker.OnIdleReturn (MainWindow.Tracker.cs) — an
+        // unawaited fire-and-forget Task here would become an unobserved task exception,
+        // surfacing (if ever) only at GC finalization instead of in the log (audit finding #1).
+        _dq.TryEnqueue(async () =>
+        {
+            try { await HandleNotificationActivation(action, args.Arguments); }
+            catch (Exception ex) { Log.Error("HandleNotificationActivation", ex); }
+        });
     }
 
     private async Task HandleNotificationActivation(string action, IDictionary<string, string> args)

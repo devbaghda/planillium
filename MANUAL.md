@@ -117,9 +117,32 @@ These settings can be adjusted from the app’s Settings area.
 
 ## Data and privacy
 
-Planillium stores data locally on the device. It is designed to be a personal tool rather than a cloud-first collaboration app.
+Planillium stores its data locally on your device, in a SQLite database and a couple of local
+JSON files — nothing is sent to a cloud service on your behalf. It's designed to be a personal
+tool, not a cloud-first collaboration app. Specifically:
 
-Credentials for services such as TickTick are stored securely via the operating system credential store rather than in plain text.
+- **Activity tracking.** While tracking is running, the app checks the title of whichever window
+  is currently active roughly once a minute, to decide whether that stretch of time was on-plan,
+  off-plan, neutral, idle, or paid time. That window title — which can include things like a
+  document name, a website title, or a chat preview — is stored verbatim in your local activity
+  diary, along with the app name and the time range. This pauses automatically while your PC is
+  locked or asleep, and stops the moment you quit the app from the tray.
+- **Evening review and idle answers.** Anything you type into the evening review or an idle-time
+  prompt is stored as free text, locally, exactly as you wrote it.
+- **Retention.** Diary detail (including window titles) is kept for a configurable number of days
+  (90 by default, adjustable in Settings) before being rolled up into daily totals and the
+  per-entry detail is discarded.
+- **Export and clearing your data.** Settings has an "Export all my data" action that writes
+  everything the app has stored into one file, narrower "Clear" actions for just your activity
+  history or just your evening reflections, and a "Clear all my data" action that wipes every
+  data table the app keeps (completions, reschedules/day-offs, notes, score history,
+  reflections, TickTick sync links, the activity diary, and the debug log) in one go — it
+  never touches your plan definitions themselves, which are archived or removed from the
+  Plans page instead.
+- **TickTick.** If you connect a TickTick account, your task titles, project names, and due dates
+  are sent to and from TickTick's own servers so the two stay in sync — that's the one place data
+  leaves your machine. Credentials for TickTick (and any other connected service) are stored
+  securely via the operating system's credential store rather than in plain text.
 
 ## Tips for getting the most out of it
 

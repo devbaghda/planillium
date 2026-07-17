@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Services;
@@ -38,7 +39,7 @@ public static class TaskNoteView
                 onError?.Invoke();
                 return false;
             }
-        });
+        }, taskText);
 
     /// <param name="onSave">Returns whether the save actually succeeded — the
     /// displayed note only updates to the new text once this returns true
@@ -47,7 +48,10 @@ public static class TaskNoteView
     /// failed save still read as "saved" until the note silently reverted
     /// the next time this task re-rendered). On failure, edit mode stays
     /// open with what was typed so nothing already-entered is lost.</param>
-    public static FrameworkElement Build(string? initialNote, Func<string, bool> onSave)
+    /// <param name="taskLabel">Task text this note belongs to, for the edit box's
+    /// accessible name — a screen reader used to announce every task's note field
+    /// identically, with no way to tell which task it belonged to (audit finding #9).</param>
+    public static FrameworkElement Build(string? initialNote, Func<string, bool> onSave, string? taskLabel = null)
     {
         var root = new StackPanel { Spacing = 4 };
 
@@ -82,6 +86,8 @@ public static class TaskNoteView
             PlaceholderText = "Your own note for this task…",
             Visibility = Visibility.Collapsed,
         };
+        AutomationProperties.SetName(editBox,
+            taskLabel is { Length: > 0 } ? $"Note for: {taskLabel}" : "Task note");
         var editRow = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,

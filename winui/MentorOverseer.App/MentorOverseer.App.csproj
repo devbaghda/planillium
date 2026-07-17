@@ -16,6 +16,11 @@
     <UseWinUI>true</UseWinUI>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Makes an ordinary "dotnet build" enforce zero warnings, not just the manual
+         "dotnet build /warnaserror" someone has to remember to run — a real warning
+         went unnoticed as "pre-existing/harmless" for three sessions before anyone
+         re-ran that flag and caught it (audit finding #4). -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Unpackaged app, Windows App SDK bundled — runs with no runtime install. -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>

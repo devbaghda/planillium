@@ -16,13 +16,10 @@ public static class AppNames
         "brave", "brave browser", "chromium",
     };
 
-    // Keep this in sync with ActivityTracker.ExeAppNames — see its comment
-    // (round-5 audit finding #20).
-    private static readonly HashSet<string> Messengers = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "telegram", "whatsapp", "slack", "discord",
-        "signal", "viber", "skype", "microsoft teams", "teams",
-    };
+    // Shared with ActivityTracker via MessengerApps.DisplayNames — see its doc comment
+    // (round-5 audit finding #20; centralized round-7 to stop the two lists needing to
+    // be kept in sync by hand).
+    private static readonly IReadOnlySet<string> Messengers = MessengerApps.DisplayNames;
 
     // Verbose app suffixes → clean display names (superset of main.py's map:
     // browsers added so the label reads "Chrome - YouTube", not

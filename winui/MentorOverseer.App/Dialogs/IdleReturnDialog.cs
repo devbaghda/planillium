@@ -227,15 +227,7 @@ public static class IdleReturnDialog
 
             if (splitMode && chosen is null)
             {
-                var t = idleStart;
-                var segments = new List<(DateTime Start, int Minutes, string Description)>();
-                foreach (var (dur, desc, _) in rows)
-                {
-                    var mins = (int)dur.Value;
-                    segments.Add((t, mins, desc.Text.Trim()));
-                    t = t.AddMinutes(mins);
-                }
-                tracker.LogIdleAnswers(segments);
+                tracker.LogIdleAnswers(BuildSegments(idleStart, rows));
                 return;
             }
 
@@ -252,5 +244,28 @@ public static class IdleReturnDialog
             Services.ToastNotifier.Show("Couldn't save that",
                 "The idle-time answer didn't save — the database was likely briefly busy.", tag: null);
         }
+    }
+
+    /// <summary>Turns the split-mode rows into back-to-back diary segments starting at
+    /// idleStart — the one piece of ShowAsync that's pure data transformation rather
+    /// than UI wiring or closure-shared dialog state, pulled out on its own so it can be
+    /// read (and eventually tested) independently of the dialog around it (audit finding
+    /// #5). The rest of ShowAsync stays one method deliberately — its closures (rows,
+    /// dialog, chosen, splitMode) share too much mutable state specific to this one
+    /// widget's two UI modes to split further without adding more complexity than it
+    /// removes, the same reasoning ReportsPage.Diary.BuildDiarySection's own doc comment
+    /// already gives for staying unsplit.</summary>
+    private static List<(DateTime Start, int Minutes, string Description)> BuildSegments(
+        DateTime idleStart, List<(NumberBox Dur, TextBox Desc, Button Remove)> rows)
+    {
+        var t = idleStart;
+        var segments = new List<(DateTime, int, string)>();
+        foreach (var (dur, desc, _) in rows)
+        {
+            var mins = (int)dur.Value;
+            segments.Add((t, mins, desc.Text.Trim()));
+            t = t.AddMinutes(mins);
+        }
+        return segments;
     }
 }

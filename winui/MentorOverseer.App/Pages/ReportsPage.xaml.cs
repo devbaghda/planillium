@@ -123,7 +123,8 @@ public sealed partial class ReportsPage : Page
                 Body.Children.Add(Card(DayTable(weekStats)));
             else
             {
-                var buckets = ReportData.Buckets(_period, db.Conn);
+                var buckets = _period == ReportPeriod.Month
+                    ? ReportData.MonthBuckets(db.Conn) : ReportData.YearBuckets(db.Conn);
                 // Month always has at least this-week's row seeded in,
                 // but Year only gets rows for months that actually have
                 // data — a brand-new install (or a period with zero

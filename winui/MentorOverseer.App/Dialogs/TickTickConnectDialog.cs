@@ -22,6 +22,18 @@ public static class TickTickConnectDialog
             Text = "From your app at developer.ticktick.com/manage. The app's OAuth " +
                    "redirect URL must be exactly:  http://localhost:8765/callback",
         });
+        panel.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            FontSize = 12,
+            // What's actually being agreed to, stated plainly before the user clicks
+            // "Save & authorize" — the dialog previously only showed OAuth setup
+            // mechanics and never said what data this connects (audit finding #7).
+            Text = "Connecting lets this app read your TickTick task titles, projects, and " +
+                   "due dates, and mark tasks complete there — that data leaves this PC and " +
+                   "goes to TickTick's servers and back.",
+        });
 
         var idBox = new TextBox
         {
@@ -110,7 +122,10 @@ public static class TickTickConnectDialog
             catch (Exception ex)
             {
                 Log.Error("TickTickConnectDialog", ex);
-                status.Text = "Unexpected error: " + ex.Message;
+                // Same "plain-English clause first, technical detail after" shape every other
+                // error message in the app uses — this one used to show raw exception text
+                // alone (audit finding #17).
+                status.Text = "Something went wrong finishing the connection — try again. (" + ex.Message + ")";
                 busy.IsActive = false;
                 d.IsPrimaryButtonEnabled = true;
             }

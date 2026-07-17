@@ -18,8 +18,8 @@ public static class SplitDiaryEntryDialog
 {
     private static readonly (string Label, string Value)[] Categories =
     {
-        ("On-plan", "on_plan"), ("Off-plan", "off_plan"), ("Paid", "paid"),
-        ("Neutral", "neutral"), ("Idle", "idle"),
+        ("On-plan", DiaryCategory.OnPlan), ("Off-plan", DiaryCategory.OffPlan), ("Paid", DiaryCategory.Paid),
+        ("Neutral", DiaryCategory.Neutral), ("Idle", DiaryCategory.Idle),
     };
 
     public static async Task<bool> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,

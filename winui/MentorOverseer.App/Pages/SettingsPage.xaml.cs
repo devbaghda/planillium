@@ -59,15 +59,34 @@ public sealed partial class SettingsPage : Page
         RepeatMin.Value = Num(cfg, "reminder_interval_minutes", 5);
         IdleMin.Value = Num(cfg, "idle_threshold_minutes", 10);
         RetentionDays.Value = Num(cfg, "diary_retention_days", Database.DiaryRetentionDays);
-        RulesOn.Text = Words(cfg, "activity_rules", "on_plan");
-        RulesOff.Text = Words(cfg, "activity_rules", "off_plan");
-        RulesNeutral.Text = Words(cfg, "activity_rules", "neutral");
-        IdleOn.Text = Words(cfg, "idle_activity_rules", "on_plan");
-        IdleOff.Text = Words(cfg, "idle_activity_rules", "off_plan");
-        IdleNeutral.Text = Words(cfg, "idle_activity_rules", "neutral");
+        RulesOn.Text = Words(cfg, "activity_rules", DiaryCategory.OnPlan);
+        RulesOff.Text = Words(cfg, "activity_rules", DiaryCategory.OffPlan);
+        RulesNeutral.Text = Words(cfg, "activity_rules", DiaryCategory.Neutral);
+        IdleOn.Text = Words(cfg, "idle_activity_rules", DiaryCategory.OnPlan);
+        IdleOff.Text = Words(cfg, "idle_activity_rules", DiaryCategory.OffPlan);
+        IdleNeutral.Text = Words(cfg, "idle_activity_rules", DiaryCategory.Neutral);
     }
 
-    private void SaveRules_Click(object sender, RoutedEventArgs e)
+    /// <summary>Fires on LostFocus for every hours/reminders/keyword TextBox and
+    /// ValueChanged for every NumberBox in that section — the whole group used to only
+    /// save via an explicit "Save settings" button, inconsistent with Theme/Opacity/
+    /// "start with Windows" above it (which already autosave), and with nothing warning
+    /// if you navigated away with unsaved edits (audit finding #10). Saving the whole
+    /// group together on any one field's change mirrors exactly what the old button did
+    /// in one Mutate call — this just removes the extra click.</summary>
+    private void Rules_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_initialising) return;
+        SaveRules();
+    }
+
+    private void Rules_ValueChanged(NumberBox sender, Microsoft.UI.Xaml.Controls.NumberBoxValueChangedEventArgs args)
+    {
+        if (_initialising) return;
+        SaveRules();
+    }
+
+    private void SaveRules()
     {
         // Validate the three times before anything is written.
         foreach (var (box, label) in new[]
@@ -104,15 +123,15 @@ public sealed partial class SettingsPage : Page
                 cfg["diary_retention_days"] = (int)RetentionDays.Value;
                 cfg["activity_rules"] = new System.Text.Json.Nodes.JsonObject
                 {
-                    ["on_plan"] = Lines(RulesOn),
-                    ["off_plan"] = Lines(RulesOff),
-                    ["neutral"] = Lines(RulesNeutral),
+                    [DiaryCategory.OnPlan] = Lines(RulesOn),
+                    [DiaryCategory.OffPlan] = Lines(RulesOff),
+                    [DiaryCategory.Neutral] = Lines(RulesNeutral),
                 };
                 cfg["idle_activity_rules"] = new System.Text.Json.Nodes.JsonObject
                 {
-                    ["on_plan"] = Lines(IdleOn),
-                    ["off_plan"] = Lines(IdleOff),
-                    ["neutral"] = Lines(IdleNeutral),
+                    [DiaryCategory.OnPlan] = Lines(IdleOn),
+                    [DiaryCategory.OffPlan] = Lines(IdleOff),
+                    [DiaryCategory.Neutral] = Lines(IdleNeutral),
                 };
             });
             // The tracker reads config once at construction — restart it so
@@ -160,11 +179,14 @@ public sealed partial class SettingsPage : Page
         RefreshTickTickStatus();
     }
 
-    private void ExportAll_Click(object sender, RoutedEventArgs e)
+    private async void ExportAll_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var path = DataExport.ExportAll();
+            // Off the UI thread — this opens the DB and reads every user table, which will
+            // only grow with time and used to run directly inside the button click handler
+            // (audit finding #12).
+            var path = await Task.Run(() => DataExport.ExportAll());
             SaveStatus.Text = "Exported to " + path;
         }
         catch (Exception ex)
@@ -339,6 +361,58 @@ public sealed partial class SettingsPage : Page
             using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
             score.ClearReflections();
         }, "Reflections cleared.", "reflections", "SettingsPage.ClearReflections");
+    }
+
+    /// <summary>
+    /// Wipes every remaining data table this app keeps (task completions, reschedules/
+    /// day-offs, task notes, score history, reflections, TickTick sync links, and the
+    /// activity diary) plus the debug log, in one action — before this, only activity
+    /// history and reflections had any delete path at all (audit finding #6); the debug
+    /// log had none either (audit finding #25). Plan definitions themselves
+    /// (plans/active/*.json) are never touched here — archiving/deleting a plan is its
+    /// own separate action on the Plans page.
+    /// </summary>
+    private async void ClearAllData_Click(object sender, RoutedEventArgs e)
+    {
+        int rowCount;
+        try
+        {
+            using var db = new Database();
+            rowCount = db.CountAllData();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ClearAllData.Count", ex);
+            SaveStatus.Text = "Couldn't read your data: " + ex.Message;
+            return;
+        }
+        if (rowCount == 0)
+        {
+            SaveStatus.Text = "No data to clear.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "Clear all my data?",
+            Content = $"Deletes {rowCount} row(s) across every data table this app keeps — " +
+                      "task completions, reschedules and day-offs, task notes, score history, " +
+                      "reflections, TickTick sync links, and the activity diary — plus the debug " +
+                      "log. Your plan definitions themselves are not deleted (use the Plans page " +
+                      "to archive or remove a plan). This cannot be undone.",
+            PrimaryButtonText = "Clear everything",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        await RunClearActionAsync(ClearAllDataBtn, () =>
+        {
+            using var db = new Database();
+            db.ClearAllData();
+            Log.Clear();
+        }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)

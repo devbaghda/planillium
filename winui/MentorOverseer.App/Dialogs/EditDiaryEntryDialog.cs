@@ -15,8 +15,8 @@ public static class EditDiaryEntryDialog
 {
     private static readonly (string Label, string Value)[] Categories =
     {
-        ("On-plan", "on_plan"), ("Off-plan", "off_plan"), ("Paid", "paid"),
-        ("Neutral", "neutral"), ("Idle", "idle"),
+        ("On-plan", DiaryCategory.OnPlan), ("Off-plan", DiaryCategory.OffPlan), ("Paid", DiaryCategory.Paid),
+        ("Neutral", DiaryCategory.Neutral), ("Idle", DiaryCategory.Idle),
     };
 
     /// <returns>null if the user cancelled (either dialog), true once

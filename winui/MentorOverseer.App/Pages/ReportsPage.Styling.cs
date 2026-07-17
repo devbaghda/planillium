@@ -20,19 +20,10 @@ public sealed partial class ReportsPage
             : score < 0 ? "SystemFillColorCriticalBrush"
             : "SystemFillColorCautionBrush"];
 
-    /// <summary>Single source of truth for a time_diary category's color — the Diary
-    /// list and the Time-by-App legend/bars used to each pick their own colors
-    /// independently and had drifted out of agreement (Paid and Neutral meant opposite
-    /// colors between the two views on the very same page — round-5 audit finding #9).
-    /// Both now read from this one table.</summary>
-    private static string CategoryBrushKey(string category) => category switch
-    {
-        "on_plan" => "SystemFillColorSuccessBrush",
-        "off_plan" => "SystemFillColorCriticalBrush",
-        "idle" => "SystemFillColorCautionBrush",
-        "paid" => "AccentTextFillColorPrimaryBrush",
-        _ => "TextFillColorSecondaryBrush", // neutral
-    };
+    /// <summary>Thin alias kept so every call site in this file doesn't need renaming —
+    /// see CategoryStyle.BrushKey (Services/CategoryStyle.cs) for the actual single
+    /// source of truth, now shared with MainWindow.Tracker's tray pill too.</summary>
+    private static string CategoryBrushKey(string category) => CategoryStyle.BrushKey(category);
 
     private static TextBlock Section(string text) => new()
     {

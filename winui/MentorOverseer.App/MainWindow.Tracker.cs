@@ -79,20 +79,20 @@ public sealed partial class MainWindow
 
     private void UpdatePill(string cls, string window)
     {
-        var (label, brushKey) = cls switch
+        // Color comes from the shared CategoryStyle.BrushKey table (Services/CategoryStyle.cs)
+        // — this pill used to keep its own independent copy that had drifted from the Reports
+        // page's colors for "paid" and the neutral default (round-7 audit finding #3).
+        var label = cls switch
         {
-            "on_plan" => ("On plan", "SystemFillColorSuccessBrush"),
-            "off_plan" => ("Off plan", "SystemFillColorCriticalBrush"),
-            "paid" => ("Paid time", "AccentFillColorDefaultBrush"),
-            // A deliberate, known state (not "nothing detected" like Neutral)
-            // gets the more visible of the two calibrated grays so the pill
-            // isn't pixel-identical to Neutral at a glance.
-            "dayoff" => ("Day off", "TextFillColorSecondaryBrush"),
-            _ => ("Neutral", "TextFillColorTertiaryBrush"),
+            DiaryCategory.OnPlan => "On plan",
+            DiaryCategory.OffPlan => "Off plan",
+            DiaryCategory.Paid => "Paid time",
+            DiaryCategory.DayOff => "Day off",
+            _ => "Neutral",
         };
         ActivityText.Text = Tracker?.OffPlanMinutes is int m and > 0
             ? $"{label} · {m}m" : label;
-        ActivityDot.Fill = (Brush)Application.Current.Resources[brushKey];
+        ActivityDot.Fill = (Brush)Application.Current.Resources[CategoryStyle.BrushKey(cls)];
 
         var app = window.Split('–', '—', '-')[0].Trim();
         ActivityWindow.Text = app.Length > 60 ? app[..60] + "…" : app;

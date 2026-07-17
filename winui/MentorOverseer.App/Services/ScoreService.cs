@@ -29,6 +29,12 @@ public sealed class ScoreService : IDisposable
     public const int OverdueAccrualCapDays = 3;
     public const int ReplanFlatFee = -10;
 
+    /// <summary>The "one week" window CurrentStreak, EnsureScoreCaughtUp, and
+    /// ComputeWeeklyComeback each used to hardcode as a bare 7/-7 literal — named once
+    /// so a future retune can't update three of the four call sites and miss the fourth
+    /// (audit finding #21).</summary>
+    private const int LookbackDays = 7;
+
     /// <summary>SQLite's "UNIQUE/PRIMARY KEY constraint violated" error code —
     /// what a ledger insert throws when another connection already wrote
     /// today's row first. Named once so the three catch clauses below agree
@@ -146,8 +152,8 @@ public sealed class ScoreService : IDisposable
         {
             var cat = r.GetString(0);
             var min = r.IsDBNull(1) ? 0 : r.GetInt32(1);
-            if (cat == "on_plan") on = min;
-            else if (cat == "off_plan") off = min;
+            if (cat == DiaryCategory.OnPlan) on = min;
+            else if (cat == DiaryCategory.OffPlan) off = min;
         }
         return (on, off);
     }
@@ -184,7 +190,7 @@ public sealed class ScoreService : IDisposable
     public int CurrentStreak()
     {
         var streak = 0;
-        for (var i = 1; i <= 7; i++)
+        for (var i = 1; i <= LookbackDays; i++)
         {
             var d = DateOnly.FromDateTime(DateTime.Today).AddDays(-i);
             // A day off doesn't break a streak — skip it rather than
@@ -304,7 +310,7 @@ public sealed class ScoreService : IDisposable
         var today = DateOnly.FromDateTime(DateTime.Today);
         _db.RunInTransaction(() =>
         {
-            for (var i = 7; i >= 1; i--)
+            for (var i = LookbackDays; i >= 1; i--)
             {
                 var d = today.AddDays(-i);
                 CreditDayScoreIfMissing(d);
@@ -335,10 +341,10 @@ public sealed class ScoreService : IDisposable
     public int ComputeWeeklyComeback(DateOnly d)
     {
         if (d.DayOfWeek != DayOfWeek.Monday) return 0;
-        var lastWeekStart = d.AddDays(-7);
+        var lastWeekStart = d.AddDays(-LookbackDays);
         var lastWeekEnd = d.AddDays(-1);
-        var prevWeekStart = d.AddDays(-14);
-        var prevWeekEnd = d.AddDays(-8);
+        var prevWeekStart = d.AddDays(-2 * LookbackDays);
+        var prevWeekEnd = d.AddDays(-(LookbackDays + 1));
         if (SumLedgerRange(prevWeekStart, prevWeekEnd) >= 0) return 0;
         if (SumLedgerRange(lastWeekStart, lastWeekEnd) < 0) return 0;
         if (LedgerHas("weekly_comeback_bonus", lastWeekStart)) return 0;
@@ -352,7 +358,7 @@ public sealed class ScoreService : IDisposable
         try
         {
             AddLedger(bonus, "weekly_comeback_bonus",
-                "recovered from a losing week", d.AddDays(-7));
+                "recovered from a losing week", d.AddDays(-LookbackDays));
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {

@@ -23,6 +23,10 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Same version-locking discipline as the main app's csproj — this project's
+         dependency versions weren't pinned/reproducible across restores the way the
+         main app's are (audit finding #15). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,6 +61,9 @@
     <Compile Include="..\MentorOverseer.App\Services\ConfigService.cs" Link="App\ConfigService.cs" />
     <Compile Include="..\MentorOverseer.App\Services\Database.cs" Link="App\Database.cs" />
     <Compile Include="..\MentorOverseer.App\Services\DateExtensions.cs" Link="App\DateExtensions.cs" />
+    <!-- Needed by ScoreService.cs/ConfigService.cs since round-7's category-string
+         centralization (audit finding #22). -->
+    <Compile Include="..\MentorOverseer.App\Services\DiaryCategory.cs" Link="App\DiaryCategory.cs" />
     <Compile Include="..\MentorOverseer.App\Services\JsonFileIO.cs" Link="App\JsonFileIO.cs" />
     <Compile Include="..\MentorOverseer.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\MentorOverseer.App\Services\PlanStore.cs" Link="App\PlanStore.cs" />

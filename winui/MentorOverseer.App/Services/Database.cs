@@ -373,6 +373,39 @@ public sealed class Database : IDisposable
         "score_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
     };
 
+    /// <summary>Total row count across every user-data table — for the "Clear all my
+    /// data" confirmation dialog. Cheap enough to run unconditionally (no index needed,
+    /// this only ever runs on a Settings button click, never in a hot path).</summary>
+    public int CountAllData()
+    {
+        using var cmd = CreateCommand();
+        cmd.CommandText = "SELECT " + string.Join(" + ", ExportedTables.Select(t => $"(SELECT COUNT(*) FROM {t})"));
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>
+    /// Wipes every one of this app's own data tables — task completions, reschedules/
+    /// day-offs, task notes, score history, reflections, TickTick sync links, and the
+    /// activity diary — in one action. Before this, only the activity diary and
+    /// reflections had any delete path at all; everything else (roughly two-thirds of
+    /// the tables) could only be removed by hand-editing the SQLite file directly
+    /// (audit finding #6). Does NOT touch plans/active/*.json — those are the user's own
+    /// authored plan content, not recorded history, and archiving/deleting a plan is its
+    /// own separate action on the Plans page.
+    /// </summary>
+    public void ClearAllData()
+    {
+        RunInTransaction(() =>
+        {
+            using var cmd = CreateCommand();
+            cmd.CommandText = string.Join(" ", ExportedTables.Select(t => $"DELETE FROM {t};"));
+            cmd.ExecuteNonQuery();
+        });
+        using var vacuum = CreateCommand();
+        vacuum.CommandText = "VACUUM";
+        vacuum.ExecuteNonQuery();
+    }
+
     /// <summary>
     /// Every row of every user-data table, schema-agnostic (reads column
     /// names off each reader rather than hardcoding them) so this doesn't

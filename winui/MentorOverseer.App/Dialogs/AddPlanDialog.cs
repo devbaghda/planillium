@@ -116,6 +116,14 @@ public static class AddPlanDialog
         {
             var m = Modes[modeBox.SelectedIndex];
             if (subject.Text.Trim().Length == 0) { Show(error, $"{m.Field1Label} is required."); return; }
+            // Reformat mode's own plan-text box was never checked before being substituted
+            // into the template — an empty box silently produced a prompt with a blank
+            // {user_plan} slot and no error (audit finding #18).
+            if (m.Reformat && ownPlan.Text.Trim().Length == 0)
+            {
+                Show(error, "Paste or load your plan text first.");
+                return;
+            }
             var text = m.Template.Replace("{subject}", subject.Text.Trim());
             text = m.Reformat
                 ? text.Replace("{user_plan}", ownPlan.Text.Trim())
@@ -123,6 +131,10 @@ public static class AddPlanDialog
                       .Replace("{area_of_interest}", area.Text.Trim().Length > 0 ? area.Text.Trim() : subject.Text.Trim());
             prompt.Text = text;
             copyBtn.IsEnabled = true;
+            // A freshly generated prompt is a new, uncopied prompt — reset the confirmation
+            // label so it doesn't keep reading "Copied ✓" for content that was never
+            // actually copied (audit finding #19).
+            copyBtn.Content = "Copy";
             error.Visibility = Visibility.Collapsed;
         };
 

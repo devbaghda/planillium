@@ -40,7 +40,12 @@ public static class StateService
     {
         _cached = s;
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PathOf)!);
-        File.WriteAllText(PathOf, JsonSerializer.Serialize(s,
+        // Same write-to-temp-then-swap as every other saved file (JsonFileIO,
+        // ConfigService) — this one was writing directly, the exact corruption
+        // window that helper exists to close, and this file is saved at the
+        // moment the app closes, i.e. the most likely time to also be killed
+        // (audit finding #2).
+        JsonFileIO.WriteAllTextAtomic(PathOf, JsonSerializer.Serialize(s,
             new JsonSerializerOptions { WriteIndented = true }));
     }
 }

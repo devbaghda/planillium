@@ -5,6 +5,35 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Privacy & data**
+- Added a "Clear all my data" button in Settings that wipes everything the
+  app has stored about you in one action — task completions, reschedules
+  and day-offs, notes, score history, reflections, TickTick sync links, the
+  activity diary, and the debug log. Previously only the activity diary and
+  your evening reflections could be cleared; everything else had no delete
+  option in the app at all
+- Connecting TickTick now tells you up front what gets shared (your task
+  titles, projects, and due dates going to and from TickTick's servers)
+  instead of only showing the technical setup fields
+- The manual's privacy section now actually describes what's tracked
+  (window titles, idle-time answers, evening reflections) and how long it's
+  kept, instead of two vague sentences
+
+**Settings**
+- Work hours, reminder timing, idle threshold, retention days, and the
+  keyword lists now save automatically as you change them, the same way
+  Theme and Opacity already did — no more separate "Save settings" click
+  that was easy to forget before navigating away
+
+**Accessibility**
+- The per-task note box and the diary search box are now properly labeled
+  for screen readers — they used to announce as unlabeled edit fields
+
+**Reports**
+- The tray icon's status color and the Reports page's colors for the same
+  activity type could disagree (most noticeably "Paid" time); both now
+  always show the same color for the same thing
+
 **Scheduling & scoring**
 - Rescheduling an overdue or due task now lets you pick today as the new
   date — it previously only let you pick tomorrow or later, even for a task

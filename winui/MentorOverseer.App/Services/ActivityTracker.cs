@@ -26,24 +26,10 @@ public sealed class ActivityTracker : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
 
-    // Keep this in sync with AppNames.Messengers below — that set (used to group
-    // Reports rows) already recognized Teams; this one (used to decorate the live
-    // window title while tracking) didn't, so Teams was classified as a messenger
-    // after the fact but not while it was actually happening (round-5 audit
-    // finding #20). Both Teams exe names covered: classic desktop client and the
-    // newer "ms-teams.exe" client.
-    private static readonly Dictionary<string, string> ExeAppNames = new()
-    {
-        ["telegram.exe"] = "Telegram",
-        ["whatsapp.exe"] = "WhatsApp",
-        ["slack.exe"] = "Slack",
-        ["discord.exe"] = "Discord",
-        ["signal.exe"] = "Signal",
-        ["viber.exe"] = "Viber",
-        ["skype.exe"] = "Skype",
-        ["teams.exe"] = "Microsoft Teams",
-        ["ms-teams.exe"] = "Microsoft Teams",
-    };
+    // Shared with AppNames.Messengers via MessengerApps.ByExeName — see its doc comment
+    // (round-5 audit finding #20; centralized round-7 to stop the two lists needing to
+    // be kept in sync by hand).
+    private static readonly IReadOnlyDictionary<string, string> ExeAppNames = MessengerApps.ByExeName;
 
     private readonly Dictionary<uint, string> _pidAppCache = new();
     private bool _pidLookupErrorLogged;
@@ -64,7 +50,7 @@ public sealed class ActivityTracker : IDisposable
     // fields below are lock-protected, and _lockPending is volatile,
     // precisely because those are the fields also touched from the UI
     // thread; everything else here is never touched outside PollOnce)
-    private string _currentClass = "neutral";
+    private string _currentClass = DiaryCategory.Neutral;
     private string _currentWindow = "";
     private DateTime? _offSince;
     private DateTime? _lastAlert;
@@ -148,11 +134,11 @@ public sealed class ActivityTracker : IDisposable
             return TimeOnly.TryParse(s, out var t) ? t : TimeOnly.Parse(fallback);
         }
 
-        _onPlan = Words(config, "activity_rules", "on_plan");
-        _offPlan = Words(config, "activity_rules", "off_plan");
-        _idleOnPlan = Words(config, "idle_activity_rules", "on_plan");
-        _idleOffPlan = Words(config, "idle_activity_rules", "off_plan");
-        _idleNeutral = Words(config, "idle_activity_rules", "neutral");
+        _onPlan = Words(config, "activity_rules", DiaryCategory.OnPlan);
+        _offPlan = Words(config, "activity_rules", DiaryCategory.OffPlan);
+        _idleOnPlan = Words(config, "idle_activity_rules", DiaryCategory.OnPlan);
+        _idleOffPlan = Words(config, "idle_activity_rules", DiaryCategory.OffPlan);
+        _idleNeutral = Words(config, "idle_activity_rules", DiaryCategory.Neutral);
         _workStart = T(config, "start", "08:00");
         _workEnd = T(config, "end", "20:00");
         _graceMin = Num(config, "reminder_grace_minutes", 15);
@@ -163,7 +149,7 @@ public sealed class ActivityTracker : IDisposable
     public (string Cls, string Window) Status => (_currentClass, _currentWindow);
 
     public int OffPlanMinutes =>
-        _offSince is DateTime s && _currentClass == "off_plan"
+        _offSince is DateTime s && _currentClass == DiaryCategory.OffPlan
             ? (int)(DateTime.Now - s).TotalMinutes : 0;
 
     /// <param name="lastDiaryEnd">End of the most recent time_diary row, if any.
@@ -206,23 +192,23 @@ public sealed class ActivityTracker : IDisposable
     public string Classify(string title)
     {
         var t = title.ToLowerInvariant();
-        foreach (var kw in _onPlan) if (t.Contains(kw)) return "on_plan";
-        foreach (var kw in _offPlan) if (t.Contains(kw)) return "off_plan";
-        return "neutral";
+        foreach (var kw in _onPlan) if (t.Contains(kw)) return DiaryCategory.OnPlan;
+        foreach (var kw in _offPlan) if (t.Contains(kw)) return DiaryCategory.OffPlan;
+        return DiaryCategory.Neutral;
     }
 
     public string ClassifyIdleText(string? description)
     {
-        if (string.IsNullOrWhiteSpace(description)) return "idle";
+        if (string.IsNullOrWhiteSpace(description)) return DiaryCategory.Idle;
         var t = description.ToLowerInvariant();
-        foreach (var kw in _idleOnPlan) if (t.Contains(kw)) return "on_plan";
-        foreach (var kw in _idleOffPlan) if (t.Contains(kw)) return "off_plan";
-        foreach (var kw in _idleNeutral) if (t.Contains(kw)) return "neutral";
-        return "idle";
+        foreach (var kw in _idleOnPlan) if (t.Contains(kw)) return DiaryCategory.OnPlan;
+        foreach (var kw in _idleOffPlan) if (t.Contains(kw)) return DiaryCategory.OffPlan;
+        foreach (var kw in _idleNeutral) if (t.Contains(kw)) return DiaryCategory.Neutral;
+        return DiaryCategory.Idle;
     }
 
     private string EffectiveClass(string cls) =>
-        cls == "off_plan" && PaidUntil is DateTime p && DateTime.Now < p ? "paid" : cls;
+        cls == DiaryCategory.OffPlan && PaidUntil is DateTime p && DateTime.Now < p ? DiaryCategory.Paid : cls;
 
     // ── window title (port of _active_window_title incl. messenger fixups) ──
 
@@ -370,7 +356,10 @@ public sealed class ActivityTracker : IDisposable
         var end = idleStart.AddMinutes(idleMinutes);
         var category = ClassifyIdleText(description);
         using var conn = AppPaths.OpenConnection();
-        LogDiarySession(conn, idleStart, end, category, "idle", description);
+        // DiaryCategory.Idle doubles as the "window" placeholder here — no real app was
+        // in the foreground, so the diary row's window field is the same sentinel value
+        // ReportData.cs checks for when deciding whether to show the description instead.
+        LogDiarySession(conn, idleStart, end, category, DiaryCategory.Idle, description);
     }
 
     /// <summary>
@@ -392,7 +381,7 @@ public sealed class ActivityTracker : IDisposable
             {
                 var end = start.AddMinutes(minutes);
                 var category = ClassifyIdleText(description);
-                LogDiarySession(conn, start, end, category, "idle", description, tx);
+                LogDiarySession(conn, start, end, category, DiaryCategory.Idle, description, tx);
             }
             tx.Commit();
         }
@@ -483,7 +472,7 @@ public sealed class ActivityTracker : IDisposable
     private void CheckAlert(string cls)
     {
         var now = DateTime.Now;
-        if (cls != "off_plan" || !InWorkingHours())
+        if (cls != DiaryCategory.OffPlan || !InWorkingHours())
         {
             _offSince = null;
             _lastAlert = null;
@@ -549,8 +538,8 @@ public sealed class ActivityTracker : IDisposable
             _offSince = null; _lastAlert = null;
             _idleNotified = false; _idleSince = null;
             _lastPollAt = now;
-            _currentClass = "dayoff"; _currentWindow = "";
-            OnStatus?.Invoke("dayoff", "");
+            _currentClass = DiaryCategory.DayOff; _currentWindow = "";
+            OnStatus?.Invoke(DiaryCategory.DayOff, "");
             return;
         }
 
@@ -661,7 +650,7 @@ public sealed class ActivityTracker : IDisposable
             if (OnIdleReturn != null)
                 OnIdleReturn.Invoke(actualMin, idleStart);
             else if (idleStart < diaryEndToday)
-                LogDiarySession(conn, idleStart, idleEnd, "idle", "idle");
+                LogDiarySession(conn, idleStart, idleEnd, DiaryCategory.Idle, DiaryCategory.Idle);
         }
         _idleNotified = false;
         _idleSince = null;

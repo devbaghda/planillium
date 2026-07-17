@@ -14,17 +14,34 @@ namespace MentorOverseer.App.Services;
 /// </summary>
 public static class ReportExport
 {
+    /// <summary>Everything ExportWeek's HTML template needs, fetched once, up front —
+    /// pulled out so the method below is purely "format this data as HTML," not a mix
+    /// of DB queries and string templating in one 90-line function (audit finding #5).</summary>
+    private sealed record WeekReportData(
+        List<ReportData.DayStat> Stats, int WeekOn, int WeekOff,
+        List<(string Label, int Minutes)> Distractions,
+        List<(string App, ReportData.AppUsage Usage)> Breakdown,
+        List<string> Hints);
+
+    private static WeekReportData GatherWeekReportData(Database db, ScoreService score)
+    {
+        var stats = ReportData.WeekStats(score);
+        var weekOn = stats.Sum(s => s.OnMin);
+        var weekOff = stats.Sum(s => s.OffMin);
+        var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn);
+        var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn);
+        var hints = Suggestions(weekOn, weekOff, distractions);
+        return new WeekReportData(stats, weekOn, weekOff, distractions, breakdown, hints);
+    }
+
     /// <summary>Writes data/report.html and opens it in the browser. Returns the path.</summary>
     public static string ExportWeek()
     {
         var plans = PlanStore.LoadActivePlans();
         using var db = new Database();
         using var score = new ScoreService(plans, db);
-
-        var stats = ReportData.WeekStats(score);
-        var weekOn = stats.Sum(s => s.OnMin);
-        var weekOff = stats.Sum(s => s.OffMin);
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var data = GatherWeekReportData(db, score);
+        var (stats, _, _, distractions, breakdown, hints) = data;
 
         var dayRows = new StringBuilder();
         foreach (var s in stats)
@@ -44,13 +61,11 @@ public static class ReportExport
                 $"<td style='color:{col};font-weight:bold'>{s.Score}</td></tr>");
         }
 
-        var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn);
         var distRows = distractions.Count == 0
             ? "<tr><td colspan='2'>No distractions logged.</td></tr>"
             : string.Join("", distractions.Select(d =>
                 $"<tr><td>{WebUtility.HtmlEncode(d.Label)}</td><td>{d.Minutes}m</td></tr>"));
 
-        var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn);
         var appRows = new StringBuilder();
         foreach (var (app, usage) in breakdown)
         {
@@ -66,7 +81,6 @@ public static class ReportExport
                     $"<td>{ReportData.FmtMins(su.Total)}</td></tr>");
         }
 
-        var hints = Suggestions(weekOn, weekOff, distractions);
         var hintItems = string.Join("", hints.Select(h => $"<li>{WebUtility.HtmlEncode(h)}</li>"));
 
         var html = $$"""
@@ -141,7 +155,9 @@ public static class ReportExport
         else
         {
             sb.AppendLine(Csv("Period", "On-plan (min)", "Off-plan (min)", "Total (min)"));
-            foreach (var b in ReportData.Buckets(period, db.Conn))
+            var buckets = period == ReportPeriod.Month
+                ? ReportData.MonthBuckets(db.Conn) : ReportData.YearBuckets(db.Conn);
+            foreach (var b in buckets)
                 sb.AppendLine(Csv(b.Label,
                     b.OnMin.ToString(CultureInfo.InvariantCulture),
                     b.OffMin.ToString(CultureInfo.InvariantCulture),

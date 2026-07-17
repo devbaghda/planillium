@@ -113,60 +113,57 @@ public sealed partial class TodayPage : Page
                 var tasks = PlanStore.TasksFor(plan, db, completions);
                 var notes = db.LoadTaskNotes(plan.Id);
                 var planDay = plan.PlanDay;
+                // Every branching decision (not started yet? day off? what's overdue/due
+                // today? eligible for "get a head start"?) lives in this one pure call —
+                // the loop below just plays the result back as UI, so a purely visual
+                // change here can no longer accidentally shift any of those decisions
+                // (audit finding #5, same reasoning GetAheadEligibility was already
+                // extracted for).
+                var view = BuildPlanView(plan, tasks, planDay);
 
-                Sections.Children.Add(SectionHeader(
-                    $"{plan.Name}  ·  Day {planDay} of {plan.TotalDaysComputed}"));
+                Sections.Children.Add(SectionHeader(view.Header));
 
-                if (planDay <= 0)
+                if (view.NotStartedMessage is { } notStarted)
                 {
-                    Sections.Children.Add(Muted(
-                        $"Starts {plan.StartDateParsed:dd.MM.yyyy} — {1 - planDay} day(s) to go."));
+                    Sections.Children.Add(Muted(notStarted));
                     continue;
                 }
 
-                // Today itself is an excluded weekday — nothing is due, and
-                // the day counter hasn't advanced, so without this check
-                // "today's tasks" would just re-show yesterday's (already
-                // completed) ones instead of a clean day-off state.
-                if (plan.IsExcluded(DateOnly.FromDateTime(DateTime.Today)))
+                // Day off shows its message first, then any overdue section below it —
+                // a normal day shows overdue first with no day-off message at all, so
+                // this stays two branches (matching the original order exactly) rather
+                // than one shared block reordering either case.
+                if (view.DayOff)
                 {
                     Sections.Children.Add(Muted("🌴 Day off — no tasks scheduled today."));
-                    var overdueToday = tasks.Where(t => t.Overdue).OrderBy(t => t.AssignedDay).ToList();
-                    if (overdueToday.Count > 0)
+                    totalOverdue += view.Overdue.Count;
+                    if (view.Overdue.Count > 0)
                     {
-                        totalOverdue += overdueToday.Count;
-                        Sections.Children.Add(GroupLabel($"OVERDUE · {overdueToday.Count}", danger: true));
-                        Sections.Children.Add(TaskCard(overdueToday, plan, notes));
+                        Sections.Children.Add(GroupLabel($"OVERDUE · {view.Overdue.Count}", danger: true));
+                        Sections.Children.Add(TaskCard(view.Overdue, plan, notes));
                     }
                     continue;
                 }
 
-                var overdue = tasks.Where(t => t.Overdue)
-                                   .OrderBy(t => t.AssignedDay).ToList();
-                var today = tasks.Where(t => t.AssignedDay == planDay).ToList();
-                totalOverdue += overdue.Count;
-
-                if (overdue.Count > 0)
+                totalOverdue += view.Overdue.Count;
+                if (view.Overdue.Count > 0)
                 {
-                    Sections.Children.Add(GroupLabel($"OVERDUE · {overdue.Count}", danger: true));
-                    Sections.Children.Add(TaskCard(overdue, plan, notes));
+                    Sections.Children.Add(GroupLabel($"OVERDUE · {view.Overdue.Count}", danger: true));
+                    Sections.Children.Add(TaskCard(view.Overdue, plan, notes));
                 }
 
-                var done = today.Count(t => t.Completed);
-                if (today.Count > 0)
+                var done = view.Today.Count(t => t.Completed);
+                if (view.Today.Count > 0)
                 {
-                    Sections.Children.Add(GroupLabel($"TODAY · {done} OF {today.Count} DONE"));
-                    Sections.Children.Add(TaskCard(today, plan, notes));
+                    Sections.Children.Add(GroupLabel($"TODAY · {done} OF {view.Today.Count} DONE"));
+                    Sections.Children.Add(TaskCard(view.Today, plan, notes));
                 }
-                else if (overdue.Count == 0)
+                else if (view.NoTasksMessage is { } noTasks)
                 {
-                    // today.Count == 0 here means no task was ever scheduled
-                    // for this plan day (a gap day, not a completed one) —
-                    // "great work!" would be congratulating for nothing.
-                    Sections.Children.Add(Muted("No tasks scheduled for today."));
+                    Sections.Children.Add(Muted(noTasks));
                 }
 
-                if (GetAheadEligibility(plan, tasks, overdue.Count, today.Count, done) is { } eligible)
+                if (view.Eligible is { } eligible)
                 {
                     Sections.Children.Add(GroupLabel(eligible.TodayClear
                         ? "GET A HEAD START ON TOMORROW?"
@@ -193,6 +190,41 @@ public sealed partial class TodayPage : Page
                 "Couldn't load plan data.\n" + ex.Message +
                 "\nIf the app isn't next to the data folder, set MENTOR_ROOT."));
         }
+    }
+
+    /// <summary>Everything Render()'s per-plan loop needs to know, decided once, up
+    /// front, as plain data — see the call site's comment (audit finding #5).</summary>
+    private sealed record PlanTodayView(
+        string Header, string? NotStartedMessage, bool DayOff,
+        List<AssignedTask> Overdue, List<AssignedTask> Today, string? NoTasksMessage,
+        (List<AssignedTask> TomorrowTasks, bool TodayClear)? Eligible);
+
+    private static PlanTodayView BuildPlanView(Plan plan, List<AssignedTask> tasks, int planDay)
+    {
+        var header = $"{plan.Name}  ·  Day {planDay} of {plan.TotalDaysComputed}";
+        if (planDay <= 0)
+            return new PlanTodayView(header,
+                $"Starts {plan.StartDateParsed:dd.MM.yyyy} — {1 - planDay} day(s) to go.",
+                false, new List<AssignedTask>(), new List<AssignedTask>(), null, null);
+
+        var overdue = tasks.Where(t => t.Overdue).OrderBy(t => t.AssignedDay).ToList();
+
+        // Today itself is an excluded weekday — nothing is due, and the day counter
+        // hasn't advanced, so without this check "today's tasks" would just re-show
+        // yesterday's (already completed) ones instead of a clean day-off state.
+        if (plan.IsExcluded(DateOnly.FromDateTime(DateTime.Today)))
+            return new PlanTodayView(header, null, true, overdue, new List<AssignedTask>(), null, null);
+
+        var today = tasks.Where(t => t.AssignedDay == planDay).ToList();
+        var done = today.Count(t => t.Completed);
+        // today.Count == 0 here means no task was ever scheduled for this plan day (a
+        // gap day, not a completed one) — "great work!" would be congratulating for
+        // nothing, so this message only applies when there's also no overdue work.
+        var noTasksMessage = today.Count == 0 && overdue.Count == 0
+            ? "No tasks scheduled for today." : null;
+        var eligible = GetAheadEligibility(plan, tasks, overdue.Count, today.Count, done);
+
+        return new PlanTodayView(header, null, false, overdue, today, noTasksMessage, eligible);
     }
 
     /// <summary>The "offer tomorrow's tasks early" business rule, pulled out of Render()

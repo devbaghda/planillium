@@ -27,15 +27,15 @@ public static class ReportData
             Total += mins;
             switch (category)
             {
-                case "on_plan": On += mins; break;
-                case "off_plan": Off += mins; break;
-                case "neutral": Neutral += mins; break;
-                case "paid": Paid += mins; break;
+                case DiaryCategory.OnPlan: On += mins; break;
+                case DiaryCategory.OffPlan: Off += mins; break;
+                case DiaryCategory.Neutral: Neutral += mins; break;
+                case DiaryCategory.Paid: Paid += mins; break;
                 // Previously uncounted here — Total (and so the row's minutes label)
                 // included idle time, but no bucket did, so an idle-heavy row's bar
                 // visibly fell short of its own label with no explanation why
                 // (round-5 audit finding #22).
-                case "idle": Idle += mins; break;
+                case DiaryCategory.Idle: Idle += mins; break;
             }
         }
     }
@@ -69,55 +69,62 @@ public static class ReportData
         return rows;
     }
 
-    /// <summary>Month → week buckets within this calendar month; Year → the
-    /// calendar months of this year, January through the current month.</summary>
-    public static List<BucketStat> Buckets(ReportPeriod period, SqliteConnection conn)
+    /// <summary>Week buckets within the current calendar month — only ever called for
+    /// ReportPeriod.Month (both call sites branch Day/Week away before reaching this).
+    /// Split from the old combined Buckets(period, conn) — two genuinely unrelated
+    /// queries (month-as-weeks vs year-as-months) living in one 82-line method with a
+    /// period-check branch was exactly the "two unrelated code paths in one function"
+    /// shape the code-quality checklist flags (audit finding #5).</summary>
+    public static List<BucketStat> MonthBuckets(SqliteConnection conn)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        using var cmd = conn.CreateCommand();
-
-        if (period == ReportPeriod.Month)
+        var start = PeriodStart(ReportPeriod.Month, today);
+        // Ordered week buckets keyed by the Monday of each week.
+        var weeks = new SortedDictionary<string, (DateOnly WeekStart, int On, int Off)>();
+        for (var d = start; d <= today; d = d.AddDays(1))
         {
-            var start = PeriodStart(ReportPeriod.Month, today);
-            // Ordered week buckets keyed by the Monday of each week.
-            var weeks = new SortedDictionary<string, (DateOnly WeekStart, int On, int Off)>();
-            for (var d = start; d <= today; d = d.AddDays(1))
-            {
-                var ws = MondayOf(d);
-                weeks.TryAdd(ws.ToIsoDate(), (ws, 0, 0));
-            }
-            cmd.CommandText =
-                "SELECT date, category, SUM(duration_min) FROM time_diary " +
-                "WHERE date >= $from GROUP BY date, category";
-            cmd.Parameters.AddWithValue("$from", start.ToIsoDate());
-            using var r = cmd.ExecuteReader();
-            while (r.Read())
-            {
-                if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                        DateTimeStyles.None, out var d)) continue;
-                var cat = r.GetString(1);
-                if (cat != "on_plan" && cat != "off_plan") continue;
-                var ws = MondayOf(d);
-                var key = ws.ToIsoDate();
-                if (!weeks.TryGetValue(key, out var w)) continue;
-                var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-                weeks[key] = cat == "on_plan" ? (w.WeekStart, w.On + mins, w.Off)
-                                              : (w.WeekStart, w.On, w.Off + mins);
-            }
-            return weeks.Values.Select(w => new BucketStat(
-                $"{w.WeekStart.ToString("dd MMM", CultureInfo.InvariantCulture)} – " +
-                $"{w.WeekStart.AddDays(6).ToString("dd MMM", CultureInfo.InvariantCulture)}",
-                w.On, w.Off)).ToList();
+            var ws = MondayOf(d);
+            weeks.TryAdd(ws.ToIsoDate(), (ws, 0, 0));
         }
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT date, category, SUM(duration_min) FROM time_diary " +
+            "WHERE date >= $from GROUP BY date, category";
+        cmd.Parameters.AddWithValue("$from", start.ToIsoDate());
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var d)) continue;
+            var cat = r.GetString(1);
+            if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
+            var ws = MondayOf(d);
+            var key = ws.ToIsoDate();
+            if (!weeks.TryGetValue(key, out var w)) continue;
+            var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+            weeks[key] = cat == DiaryCategory.OnPlan ? (w.WeekStart, w.On + mins, w.Off)
+                                          : (w.WeekStart, w.On, w.Off + mins);
+        }
+        return weeks.Values.Select(w => new BucketStat(
+            $"{w.WeekStart.ToString("dd MMM", CultureInfo.InvariantCulture)} – " +
+            $"{w.WeekStart.AddDays(6).ToString("dd MMM", CultureInfo.InvariantCulture)}",
+            w.On, w.Off)).ToList();
+    }
 
-        // Year — group by calendar month, January through the current month.
-        // Raw time_diary only covers the diary's configured retention window
-        // (ConfigService.DiaryRetentionDays(); Database.DiaryRetentionDays is
-        // only its fallback default), so earlier months of the year come
-        // from diary_daily_rollup instead — the two never overlap (a date
-        // only gets a rollup row once its raw rows are pruned), so summing
-        // both sources is safe.
+    /// <summary>Calendar-month buckets for this year, January through the current
+    /// month — only ever called for ReportPeriod.Year (see MonthBuckets' doc comment
+    /// for why this was split out of it). Raw time_diary only covers the diary's
+    /// configured retention window (ConfigService.DiaryRetentionDays();
+    /// Database.DiaryRetentionDays is only its fallback default), so earlier months of
+    /// the year come from diary_daily_rollup instead — the two never overlap (a date
+    /// only gets a rollup row once its raw rows are pruned), so summing both sources
+    /// is safe.</summary>
+    public static List<BucketStat> YearBuckets(SqliteConnection conn)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
         var fromStr = PeriodStart(ReportPeriod.Year, today).ToIsoDate();
+
+        using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT strftime('%Y-%m', date) AS mo, category, SUM(duration_min) " +
             "FROM time_diary WHERE date >= $from GROUP BY mo, category ORDER BY mo";
@@ -129,10 +136,10 @@ public static class ReportData
                 var mo = r.IsDBNull(0) ? "" : r.GetString(0);
                 if (mo.Length == 0) continue;
                 var cat = r.GetString(1);
-                if (cat != "on_plan" && cat != "off_plan") continue;
+                if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
                 var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
                 months.TryGetValue(mo, out var m);
-                months[mo] = cat == "on_plan" ? (m.On + mins, m.Off) : (m.On, m.Off + mins);
+                months[mo] = cat == DiaryCategory.OnPlan ? (m.On + mins, m.Off) : (m.On, m.Off + mins);
             }
 
         using var rollupCmd = conn.CreateCommand();
@@ -169,7 +176,7 @@ public static class ReportData
     /// as renamed rows move out of it).
     /// </summary>
     private static string EffectiveWindow(string window, string? description) =>
-        window == "idle" && description is { Length: > 0 } ? description : window;
+        window == DiaryCategory.Idle && description is { Length: > 0 } ? description : window;
 
     /// <summary>Off-plan minutes grouped by "App - sub" label, biggest first.</summary>
     public static List<(string Label, int Minutes)> TopDistractions(ReportPeriod period,

@@ -155,11 +155,17 @@ public sealed partial class ReportsPage
                 Content = moreLabel,
                 Margin = new Thickness(0, 4, 0, 0),
             };
+            // Same explicit expand/collapse state signal as the per-app rows above
+            // (SetExpandedState), rather than relying only on the visible Content text
+            // changing (audit finding #27).
+            AutomationProperties.SetName(moreBtn, $"{moreLabel}, collapsed");
             moreBtn.Click += (_, _) =>
             {
                 var showing = overflow.Visibility == Visibility.Visible;
                 overflow.Visibility = showing ? Visibility.Collapsed : Visibility.Visible;
                 moreBtn.Content = showing ? moreLabel : "Show fewer";
+                AutomationProperties.SetName(moreBtn,
+                    showing ? $"{moreLabel}, collapsed" : $"Show fewer apps, expanded");
             };
             panel.Children.Add(moreBtn);
         }
@@ -174,11 +180,11 @@ public sealed partial class ReportsPage
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new Thickness(2, 0, 0, 8) };
         foreach (var (label, brushKey) in new[]
         {
-            ("On-plan", CategoryBrushKey("on_plan")),
-            ("Off-plan", CategoryBrushKey("off_plan")),
-            ("Neutral", CategoryBrushKey("neutral")),
-            ("Paid", CategoryBrushKey("paid")),
-            ("Idle", CategoryBrushKey("idle")),
+            ("On-plan", CategoryBrushKey(DiaryCategory.OnPlan)),
+            ("Off-plan", CategoryBrushKey(DiaryCategory.OffPlan)),
+            ("Neutral", CategoryBrushKey(DiaryCategory.Neutral)),
+            ("Paid", CategoryBrushKey(DiaryCategory.Paid)),
+            ("Idle", CategoryBrushKey(DiaryCategory.Idle)),
         })
         {
             var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
@@ -238,11 +244,11 @@ public sealed partial class ReportsPage
         };
         foreach (var (mins, brushKey) in new[]
         {
-            (u.On, CategoryBrushKey("on_plan")),
-            (u.Off, CategoryBrushKey("off_plan")),
-            (u.Neutral, CategoryBrushKey("neutral")),
-            (u.Paid, CategoryBrushKey("paid")),
-            (u.Idle, CategoryBrushKey("idle")),
+            (u.On, CategoryBrushKey(DiaryCategory.OnPlan)),
+            (u.Off, CategoryBrushKey(DiaryCategory.OffPlan)),
+            (u.Neutral, CategoryBrushKey(DiaryCategory.Neutral)),
+            (u.Paid, CategoryBrushKey(DiaryCategory.Paid)),
+            (u.Idle, CategoryBrushKey(DiaryCategory.Idle)),
         })
         {
             var w = barWidth * mins / maxTotal;

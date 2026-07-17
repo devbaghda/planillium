@@ -69,6 +69,10 @@ public sealed partial class ReportsPage
             Text = _diarySearch,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        // Placeholder text alone isn't exposed to screen readers as an accessible
+        // name — a static name here (audit finding #16) since the placeholder text
+        // itself already varies with the retention setting.
+        AutomationProperties.SetName(searchBox, "Search the time diary");
         Body.Children.Add(searchBox);
 
         // Mark-selected toolbar — built once (not on every keystroke) so
@@ -220,9 +224,9 @@ public sealed partial class ReportsPage
             selectedIds.Clear();
             RenderDiaryResults();
         }
-        markOnBtn.Click += (_, _) => MarkSelected("on_plan");
-        markOffBtn.Click += (_, _) => MarkSelected("off_plan");
-        markNeutralBtn.Click += (_, _) => MarkSelected("neutral");
+        markOnBtn.Click += (_, _) => MarkSelected(DiaryCategory.OnPlan);
+        markOffBtn.Click += (_, _) => MarkSelected(DiaryCategory.OffPlan);
+        markNeutralBtn.Click += (_, _) => MarkSelected(DiaryCategory.Neutral);
 
         selectAllBox.Checked += (_, _) =>
         {
