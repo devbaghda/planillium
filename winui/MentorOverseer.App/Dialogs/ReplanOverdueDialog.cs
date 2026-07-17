@@ -9,8 +9,8 @@ namespace MentorOverseer.App.Dialogs;
 /// "Replan all overdue" — one dialog listing every overdue task with its
 /// own date-picker, all picked before anything is saved. Replaced
 /// ScoreService's old automatic time-budget spread per the user's request
-/// 2026-07-14: he wants to choose exactly which day each task lands on,
-/// not have it assigned for him. Whatever's already on the day picked for
+/// 2026-07-14: they want to choose exactly which day each task lands on,
+/// not have it assigned for them. Whatever's already on the day picked for
 /// a task — and everything after it — shifts forward by one, the same
 /// "insert, don't overlap" rule RescheduleTaskDialog already uses for a
 /// single task; this is just that rule applied once per row, in order,

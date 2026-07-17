@@ -224,7 +224,7 @@ public static class AddPlanDialog
             // Message bakes in the full picked path, which can carry a
             // personally-named plan file plus the Windows username the path
             // starts with. The error TextBlock (visible only to the user, on
-            // his own screen) still shows the full message; only what
+            // their own screen) still shows the full message; only what
             // lands in the log file — which has no retention/redaction of
             // its own — is narrowed (2026-07-14 round-6 audit finding #22).
             Log.Warn("AddPlanDialog.LoadFile",

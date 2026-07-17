@@ -11,7 +11,6 @@ across up to 2 active life/career plans simultaneously. It monitors his activity
 keeps him on-plan, logs his full day (06:00–20:00), and generates weekly reports.
 
 ## The user
-- Name: the user
 - Location: Milan, Italy (moving to Utrecht/Eindhoven, NL)
 - Goal: Land a Dutch Digital Transformation Manager role → HSM visa → EU citizenship
 - Key tools: Power BI, Power Platform, SharePoint, MBA from Bologna
@@ -132,7 +131,7 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
    applies once for the day-of miss (folded into that day's `daily_score`) and again
    *every subsequent day* it stays outstanding (`overdue_accrual`, capped at 3 days).
    Rescheduling doesn't refund penalties already taken.
-7. **the user's steady-state rule: one task per day.** A day holding two tasks is only ever
+7. **The user's steady-state rule: one task per day.** A day holding two tasks is only ever
    a transient fact ("I did two things today"), never a permanent state a scheduling
    action should create. This is *why* Reschedule/Day-off and Move-to-today deliberately
    behave differently (clarified with the user 2026-07-09, after an audit flagged the
@@ -238,7 +237,7 @@ on 2026-07-17 after the round-7 audit)._
   root-caused — `Log.Info` diagnostics added at the sleep-gap/idle-return decision points
   (**open TODO: watch the log next occurrence**); skills housekeeping (reconciled canonical
   `Desktop/CLAUDE/skills` vs deployed `~/.claude/skills`, added global skill `knowledge-upkeep`);
-  **found live** via a the user screenshot — `ActivityTracker.HandleActiveSession`'s idle-detected
+  **found live** via a user screenshot — `ActivityTracker.HandleActiveSession`'s idle-detected
   branch closed the outgoing session through "now" instead of the real idle-start instant,
   double-counting up to 10 min of on/off-plan time against idle for as long as idle detection has
   existed — fixed by computing idle-start once, shared with `_idleSince` (**open TODO: the
@@ -343,16 +342,17 @@ on 2026-07-17 after the round-7 audit)._
     back-computed real moment, not at "now," or two records meant to be back-to-back end up
     overlapping instead (see the 2026-07-15 idle-transition overlap bug below).
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **The two overlapping diary rows the user spotted 2026-07-15 (on-plan 11:41→11:51 inside idle
-    "Break" 11:40→11:55) are still sitting in `data/progress.db` uncorrected** — the bug that
-    caused them is fixed, but fixing already-written rows is a direct DB edit and needs the user's
-    explicit confirmation naming the specific rows first (this file's Direct-database-access
-    rule). There may be older instances of the same overlap further back in the diary too, not
-    audited.
+  - **A full-history scan (2026-07-17/18) found 42 overlapping diary-row pairs from 06-29 through
+    07-16, not just the one 07-15 instance previously flagged, plus 2 rows with end_time before
+    start_time.** Only 2 of the 42 cleanly match the documented `HandleActiveSession` bug
+    signature (active row's end == idle row's end, active row started at/before idle start);
+    the other 40 are mostly 1-2 minute boundary artifacts with no single confirmed cause. The
+    user's call: leave all of it untouched rather than guess-correct real data (2026-07-18).
+    Not expected to be revisited unless a clear mechanism for the other 40 turns up.
   - `Plan.PlanDayForDate`/`DateForPlanDay`'s day-by-day walk for plans with excluded weekdays is
     O(days-elapsed), called on nearly every render/click (round-5 audit finding #28, deferred —
     profile before prioritizing per the auditor's own note; no evidence yet it's actually slow).
-  - ~~Rotate the TickTick OAuth client secret~~ — **the user confirmed done 2026-07-09**
+  - ~~Rotate the TickTick OAuth client secret~~ — **user confirmed done 2026-07-09**
     (rotated at developer.ticktick.com). One follow-up remains, not yet done: the app's
     Windows Credential Manager entry still holds the *old* secret until the user reconnects
     TickTick from Settings (disconnect → "Connect TickTick" → re-auth writes the new value

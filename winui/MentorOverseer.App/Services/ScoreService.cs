@@ -440,7 +440,7 @@ public sealed class ScoreService : IDisposable
     /// forward by one instead of doubling up), applied in the order given;
     /// the flat fee then covers the whole batch once, same as the old
     /// automatic version this replaced (2026-07-14 — the user wanted to choose
-    /// the days himself instead of an automatic time-budget spread).
+    /// the days themselves instead of an automatic time-budget spread).
     /// </summary>
     public void ReplanOverdueTo(List<(Plan Plan, string TaskText, int OriginalDay, int NewDay)> assignments)
     {

@@ -8,7 +8,7 @@
 #endif
 #define AppName "Planillium"
 #define AppExe "Planillium.App.exe"
-#define AppPublisher "the user"
+#define AppPublisher "Planillium"
 
 [Setup]
 AppId={{F9C80A85-CB70-4F91-ABDC-9C5D9F0FE86C}
