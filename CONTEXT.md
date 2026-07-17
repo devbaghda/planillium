@@ -209,6 +209,23 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-18, round-8 full audit** (5 parallel passes — architecture/security/UX/code-quality/
+  privacy; report: https://claude.ai/code/artifact/016b54c5-9852-4e12-9092-c5fdb799b4e9): 0
+  Critical, 1 High, 8 Medium, 7 Low, 3 Info; not yet remediated (reported only — user hasn't
+  asked to fix). Headline finding (R8-01, High): `ScoreService.RecomputeDayScoreCore` hardcodes
+  `streak=0` for any date that isn't literally today (`ScoreService.cs:298`), so
+  `RecalculateDayScore` — called whenever a past diary entry is edited/split/bulk-recategorized —
+  silently discards whatever streak bonus that day originally earned, with no warning. Also
+  found: `MoveTaskToToday` is the one of the four schedule-shift methods still missing the
+  transaction wrap its three siblings already have (R8-03, repeat of the round-5 finding #27
+  bug class); `ScoreService.IsScoringExemptFor` and `ActivityTracker.IsFullyOffToday` compute
+  the same day-off predicate via two independent, unlinked implementations (R8-04); the evening
+  review's overdue-carry preview doesn't apply the same per-plan exemption filter the real save
+  does, so it can show a different number than what's recorded (R8-02); `SplitDiaryEntryDialog`
+  never got the `bool?` cancelled/failed/succeeded contract its three sibling dialogs already
+  have (R8-06, another "fix one sibling" instance); `ClearAllData_Click` doesn't delete
+  `report.html`/`report.csv`/`full-export.json` the way `ClearHistory_Click` already does
+  (R8-05). Full list, plain-English explanations, and quick wins in the artifact above.
 - **2026-07-18, diary-overlap re-audit + git-history purge**: Two open TODOs, both resolved.
   (1) Full-history scan of `time_diary` found 42 overlapping row-pairs (06-29 through 07-16),
   not just the single 07-15 instance previously flagged — see the Open TODOs entry above for
