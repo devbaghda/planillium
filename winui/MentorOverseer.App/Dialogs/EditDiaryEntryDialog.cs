@@ -13,12 +13,6 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class EditDiaryEntryDialog
 {
-    private static readonly (string Label, string Value)[] Categories =
-    {
-        ("On-plan", DiaryCategory.OnPlan), ("Off-plan", DiaryCategory.OffPlan), ("Paid", DiaryCategory.Paid),
-        ("Neutral", DiaryCategory.Neutral), ("Idle", DiaryCategory.Idle),
-    };
-
     /// <returns>null if the user cancelled (either dialog), true once
     /// saved/deleted, false if the save/delete itself failed (2026-07-14
     /// round-6 audit finding #6: callers used to treat false the same as a
@@ -43,9 +37,9 @@ public static class EditDiaryEntryDialog
         panel.Children.Add(durBox);
 
         var catBox = new ComboBox { Header = "Category", HorizontalAlignment = HorizontalAlignment.Stretch };
-        foreach (var (label, value) in Categories)
+        foreach (var (label, value) in DiaryCategory.EditableOptions)
             catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
-        catBox.SelectedIndex = Array.FindIndex(Categories, c => c.Value == category) is >= 0 and var i ? i : 0;
+        catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == category) is >= 0 and var i ? i : 0;
         panel.Children.Add(catBox);
 
         var descBox = new TextBox { Header = "Description", Text = description ?? "" };
@@ -112,7 +106,7 @@ public static class EditDiaryEntryDialog
                 var cat = ((ComboBoxItem)catBox.SelectedItem).Tag as string ?? category;
                 db.UpdateDiaryEntry(id, startBox.Text.Trim(), endBox.Text.Trim(),
                     (int)durBox.Value, cat, descBox.Text.Trim() is { Length: > 0 } d ? d : null);
-                RecalculateScore(db, date);
+                ScoreService.TryRecalculateDayScores(db, [date], "EditDiaryEntryDialog.RecalculateScore");
                 return true;
             }
             if (result == ContentDialogResult.Secondary)
@@ -121,7 +115,7 @@ public static class EditDiaryEntryDialog
                 // level of detail every other permanent-delete confirmation in the app
                 // already gives (2026-07-18 audit finding R8-08: this one used to be a
                 // bare "Delete this diary entry?" with no Content at all).
-                var label = Array.Find(Categories, c => c.Value == category).Label ?? category;
+                var label = Array.Find(DiaryCategory.EditableOptions, c => c.Value == category).Label ?? category;
                 var confirm = new ContentDialog
                 {
                     Title = "Delete this diary entry?",
@@ -134,7 +128,7 @@ public static class EditDiaryEntryDialog
                 };
                 if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;
                 db.DeleteDiaryEntry(id);
-                RecalculateScore(db, date);
+                ScoreService.TryRecalculateDayScores(db, [date], "EditDiaryEntryDialog.RecalculateScore");
                 return true;
             }
         }
@@ -144,25 +138,5 @@ public static class EditDiaryEntryDialog
             return false;
         }
         return null;
-    }
-
-    /// <summary>Editing or deleting an entry changes that day's on/off-plan minutes, but
-    /// a day already scored (score_ledger's daily_score is once-per-date, not
-    /// auto-refreshing) would otherwise keep showing the stale figure forever — recompute
-    /// it right away instead of waiting for a change that never comes (2026-07-17
-    /// request, prompted by editing a diary entry's category). Best-effort: a failure
-    /// here shouldn't turn an otherwise-successful save/delete into a reported failure,
-    /// so it's logged rather than thrown.</summary>
-    private static void RecalculateScore(Database db, DateOnly date)
-    {
-        try
-        {
-            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
-            score.RecalculateDayScore(date);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("EditDiaryEntryDialog.RecalculateScore", ex);
-        }
     }
 }

@@ -23,4 +23,13 @@ public static class DiaryCategory
     public const string Idle = "idle";
     public const string Paid = "paid";
     public const string DayOff = "dayoff";
+
+    /// <summary>The five editable categories, with their display labels, in the order
+    /// EditDiaryEntryDialog and SplitDiaryEntryDialog each show them in a category
+    /// dropdown — previously copy-pasted verbatim in both dialogs, in sync only by
+    /// coincidence (2026-07-18 audit finding R8-11).</summary>
+    public static readonly (string Label, string Value)[] EditableOptions =
+    {
+        ("On-plan", OnPlan), ("Off-plan", OffPlan), ("Paid", Paid), ("Neutral", Neutral), ("Idle", Idle),
+    };
 }

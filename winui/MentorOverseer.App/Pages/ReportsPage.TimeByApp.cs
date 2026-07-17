@@ -172,21 +172,29 @@ public sealed partial class ReportsPage
         return panel;
     }
 
-    /// <summary>Color key for AppUsageRow's stacked bars — same three
-    /// brush keys, same order, so this can never drift from what the bars
+    /// <summary>The five categories AppUsageRow stacks into a bar, in display order, with
+    /// the label the legend shows and how to read that category's minutes off an AppUsage.
+    /// Previously two independently hand-written lists (the legend and the bar) kept in
+    /// sync only by a comment promising they matched, not by sharing a source
+    /// (2026-07-18 audit finding R8-13).</summary>
+    private static readonly (string Category, string Label, Func<ReportData.AppUsage, int> Minutes)[] StackedCategories =
+    {
+        (DiaryCategory.OnPlan, "On-plan", u => u.On),
+        (DiaryCategory.OffPlan, "Off-plan", u => u.Off),
+        (DiaryCategory.Neutral, "Neutral", u => u.Neutral),
+        (DiaryCategory.Paid, "Paid", u => u.Paid),
+        (DiaryCategory.Idle, "Idle", u => u.Idle),
+    };
+
+    /// <summary>Color key for AppUsageRow's stacked bars — reads from
+    /// StackedCategories, so this can never drift from what the bars
     /// actually use.</summary>
     private static StackPanel TimeByAppLegend()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new Thickness(2, 0, 0, 8) };
-        foreach (var (label, brushKey) in new[]
+        foreach (var (category, label, _) in StackedCategories)
         {
-            ("On-plan", CategoryBrushKey(DiaryCategory.OnPlan)),
-            ("Off-plan", CategoryBrushKey(DiaryCategory.OffPlan)),
-            ("Neutral", CategoryBrushKey(DiaryCategory.Neutral)),
-            ("Paid", CategoryBrushKey(DiaryCategory.Paid)),
-            ("Idle", CategoryBrushKey(DiaryCategory.Idle)),
-        })
-        {
+            var brushKey = CategoryBrushKey(category);
             var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             item.Children.Add(new Border
             {
@@ -242,21 +250,15 @@ public sealed partial class ReportsPage
             VerticalAlignment = VerticalAlignment.Center,
             Height = 8,
         };
-        foreach (var (mins, brushKey) in new[]
+        foreach (var (category, _, minutesOf) in StackedCategories)
         {
-            (u.On, CategoryBrushKey(DiaryCategory.OnPlan)),
-            (u.Off, CategoryBrushKey(DiaryCategory.OffPlan)),
-            (u.Neutral, CategoryBrushKey(DiaryCategory.Neutral)),
-            (u.Paid, CategoryBrushKey(DiaryCategory.Paid)),
-            (u.Idle, CategoryBrushKey(DiaryCategory.Idle)),
-        })
-        {
+            var mins = minutesOf(u);
             var w = barWidth * mins / maxTotal;
             if (w >= 1)
                 segments.Children.Add(new Border
                 {
                     Width = w, Height = 8,
-                    Background = (Brush)Application.Current.Resources[brushKey],
+                    Background = (Brush)Application.Current.Resources[CategoryBrushKey(category)],
                 });
         }
         var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };

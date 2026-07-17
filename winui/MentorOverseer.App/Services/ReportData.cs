@@ -206,7 +206,7 @@ public static class ReportData
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT date, window, description, SUM(duration_min) FROM time_diary " +
-            "WHERE category='off_plan' AND " + DateFilter(period, cmd) +
+            $"WHERE category='{DiaryCategory.OffPlan}' AND " + DateFilter(period, cmd) +
             " GROUP BY date, window, description";
         using var r = cmd.ExecuteReader();
         while (r.Read())

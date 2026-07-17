@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Media;
 using MentorOverseer.App.Services;
 
@@ -322,6 +323,11 @@ public static class ReviewDialog
         {
             PlaceholderText = "One line: what moved the needle today?",
         };
+        // PlaceholderText alone isn't exposed as an accessible name (same gap already
+        // fixed elsewhere, e.g. SplitDiaryEntryDialog's description box) — on the app's
+        // single highest-stakes daily dialog, a screen reader would otherwise announce
+        // this as an unlabeled input (2026-07-18 audit finding R8-15).
+        AutomationProperties.SetName(reflection, "Reflection: what moved the needle today?");
         panel.Children.Add(reflection);
 
         return (panel, reflection);

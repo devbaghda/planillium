@@ -221,12 +221,7 @@ public sealed partial class ReportsPage
                 // affected day's score so none of them keep showing a stale figure
                 // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
                 // re-category into a reported failure.
-                try
-                {
-                    using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
-                    foreach (var d in affectedDates) score.RecalculateDayScore(d);
-                }
-                catch (Exception ex) { Log.Error("ReportsPage.MarkSelected.RecalculateScore", ex); }
+                ScoreService.TryRecalculateDayScores(db, affectedDates, "ReportsPage.MarkSelected.RecalculateScore");
             }
             catch (Exception ex)
             {

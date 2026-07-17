@@ -42,10 +42,25 @@ public static class RescheduleTaskDialog
             DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
         };
 
+        var panel = new StackPanel { Spacing = 10 };
+        // Same disclosure ReplanOverdueDialog already gives for the identical shift
+        // mechanic — this dialog was the one sibling that never got it, so moving a task
+        // onto an occupied day was a surprise you only discovered after the fact
+        // (2026-07-18 audit finding R8-14).
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Whatever's already on the day you pick — and everything after it — " +
+                   "shifts forward by one, so this task gets its own day instead of doubling up.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+        panel.Children.Add(picker);
+
         var dialog = new ContentDialog
         {
             Title = "Reschedule task",
-            Content = picker,
+            Content = panel,
             PrimaryButtonText = "Move",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,

@@ -126,7 +126,10 @@ tool, not a cloud-first collaboration app. Specifically:
   off-plan, neutral, idle, or paid time. That window title — which can include things like a
   document name, a website title, or a chat preview — is stored verbatim in your local activity
   diary, along with the app name and the time range. This pauses automatically while your PC is
-  locked or asleep, and stops the moment you quit the app from the tray.
+  locked or asleep, and stops the moment you quit the app from the tray. It also pauses entirely
+  on a recurring rest day (a weekday you've excluded for a plan). A single day manually marked
+  "Day off" is different: tracking keeps running as normal on that day — only the off-plan
+  reminder is silenced, so the diary can still record what you did without nagging you about it.
 - **Evening review and idle answers.** Anything you type into the evening review or an idle-time
   prompt is stored as free text, locally, exactly as you wrote it.
 - **Retention.** Diary detail (including window titles) is kept for a configurable number of days

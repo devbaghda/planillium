@@ -296,6 +296,24 @@ public sealed class ScoreService : IDisposable
         return result ?? 0;
     }
 
+    /// <summary>Best-effort RecalculateDayScore for one or more dates — a failure here
+    /// shouldn't turn an otherwise-successful diary edit into a reported failure, so it's
+    /// logged rather than thrown. Centralizes what EditDiaryEntryDialog,
+    /// SplitDiaryEntryDialog, and ReportsPage.Diary.MarkSelected each used to hand-roll
+    /// independently (2026-07-18 audit finding R8-12).</summary>
+    public static void TryRecalculateDayScores(Database db, IEnumerable<DateOnly> dates, string logContext)
+    {
+        try
+        {
+            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+            foreach (var d in dates) score.RecalculateDayScore(d);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(logContext, ex);
+        }
+    }
+
     private int? RecomputeDayScoreCore(DateOnly d)
     {
         var (total, done) = DayTaskCounts(d);

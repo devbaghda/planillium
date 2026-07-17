@@ -16,12 +16,6 @@ namespace MentorOverseer.App.Dialogs;
 /// </summary>
 public static class SplitDiaryEntryDialog
 {
-    private static readonly (string Label, string Value)[] Categories =
-    {
-        ("On-plan", DiaryCategory.OnPlan), ("Off-plan", DiaryCategory.OffPlan), ("Paid", DiaryCategory.Paid),
-        ("Neutral", DiaryCategory.Neutral), ("Idle", DiaryCategory.Idle),
-    };
-
     /// <returns>null if the user cancelled, true once split, false if the split itself
     /// failed — matches EditDiaryEntryDialog's contract (2026-07-14 round-6 audit finding
     /// #6, applied here 2026-07-18 audit finding R8-06: this dialog was the one sibling
@@ -80,9 +74,9 @@ public static class SplitDiaryEntryDialog
         {
             var durBox = DialogControls.MinutesBox(prefillMin);
             var catBox = new ComboBox { Width = 110 };
-            foreach (var (label, value) in Categories)
+            foreach (var (label, value) in DiaryCategory.EditableOptions)
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
-            catBox.SelectedIndex = Array.FindIndex(Categories, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
+            catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
             AutomationProperties.SetName(catBox, "Category");
             var descBox = new TextBox
             {
@@ -159,12 +153,7 @@ public static class SplitDiaryEntryDialog
             // category) — recompute so an already-scored day doesn't keep showing a stale
             // figure (2026-07-17 request). Best-effort: doesn't turn an otherwise-
             // successful split into a reported failure.
-            try
-            {
-                using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
-                score.RecalculateDayScore(date);
-            }
-            catch (Exception ex) { Log.Error("SplitDiaryEntryDialog.RecalculateScore", ex); }
+            ScoreService.TryRecalculateDayScores(db, [date], "SplitDiaryEntryDialog.RecalculateScore");
             return true;
         }
         catch (Exception ex)
