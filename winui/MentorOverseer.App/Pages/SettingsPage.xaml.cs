@@ -370,7 +370,12 @@ public sealed partial class SettingsPage : Page
     /// history and reflections had any delete path at all (audit finding #6); the debug
     /// log had none either (audit finding #25). Plan definitions themselves
     /// (plans/active/*.json) are never touched here — archiving/deleting a plan is its
-    /// own separate action on the Plans page.
+    /// own separate action on the Plans page. Also deletes any report.html/report.csv/
+    /// full-export.json sitting in the data folder — unconditionally, unlike the smaller
+    /// "Clear activity history" button's opt-in checkbox, since this action is already the
+    /// most destructive one in the app and its own confirmation already says "this cannot
+    /// be undone" (2026-07-18 audit finding R8-05: this used to only clear the database,
+    /// leaving those export files as an untouched second copy of the same data).
     /// </summary>
     private async void ClearAllData_Click(object sender, RoutedEventArgs e)
     {
@@ -398,8 +403,9 @@ public sealed partial class SettingsPage : Page
             Content = $"Deletes {rowCount} row(s) across every data table this app keeps — " +
                       "task completions, reschedules and day-offs, task notes, score history, " +
                       "reflections, TickTick sync links, and the activity diary — plus the debug " +
-                      "log. Your plan definitions themselves are not deleted (use the Plans page " +
-                      "to archive or remove a plan). This cannot be undone.",
+                      "log and any report.html/report.csv/full-export.json you've exported to the " +
+                      "data folder. Your plan definitions themselves are not deleted (use the " +
+                      "Plans page to archive or remove a plan). This cannot be undone.",
             PrimaryButtonText = "Clear everything",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
@@ -412,6 +418,11 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             db.ClearAllData();
             Log.Clear();
+            foreach (var f in new[] { "report.html", "report.csv", "full-export.json" })
+            {
+                try { File.Delete(Path.Combine(AppPaths.Root, "data", f)); }
+                catch (Exception ex) { Log.Error($"SettingsPage.ClearAllData.DeleteExport({f})", ex); }
+            }
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
     }
 

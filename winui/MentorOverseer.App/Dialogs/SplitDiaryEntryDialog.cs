@@ -22,7 +22,12 @@ public static class SplitDiaryEntryDialog
         ("Neutral", DiaryCategory.Neutral), ("Idle", DiaryCategory.Idle),
     };
 
-    public static async Task<bool> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
+    /// <returns>null if the user cancelled, true once split, false if the split itself
+    /// failed — matches EditDiaryEntryDialog's contract (2026-07-14 round-6 audit finding
+    /// #6, applied here 2026-07-18 audit finding R8-06: this dialog was the one sibling
+    /// still returning a plain bool, so a save failure was indistinguishable from
+    /// Cancel and the caller could never show an error for it).</returns>
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
         string start, string end, int durationMin, string category, string window, string? description)
     {
         if (!TimeOnly.TryParseExact(start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
@@ -125,7 +130,7 @@ public static class SplitDiaryEntryDialog
         AddRow(null, category, null);
 
         var result = await DialogGate.ShowAsync(dialog);
-        if (result != ContentDialogResult.Primary) return false;
+        if (result != ContentDialogResult.Primary) return null;
 
         try
         {

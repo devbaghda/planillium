@@ -14,7 +14,7 @@ public enum ReportPeriod { Day, Week, Month, Year }
 /// </summary>
 public static class ReportData
 {
-    public sealed record DayStat(DateOnly Date, int Done, int Total, int OnMin, int OffMin, int Score);
+    public sealed record DayStat(DateOnly Date, int Done, int Total, int OnMin, int OffMin, int Score, bool IsDayOff);
     public sealed record BucketStat(string Label, int OnMin, int OffMin);
 
     public sealed class AppUsage
@@ -72,7 +72,7 @@ public static class ReportData
             // minutes don't count toward this summary table any more than they count
             // toward the score (2026-07-17 request).
             if (isExempt) { on = 0; off = 0; }
-            rows.Add(new DayStat(d, done, total, on, off, s));
+            rows.Add(new DayStat(d, done, total, on, off, s, isExempt));
         }
         return rows;
     }

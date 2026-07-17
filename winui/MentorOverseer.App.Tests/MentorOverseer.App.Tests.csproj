@@ -67,6 +67,7 @@
     <Compile Include="..\MentorOverseer.App\Services\JsonFileIO.cs" Link="App\JsonFileIO.cs" />
     <Compile Include="..\MentorOverseer.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\MentorOverseer.App\Services\PlanStore.cs" Link="App\PlanStore.cs" />
+    <Compile Include="..\MentorOverseer.App\Services\ScoreReason.cs" Link="App\ScoreReason.cs" />
     <Compile Include="..\MentorOverseer.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />
   </ItemGroup>
 

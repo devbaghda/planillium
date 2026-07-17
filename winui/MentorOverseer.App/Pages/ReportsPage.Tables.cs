@@ -28,9 +28,14 @@ public sealed partial class ReportsPage
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition());
             var isToday = s.Date == today;
+            // A day off correctly zeroes on/off-plan minutes here (same rule the score
+            // uses), but showing that as a bare "0m/0m" reads identically to a tracking
+            // failure or a genuinely idle day everywhere else in the app labels a day off
+            // explicitly (2026-07-18 audit finding R8-07) — so this table needs its own
+            // label since it's the one place that didn't have one.
             var cells = new[]
             {
-                s.Date.ToDisplayDate(),
+                s.Date.ToDisplayDate() + (s.IsDayOff ? "\nDay off" : ""),
                 $"{s.Done}/{s.Total}",
                 ReportData.FmtMins(s.OnMin), ReportData.FmtMins(s.OffMin),
                 s.Score.ToString(),
@@ -41,6 +46,7 @@ public sealed partial class ReportsPage
                 {
                     Text = cells[c],
                     FontWeight = isToday ? FontWeights.SemiBold : FontWeights.Normal,
+                    TextWrapping = c == 0 ? TextWrapping.Wrap : TextWrapping.NoWrap,
                 };
                 if (c == 4)
                     tb.Foreground = ScoreBrush(s.Score);

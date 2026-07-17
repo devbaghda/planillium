@@ -491,8 +491,9 @@ public sealed partial class ReportsPage
             AutomationProperties.SetName(split, $"Split into several activities: {windowLabel}, {start}–{end}");
             split.Click += async (_, _) =>
             {
-                if (await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc))
-                    Render();
+                var ok = await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc);
+                if (ok == true) Render();
+                else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
             };
             Grid.SetColumn(time, 1);
             Grid.SetColumn(catText, 2);

@@ -85,7 +85,7 @@ public sealed class ScoreService : IDisposable
                 indexCmd.CommandText =
                     "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
                     "ON score_ledger(reason, date) " +
-                    "WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus')";
+                    $"WHERE reason IN ('{ScoreReason.DailyScore}', '{ScoreReason.OverdueAccrual}', '{ScoreReason.WeeklyComebackBonus}')";
                 indexCmd.ExecuteNonQuery();
                 _schemaEnsured = true;
             }
@@ -270,7 +270,7 @@ public sealed class ScoreService : IDisposable
 
     public int? CreditDayScoreIfMissing(DateOnly d)
     {
-        if (LedgerHas("daily_score", d)) return null;
+        if (LedgerHas(ScoreReason.DailyScore, d)) return null;
         return RecomputeDayScoreCore(d);
     }
 
@@ -288,7 +288,7 @@ public sealed class ScoreService : IDisposable
         _db.RunInTransaction(() =>
         {
             using var del = _db.CreateCommand();
-            del.CommandText = "DELETE FROM score_ledger WHERE reason='daily_score' AND date=$d";
+            del.CommandText = $"DELETE FROM score_ledger WHERE reason='{ScoreReason.DailyScore}' AND date=$d";
             del.Parameters.AddWithValue("$d", d.ToIsoDate());
             del.ExecuteNonQuery();
             result = RecomputeDayScoreCore(d);
@@ -305,7 +305,7 @@ public sealed class ScoreService : IDisposable
         var score = DayScore(done, total, on, off, streak, isExempt);
         try
         {
-            AddLedger(score, "daily_score", $"day score {score}" + (isExempt ? " (day off)" : ""), d);
+            AddLedger(score, ScoreReason.DailyScore, $"day score {score}" + (isExempt ? " (day off)" : ""), d);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {
@@ -357,13 +357,13 @@ public sealed class ScoreService : IDisposable
     /// </summary>
     public int? CreditOverdueAccrualIfMissing(DateOnly d)
     {
-        if (LedgerHas("overdue_accrual", d)) return null;
+        if (LedgerHas(ScoreReason.OverdueAccrual, d)) return null;
         var count = OverdueAccrualCount(d);
         if (count == 0) return 0;
         var delta = count * ConfigService.ScoringRate("task_overdue_penalty", -5);
         try
         {
-            AddLedger(delta, "overdue_accrual", $"{count} task(s) still overdue (3-day cap)", d);
+            AddLedger(delta, ScoreReason.OverdueAccrual, $"{count} task(s) still overdue (3-day cap)", d);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
         {
@@ -421,8 +421,8 @@ public sealed class ScoreService : IDisposable
         var prevWeekEnd = d.AddDays(-(LookbackDays + 1));
         if (SumLedgerRange(prevWeekStart, prevWeekEnd) >= 0) return 0;
         if (SumLedgerRange(lastWeekStart, lastWeekEnd) < 0) return 0;
-        if (LedgerHas("weekly_comeback_bonus", lastWeekStart)) return 0;
-        return ConfigService.ScoringRate("weekly_comeback_bonus", 20);
+        if (LedgerHas(ScoreReason.WeeklyComebackBonus, lastWeekStart)) return 0;
+        return ConfigService.ScoringRate(ScoreReason.WeeklyComebackBonus, 20);
     }
 
     public int? CreditWeeklyComebackIfMissing(DateOnly d)
@@ -431,7 +431,7 @@ public sealed class ScoreService : IDisposable
         if (bonus == 0) return null;
         try
         {
-            AddLedger(bonus, "weekly_comeback_bonus",
+            AddLedger(bonus, ScoreReason.WeeklyComebackBonus,
                 "recovered from a losing week", d.AddDays(-LookbackDays));
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintViolation)
@@ -462,7 +462,7 @@ public sealed class ScoreService : IDisposable
         {
             foreach (var (plan, taskText, originalDay, newDay) in assignments)
                 RescheduleTask(plan, taskText, originalDay, newDay);
-            AddLedger(ReplanFlatFee, "replan_overdue",
+            AddLedger(ReplanFlatFee, ScoreReason.ReplanOverdue,
                 $"replanned {assignments.Count} overdue task(s), flat fee, user-picked days");
         });
     }

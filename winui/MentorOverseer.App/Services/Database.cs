@@ -102,7 +102,7 @@ public sealed class Database : IDisposable
         using (var check = CreateCommand())
         {
             check.CommandText = "SELECT sql FROM sqlite_master WHERE type='index' AND name='sl_reason_date'";
-            if (check.ExecuteScalar() is string sql && !sql.Contains("weekly_comeback_bonus"))
+            if (check.ExecuteScalar() is string sql && !sql.Contains(ScoreReason.WeeklyComebackBonus))
             {
                 using var drop = CreateCommand();
                 drop.CommandText = "DROP INDEX sl_reason_date";
@@ -167,7 +167,7 @@ public sealed class Database : IDisposable
             ");" +
             "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
             "  ON score_ledger(reason, date) " +
-            "  WHERE reason IN ('daily_score', 'overdue_accrual', 'weekly_comeback_bonus');" +
+            $"  WHERE reason IN ('{ScoreReason.DailyScore}', '{ScoreReason.OverdueAccrual}', '{ScoreReason.WeeklyComebackBonus}');" +
             "CREATE TABLE IF NOT EXISTS time_diary (" +
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  date         TEXT NOT NULL," +

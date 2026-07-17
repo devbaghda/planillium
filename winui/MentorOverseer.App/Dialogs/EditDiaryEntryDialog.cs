@@ -117,9 +117,16 @@ public static class EditDiaryEntryDialog
             }
             if (result == ContentDialogResult.Secondary)
             {
+                // Names exactly what's being removed and its side effect — matches the
+                // level of detail every other permanent-delete confirmation in the app
+                // already gives (2026-07-18 audit finding R8-08: this one used to be a
+                // bare "Delete this diary entry?" with no Content at all).
+                var label = Array.Find(Categories, c => c.Value == category).Label ?? category;
                 var confirm = new ContentDialog
                 {
                     Title = "Delete this diary entry?",
+                    Content = $"The {label} entry from {start}–{end} on {date.ToDisplayDate()} will be " +
+                              "permanently removed, and that day's score will be recalculated. This can't be undone.",
                     PrimaryButtonText = "Delete",
                     CloseButtonText = "Cancel",
                     DefaultButton = ContentDialogButton.Close,
