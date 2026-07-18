@@ -29,6 +29,10 @@ going forward; the original Python/Tkinter version is retired.
 - Reports and exports that need last week's or a whole year's worth of
   streak/task data now reuse work instead of re-querying the database for
   every single day
+- For plans with days off (e.g. no weekends), figuring out which calendar
+  date a plan-day lands on is now near-instant instead of getting slightly
+  slower the longer the plan has been running — it used to check the
+  calendar one day at a time from the plan's start date
 - "Disconnect TickTick" now shows an error if it doesn't fully succeed,
   instead of silently doing nothing
 - The "keep detailed diary" retention setting now has an upper limit, so it

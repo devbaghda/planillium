@@ -43,17 +43,41 @@ public class Plan
     public bool IsOffOn(DateOnly d, Func<string, int, bool> isMarkedOff) =>
         IsExcluded(d) || isMarkedOff(Id, PlanDayForDate(d));
 
-    /// <summary>Calendar date day N's tasks actually land on — walks forward
-    /// from the start date counting only non-excluded days. With no
-    /// exclusions this is exactly StartDateParsed.AddDays(planDay - 1).</summary>
+    /// <summary>How many non-excluded days fall in each 7-day cycle — the exclusion
+    /// pattern is by weekday, so it repeats every week. 0 only in the degenerate case
+    /// where every weekday is excluded (nothing is ever due); the picker dialog doesn't
+    /// stop a user from selecting all 7, so DateForPlanDay/PlanDayForDate fall back to a
+    /// plain walk rather than divide by zero when that happens.</summary>
+    private int NonExcludedPerWeek => 7 - ExcludedWeekdays.Distinct().Count();
+
+    /// <summary>Calendar date day N's tasks actually land on. With no exclusions this is
+    /// exactly StartDateParsed.AddDays(planDay - 1). With exclusions, the weekly pattern
+    /// repeats, so full weeks are skipped in closed form (round-12 audit — the previous
+    /// day-by-day walk was O(planDay), called on nearly every render/click) and only the
+    /// remainder (at most one more week) is walked.</summary>
     public DateOnly DateForPlanDay(int planDay)
     {
         if (ExcludedWeekdays.Count == 0) return StartDateParsed.AddDays(planDay - 1);
+        var perWeek = NonExcludedPerWeek;
+        if (perWeek <= 0) return DateForPlanDaySlow(planDay);
+        var fullWeeks = (planDay - 1) / perWeek;
+        var count = fullWeeks * perWeek;
+        var date = StartDateParsed.AddDays(fullWeeks * 7);
+        while (true)
+        {
+            if (!IsExcluded(date))
+            {
+                count++;
+                if (count == planDay) return date;
+            }
+            date = date.AddDays(1);
+        }
+    }
+
+    private DateOnly DateForPlanDaySlow(int planDay)
+    {
         var date = StartDateParsed;
         var count = 0;
-        // planDay is always small relative to any realistic plan length, and
-        // exclusions are at most a handful of weekdays, so this terminates
-        // quickly — no need for a closed-form skip-ahead calculation.
         while (true)
         {
             if (!IsExcluded(date))
@@ -70,15 +94,22 @@ public class Plan
     /// target itself is excluded, the count doesn't advance for it, so the
     /// result is the same as the last non-excluded day before it (nothing
     /// new becomes due on an excluded day; work picks back up where it left
-    /// off on the next valid day).</summary>
+    /// off on the next valid day). Same closed-form full-weeks shortcut as
+    /// DateForPlanDay, only walking the remainder day by day.</summary>
     public int PlanDayForDate(DateOnly target)
     {
         if (ExcludedWeekdays.Count == 0)
             return target.DayNumber - StartDateParsed.DayNumber + 1;
         if (target < StartDateParsed)
             return target.DayNumber - StartDateParsed.DayNumber + 1;
-        var count = 0;
-        for (var date = StartDateParsed; date <= target; date = date.AddDays(1))
+        var perWeek = NonExcludedPerWeek;
+        if (perWeek <= 0) return 0;
+        var totalCalendarDays = target.DayNumber - StartDateParsed.DayNumber + 1;
+        var fullWeeks = totalCalendarDays / 7;
+        var count = fullWeeks * perWeek;
+        var date = StartDateParsed.AddDays(fullWeeks * 7);
+        var remainder = totalCalendarDays % 7;
+        for (var i = 0; i < remainder; i++, date = date.AddDays(1))
             if (!IsExcluded(date)) count++;
         return count;
     }

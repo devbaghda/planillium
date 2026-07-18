@@ -209,6 +209,13 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-18, plan-day math performance fix** (user-requested, not an audit round): closed
+  out the last open-TODO performance item — see the Open TODOs entry above (now struck
+  through) for the closed-form approach and test coverage. Verified via clean Debug build
+  (0 warnings; Release skipped since the live exe was running and holding it locked) + 83/83
+  tests (up from 19 — new `PlanModelsSchedulingTests.cs`). Also added a "simplicity is king"
+  lesson to the global `windows-code-refiner`/`windows-app-auditor` skills after this fix —
+  see Standing lessons.
 - **2026-07-18, round-11 audit + fix** (5 parallel background sub-agents, all completed —
   extra scrutiny requested on round 10's new code since it hadn't been re-audited yet). 4
   Medium + 6 Low + 5 Info, all 15 fixed same session, verified via clean Debug build (0
@@ -434,6 +441,16 @@ on 2026-07-17 after the round-7 audit)._
   tests (`ScoreServiceScoringTests.cs`). Verified with full Debug+Release build + all 18 tests +
   live Release relaunch + log check.
 - **Standing lessons** (apply every session, not just the one that taught them):
+  - **Simplicity is king: prefer the algebraic/closed-form fix over a caching layer when the
+    thing being repeated has structure to exploit.** The `PlanDayForDate`/`DateForPlanDay`
+    O(days-elapsed) walk (round-5 finding #28) could have been "fixed" by memoizing results per
+    plan — but that adds an invalidation surface (must be cleared whenever `ExcludedWeekdays`
+    changes) for a problem the math itself dissolves: the exclusion pattern is weekly-periodic,
+    so skipping full weeks in closed form turns O(days-elapsed) into O(1) with zero state to
+    keep in sync, ever. When a repeated calculation has periodic/structural regularity, look for
+    the closed form before reaching for a cache — a cache is the right tool when the underlying
+    work is genuinely irreducible (e.g. `ScoreService.DaysOff`'s DB-backed per-instance cache),
+    not when it's just an unexploited pattern in the math.
   - **A remediation's own re-audit must re-check the fix's *own* new code, not just confirm the
     original findings are gone.** 2026-07-18 round-8: the R8-05 fix (delete export files on
     "Clear all my data") wrapped each file-delete in its own try/catch that logged-and-swallowed
@@ -498,9 +515,18 @@ on 2026-07-17 after the round-7 audit)._
     the other 40 are mostly 1-2 minute boundary artifacts with no single confirmed cause. The
     user's call: leave all of it untouched rather than guess-correct real data (2026-07-18).
     Not expected to be revisited unless a clear mechanism for the other 40 turns up.
-  - `Plan.PlanDayForDate`/`DateForPlanDay`'s day-by-day walk for plans with excluded weekdays is
-    O(days-elapsed), called on nearly every render/click (round-5 audit finding #28, deferred —
-    profile before prioritizing per the auditor's own note; no evidence yet it's actually slow).
+  - ~~`Plan.PlanDayForDate`/`DateForPlanDay`'s day-by-day walk for plans with excluded weekdays~~
+    — **fixed 2026-07-18.** Since the exclusion pattern is by weekday, it repeats every 7
+    calendar days — replaced the O(days-elapsed) walk with a closed-form "skip full weeks,
+    walk only the remainder" calculation (O(1) plus at most ~7 loop iterations). Kept the
+    old walk as a private fallback (`DateForPlanDaySlow`) only for the degenerate all-7-days-
+    excluded case (avoids a divide-by-zero; the picker dialog doesn't block that input, though
+    it was already a pre-existing infinite-loop risk untouched by this fix). New
+    `PlanModelsSchedulingTests.cs` brute-force-verifies the closed form against the plain walk
+    across every 0/1/2-weekday exclusion combination plus weekend/3-day cases, 400+ plan-days
+    each (83 tests total, up from 19) — deliberately no caching/memoization layer, since the
+    math alone is O(1) and doesn't need cache-invalidation bookkeeping the way e.g.
+    `ScoreService.DaysOff`'s per-instance cache does.
   - ~~Rotate the TickTick OAuth client secret~~ — **user confirmed done 2026-07-09**
     (rotated at developer.ticktick.com). One follow-up remains, not yet done: the app's
     Windows Credential Manager entry still holds the *old* secret until the user reconnects
