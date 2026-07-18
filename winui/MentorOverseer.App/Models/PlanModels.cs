@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using System.Text.Json.Serialization;
 
@@ -23,8 +24,12 @@ public class Plan
     /// non-excluded date instead, cascading if that's excluded too.</summary>
     [JsonPropertyName("excluded_weekdays")] public List<int> ExcludedWeekdays { get; set; } = new();
 
+    // CultureInfo.InvariantCulture: StartDate is always written in fixed ISO yyyy-MM-dd
+    // (DateExtensions.ToIsoDate) — parsing it back with the reader's current culture
+    // could silently fail on a non-Gregorian-calendar locale, resetting this plan's whole
+    // day-numbering to "starts today" with no error shown (2026-07-18 audit finding R11-03).
     public DateOnly StartDateParsed =>
-        DateOnly.TryParse(StartDate, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+        DateOnly.TryParse(StartDate, CultureInfo.InvariantCulture, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
 
     public bool IsExcluded(DateOnly d) => ExcludedWeekdays.Contains((int)d.DayOfWeek);
 

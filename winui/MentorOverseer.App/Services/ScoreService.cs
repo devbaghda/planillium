@@ -50,13 +50,6 @@ public sealed class ScoreService : IDisposable
     private readonly Database _db;
     private readonly Dictionary<(string, int, string), bool> _completions;
 
-    // Same "once per process, not once per construction" reasoning as
-    // Database.cs — ScoreService is constructed on nearly every page render
-    // and button click, and re-running two schema statements every time was
-    // pure avoidable overhead on the UI thread.
-    private static bool _schemaEnsured;
-    private static readonly object SchemaGate = new();
-
     public ScoreService(List<Plan> plans, Database db)
     {
         _plans = plans;
@@ -65,31 +58,16 @@ public sealed class ScoreService : IDisposable
         // reflections is now created by Database.EnsureSchema (round-5 audit finding #26 —
         // it used to be created only here, a hidden dependency that made "Export all my
         // data" quietly depend on a ScoreService having been constructed first).
-        lock (SchemaGate)
-        {
-            if (!_schemaEnsured)
-            {
-                // Belt-and-suspenders no-op: Database's constructor (already
-                // run via db.LoadCompletions() above) owns creating/migrating
-                // this index — see Database.EnsureSchema for the drop-and-
-                // recreate logic needed because "CREATE INDEX IF NOT EXISTS"
-                // won't widen an existing one. _db.CreateCommand() (not raw
-                // _conn.CreateCommand()) so this can't throw if a future
-                // caller ever constructs a ScoreService from inside an
-                // already-open RunInTransaction block (2026-07-14 round-6
-                // audit finding #15 — not reachable today since this only
-                // ever runs once per process, gated by _schemaEnsured, but
-                // every other command in this class already goes through
-                // the wrapper).
-                using var indexCmd = _db.CreateCommand();
-                indexCmd.CommandText =
-                    "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
-                    "ON score_ledger(reason, date) " +
-                    $"WHERE reason IN ('{ScoreReason.DailyScore}', '{ScoreReason.OverdueAccrual}', '{ScoreReason.WeeklyComebackBonus}')";
-                indexCmd.ExecuteNonQuery();
-                _schemaEnsured = true;
-            }
-        }
+        //
+        // This constructor used to also re-issue its own "belt-and-suspenders" copy of the
+        // sl_reason_date index-creation SQL — removed (2026-07-18 audit finding R11-05):
+        // `db` is a constructor parameter, so Database's own constructor (which
+        // unconditionally runs EnsureSchema, the one place that actually knows how to
+        // drop-and-recreate this index when its reason list widens — see
+        // Database.EnsureSchema) has already run by the time this code executes. The
+        // second copy could never fix anything Database.EnsureSchema hadn't already fixed,
+        // and unlike that copy, had no drop-and-recreate logic of its own — a real risk if
+        // the two copies were ever left to drift (they didn't, but nothing enforced that).
     }
 
     // No-op: this class shares its connection with (owned and disposed by)
@@ -288,7 +266,12 @@ public sealed class ScoreService : IDisposable
         _db.RunInTransaction(() =>
         {
             using var del = _db.CreateCommand();
-            del.CommandText = $"DELETE FROM score_ledger WHERE reason='{ScoreReason.DailyScore}' AND date=$d";
+            // Parameterized like every other reason-filtering query in this file (e.g.
+            // LedgerHas above) instead of interpolated — ScoreReason.DailyScore is a fixed
+            // const today, but interpolating it here was the one place in the file that
+            // didn't match that convention (2026-07-18 audit finding R11-15).
+            del.CommandText = "DELETE FROM score_ledger WHERE reason=$r AND date=$d";
+            del.Parameters.AddWithValue("$r", ScoreReason.DailyScore);
             del.Parameters.AddWithValue("$d", d.ToIsoDate());
             del.ExecuteNonQuery();
             result = RecomputeDayScoreCore(d);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -116,7 +117,11 @@ public static class ConfigService
         var start = "08:00";
         if (Root.TryGetProperty("working_hours", out var wh) &&
             wh.TryGetProperty("start", out var v) && v.GetString() is { Length: > 0 } s) start = s;
-        return TimeSpan.TryParse(start, out var t) ? t : new TimeSpan(8, 0, 0);
+        // InvariantCulture: "start" is always written/validated as HH:mm (SettingsPage's
+        // TryParseExact check) — reading it back with the current culture could silently
+        // fall back to the default on a locale where ':' isn't the time separator
+        // (2026-07-18 audit finding R11-03).
+        return TimeSpan.TryParse(start, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(8, 0, 0);
     }
 
     /// <summary>How many days of detailed diary history to keep before it's

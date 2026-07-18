@@ -9,12 +9,6 @@ public sealed partial class SettingsPage : Page
 {
     private bool _initialising = true;
 
-    /// <summary>The three files "Export all my data" / the report exporters can write to
-    /// the data folder — shared by both "clear my data" actions below so they can't drift
-    /// apart on what counts as an export file (2026-07-18 audit finding R9-01; previously
-    /// each retyped the same three literals independently).</summary>
-    private static readonly string[] ExportFileNames = { "report.html", "report.csv", "full-export.json" };
-
     public SettingsPage()
     {
         InitializeComponent();
@@ -184,6 +178,10 @@ public sealed partial class SettingsPage : Page
         try
         {
             ConfigService.Mutate(cfg => cfg["user_name"] = YourName.Text.Trim());
+            // Every other autosaving field on this page confirms on success — this one
+            // didn't, so typing a name and tabbing away gave no sign it actually saved
+            // (2026-07-18 audit finding R11-09).
+            SaveStatus.Text = "Saved.";
         }
         catch (Exception ex)
         {
@@ -229,9 +227,25 @@ public sealed partial class SettingsPage : Page
         };
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
-        TickTickAuth.Disconnect();
-        RefreshTickTickStatus();
-        SaveStatus.Text = "TickTick disconnected.";
+        // Unlike every other mutating button on this page, this one had no try/catch —
+        // a failed write partway through (Disconnect deletes 3 credentials, then rewrites
+        // config.json) could silently leave the screen still saying "Connected" with no
+        // error shown (2026-07-18 audit finding R11-01, found independently by two audit
+        // passes). RefreshTickTickStatus in `finally` keeps the screen honest either way.
+        try
+        {
+            TickTickAuth.Disconnect();
+            SaveStatus.Text = "TickTick disconnected.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.TickTickDisconnect", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't fully disconnect TickTick", ex);
+        }
+        finally
+        {
+            RefreshTickTickStatus();
+        }
     }
 
     private async void ExportAll_Click(object sender, RoutedEventArgs e)
@@ -278,7 +292,7 @@ public sealed partial class SettingsPage : Page
         // deliberately kept, name the ones that currently exist and offer
         // an opt-in checkbox to remove them in the same action instead of
         // just warning and leaving it to a manual trip to File Explorer.
-        var exportNames = ExportFileNames
+        var exportNames = ExportFiles.All
             .Where(f => File.Exists(Path.Combine(AppPaths.Root, "data", f)))
             .ToList();
 
@@ -504,8 +518,9 @@ public sealed partial class SettingsPage : Page
                       "reflections, TickTick sync links, and the activity diary — plus the debug " +
                       "log, your saved TickTick connection (client ID, secret, and tokens), and " +
                       "any report.html/report.csv/full-export.json you've exported to the data " +
-                      "folder. Your plan definitions themselves are not deleted (use the Plans " +
-                      "page to archive or remove a plan). This cannot be undone.",
+                      "folder. Your plan definitions and the other settings on this page " +
+                      "(including your name) are not touched — use the Plans page to archive " +
+                      "or remove a plan. This cannot be undone.",
             PrimaryButtonText = "Clear everything",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
@@ -523,7 +538,7 @@ public sealed partial class SettingsPage : Page
             // Manager survived every "clear all my data" run with no way to remove them
             // short of opening Credential Manager by hand (2026-07-18 audit finding R10-02).
             TickTickAuth.Disconnect();
-            ThrowIfExportFilesRemain(DeleteExportFiles(ExportFileNames));
+            ThrowIfExportFilesRemain(DeleteExportFiles(ExportFiles.All));
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
         RefreshTickTickStatus();
     }

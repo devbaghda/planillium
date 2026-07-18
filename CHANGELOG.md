@@ -29,6 +29,16 @@ going forward; the original Python/Tkinter version is retired.
 - Reports and exports that need last week's or a whole year's worth of
   streak/task data now reuse work instead of re-querying the database for
   every single day
+- "Disconnect TickTick" now shows an error if it doesn't fully succeed,
+  instead of silently doing nothing
+- The "keep detailed diary" retention setting now has an upper limit, so it
+  can't be accidentally set high enough to defeat its own purpose
+- "Clear all my data"'s confirmation text now mentions that your name and
+  other settings aren't touched by it
+- Setting your name in Settings now confirms it saved
+- Fixed a rare case where a plan's start date, or the work-hours/day-review
+  times, could be misread on a PC set to certain non-English regional
+  formats
 
 **Scoring & day-offs**
 - A day where every one of your active plans is off (a recurring rest day

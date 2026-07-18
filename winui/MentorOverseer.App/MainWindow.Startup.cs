@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -93,7 +94,11 @@ public sealed partial class MainWindow
         var eod = "20:00";
         if (ConfigService.Root.TryGetProperty("end_of_day_summary_time", out var v) &&
             v.GetString() is { Length: > 0 } s) eod = s;
-        return TimeSpan.TryParse(eod, out var t) ? t : new TimeSpan(20, 0, 0);
+        // InvariantCulture: same reasoning as ConfigService.WorkStartTime — this is always
+        // a fixed HH:mm string, reading it back with the current culture could silently
+        // fall back to the default on a locale where ':' isn't the time separator
+        // (2026-07-18 audit finding R11-03).
+        return TimeSpan.TryParse(eod, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(20, 0, 0);
     }
 
     public void RefreshScore()

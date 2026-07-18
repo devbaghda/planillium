@@ -22,7 +22,7 @@ public static class DataExport
             WriteIndented = true,
         });
 
-        var outPath = Path.Combine(AppPaths.Root, "data", "full-export.json");
+        var outPath = Path.Combine(AppPaths.Root, "data", ExportFiles.FullExportJson);
         Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
         File.WriteAllText(outPath, json, System.Text.Encoding.UTF8);
         Process.Start(new ProcessStartInfo(outPath) { UseShellExecute = true });

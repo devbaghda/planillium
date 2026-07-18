@@ -38,4 +38,12 @@ internal static class DateExtensions
     /// one isn't a DB key, but the sibling-drift risk is the same.</summary>
     public static string ToDisplayDate(this DateTime d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
     public static string ToDisplayDate(this DateOnly d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>The read-side counterpart of ToIsoDate — every one of this file's other
+    /// helpers covers the write direction, but the reverse ("turn a stored yyyy-MM-dd
+    /// string back into a DateOnly") was still hand-typed 6 times in ReportData.cs alone
+    /// (2026-07-18 audit finding R11-04), the identical drift risk this class exists to
+    /// prevent, just on the leg nothing had covered yet.</summary>
+    public static bool TryParseIsoDate(this string s, out DateOnly d) =>
+        DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d);
 }

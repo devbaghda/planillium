@@ -73,6 +73,12 @@ public static class CredentialStore
         try
         {
             Marshal.Copy(blobBytes, 0, blob, blobBytes.Length);
+            // Defense-in-depth (2026-07-18 audit finding R11-14): blobBytes is only
+            // needed for the Marshal.Copy just above — zero it now instead of leaving
+            // the plaintext secret sitting in this array until the GC reclaims it.
+            // Real-world exposure is low (this needs process-memory read access, which
+            // already implies a worse compromise), but the cost of clearing is free.
+            Array.Clear(blobBytes);
             var cred = new CREDENTIAL
             {
                 Type = 1,                       // CRED_TYPE_GENERIC
@@ -92,18 +98,37 @@ public static class CredentialStore
             // any caller treats the secret as saved (lesson from audit #6).
             return Read(key) == value;
         }
-        finally { Marshal.FreeCoTaskMem(blob); }
+        finally
+        {
+            // Same reasoning as the Array.Clear above — CredWriteW has already made its
+            // own internal copy by this point, so there's no reason to leave the
+            // plaintext secret in freed-but-unoverwritten unmanaged heap memory.
+            var zero = new byte[blobBytes.Length];
+            Marshal.Copy(zero, 0, blob, zero.Length);
+            Marshal.FreeCoTaskMem(blob);
+        }
     }
+
+    private const int ErrorNotFound = 1168;
 
     /// <summary>Removes a stored credential (both the current-service and legacy-service
     /// target names, mirroring Read's dual-target lookup) — added so a "disconnect"/
     /// "clear my data" action can actually undo what Write saved (2026-07-18 audit
     /// finding R10-02: no delete path existed at all before this). CredDeleteW returning
-    /// false just means that particular target name was never written — the common case
-    /// for whichever of the two doesn't apply — not a failure worth surfacing to the user.</summary>
+    /// false with ERROR_NOT_FOUND just means that particular target name was never
+    /// written — the common case for whichever of the two doesn't apply — not worth
+    /// surfacing. A false return with any OTHER error previously left no trace at all: if
+    /// deletion genuinely failed, the app (and user) would have no way to know the secret
+    /// was still sitting in Credential Manager after "disconnecting" (2026-07-18 audit
+    /// finding R11-13) — logged now, matching the pattern Write already uses on failure.</summary>
     public static void Delete(string key)
     {
         foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}" })
-            CredDeleteW(target, 1 /* CRED_TYPE_GENERIC */, 0);
+        {
+            if (CredDeleteW(target, 1 /* CRED_TYPE_GENERIC */, 0)) continue;
+            var error = Marshal.GetLastWin32Error();
+            if (error != ErrorNotFound)
+                Log.Warn("CredentialStore.Delete", $"CredDeleteW({target}) failed, error {error}");
+        }
     }
 }

@@ -102,8 +102,7 @@ public static class ReportData
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var d)) continue;
+            if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
             // Tracked (still visible in the raw Diary list) but doesn't count toward this
             // bucket, same as the score and the weekly summary table (2026-07-17 request).
             if (score.AllPlansScoringExempt(d)) continue;
@@ -156,8 +155,7 @@ public static class ReportData
         using (var r = cmd.ExecuteReader())
             while (r.Read())
             {
-                if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                        DateTimeStyles.None, out var d)) continue;
+                if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
                 var cat = r.GetString(1);
                 if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
                 var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
@@ -171,8 +169,7 @@ public static class ReportData
         using (var r = rollupCmd.ExecuteReader())
             while (r.Read())
             {
-                if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                        DateTimeStyles.None, out var d)) continue;
+                if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
                 var on = r.IsDBNull(1) ? 0 : r.GetInt32(1);
                 var off = r.IsDBNull(2) ? 0 : r.GetInt32(2);
                 AddToMonth(d, on, off);
@@ -214,8 +211,7 @@ public static class ReportData
             // Grouping by date too (not just window/description) lets a day-off date be
             // excluded here, same as every other Reports total (2026-07-17 request) —
             // still tracked in the raw Diary list, it just doesn't count toward this.
-            if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var d) || score.AllPlansScoringExempt(d)) continue;
+            if (!r.GetString(0).TryParseIsoDate(out var d) || score.AllPlansScoringExempt(d)) continue;
             var window = r.GetString(1);
             var desc = r.IsDBNull(2) ? null : r.GetString(2);
             var label = AppNames.Label(EffectiveWindow(window, desc));
@@ -241,8 +237,7 @@ public static class ReportData
         while (r.Read())
         {
             // Same day-off exclusion as TopDistractions above (2026-07-17 request).
-            if (!DateOnly.TryParseExact(r.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var d) || score.AllPlansScoringExempt(d)) continue;
+            if (!r.GetString(0).TryParseIsoDate(out var d) || score.AllPlansScoringExempt(d)) continue;
             var window = r.GetString(1);
             var cat = r.GetString(2);
             var desc = r.IsDBNull(3) ? null : r.GetString(3);
@@ -293,8 +288,7 @@ public static class ReportData
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            if (!DateOnly.TryParseExact(r.GetString(1), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var d)) continue;
+            if (!r.GetString(1).TryParseIsoDate(out var d)) continue;
             result.Add(new DiaryEntry(r.GetInt64(0), d, r.GetString(2), r.GetString(3), r.GetInt32(4),
                 r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7)));
         }

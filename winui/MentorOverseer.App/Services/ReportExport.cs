@@ -114,7 +114,7 @@ public static class ReportExport
             </body></html>
             """;
 
-        var outPath = Path.Combine(AppPaths.Root, "data", "report.html");
+        var outPath = Path.Combine(AppPaths.Root, "data", ExportFiles.ReportHtml);
         Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
         File.WriteAllText(outPath, html, Encoding.UTF8);
         Process.Start(new ProcessStartInfo(outPath) { UseShellExecute = true });
@@ -190,7 +190,7 @@ public static class ReportExport
                     su.Total.ToString(CultureInfo.InvariantCulture)));
         }
 
-        var outPath = Path.Combine(AppPaths.Root, "data", "report.csv");
+        var outPath = Path.Combine(AppPaths.Root, "data", ExportFiles.ReportCsv);
         Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
         File.WriteAllText(outPath, sb.ToString(), new UTF8Encoding(true));
         Process.Start(new ProcessStartInfo(outPath) { UseShellExecute = true });

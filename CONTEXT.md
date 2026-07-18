@@ -209,6 +209,46 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-18, round-11 audit + fix** (5 parallel background sub-agents, all completed —
+  extra scrutiny requested on round 10's new code since it hadn't been re-audited yet). 4
+  Medium + 6 Low + 5 Info, all 15 fixed same session, verified via clean Debug build (0
+  warnings — Release build skipped this pass since the live exe was running and holding the
+  output file locked) + 19/19 tests. Headline: **R11-01**, a real gap in round 10's own new
+  "Disconnect TickTick" button (no try/catch, unlike every sibling on the page) — caught
+  *independently* by two different audit passes (UX and Security) landing on the exact same
+  finding, a good confidence signal for the remediation-loop's "re-check the fix's own new
+  code" lesson. Other fixes: **R11-02** `MainWindow`'s tracker-startup fire-and-forget Task
+  had no try/catch, the one sibling that missed a pattern three other call sites in the same
+  file already use; **R11-03** four places reading back a date/time the app itself wrote
+  (a plan's `StartDate`, work hours, EOD time) weren't pinned to `InvariantCulture` like the
+  write side already was — `PlanModels.StartDateParsed` was the more serious one, could
+  silently reset a plan's day-numbering on a non-Gregorian-calendar locale; **R11-04** new
+  `DateExtensions.TryParseIsoDate` closes the read-side gap `ToIsoDate` never had a
+  counterpart for — `ReportData.cs` had hand-typed the same parse expression 6 times;
+  **R11-05** deleted a redundant "belt-and-suspenders" copy of the `sl_reason_date`
+  index-creation SQL in `ScoreService`'s constructor — `Database.EnsureSchema` (which the
+  `Database` object passed into that constructor has already run) is the only copy that
+  actually knows how to migrate that index, so the second copy could only ever be a silent
+  no-op if it ever went stale; **R11-06** new `Services/ExportFiles.cs` is now the *one*
+  source of truth for the three export filenames — R9-01 had already unified the *delete*
+  side, this closes the *write* side (`DataExport.cs`/`ReportExport.cs` no longer retype the
+  names); **R11-07/08/09/10/12** Settings polish (Disconnect button naming/ellipsis
+  convention, name-save confirmation, retention-days upper bound, "Clear all my data"
+  confirmation text now mentions settings/name aren't touched); **R11-13/14** `CredentialStore`
+  hardening — `Delete` now logs a warning on a genuine (non-"not found") `CredDeleteW`
+  failure instead of leaving no trace, and `Write` zeroes the plaintext secret's managed and
+  unmanaged buffers immediately after use instead of leaving them for the GC/allocator;
+  **R11-15** the one remaining `ScoreReason` SQL-interpolation site (`RecalculateDayScore`'s
+  DELETE) parameterized to match the rest of the file's convention. **R11-11** (TickTick
+  disconnect is local-only, doesn't revoke server-side at TickTick) and **R11-16**
+  (`ActivityTracker`'s 2026-07-15 diagnostic `Log.Info` lines) were investigated, not code-
+  fixed: R11-11 would need a TickTick-side revoke endpoint, out of scope; R11-16's log data
+  was actually reviewed this round (17 real firings across 3 days) and shows the diagnostic
+  working as intended — the two `willFire=False` entries are both correctly explained by the
+  idle period starting after that day's 20:00 diary-hours cutoff, not a bug — so the lines
+  stay in place as still-useful, low-cost instrumentation rather than orphaned scaffolding.
+  Security pass came back completely clean again (zero new findings) apart from the R11-01
+  cross-confirmation.
 - **2026-07-18, round-10 audit + fix** (5 parallel background sub-agents this time — all 5
   completed successfully, unlike round 9's outright failures). 4 Medium + 5 Low + 4 Info, all
   13 fixed same session, verified via clean Release build (0 warnings) + 19/19 tests. Two

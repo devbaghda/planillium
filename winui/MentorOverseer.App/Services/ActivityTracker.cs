@@ -139,7 +139,12 @@ public sealed class ActivityTracker : IDisposable
             var s = fallback;
             if (cfg.TryGetProperty("working_hours", out var wh) &&
                 wh.TryGetProperty(key, out var v) && v.GetString() is { Length: > 0 } str) s = str;
-            return TimeOnly.TryParse(s, out var t) ? t : TimeOnly.Parse(fallback);
+            // InvariantCulture on both: these are always fixed HH:mm strings (config.json's
+            // "working_hours", validated by SettingsPage's TryParseExact) — reading them
+            // back with the current culture could silently fall back on a locale where ':'
+            // isn't the time separator (2026-07-18 audit finding R11-03).
+            return TimeOnly.TryParse(s, CultureInfo.InvariantCulture, out var t)
+                ? t : TimeOnly.Parse(fallback, CultureInfo.InvariantCulture);
         }
 
         _onPlan = Words(config, "activity_rules", DiaryCategory.OnPlan);

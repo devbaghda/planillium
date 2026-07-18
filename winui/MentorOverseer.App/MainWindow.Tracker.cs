@@ -33,8 +33,22 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task InitTrackingAsync()
     {
-        await NameSetupDialog.EnsureShownAsync(this);
-        StartTracker();
+        // Both call sites (MainWindow.xaml.cs) fire this as a discarded
+        // "_ = InitTrackingAsync()" — an unguarded fault here becomes an unobserved task
+        // exception (invisible until GC finalization) and the practical effect is tracking
+        // silently never starts, with nothing in the log to explain why. Every structurally
+        // similar fire-and-forget call elsewhere in this file already catches for exactly
+        // this reason; these two were the one sibling that didn't (2026-07-18 audit finding
+        // R11-02).
+        try
+        {
+            await NameSetupDialog.EnsureShownAsync(this);
+            StartTracker();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("InitTrackingAsync", ex);
+        }
     }
 
     private void StartTracker()
