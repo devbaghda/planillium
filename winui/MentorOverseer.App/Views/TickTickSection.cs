@@ -79,8 +79,7 @@ public static class TickTickSection
             Log.Error("TickTickSection.Load", ex);
             if (!Current()) return;
             host.Children.Remove(loading);
-            host.Children.Add(Muted(
-                "TickTick sync failed. (" + ex.Message + ")"));
+            host.Children.Add(Muted(Log.Friendly("TickTick sync failed", ex)));
             var reconnect = new HyperlinkButton { Content = "Reconnect TickTick…", FontSize = 13 };
             reconnect.Click += async (_, _) =>
             {

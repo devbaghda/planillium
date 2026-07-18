@@ -7,6 +7,14 @@
         <StackPanel MaxWidth="720" HorizontalAlignment="Center" Spacing="16">
             <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0"/>
 
+            <TextBlock Text="PROFILE" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
+            <!-- Previously set once at first run (NameSetupDialog) with no way to see or
+                 change it afterward short of opening config.json directly
+                 (2026-07-18 audit finding R10-13). -->
+            <TextBox x:Name="YourName" Header="Your name" Width="260" HorizontalAlignment="Left"
+                     PlaceholderText="e.g. Alex" LostFocus="YourName_Changed"/>
+
             <TextBlock Text="APPEARANCE" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
             <RadioButtons x:Name="ThemeChoice" SelectionChanged="Theme_Changed">
@@ -28,8 +36,13 @@
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
             <TextBlock x:Name="TickTickStatus" TextWrapping="Wrap"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-            <Button x:Name="TickTickConnectBtn" Content="Connect TickTick…"
-                    Click="TickTickConnect_Click" HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="TickTickConnectBtn" Content="Connect TickTick…"
+                        Click="TickTickConnect_Click" HorizontalAlignment="Left"/>
+                <Button x:Name="TickTickDisconnectBtn" Content="Disconnect"
+                        Click="TickTickDisconnect_Click" HorizontalAlignment="Left"
+                        Visibility="Collapsed"/>
+            </StackPanel>
 
             <TextBlock Text="TRACKING" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>

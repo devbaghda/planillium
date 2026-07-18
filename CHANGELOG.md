@@ -5,6 +5,31 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Reliability & polish**
+- Error messages shown in the app (failed saves, exports, or page loads) now
+  lead with what to do about it instead of just the raw technical detail —
+  the technical detail is still shown alongside it, just not as the whole
+  message
+- The list of exported files ("Clear activity history" and "Clear all my
+  data" both offer to remove `report.html`/`report.csv`/`full-export.json`)
+  is now defined once instead of twice, so a future export type can't be
+  added to one delete action and forgotten in the other
+- Fixed a message that could read as self-contradicting: "Clear activity
+  history"/"Clear all my data" no longer say "Couldn't clear..." in the same
+  breath as confirming your data actually was cleared and only a leftover
+  exported file survived
+- Added a "Disconnect TickTick" button in Settings, and folded the same
+  cleanup into "Clear all my data" — previously the only way to fully
+  remove a saved TickTick connection (client ID, secret, and tokens) was to
+  open Windows Credential Manager by hand
+- Added a "Your name" field to Settings — previously only settable once, at
+  first run
+- TickTick sync/connection failures now read in the same voice as every
+  other error message in the app
+- Reports and exports that need last week's or a whole year's worth of
+  streak/task data now reuse work instead of re-querying the database for
+  every single day
+
 **Scoring & day-offs**
 - A day where every one of your active plans is off (a recurring rest day
   or a day you've marked off) no longer earns or loses any points for

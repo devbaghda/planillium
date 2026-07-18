@@ -185,10 +185,12 @@ public sealed partial class TodayPage : Page
         }
         catch (Exception ex)
         {
-            Log.Error("TodayPage.Render", ex);
-            Sections.Children.Add(Muted(
-                "Couldn't load plan data.\n" + ex.Message +
-                "\nIf the app isn't next to the data folder, set MENTOR_ROOT."));
+            // The MENTOR_ROOT hint used to be stacked onto the on-screen message too,
+            // reading as two different pieces of advice glued together (2026-07-18 audit
+            // finding R10-10) — it's genuinely useful, just belongs in the log next to the
+            // exception it explains, not as a second sentence in the user-facing text.
+            Log.Error("TodayPage.Render (if the app isn't next to the data folder, set MENTOR_ROOT)", ex);
+            Sections.Children.Add(Muted(Log.Friendly("Couldn't load your plan data", ex)));
         }
     }
 

@@ -31,9 +31,20 @@ public static class TickTickAuth
     // "Connect TickTick" for the full 2-minute timeout with no clue why (round-5 audit
     // finding #15). static readonly, not const: C#'s constant string interpolation only
     // covers string-typed holes, not an int constant needing ToString().
-    private static readonly string RedirectUri = $"http://localhost:{RedirectPort}/callback";
+    // internal (not private): TickTickConnectDialog's setup instructions display this
+    // same value — it used to retype the URL as its own literal, the identical
+    // two-copies-of-one-fact shape this comment already warns about, just one file over
+    // (2026-07-18 audit finding R10-05).
+    internal static readonly string RedirectUri = $"http://localhost:{RedirectPort}/callback";
     private const string AuthUrl = "https://ticktick.com/oauth/authorize";
     private const string TokenUrl = "https://ticktick.com/oauth/token";
+
+    // The three Credential Manager entries a successful connect can write — shared by
+    // Disconnect() below and (via SettingsPage) "Clear all my data," so both delete
+    // paths agree on what "disconnected" actually means (2026-07-18 audit finding
+    // R10-02: previously nothing in the app could remove these once written).
+    internal static readonly string[] CredentialKeys =
+        { "ticktick_client_secret", "ticktick_access_token", "ticktick_refresh_token" };
 
     // Reused across calls rather than a new HttpClient per request — the
     // earlier "share one HttpClient" fix (TickTickService.SharedClient)
@@ -49,6 +60,20 @@ public static class TickTickAuth
 
     public static bool SaveClientSecret(string secret) =>
         CredentialStore.Write("ticktick_client_secret", secret);
+
+    /// <summary>Undoes everything "Connect TickTick" wrote: deletes the stored client
+    /// secret and tokens, and clears the saved client ID from config.json. Doesn't touch
+    /// the ticktick_sync database table (the plan-task ↔ TickTick-task ID links) — that's
+    /// a separate, database-side concern already covered by "Clear all my data" (2026-07-18
+    /// audit finding R10-02).</summary>
+    public static void Disconnect()
+    {
+        foreach (var key in CredentialKeys) CredentialStore.Delete(key);
+        ConfigService.Mutate(cfg =>
+        {
+            if (cfg["ticktick"] is System.Text.Json.Nodes.JsonObject tt) tt.Remove("client_id");
+        });
+    }
 
     /// <summary>
     /// Runs the whole browser flow. Returns (ok, user-facing message).
@@ -78,7 +103,7 @@ public static class TickTickAuth
         }
         catch (SocketException ex)
         {
-            return (false, $"Can't listen on port {RedirectPort} — close the other app using it. ({ex.Message})");
+            return (false, Log.Friendly($"Can't listen on port {RedirectPort}", ex, "close the other app using it"));
         }
 
         try

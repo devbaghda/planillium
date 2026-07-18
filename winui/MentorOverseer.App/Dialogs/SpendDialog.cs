@@ -26,7 +26,7 @@ public static class SpendDialog
             confirmLabel: "Buy",
             onConfirm: (score, amount, cost) =>
             {
-                score.AddLedger(-cost, "entertainment_purchase",
+                score.AddLedger(-cost, ScoreReason.EntertainmentPurchase,
                     amount.ToString("0.#", CultureInfo.InvariantCulture) + " min");
                 if (window.Tracker is { } tracker)
                     tracker.PaidUntil = DateTime.Now.AddMinutes(amount);
@@ -44,7 +44,7 @@ public static class SpendDialog
             cost: amount => (int)Math.Round(amount * rate),
             confirmLabel: "Log spend",
             onConfirm: (score, amount, cost) =>
-                score.AddLedger(-cost, "money_expenditure",
+                score.AddLedger(-cost, ScoreReason.MoneyExpenditure,
                     symbol + amount.ToString("0.##", CultureInfo.InvariantCulture)));
     }
 

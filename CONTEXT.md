@@ -209,6 +209,58 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-18, round-10 audit + fix** (5 parallel background sub-agents this time — all 5
+  completed successfully, unlike round 9's outright failures). 4 Medium + 5 Low + 4 Info, all
+  13 fixed same session, verified via clean Release build (0 warnings) + 19/19 tests. Two
+  themes: (1) round 9's own fixes (`Log.Friendly`, `ExportFileNames`) were applied correctly
+  everywhere they were sent, but missed sibling instances of the same shape in files that
+  round didn't touch — cross-confirmed independently by two different agents (UX and
+  code-quality) landing on the identical `TickTickConnectDialog.cs`/`TickTickSection.cs` gap;
+  (2) a real regression in my own round-9 fix: wrapping `ThrowIfExportFilesRemain`'s deliberate
+  "your data was cleared, but a file survived" message in `Log.Friendly`'s "Couldn't clear..."
+  prefix produced a self-contradicting string. Fixes: new `ExportCleanupException` type lets
+  `RunClearActionAsync` display that one message as-is instead of double-wrapping it (R10-01);
+  new `CredentialStore.Delete`/`TickTickAuth.Disconnect` + a "Disconnect TickTick" Settings
+  button, also folded into "Clear all my data" — previously no in-app way existed to remove the
+  3 Credential-Manager-stored TickTick secrets, only Windows Credential Manager by hand (R10-02,
+  Medium/privacy); `ScoreService.Overrides()` memoizes `task_overrides` per plan the same way
+  `DaysOff` already was, single invalidation point in `SaveOverride` (R10-03, was causing 100+
+  redundant SQL round-trips per Reports week-render); `TickTickConnectDialog`/`TickTickSection`
+  routed through `Log.Friendly` (R10-04); `TickTickAuth.RedirectUri` exposed `internal` and read
+  by the connect dialog instead of a second hardcoded copy of the callback URL (R10-05, same
+  "two copies of one fact" shape as round-5 finding #15, just one file over); `AppNames.cs`'s
+  three independently-typed dash-separator lists unified into one `DashChars` source (R10-06);
+  `SpendDialog`'s two raw ledger-reason literals folded into `ScoreReason` (R10-07); several
+  Settings error-copy wording passes for consistency (R10-08/09/10); shared
+  `WatcherPollInterval` constant for the EOD/kickoff timers (R10-11); `Log.Friendly` gained an
+  optional `action` parameter for call sites with a more specific fix than the generic "try
+  again" (R10-12 — applied to `TickTickAuth`'s port-in-use message; `App.xaml.cs`'s
+  fatal-startup dialog deliberately left alone, per the audit's own note that its
+  multi-paragraph native-MessageBox shape isn't a clean fit); new "Your name" field added to
+  Settings, previously only settable once at first run via `NameSetupDialog` (R10-13). Security
+  pass came back completely clean — zero new findings.
+- **2026-07-18, round-9 audit + fix (no artifact — flat table in chat, per standing
+  preference)**: The 5 background sub-agents originally launched for this round all failed
+  outright on a session usage-limit error before producing any output — ran the full 5-category
+  pass directly (no sub-agents) instead. Found 1 Medium + 1 Info, both fixed same session (no
+  separate re-audit loop needed — small enough to fix and verify inline): **R9-01** (Medium,
+  code quality/privacy) — the 3-filename export list (`report.html`/`report.csv`/
+  `full-export.json`) that both "Clear activity history" and "Clear all my data" use to also
+  delete exported copies was typed out as two independent array literals
+  (`SettingsPage.xaml.cs:226` and `:448`) — another instance of this project's recurring
+  duplicated-lookup-table bug class, and one sitting directly in the R8-05 privacy-fix code path;
+  unified into one `ExportFileNames` constant. **R9-02** (Info) — ~10 spots across
+  Settings/Today/Plans/Reports/Schedule pages showed a caught exception's raw `.Message` as the
+  entire error string; added `Log.Friendly(what, ex)` (technical detail kept, in parentheses,
+  since for this app's actual solo-developer audience it's useful for self-diagnosis — just no
+  longer the *whole* message) and routed all ~10 sites through it. Everything else checked clean
+  on direct re-verification: R8-05's export-delete fix and its own re-audit-caught silent-failure
+  fix still intact, `ClearAllData`'s table list still covers all 9 schema tables, no locale
+  regressions, no new instances of the duplicated-lookup-table pattern beyond R9-01, icon-only
+  buttons still have `AutomationProperties` names, timer reentrancy/disposal/dialog-gating/
+  single-instance-mutex/credential-handling all still correct. Verified via clean Release build
+  (0 warnings) + 19/19 tests both before and after the fix, plus `dotnet list package
+  --vulnerable` (both projects clean).
 - **2026-07-18, round-8 full audit + same-day remediation** (5 parallel passes — architecture/
   security/UX/code-quality/privacy; report — note the user's since-established preference is
   flat-text findings in chat, not an artifact, going forward:

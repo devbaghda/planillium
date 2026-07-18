@@ -62,11 +62,16 @@ public sealed partial class MainWindow
         }
     }
 
+    // Both watchers below poll on the same cadence — one named constant instead of two
+    // independently-typed TimeSpan.FromMinutes(1) literals, so a future tuning change
+    // can't update one and miss the other (2026-07-18 audit finding R10-11).
+    private static readonly TimeSpan WatcherPollInterval = TimeSpan.FromMinutes(1);
+
     /// <summary>At the configured end-of-day time, offer the evening review once.</summary>
     private void StartEodWatcher()
     {
         var timer = _dq.CreateTimer();
-        timer.Interval = TimeSpan.FromMinutes(1);
+        timer.Interval = WatcherPollInterval;
         timer.Tick += async (_, _) => await ReviewDialog.Trigger(this);
         timer.Start();
     }
@@ -78,7 +83,7 @@ public sealed partial class MainWindow
     private void StartKickoffWatcher()
     {
         var timer = _dq.CreateTimer();
-        timer.Interval = TimeSpan.FromMinutes(1);
+        timer.Interval = WatcherPollInterval;
         timer.Tick += async (_, _) => await KickoffDialog.Trigger(this);
         timer.Start();
     }

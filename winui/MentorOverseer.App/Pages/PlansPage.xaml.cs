@@ -76,7 +76,7 @@ public sealed partial class PlansPage : Page
         catch (Exception ex)
         {
             Log.Error("PlansPage.Render", ex);
-            ActiveList.Children.Add(new TextBlock { Text = "Couldn't load plans: " + ex.Message });
+            ActiveList.Children.Add(new TextBlock { Text = Log.Friendly("Couldn't load your plans", ex) });
             return;
         }
 

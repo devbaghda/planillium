@@ -64,7 +64,13 @@ public static class AppNames
         "vs code", "visual studio code",
     };
 
-    private static readonly string[] Separators = { " - ", " — ", " – " };
+    // The three dash characters this app treats as a title separator — previously listed
+    // independently three times below (here padded as " x "; Telegram-title stripping as
+    // " x ("; badge-count stripping as "x "), agreeing only by coincidence
+    // (2026-07-18 audit finding R10-06, this project's recurring duplicated-lookup-table
+    // pattern). One source, three derived variants.
+    private static readonly char[] DashChars = { '-', '—', '–' };
+    private static readonly string[] Separators = DashChars.Select(c => $" {c} ").ToArray();
     private const char Lrm = '‎';
     private const char Rlm = '‏';
 
@@ -155,7 +161,7 @@ public static class AppNames
     private static string StripTelegramTitle(string title)
     {
         var t = title.TrimStart(Lrm, Rlm).Trim();
-        foreach (var sep in new[] { " – (", " — (", " - (" })
+        foreach (var sep in DashChars.Select(c => $" {c} ("))
         {
             var idx = t.LastIndexOf(sep, StringComparison.Ordinal);
             if (idx == -1) continue;
@@ -177,7 +183,7 @@ public static class AppNames
             if (inner.Length > 0 && inner.All(char.IsDigit))
             {
                 var after = t[(t.IndexOf(')') + 1)..].Trim();
-                foreach (var sep in new[] { "– ", "— ", "- " })
+                foreach (var sep in DashChars.Select(c => $"{c} "))
                     if (after.StartsWith(sep, StringComparison.Ordinal))
                     {
                         after = after[sep.Length..].Trim();

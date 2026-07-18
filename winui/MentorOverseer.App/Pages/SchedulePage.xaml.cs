@@ -51,7 +51,7 @@ public sealed partial class SchedulePage : Page
         catch (Exception ex)
         {
             Log.Error("SchedulePage.Render (plans)", ex);
-            Sections.Children.Add(new TextBlock { Text = "Couldn't load plans: " + ex.Message });
+            Sections.Children.Add(new TextBlock { Text = Log.Friendly("Couldn't load your plans", ex) });
             return;
         }
 
@@ -79,7 +79,7 @@ public sealed partial class SchedulePage : Page
         catch (Exception ex)
         {
             Log.Error("SchedulePage.Render", ex);
-            Sections.Children.Add(new TextBlock { Text = "Couldn't load the schedule: " + ex.Message });
+            Sections.Children.Add(new TextBlock { Text = Log.Friendly("Couldn't load your schedule", ex) });
         }
     }
 

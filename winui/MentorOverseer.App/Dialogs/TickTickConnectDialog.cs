@@ -19,8 +19,13 @@ public static class TickTickConnectDialog
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            // Reads TickTickAuth's own RedirectUri instead of retyping the URL as a
+            // separate literal — the two used to be independent, so a future port change
+            // would leave this instruction telling the user to register the wrong address
+            // (2026-07-18 audit finding R10-05, the same "two copies of one fact" shape
+            // round-5 finding #15 already fixed once for the app's own internal use of it).
             Text = "From your app at developer.ticktick.com/manage. The app's OAuth " +
-                   "redirect URL must be exactly:  http://localhost:8765/callback",
+                   $"redirect URL must be exactly:  {TickTickAuth.RedirectUri}",
         });
         panel.Children.Add(new TextBlock
         {
@@ -122,10 +127,7 @@ public static class TickTickConnectDialog
             catch (Exception ex)
             {
                 Log.Error("TickTickConnectDialog", ex);
-                // Same "plain-English clause first, technical detail after" shape every other
-                // error message in the app uses — this one used to show raw exception text
-                // alone (audit finding #17).
-                status.Text = "Something went wrong finishing the connection — try again. (" + ex.Message + ")";
+                status.Text = Log.Friendly("Something went wrong finishing the connection", ex);
                 busy.IsActive = false;
                 d.IsPrimaryButtonEnabled = true;
             }

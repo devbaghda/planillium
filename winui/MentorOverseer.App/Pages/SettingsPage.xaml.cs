@@ -9,6 +9,12 @@ public sealed partial class SettingsPage : Page
 {
     private bool _initialising = true;
 
+    /// <summary>The three files "Export all my data" / the report exporters can write to
+    /// the data folder — shared by both "clear my data" actions below so they can't drift
+    /// apart on what counts as an export file (2026-07-18 audit finding R9-01; previously
+    /// each retyped the same three literals independently).</summary>
+    private static readonly string[] ExportFileNames = { "report.html", "report.csv", "full-export.json" };
+
     public SettingsPage()
     {
         InitializeComponent();
@@ -21,6 +27,7 @@ public sealed partial class SettingsPage : Page
             };
             OpacitySlider.Value = StateService.Load().Opacity;
             StartupToggle.IsOn = StartupService.IsEnabled;
+            YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
             LoadRules();
             _initialising = false;
@@ -142,7 +149,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             Log.Error("SettingsPage.SaveRules", ex);
-            SaveStatus.Text = "Couldn't save: " + ex.Message;
+            SaveStatus.Text = Log.Friendly("Couldn't save your settings", ex);
         }
     }
 
@@ -153,12 +160,36 @@ public sealed partial class SettingsPage : Page
             : "Not connected.";
         TickTickConnectBtn.Content = TickTickService.IsAuthorized
             ? "Reconnect TickTick…" : "Connect TickTick…";
+        // Only worth offering once there's something to disconnect — before the first
+        // connect, or after a Disconnect/Clear-all-data already removed the tokens,
+        // there's nothing left for it to do (2026-07-18 audit finding R10-02).
+        TickTickDisconnectBtn.Visibility = TickTickService.IsAuthorized
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void Startup_Toggled(object sender, RoutedEventArgs e)
     {
         if (_initialising) return;
         StartupService.SetEnabled(StartupToggle.IsOn);
+    }
+
+    /// <summary>Autosaves like Theme/Opacity/"start with Windows" above it — previously
+    /// this could only be set once, at first run, via NameSetupDialog, with no way to see
+    /// or change it afterward short of opening config.json directly (2026-07-18 audit
+    /// finding R10-13). An empty name is valid (mentor-voice copy already falls back to a
+    /// neutral greeting) — nothing here forces a value.</summary>
+    private void YourName_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_initialising) return;
+        try
+        {
+            ConfigService.Mutate(cfg => cfg["user_name"] = YourName.Text.Trim());
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.YourName", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't save your name", ex);
+        }
     }
 
     private void Opacity_Changed(object sender,
@@ -179,6 +210,30 @@ public sealed partial class SettingsPage : Page
         RefreshTickTickStatus();
     }
 
+    /// <summary>Removes the stored client secret and tokens, and the saved client ID —
+    /// previously the only way to fully undo a "Connect TickTick" was to open Windows
+    /// Credential Manager by hand and find the right entries (2026-07-18 audit finding
+    /// R10-02).</summary>
+    private async void TickTickDisconnect_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = new ContentDialog
+        {
+            Title = "Disconnect TickTick?",
+            Content = "Removes the saved client ID, secret, and access tokens from this " +
+                      "PC. Your TickTick account and tasks themselves aren't affected — " +
+                      "you can reconnect any time.",
+            PrimaryButtonText = "Disconnect",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        TickTickAuth.Disconnect();
+        RefreshTickTickStatus();
+        SaveStatus.Text = "TickTick disconnected.";
+    }
+
     private async void ExportAll_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -192,7 +247,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             Log.Error("SettingsPage.ExportAll", ex);
-            SaveStatus.Text = "Export failed: " + ex.Message;
+            SaveStatus.Text = Log.Friendly("Couldn't export your data", ex);
         }
     }
 
@@ -207,7 +262,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             Log.Error("SettingsPage.ClearHistory.Count", ex);
-            SaveStatus.Text = "Couldn't read activity history: " + ex.Message;
+            SaveStatus.Text = Log.Friendly("Couldn't read your activity history", ex);
             return;
         }
         if (diaryRows == 0 && rollupDays == 0)
@@ -223,7 +278,7 @@ public sealed partial class SettingsPage : Page
         // deliberately kept, name the ones that currently exist and offer
         // an opt-in checkbox to remove them in the same action instead of
         // just warning and leaving it to a manual trip to File Explorer.
-        var exportNames = new[] { "report.html", "report.csv", "full-export.json" }
+        var exportNames = ExportFileNames
             .Where(f => File.Exists(Path.Combine(AppPaths.Root, "data", f)))
             .ToList();
 
@@ -278,7 +333,7 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             db.ClearActivityHistory();
             if (deleteExports) ThrowIfExportFilesRemain(DeleteExportFiles(exportNames));
-        }, "Activity history cleared.", "activity history", "SettingsPage.ClearHistory");
+        }, "Activity history cleared.", "your activity history", "SettingsPage.ClearHistory");
     }
 
     /// <summary>Deletes each named file from the data folder, best-effort — logs and
@@ -302,6 +357,15 @@ public sealed partial class SettingsPage : Page
         return failed;
     }
 
+    /// <summary>Distinguishes "the clear itself failed" from "the clear succeeded, but a
+    /// leftover export file couldn't be removed" — RunClearActionAsync's catch checks for
+    /// this type specifically so the two cases get different headlines instead of both
+    /// being flattened into a generic "Couldn't clear X" that would contradict this
+    /// exception's own already-correct message (2026-07-18 audit finding R10-01: wrapping
+    /// this in Log.Friendly's "Couldn't clear..." prefix produced a message that said the
+    /// clear failed in its first sentence and succeeded in its second).</summary>
+    private sealed class ExportCleanupException(string message) : Exception(message);
+
     /// <summary>Throws so a partial file-delete failure surfaces through
     /// RunClearActionAsync's existing error path instead of being silently absorbed —
     /// the database-level clear this runs alongside already succeeded by this point, so
@@ -309,8 +373,8 @@ public sealed partial class SettingsPage : Page
     private static void ThrowIfExportFilesRemain(List<string> failed)
     {
         if (failed.Count > 0)
-            throw new IOException(
-                $"your data was cleared, but {string.Join(", ", failed)} couldn't be removed — close it elsewhere and try again");
+            throw new ExportCleanupException(
+                $"Your data was cleared, but {string.Join(", ", failed)} couldn't be removed — close it elsewhere and try again.");
     }
 
     /// <summary>Shared busy-state sequence for the two "clear my data"
@@ -331,10 +395,18 @@ public sealed partial class SettingsPage : Page
             await Task.Run(dbAction);
             SaveStatus.Text = successMessage;
         }
+        catch (ExportCleanupException ex)
+        {
+            // Already a complete, correct, human-readable message — the clear itself
+            // succeeded, only a leftover export file didn't. Log.Friendly's "Couldn't
+            // clear..." prefix would contradict it (R10-01), so show it as-is.
+            Log.Warn(logTag, ex.Message);
+            SaveStatus.Text = ex.Message;
+        }
         catch (Exception ex)
         {
             Log.Error(logTag, ex);
-            SaveStatus.Text = $"Couldn't clear {whatFailed}: " + ex.Message;
+            SaveStatus.Text = Log.Friendly($"Couldn't clear {whatFailed}", ex);
         }
         finally
         {
@@ -361,7 +433,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             Log.Error("SettingsPage.ClearReflections.Count", ex);
-            SaveStatus.Text = "Couldn't read reflections: " + ex.Message;
+            SaveStatus.Text = Log.Friendly("Couldn't read your reflections", ex);
             return;
         }
         if (count == 0)
@@ -387,7 +459,7 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
             score.ClearReflections();
-        }, "Reflections cleared.", "reflections", "SettingsPage.ClearReflections");
+        }, "Reflections cleared.", "your reflections", "SettingsPage.ClearReflections");
     }
 
     /// <summary>
@@ -415,7 +487,7 @@ public sealed partial class SettingsPage : Page
         catch (Exception ex)
         {
             Log.Error("SettingsPage.ClearAllData.Count", ex);
-            SaveStatus.Text = "Couldn't read your data: " + ex.Message;
+            SaveStatus.Text = Log.Friendly("Couldn't read your data", ex);
             return;
         }
         if (rowCount == 0)
@@ -430,9 +502,10 @@ public sealed partial class SettingsPage : Page
             Content = $"Deletes {rowCount} row(s) across every data table this app keeps — " +
                       "task completions, reschedules and day-offs, task notes, score history, " +
                       "reflections, TickTick sync links, and the activity diary — plus the debug " +
-                      "log and any report.html/report.csv/full-export.json you've exported to the " +
-                      "data folder. Your plan definitions themselves are not deleted (use the " +
-                      "Plans page to archive or remove a plan). This cannot be undone.",
+                      "log, your saved TickTick connection (client ID, secret, and tokens), and " +
+                      "any report.html/report.csv/full-export.json you've exported to the data " +
+                      "folder. Your plan definitions themselves are not deleted (use the Plans " +
+                      "page to archive or remove a plan). This cannot be undone.",
             PrimaryButtonText = "Clear everything",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
@@ -445,8 +518,14 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             db.ClearAllData();
             Log.Clear();
-            ThrowIfExportFilesRemain(DeleteExportFiles(new[] { "report.html", "report.csv", "full-export.json" }));
+            // Previously only the ticktick_sync database table (plan-task ↔ TickTick-task
+            // ID links) was cleared here — the actual credentials in Windows Credential
+            // Manager survived every "clear all my data" run with no way to remove them
+            // short of opening Credential Manager by hand (2026-07-18 audit finding R10-02).
+            TickTickAuth.Disconnect();
+            ThrowIfExportFilesRemain(DeleteExportFiles(ExportFileNames));
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
+        RefreshTickTickStatus();
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)

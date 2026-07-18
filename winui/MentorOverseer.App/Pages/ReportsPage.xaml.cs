@@ -170,7 +170,7 @@ public sealed partial class ReportsPage : Page
             Log.Error("ReportsPage.Render", ex);
             Body.Children.Add(new TextBlock
             {
-                Text = "Couldn't load report data: " + ex.Message,
+                Text = Log.Friendly("Couldn't load your report data", ex),
                 TextWrapping = TextWrapping.Wrap,
             });
         }

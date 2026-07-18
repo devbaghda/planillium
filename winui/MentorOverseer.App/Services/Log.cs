@@ -41,6 +41,21 @@ public static class Log
 
     public static void Info(string message) => Write("INFO", message);
 
+    /// <summary>Turns a caught exception into UI copy that leads with what to do, not just
+    /// the raw exception text — the technical detail stays (in parentheses), since for this
+    /// app's actual audience (the developer, running it for themselves) it's genuinely useful
+    /// for self-diagnosis, not noise to hide (2026-07-18 audit finding R9-02). One shared
+    /// helper instead of every page re-typing its own "{what}: {ex.Message}" — the same
+    /// "don't duplicate the string" reasoning as R9-01 in the same audit round.</summary>
+    /// <param name="action">Overrides the default "try again, or check the log" clause for
+    /// cases with a more specific fix to name (e.g. "close the other app using it") —
+    /// added so call sites with real custom action text don't have to skip this helper
+    /// entirely just because the generic default doesn't fit (2026-07-18 audit finding
+    /// R10-12).</param>
+    public static string Friendly(string what, Exception ex,
+        string action = "try again, or check data/mentor-winui.log for details") =>
+        $"{what} — {action}. ({ex.Message})";
+
     /// <summary>Deletes the log file outright — this was the one piece of the app's data
     /// that sat outside every "clear my data" control (audit finding #25); folded into
     /// Settings' "Clear all my data" action rather than a standalone button, since this

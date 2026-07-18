@@ -150,7 +150,7 @@ public sealed class ScoreService : IDisposable
             // should still be counted and credited rather than silently ignored.
             if (plan.IsExcluded(d)) continue;
             var dayNum = plan.PlanDayForDate(d);
-            var overrides = _db.LoadOverrides(plan.Id);
+            var overrides = Overrides(plan.Id);
             foreach (var phase in plan.Phases)
                 foreach (var task in phase.Tasks)
                 {
@@ -339,7 +339,7 @@ public sealed class ScoreService : IDisposable
         foreach (var plan in _plans)
         {
             var dayNum = plan.PlanDayForDate(d);
-            var overrides = _db.LoadOverrides(plan.Id);
+            var overrides = Overrides(plan.Id);
             foreach (var phase in plan.Phases)
                 foreach (var task in phase.Tasks)
                 {
@@ -688,6 +688,27 @@ public sealed class ScoreService : IDisposable
         cmd.Parameters.AddWithValue("$orig", originalDay);
         cmd.Parameters.AddWithValue("$day", assignedDay);
         cmd.ExecuteNonQuery();
+        // This is the only write path to task_overrides in the whole class — a single
+        // invalidation point here keeps Overrides() below correct without needing to
+        // remember to invalidate at every one of SaveOverride's several call sites.
+        _overridesCache.Remove(planId);
+    }
+
+    // Memoized per plan for this ScoreService instance's lifetime — same reasoning as
+    // DaysOff above (2026-07-18 audit finding R10-03: DayTaskCounts/OverdueAsOf each
+    // re-queried task_overrides fresh on every call, unlike the near-identical DaysOff
+    // lookup that already got this treatment in round 7 specifically because
+    // AllPlansScoringExempt could call it hundreds of times in one Reports render —
+    // DayTaskCounts/OverdueAsOf are called just as often from the same render paths).
+    // Callers get a defensive copy, never the cached dictionary itself.
+    private readonly Dictionary<string, Dictionary<string, int>> _overridesCache = new();
+
+    private Dictionary<string, int> Overrides(string planId)
+    {
+        if (_overridesCache.TryGetValue(planId, out var cached)) return new Dictionary<string, int>(cached);
+        var result = _db.LoadOverrides(planId);
+        _overridesCache[planId] = result;
+        return new Dictionary<string, int>(result);
     }
 
     // ── reflections (new, additive table) ────────────────────────────────

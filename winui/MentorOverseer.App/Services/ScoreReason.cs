@@ -15,4 +15,12 @@ public static class ScoreReason
     public const string OverdueAccrual = "overdue_accrual";
     public const string WeeklyComebackBonus = "weekly_comeback_bonus";
     public const string ReplanOverdue = "replan_overdue";
+
+    // Added 2026-07-18 (audit finding R10-07): SpendDialog.cs's two ledger reasons were
+    // never folded into this migration despite being created the same day this class
+    // was — the exact "typo compiles fine and silently stops matching" risk this class
+    // exists to prevent. Also a cross-app data contract (the Python app's sidebar
+    // dialogs write these same two literals — see SpendDialog.cs's doc comment).
+    public const string EntertainmentPurchase = "entertainment_purchase";
+    public const string MoneyExpenditure = "money_expenditure";
 }

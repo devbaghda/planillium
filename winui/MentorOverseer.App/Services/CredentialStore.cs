@@ -20,6 +20,8 @@ public static class CredentialStore
     private static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CredWriteW(ref CREDENTIAL credential, uint flags);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CredDeleteW(string target, uint type, uint flags);
     [DllImport("advapi32.dll")]
     private static extern void CredFree(IntPtr buffer);
 
@@ -91,5 +93,17 @@ public static class CredentialStore
             return Read(key) == value;
         }
         finally { Marshal.FreeCoTaskMem(blob); }
+    }
+
+    /// <summary>Removes a stored credential (both the current-service and legacy-service
+    /// target names, mirroring Read's dual-target lookup) — added so a "disconnect"/
+    /// "clear my data" action can actually undo what Write saved (2026-07-18 audit
+    /// finding R10-02: no delete path existed at all before this). CredDeleteW returning
+    /// false just means that particular target name was never written — the common case
+    /// for whichever of the two doesn't apply — not a failure worth surfacing to the user.</summary>
+    public static void Delete(string key)
+    {
+        foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}" })
+            CredDeleteW(target, 1 /* CRED_TYPE_GENERIC */, 0);
     }
 }
