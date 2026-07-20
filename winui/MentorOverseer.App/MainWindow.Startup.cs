@@ -89,6 +89,81 @@ public sealed partial class MainWindow
         timer.Start();
     }
 
+    // Set once per calendar day the moment the reminder below actually fires (or is
+    // decided not to, because nothing's pending) — the guard that keeps it from
+    // re-notifying every minute for the rest of the window before day-end.
+    private DateOnly? _lateDayReminderShownDate;
+
+    /// <summary>How long before the configured end-of-day time this should warn about
+    /// still-open tasks — user-configurable (Settings), 2 hours by default (2026-07-20
+    /// request).</summary>
+    public static TimeSpan LateDayReminderLead()
+    {
+        var hours = 2.0;
+        if (ConfigService.Root.TryGetProperty("late_day_task_reminder_hours", out var v) &&
+            v.TryGetDouble(out var h) && h > 0) hours = h;
+        return TimeSpan.FromHours(hours);
+    }
+
+    /// <summary>Once per day, once the configured lead time before end-of-day is
+    /// reached, nudge if there's still incomplete work due today (todays' tasks not
+    /// yet done, plus anything overdue) across every active plan — the same "todays'
+    /// tasks" definition TodayPage.BuildPlanView uses, so this can't disagree with
+    /// what the Today page itself shows as pending. A day where every relevant plan
+    /// is excluded (Plan.IsExcluded — the same recurring-rest-day check the rest of
+    /// the app already uses) naturally contributes nothing, so a full day off never
+    /// nags. Uses a toast (not a dialog) since the app spends most of its life hidden
+    /// in the tray, same reasoning as every other timed prompt in this file.</summary>
+    private void StartLateDayTaskReminderWatcher()
+    {
+        var timer = _dq.CreateTimer();
+        timer.Interval = WatcherPollInterval;
+        timer.Tick += (_, _) => CheckLateDayTaskReminder();
+        timer.Start();
+    }
+
+    private void CheckLateDayTaskReminder()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (_lateDayReminderShownDate == today) return;
+
+        var now = DateTime.Now;
+        var dayEnd = DateTime.Today + EodTime();
+        var windowStart = dayEnd - LateDayReminderLead();
+        if (now < windowStart || now >= dayEnd) return;
+
+        try
+        {
+            var plans = PlanStore.LoadActivePlans();
+            var pending = 0;
+            if (plans.Count > 0)
+            {
+                using var db = new Database();
+                var completions = db.LoadCompletions();
+                foreach (var plan in plans)
+                {
+                    if (plan.IsExcluded(today)) continue;
+                    var tasks = PlanStore.TasksFor(plan, db, completions);
+                    var planDay = plan.PlanDay;
+                    pending += tasks.Count(t => t.Overdue || (t.AssignedDay == planDay && !t.Completed));
+                }
+            }
+            _lateDayReminderShownDate = today;
+            if (pending == 0) return;
+
+            var remaining = dayEnd - now;
+            var timeText = remaining.TotalMinutes >= 90
+                ? $"{remaining.TotalHours:0.#}h" : $"{Math.Max(1, (int)remaining.TotalMinutes)}m";
+            ToastNotifier.Show("Day's winding down",
+                $"{timeText} left today and {pending} task{(pending == 1 ? "" : "s")} still open.",
+                tag: "late-day-reminder");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("CheckLateDayTaskReminder", ex);
+        }
+    }
+
     public static TimeSpan EodTime()
     {
         var eod = "20:00";

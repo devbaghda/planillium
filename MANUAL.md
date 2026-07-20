@@ -113,6 +113,11 @@ The app includes configurable settings for:
 - themes,
 - and activity classification rules.
 
+A separate end-of-day nudge warns you once, a configurable number of hours before the day's review
+time (2 hours by default), if any of today's or overdue tasks are still open — a plain toast
+notification, not a dialog, so it doesn't interrupt whatever you're doing. It only fires once a day
+and stays silent on a day every relevant plan already has off.
+
 These settings can be adjusted from the app’s Settings area.
 
 ## Data and privacy

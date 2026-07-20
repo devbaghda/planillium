@@ -64,6 +64,7 @@
                      silently defeat the app's own documented "kept for a configurable
                      number of days, 90 by default" retention promise. -->
                 <NumberBox x:Name="RetentionDays" Header="Keep detailed diary (days)" Width="190" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                <NumberBox x:Name="LateDayReminderHours" Header="Warn if tasks open, before day ends (hrs)" Width="230" Minimum="0.25" Maximum="12" SmallChange="0.25" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
             </StackPanel>
 
             <TextBlock Text="ACTIVITY KEYWORDS  ·  one per line, matched inside window titles" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"

@@ -51,6 +51,8 @@ public sealed partial class SettingsPage : Page
             wh.TryGetProperty(key, out var v) && v.GetString() is { Length: > 0 } s ? s : fallback;
         static int Num(System.Text.Json.JsonElement root, string key, int fallback) =>
             root.TryGetProperty(key, out var v) && v.TryGetInt32(out var n) ? n : fallback;
+        static double NumD(System.Text.Json.JsonElement root, string key, double fallback) =>
+            root.TryGetProperty(key, out var v) && v.TryGetDouble(out var n) ? n : fallback;
 
         WorkStart.Text = Time(cfg, "start", "08:00");
         WorkEnd.Text = Time(cfg, "end", "20:00");
@@ -60,6 +62,7 @@ public sealed partial class SettingsPage : Page
         RepeatMin.Value = Num(cfg, "reminder_interval_minutes", 5);
         IdleMin.Value = Num(cfg, "idle_threshold_minutes", 10);
         RetentionDays.Value = Num(cfg, "diary_retention_days", Database.DiaryRetentionDays);
+        LateDayReminderHours.Value = NumD(cfg, "late_day_task_reminder_hours", 2.0);
         RulesOn.Text = Words(cfg, "activity_rules", DiaryCategory.OnPlan);
         RulesOff.Text = Words(cfg, "activity_rules", DiaryCategory.OffPlan);
         RulesNeutral.Text = Words(cfg, "activity_rules", DiaryCategory.Neutral);
@@ -122,6 +125,7 @@ public sealed partial class SettingsPage : Page
                 // #34) — Database.DiaryRetentionDays remains the fallback
                 // default, read via ConfigService.DiaryRetentionDays().
                 cfg["diary_retention_days"] = (int)RetentionDays.Value;
+                cfg["late_day_task_reminder_hours"] = LateDayReminderHours.Value;
                 cfg["activity_rules"] = new System.Text.Json.Nodes.JsonObject
                 {
                     [DiaryCategory.OnPlan] = Lines(RulesOn),

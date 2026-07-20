@@ -133,6 +133,7 @@ public sealed partial class MainWindow : Window
         RunStartupCatchUp();
         StartEodWatcher();
         StartKickoffWatcher();
+        StartLateDayTaskReminderWatcher();
 
         InitTray();
         // Click-to-reopen for kickoff/idle-return toasts. Best-effort: if this

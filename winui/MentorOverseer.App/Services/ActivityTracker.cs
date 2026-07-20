@@ -274,10 +274,12 @@ public sealed class ActivityTracker : IDisposable
         {
             GetWindowThreadProcessId(hwnd, out var pid);
             string app = "";
+            string processName = "";
             try
             {
                 using var proc = Process.GetProcessById((int)pid);
-                var exe = (proc.ProcessName + ".exe").ToLowerInvariant();
+                processName = proc.ProcessName;
+                var exe = (processName + ".exe").ToLowerInvariant();
                 ExeAppNames.TryGetValue(exe, out app!);
                 app ??= "";
             }
@@ -318,6 +320,14 @@ public sealed class ActivityTracker : IDisposable
                     ? (clean.Length > 0 ? $"{clean} – {app}" : app)
                     : app;
             }
+            // A window with a genuinely empty title bar (most commonly the desktop
+            // itself, briefly focused between switching apps) and no ExeAppNames
+            // entry used to fall through to an empty string here — recorded and
+            // shown as a bare "-" with no way to tell what it actually was
+            // (2026-07-20 request). The process name is real information already
+            // in hand at this point; use it instead of leaving the diary blank.
+            else if (title.Length == 0 && processName.Length > 0)
+                title = processName;
         }
         catch (Exception ex)
         {

@@ -5,6 +5,14 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**New**
+- A new end-of-day reminder warns you once, a configurable number of hours before the
+  day's review time (2 hours by default, adjustable in Settings), if today's or overdue
+  tasks are still open
+- Diary entries for a window with a genuinely blank title bar (most commonly the
+  desktop itself, briefly focused between switching apps) now show the program's
+  name instead of a blank/"-" entry with no information at all
+
 **Reliability & polish**
 - Error messages shown in the app (failed saves, exports, or page loads) now
   lead with what to do about it instead of just the raw technical detail —

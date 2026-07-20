@@ -183,7 +183,9 @@ lists), `scoring` (task_completed/task_overdue_penalty/on_plan_hour/off_plan_hou
 streak_bonus_per_day/weekly_comeback_bonus), `score` (points_per_minute/
 points_per_currency_unit/currency_symbol — the "buy entertainment time" economy),
 `idle_activity_rules` (idle-dialog answer → category reclassification, the user
-populates via Settings), `start_with_windows`, `appearance.theme_mode`. Edited via
+populates via Settings), `start_with_windows`, `appearance.theme_mode`,
+`late_day_task_reminder_hours` (added 2026-07-20, default 2.0 — how long before
+`end_of_day_summary_time` the once-a-day "tasks still open" toast fires). Edited via
 the in-app Settings dialog, which writes this file and restarts the activity tracker.
 
 ---
@@ -209,6 +211,29 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-20, late-day task reminder + diary window-title investigation**: user asked for three
+  things. (1) New feature: a once-a-day toast warns a configurable number of hours before
+  `end_of_day_summary_time` (default 2h, `late_day_task_reminder_hours` in Settings) if today's or
+  overdue tasks are still open across active plans — reuses `TodayPage.BuildPlanView`'s exact
+  "today's tasks" definition (`AssignedDay == planDay && !Completed`, plus `Overdue`) so it can't
+  disagree with what the Today page itself shows, and naturally skips a day every relevant plan
+  already excludes (no separate rest-day special-case needed). New `MainWindow.Startup.cs` watcher
+  (`StartLateDayTaskReminderWatcher`), same one-tick-per-minute pattern as the existing EOD/kickoff
+  watchers. (2) Investigated "why do so many diary rows just say 'File Explorer'" — turned out NOT
+  to be a bug: every single `File Explorer` row in `time_diary` already has a specific folder/tab
+  name prefix (`SELECT DISTINCT window ... LIKE '%File Explorer%'` returned zero bare matches) —
+  what actually happens is the Reports page's "Time by App" chart *groups* by the trailing app name
+  for the summary bars, collapsing all the different folder-specific titles into one visual bucket;
+  the detail was always in the raw diary list underneath. No code change; explained to the user.
+  (3) The "-" entries the user saw were rows with a genuinely empty `window` value (118 rows, all
+  `neutral`, ~1-2 min each — a window with a blank title bar, most commonly the desktop itself
+  briefly focused mid-app-switch) — this WAS a real, if minor, gap: `ActivityTracker.ActiveWindowTitle`
+  now falls back to the process name when both the raw title and the `ExeAppNames` lookup come up
+  empty, so these show e.g. "explorer" instead of nothing. Verified via clean Debug build (0
+  warnings) + 83/83 tests. **Not yet in the live Release instance** — held off rebuilding/relaunching
+  since the request landed right at/after the 20:00 `end_of_day_summary_time`, and CLAUDE.md's own
+  caution is not to risk skipping that day's evening-review popup; pending the user's go-ahead on
+  timing.
 - **2026-07-20, diary-tracking-gap investigation (next occurrence of the 2026-07-15 open TODO)**:
   user reported today's diary starting at 07:59 instead of the configured 06:00 diary-start, with
   no accounting at all for the gap before it. Investigation (log + direct read-only DB query via
