@@ -209,6 +209,31 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-20, diary-tracking-gap investigation (next occurrence of the 2026-07-15 open TODO)**:
+  user reported today's diary starting at 07:59 instead of the configured 06:00 diary-start, with
+  no accounting at all for the gap before it. Investigation (log + direct read-only DB query via
+  a PowerShell-loaded `Microsoft.Data.Sqlite` — CLI `sqlite3` isn't installed on this machine;
+  native `e_sqlite3.dll` had to be added to `PATH` from the build output's
+  `runtimes/win-x64/native/` folder before `SQLitePCL.Batteries_V2.Init()` would succeed) confirmed
+  this is real, not just "the PC was off": `time_diary` has zero rows for 2026-07-19 (a genuine
+  rest day — both active plans exclude Sat+Sun) but ALSO a second, cleaner occurrence the same
+  morning mid-session with no reboot/rest-day involved — a 198-minute continuous "neutral - File
+  Explorer" block (08:04→11:22) that should have been split by idle detection but wasn't. Both
+  `ActivityTracker.HandleIdleReturn` log lines that morning show `idleStart` landing only ~1 poll
+  interval (60s) before `idleEnd`, instead of reflecting the true, much longer preceding gap.
+  Traced every `_idleSince`/`_idleNotified` write site in `ActivityTracker.cs`: all four are
+  correctly gated so `_idleSince` should stay frozen at the true idle-start once `_idleNotified`
+  is true, and the timer is already confirmed non-reentrant (one-shot + re-arm, `Start()`
+  correctly built) — yet the evidence shows it isn't staying frozen. Root cause NOT conclusively
+  found from static reading alone; rather than ship a speculative fix, added `Log.Info` diagnostics
+  to the two `_idleSince` writers that were previously silent (`HandleSessionLock`,
+  `HandleActiveSession`'s idle branch — commit pending) so the *next* occurrence pins which path
+  actually fires and what value it writes. Verified via clean Debug build (0 warnings) + 83/83
+  tests; **not yet in the live Release instance** — the diagnostic won't take effect until the
+  user rebuilds Release and relaunches, done on their own schedule per the EOD-time caution in
+  CLAUDE.md. **Open TODO: watch the log for the next occurrence of this exact signature**
+  (idleStart within ~1-2 poll intervals of idleEnd despite a much longer real gap) and check which
+  of the two new log lines fired beforehand.
 - **2026-07-18, two new global skills + first posting-plan content**: user asked (scheduled via a
   local one-shot cron job to start at 14:30, since a cloud routine can't touch local `~/.claude/skills`
   files) to build two reusable global skills. Both live in the canonical `Desktop/CLAUDE/skills` repo

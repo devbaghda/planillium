@@ -638,6 +638,16 @@ public sealed class ActivityTracker : IDisposable
             }
             _idleSince = now;
             _idleNotified = true;
+            // Diagnostic (2026-07-20): a HandleIdleReturn was twice observed the
+            // same day with idleStart landing only ~1 poll interval before idleEnd
+            // instead of the true, much longer preceding gap — meaning _idleSince
+            // got reset somewhere between the real idle-start and the eventual
+            // return, despite every _idleSince writer being gated on !_idleNotified
+            // (which should make that impossible once _idleNotified is already
+            // true). This site is one of the two writers that don't already log —
+            // logging here confirms whether a session-lock event was in fact what
+            // set (or reset) idleSince right before the next occurrence.
+            Log.Info($"ActivityTracker.HandleSessionLock: idleSince set to {now:o}");
         }
         else
         {
@@ -743,6 +753,17 @@ public sealed class ActivityTracker : IDisposable
             }
             _idleSince = idleStartPoint;
             _idleNotified = true;
+            // Diagnostic (2026-07-20, same investigation as HandleSessionLock's
+            // new log line above) — this is the other silent _idleSince writer.
+            // Confirmed live: a 198-minute neutral "File Explorer" block (08:04-
+            // 11:22) should have set idleSince here to ~08:04 (idleStartPoint,
+            // back-computed from idleS the same way the 2026-07-15 fix above
+            // already gets right), but the eventual HandleIdleReturn at 11:22
+            // logged idleStart=11:22:34 instead — ~1 poll interval before
+            // idleEnd, not ~08:04. Logging the value set here lets the next
+            // occurrence show whether it's actually written correctly at this
+            // site and only goes wrong later, or is already wrong on arrival.
+            Log.Info($"ActivityTracker.HandleActiveSession: idleSince set to {idleStartPoint:o} (idleS={idleS:F0}s)");
         }
         else if (_sessionStart is null)
         {
