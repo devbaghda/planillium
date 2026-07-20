@@ -209,6 +209,24 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-18, two new global skills + first posting-plan content**: user asked (scheduled via a
+  local one-shot cron job to start at 14:30, since a cloud routine can't touch local `~/.claude/skills`
+  files) to build two reusable global skills. Both live in the canonical `Desktop/CLAUDE/skills` repo
+  (edit there, never directly in `~/.claude/skills` — a previous session's direct edit to the deployed
+  copy got silently overwritten by this session's `install-skills.sh --global` run, caught and
+  reconciled per `knowledge-upkeep`'s own warned failure mode). **`posting-plan`**: maintains a
+  per-project `POSTING_PLAN.md` + `posts/` folder, drafts LinkedIn/Reddit posts in a human voice,
+  triggers proactively alongside `knowledge-upkeep` at shipped milestones — never publishes (no
+  platform connector exists). Bootstrapped for this project: `POSTING_PLAN.md` now exists here with a
+  real drafted post (`posts/2026-07-18-plan-day-perf-fix.md`, about the closed-form perf fix below) plus
+  two queued ideas (round-11 audit, the WinUI-rebuild arc) — ready for the user to review and post.
+  **`project-media`**: one-page project presentations via the Artifact tool (always available); short
+  animated content scoped honestly after verifying this machine's real capabilities (2026-07-18):
+  ffmpeg NOT installed, Playwright available via `npx` and can drive the system-installed Edge browser
+  with no download needed, no video-generation API connected — so it defaults to an animated one-pager
+  (no video file needed) and documents the exact `winget install ffmpeg` gap-closing steps for real
+  video export rather than assuming a pipeline that isn't there. Neither skill is Planillium-specific;
+  both apply to any future project.
 - **2026-07-18, plan-day math performance fix** (user-requested, not an audit round): closed
   out the last open-TODO performance item — see the Open TODOs entry above (now struck
   through) for the closed-form approach and test coverage. Verified via clean Debug build
