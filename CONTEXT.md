@@ -551,6 +551,22 @@ on 2026-07-17 after the round-7 audit)._
     messages — a separate `--replace-message` pass is needed to actually remove a string from
     "history" in the sense a user means it (2026-07-18).
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **Diary-tracking-gap bug (2026-07-20): root cause not yet found, diagnostics added.** Watch the
+    log for another occurrence of `HandleIdleReturn`'s `idleStart` landing only ~1-2 poll intervals
+    before `idleEnd` despite a much longer real gap (two confirmed today: 06:00-07:59, and a
+    198-minute unbroken "File Explorer" block idle detection should have split). The two previously-
+    silent `_idleSince` writers (`HandleSessionLock`, `HandleActiveSession`'s idle branch) now log —
+    check which fires next time and what value it writes. Fix intentionally deferred until the
+    mechanism is actually pinned, not guessed.
+  - **LinkedIn/Reddit autonomous-publish for `posting-plan`: direction not yet decided, deferred by
+    the user (2026-07-20) rather than answered.** Reddit is realistically buildable — a "script" app
+    at reddit.com/prefs/apps (instant approval) + OAuth2, credentials in Windows Credential Manager
+    like TickTick's, gated behind per-post confirmation. LinkedIn is not: the official API needs a
+    slow/uncertain review (often expects a Company Page) and browser-automation posting was declined
+    outright as a LinkedIn ToS violation risking the account — the fallback (paste-ready drafts vs.
+    pursuing the official API application) is still an open choice. Revisit when the user wants to
+    pick a direction; don't build either without their explicit go-ahead given real accounts/ToS are
+    involved.
   - **A full-history scan (2026-07-17/18) found 42 overlapping diary-row pairs from 06-29 through
     07-16, not just the one 07-15 instance previously flagged, plus 2 rows with end_time before
     start_time.** Only 2 of the 42 cleanly match the documented `HandleActiveSession` bug
