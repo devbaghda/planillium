@@ -219,21 +219,31 @@ on 2026-07-17 after the round-7 audit)._
   disagree with what the Today page itself shows, and naturally skips a day every relevant plan
   already excludes (no separate rest-day special-case needed). New `MainWindow.Startup.cs` watcher
   (`StartLateDayTaskReminderWatcher`), same one-tick-per-minute pattern as the existing EOD/kickoff
-  watchers. (2) Investigated "why do so many diary rows just say 'File Explorer'" — turned out NOT
-  to be a bug: every single `File Explorer` row in `time_diary` already has a specific folder/tab
-  name prefix (`SELECT DISTINCT window ... LIKE '%File Explorer%'` returned zero bare matches) —
-  what actually happens is the Reports page's "Time by App" chart *groups* by the trailing app name
-  for the summary bars, collapsing all the different folder-specific titles into one visual bucket;
-  the detail was always in the raw diary list underneath. No code change; explained to the user.
-  (3) The "-" entries the user saw were rows with a genuinely empty `window` value (118 rows, all
-  `neutral`, ~1-2 min each — a window with a blank title bar, most commonly the desktop itself
-  briefly focused mid-app-switch) — this WAS a real, if minor, gap: `ActivityTracker.ActiveWindowTitle`
-  now falls back to the process name when both the raw title and the `ExeAppNames` lookup come up
-  empty, so these show e.g. "explorer" instead of nothing. Verified via clean Debug build (0
+  watchers. (2) Investigated "why do so many diary rows just say 'File Explorer'" — first pass
+  wrongly concluded this wasn't a bug (checked only the raw `time_diary` table, which does have the
+  folder/tab name in every row, e.g. `'last INAILs - File Explorer'`). User pushed back with a
+  screenshot of the actual Reports diary list still showing bare "File Explorer (198m)" rows — that
+  screenshot was the real per-row list, not the "Time by App" summary chart, so the grouping
+  explanation was wrong. Real cause: `AppNames.Sub()` (`Services/AppNames.cs`), which the Reports
+  page's row label goes through, only extracts a sub-detail (filename/project/chat/etc.) for a fixed
+  set of apps — browsers, messengers, VS Code, and a hardcoded Office/Adobe list (`FileSubApps`) —
+  and "File Explorer" was never in that list, so its `Group()` name alone ("File Explorer") was
+  shown and the folder name in front of it silently dropped, for every File Explorer row, not just
+  one. Fixed by adding a case to `Sub()` that returns the leading segment (the folder/tab name) when
+  the app group is "File Explorer" — same idea as the existing `FileSubApps` filename case. (3) The
+  "-" entries the user saw were rows with a genuinely empty `window` value (118 rows, all `neutral`,
+  ~1-2 min each — a window with a blank title bar, most commonly the desktop itself briefly focused
+  mid-app-switch) — this WAS a real, if minor, gap: `ActivityTracker.ActiveWindowTitle` now falls
+  back to the process name when both the raw title and the `ExeAppNames` lookup come up empty, so
+  these show e.g. "explorer" instead of nothing. Both (2) and (3) verified via clean Debug build (0
   warnings) + 83/83 tests. **Not yet in the live Release instance** — held off rebuilding/relaunching
-  since the request landed right at/after the 20:00 `end_of_day_summary_time`, and CLAUDE.md's own
-  caution is not to risk skipping that day's evening-review popup; pending the user's go-ahead on
-  timing.
+  since the original request landed right at/after the 20:00 `end_of_day_summary_time`, and
+  CLAUDE.md's own caution is not to risk skipping that day's evening-review popup; pending the user's
+  go-ahead on timing.
+  - Lesson: when re-investigating a report the app's own screen contradicts, check what the *screen
+    the user is looking at* actually does with the data, not just the raw table — a value can be
+    correct in storage and still wrong on screen if a formatting/grouping step between the two drops
+    information for a case it wasn't written to handle.
 - **2026-07-20, diary-tracking-gap investigation (next occurrence of the 2026-07-15 open TODO)**:
   user reported today's diary starting at 07:59 instead of the configured 06:00 diary-start, with
   no accounting at all for the gap before it. Investigation (log + direct read-only DB query via

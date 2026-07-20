@@ -12,6 +12,11 @@ going forward; the original Python/Tkinter version is retired.
 - Diary entries for a window with a genuinely blank title bar (most commonly the
   desktop itself, briefly focused between switching apps) now show the program's
   name instead of a blank/"-" entry with no information at all
+- Fixed File Explorer diary rows always showing bare "File Explorer" with the
+  folder/tab name silently dropped, even though it was already being recorded —
+  the Reports page's label formatter just didn't know File Explorer was one of
+  the apps with a meaningful sub-detail to show (it already handled this for
+  Word, Excel, browsers, etc., File Explorer was missing from that list)
 
 **Reliability & polish**
 - Error messages shown in the app (failed saves, exports, or page loads) now

@@ -142,6 +142,17 @@ public static class AppNames
             return filename.Length > 0 ? filename : null;
         }
 
+        // Windows 11's tabbed File Explorer titles as "FolderName - File Explorer"
+        // (or "FolderName and 1 more tab - File Explorer") — the folder/tab name is
+        // the sub-item, same role a filename plays for FileSubApps above. Without
+        // this, every File Explorer row collapsed to the bare app name in reports,
+        // even though the folder name was captured and stored (2026-07-20 report).
+        if (appGroup.Equals("File Explorer", StringComparison.OrdinalIgnoreCase))
+        {
+            var location = parts[0];
+            return location.Length > 0 ? location : null;
+        }
+
         return null;
     }
 
