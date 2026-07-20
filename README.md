@@ -4,18 +4,15 @@ Planillium is a Windows desktop app built to help one person stay aligned with a
 
 It was created for a very specific purpose: to act less like a generic task manager and more like a personal mentor and operating system for progress.
 
+![Planillium preview](media/launch-demo.gif)
+
+*Preview shown with sample/placeholder data, not a real user's activity history.*
+
 ## Why this app exists
 
-Many productivity tools help people organize tasks. Fewer help them stay on course when the work is difficult, long-term, or emotionally demanding.
+In a world full of distractions, micro-tasks, everyday routine, mobile notifications, email, and everything else, it's easy to lose focus. You go through your tasks during the day, but after a month, or a year, you wake up and realize you were just running in circles — going through the motions without actually developing further, without taking that extra step forward to get better, gain some knowledge, feel more professional, understand something better.
 
-Planillium was designed to fill that gap by combining:
-
-- structured plans with phases and tasks,
-- daily accountability,
-- activity and focus tracking,
-- score-based motivation,
-- weekly reflection and reporting,
-- and a calm desktop experience that stays available without being intrusive.
+At least that was my case. I built Planillium for myself to split the road to a goal into smaller daily steps, actually accomplish them, and move forward steadily instead of drifting. To make sure I stick to the plan, the app has a reminder function and the "authority" to punish and reward me based on how much of my day was on-plan versus off-plan — I can "buy" free time with the reward, or convert it into a small "purchase with no regrets." Childish, maybe. But gamifying it is what actually made it work for me.
 
 The app is especially suited for people working on major life or career projects, such as career transitions, relocation plans, study programs, and long-form personal development goals.
 
@@ -92,15 +89,9 @@ dotnet build -p:Platform=x64 -c Release
 
 ## Why open source
 
-Publishing this project publicly helps demonstrate:
+Building an app was a completely new experience for me — outside some automation flows and Microsoft Power Platform work, I have no prior coding background. I don't write or review code myself: I directed the whole build with Claude Code, describing what I needed and letting it handle the implementation, through several rounds of AI-driven build-and-test cycles, including dedicated security review passes.
 
-- end-to-end product design,
-- desktop application architecture,
-- Windows application development,
-- data modeling and local persistence,
-- and thoughtful UX decisions for personal productivity tools.
-
-It is also a strong portfolio piece for software engineers who want to show they can build real user-facing systems, not just toy demos.
+I'm sharing this publicly because I think the underlying idea might help someone else stuck in the same loop, and because I'd genuinely value feedback from people with real development experience — on the UX/UI, and especially on the backend, since this whole project is a live example of what's possible when you direct rather than write the code yourself.
 
 ## License
 
