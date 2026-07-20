@@ -73,10 +73,21 @@ public static class ReviewDialog
     /// would wedge every other dialog in the app behind it via DialogGate's
     /// single process-wide queue.
     /// </summary>
+    // Diagnostic only (2026-07-20 request): a user reported no end-of-day notification at all
+    // one evening, with nothing in the log to explain why — logged once per day, the first
+    // time this actually attempts to offer the review, so the next occurrence shows whether
+    // Trigger was even reached and which routing branch (dialog vs. toast) it took.
+    private static string? _loggedAttemptOn;
+
     public static Task Trigger(MainWindow window)
     {
         if (!ShouldOffer()) return Task.CompletedTask;
         var today = DateTime.Today.ToIsoDate();
+        if (_loggedAttemptOn != today)
+        {
+            _loggedAttemptOn = today;
+            Log.Info($"ReviewDialog.Trigger: offering review for {today}, window on-screen={window.IsOnScreen()}");
+        }
         // _offeredOn is set here, not inside ShowCore, so it only ever
         // reflects the automatic watcher having actually put the dialog in
         // front of the user — TodayPage's manual "Evening review" button

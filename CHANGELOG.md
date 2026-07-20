@@ -17,6 +17,16 @@ going forward; the original Python/Tkinter version is retired.
   the Reports page's label formatter just didn't know File Explorer was one of
   the apps with a meaningful sub-detail to show (it already handled this for
   Word, Excel, browsers, etc., File Explorer was missing from that list)
+- The tray icon now shows a small red dot whenever a notification has fired
+  since you last had the app window open — it clears the moment you bring the
+  app to the front, the same way most tray-icon badges work
+
+**Diagnostics**
+- Added logging around the evening-review prompt and the shared dialog queue
+  (`DialogGate`) after a report that the end-of-day review didn't appear at
+  all one evening with nothing in the log to explain why — this doesn't fix
+  anything by itself, but the next occurrence should leave a clear trail of
+  whether the prompt was even attempted and, if so, what blocked it
 
 **Reliability & polish**
 - Error messages shown in the app (failed saves, exports, or page loads) now

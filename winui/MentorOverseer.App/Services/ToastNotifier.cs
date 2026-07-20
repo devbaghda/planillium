@@ -49,6 +49,9 @@ public static class ToastNotifier
                 builder.AddArgument(key, value);
             if (tag is { Length: > 0 }) builder.SetTag(tag);
             AppNotificationManager.Default.Show(builder.BuildNotification());
+            // Centralized here rather than at each call site so every current and future
+            // toast automatically participates in the unread tray dot (2026-07-20 request).
+            NotificationCenter.MarkUnread();
         }
         catch (Exception ex)
         {

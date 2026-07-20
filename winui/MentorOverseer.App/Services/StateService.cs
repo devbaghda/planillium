@@ -17,6 +17,11 @@ public class AppState
     [JsonPropertyName("name_asked")] public bool NameAsked { get; set; } = false;
     [JsonPropertyName("window_width")] public int WindowWidth { get; set; } = 1180;
     [JsonPropertyName("window_height")] public int WindowHeight { get; set; } = 780;
+    // How many toast notifications have fired since the window was last brought to the
+    // foreground — backs the tray icon's unread dot (2026-07-20 request). Persisted (not
+    // just in-memory) so a notification that fires while the app is closed, or right before
+    // it's quit, still shows as unread the next time it's launched.
+    [JsonPropertyName("unread_notifications")] public int UnreadNotifications { get; set; } = 0;
 }
 
 public static class StateService

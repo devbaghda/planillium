@@ -120,6 +120,13 @@ and stays silent on a day every relevant plan already has off.
 
 These settings can be adjusted from the app’s Settings area.
 
+### Notifications and the tray icon
+
+Any toast notification the app raises (a reminder, a "welcome back" prompt, the evening review)
+leaves the tray icon showing a small red dot until you actually bring the app window to the front —
+so a prompt that fired while you were away, or while the window was hidden in the tray, isn't lost
+track of. Opening the app clears the dot, the same way most other tray-icon badges work.
+
 ## Data and privacy
 
 Planillium stores its data locally on your device, in a SQLite database and a couple of local

@@ -166,10 +166,19 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) =>
         {
             Tracker?.Stop();
-            _tray?.Dispose();
+            DisposeTray();
             if (_notificationActivationWired)
                 AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
             if (_hwnd != IntPtr.Zero) WTSUnRegisterSessionNotification(_hwnd);
+        };
+
+        // Being brought to the foreground is the "I've seen what's going on" signal for the
+        // tray unread dot (2026-07-20 request) — there's no separate per-notification inbox to
+        // click into, so looking at the app clears it, same as most tray-icon badges.
+        Activated += (_, e) =>
+        {
+            if (e.WindowActivationState != WindowActivationState.Deactivated)
+                NotificationCenter.MarkAllRead();
         };
     }
 

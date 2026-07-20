@@ -243,7 +243,44 @@ on 2026-07-17 after the round-7 audit)._
   - Lesson: when re-investigating a report the app's own screen contradicts, check what the *screen
     the user is looking at* actually does with the data, not just the raw table — a value can be
     correct in storage and still wrong on screen if a formatting/grouping step between the two drops
-    information for a case it wasn't written to handle.
+    information for a case it wasn't written to handle. Folded into the `windows-app-auditor` global
+    skill's "verify, don't vibe" section.
+- **2026-07-20, unread-notification tray dot + missing-EOD-notification report**: user reported no
+  end-of-day review notification appeared one evening, and asked for all notifications to stay
+  "unread" (tray icon shows a dot) until the app is actually looked at. (1) The missing-notification
+  report couldn't be conclusively root-caused: the live process had been running continuously since
+  well before 20:00 and was still alive over an hour past it, `winui_state.json`'s `last_review`
+  never advanced past the previous day, and the log had zero entries (not even an error) in that
+  window — ruling out a crash but not narrowing down which of several plausible causes (a stuck
+  `DialogGate` semaphore held by an earlier undismissed dialog; `window.IsOnScreen()` misreading
+  state; a toast that fired but was never noticed) actually happened. Per the audit skill's own
+  "instrument, don't guess" principle, added diagnostic-only logging instead of a speculative fix:
+  `DialogGate.ShowAsync` now logs a `Warn` if a wait for the gate exceeds 15s (would catch a stuck
+  dialog starving the queue), and `ReviewDialog.Trigger` logs once/day the first time it actually
+  attempts to offer the review, naming whether the window was on-screen. Next occurrence should be
+  diagnosable from the log. (2) New `Services/NotificationCenter.cs`: a persisted unread counter
+  (`unread_notifications` in `winui_state.json`, via `StateService`) that `ToastNotifier.Show`
+  increments on every successful toast (centralized there so all current+future call sites
+  participate automatically) and that `MainWindow`'s `Activated` event clears — "read" means the
+  window was brought to the foreground, there's no separate per-notification inbox. `MainWindow.Tray.cs`
+  builds two cached `System.Drawing.Icon`s once at startup (plain + a badged version with a red dot
+  composited via GDI+ `FillEllipse` onto the existing `icon.ico`) and swaps `_tray.Icon` between them
+  on `NotificationCenter.UnreadChanged`; the badged icon's `Icon.FromHandle`-wrapped HICON is
+  destroyed explicitly in `Closed` (that call doesn't take ownership of the handle, a known .NET GDI
+  gotcha — left unhandled it would leak one handle for the life of the badge, though since it's only
+  built once per process run, not per toggle, this is a fixed one-time cost, not unbounded growth).
+  Verified: clean Debug build (0 warnings) + 83/83 tests; the mark-unread→mark-read round trip was
+  confirmed end-to-end via a throwaway instance (`MENTOR_ROOT` pointed at a scratch folder, a
+  pre-seeded `unread_notifications: 1`, launched, confirmed it reset to `0` on window activation);
+  the badge composite itself was verified by rendering the exact same GDI+ calls standalone and
+  visually inspecting the output (a clear red dot with a white ring, bottom-right corner) — the tray
+  shell's own overflow-flyout UI resisted UI-Automation-driven inspection (auto-closes when a
+  non-foreground process invokes it) so the live tray icon wasn't itself screenshotted, but the
+  underlying draw call is proven correct and `TaskbarIcon.Icon` is a plain property assignment.
+  **Both items are now in the live Release instance** — the user closed the previously-running
+  instance (from the prior session's end-of-day/File-Explorer/blank-title batch, which was also
+  still pending a rebuild) between turns; rebuilt Release and relaunched cleanly (log shows a normal
+  startup, no errors) once confirmed stopped.
 - **2026-07-20, diary-tracking-gap investigation (next occurrence of the 2026-07-15 open TODO)**:
   user reported today's diary starting at 07:59 instead of the configured 06:00 diary-start, with
   no accounting at all for the gap before it. Investigation (log + direct read-only DB query via
