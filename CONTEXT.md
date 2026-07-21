@@ -27,7 +27,7 @@ Python source was removed from the repo on 2026-07-08 once the WinUI app had shi
 everything it did (still recoverable from git history/tags if ever needed).
 
 ```
-mentor-overseer/
+Planillium/
 ├── CONTEXT.md              ← you are here. Read this first every session.
 ├── CLAUDE.md               ← operating instructions (how to work here — build/verify/
 │                              publish workflow, safety rules). CONTEXT.md is facts,
@@ -211,6 +211,13 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-21, GitHub repo renamed to match app branding**: `devbaghda/mentor-overseer` →
+  `devbaghda/planillium` (`gh repo rename`), freed up by deleting the stray duplicate that
+  previously held that name (see entry below). Local `origin` remote updated to match; doc
+  references to the old repo name updated in `CLAUDE.md` and the launch-post draft — historical
+  session notes below that describe past actions (e.g. "flipped `devbaghda/mentor-overseer` to
+  Public") were deliberately left as-is since they're accurate records of what the repo was
+  actually called at the time.
 - **2026-07-21, first real release build (v1.1.0) + public-readiness pass**: user asked to build the
   distributable package and prepare to publish publicly. Found `release/release.ps1` +
   `release/installer/app.iss` (Inno Setup) already existed from an earlier session but had never
