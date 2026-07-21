@@ -211,6 +211,18 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-21, posting-plan content removed from the public repo (part 1 of 2 — current tree)**:
+  user's call — `posts/`, `POSTING_PLAN.md`, and the older `SOCIAL_POSTS.md` aren't part of the app
+  and shouldn't be publicly visible on GitHub. Repo-wide audit (`git ls-tree` at root) confirmed
+  these three were the only "not the app" tracked paths — `CLAUDE.md`/`CONTEXT.md` were
+  deliberately kept (dev history/process docs, not marketing drafts). Moved `media/*` to a
+  new top-level `media/` folder first (README embeds those images), rewrote README's
+  `media/` references to `media/`, then `git rm --cached` the three paths (files kept on
+  local disk, just untracked — the user still needs them to actually post) and added them to
+  `.gitignore`. Committed and pushed immediately so the live repo was fixed without waiting on
+  **part 2, a full git-history purge (in progress / see the next entry for the outcome)** — the
+  repo's been public since earlier the same day and these paths were already in several pushed
+  commits, so a plain removal alone leaves them recoverable from GitHub's commit history.
 - **2026-07-21, GitHub repo renamed to match app branding**: `devbaghda/mentor-overseer` →
   `devbaghda/planillium` (`gh repo rename`), freed up by deleting the stray duplicate that
   previously held that name (see entry below). Local `origin` remote updated to match; doc

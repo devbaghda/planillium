@@ -3,6 +3,13 @@ data/
 config.json
 plans/active/*.json
 
+# Publishing/marketing drafts — local-only, not part of the app (2026-07-21).
+# Kept on disk for the user's own posting workflow; deliberately not pushed to
+# the public repo.
+posts/
+POSTING_PLAN.md
+SOCIAL_POSTS.md
+
 # Build artifacts
 *.exe
 release/dist/
