@@ -211,18 +211,38 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
-- **2026-07-21, posting-plan content removed from the public repo (part 1 of 2 — current tree)**:
+- **2026-07-21, posting-plan content removed from the public repo — both tree and full history**:
   user's call — `posts/`, `POSTING_PLAN.md`, and the older `SOCIAL_POSTS.md` aren't part of the app
   and shouldn't be publicly visible on GitHub. Repo-wide audit (`git ls-tree` at root) confirmed
   these three were the only "not the app" tracked paths — `CLAUDE.md`/`CONTEXT.md` were
-  deliberately kept (dev history/process docs, not marketing drafts). Moved `media/*` to a
-  new top-level `media/` folder first (README embeds those images), rewrote README's
-  `media/` references to `media/`, then `git rm --cached` the three paths (files kept on
-  local disk, just untracked — the user still needs them to actually post) and added them to
-  `.gitignore`. Committed and pushed immediately so the live repo was fixed without waiting on
-  **part 2, a full git-history purge (in progress / see the next entry for the outcome)** — the
-  repo's been public since earlier the same day and these paths were already in several pushed
-  commits, so a plain removal alone leaves them recoverable from GitHub's commit history.
+  deliberately kept (dev history/process docs, not marketing drafts).
+  **Part 1 (current tree):** moved the `posts/media/*` images to a new top-level `media/` folder
+  first (README embeds them), rewrote README's image references to the new path, then
+  `git rm --cached` the three paths (files kept on local disk, just untracked — the user still
+  needs them to actually post) and added them to `.gitignore`; committed and pushed right away so
+  the live repo was fixed without waiting on part 2.
+  **Part 2 (full history purge):** the repo's been public since earlier the same day and these
+  paths were already in several pushed commits, so the tree-only fix alone would still leave them
+  recoverable from GitHub's commit history. Same `git filter-repo`-in-a-fresh-clone approach as the
+  2026-07-18 personal-data purge, three passes on one scratch clone: (1) `--path-rename
+  posts/media/:media/` across all history, so old commits' layout matches the new one; (2)
+  `--invert-paths --path posts/ --path POSTING_PLAN.md --path SOCIAL_POSTS.md --force` to drop
+  those paths from every commit; (3) `--replace-text` rewriting the literal string `posts/media/`
+  → `media/` in every blob's text content, so a historical README/CONTEXT.md doesn't point at a
+  path that no longer exists in that commit's own rewritten tree. Verified before pushing: local
+  commit count 166 → 159 on the purged clone (the 7 dropped commits were ones that touched only
+  the now-removed paths and became fully empty — filter-repo prunes those by default; spot-checked
+  against the real commit list, matches exactly what you'd expect from the posting-plan-only
+  commits); zero hits for the three paths across all history in the clone; tip-tree content
+  identical to pre-purge except one expected line (a session note's own prose mentioning the old
+  path got caught by the same text replacement). Force-pushed `master`+`winui-rebuild`+both tags
+  (`v1.0.0`'s hash also changed — expected, filter-repo regenerates the whole commit graph even
+  for commits whose content didn't change), then reset the real local working copy to match.
+  **Residual, not on GitHub:** two purely-local branches (`audit-fixes-2026-07-09`,
+  `code-refinement`) still have the old pre-purge history — same as the 2026-07-18 purge's own
+  note, these were never pushed to origin so they don't affect what's public; left untouched rather
+  than deleted without being asked. If a genuinely clean local state matters too, that's a separate
+  ask.
 - **2026-07-21, GitHub repo renamed to match app branding**: `devbaghda/mentor-overseer` →
   `devbaghda/planillium` (`gh repo rename`), freed up by deleting the stray duplicate that
   previously held that name (see entry below). Local `origin` remote updated to match; doc
