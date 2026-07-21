@@ -28,6 +28,18 @@ going forward; the original Python/Tkinter version is retired.
   anything by itself, but the next occurrence should leave a clear trail of
   whether the prompt was even attempted and, if so, what blocked it
 
+**Fixes**
+- Fixed the recurring bug where a day's activity tracking would silently start
+  from whenever the PC was next used instead of the configured day-start time,
+  with no idle/gap entry accounting for the missing stretch — a poll that
+  resumed after a long gap (e.g. after Windows paused the app's background
+  timer overnight) and also had a pending "session was locked" notification
+  ran the lock-handling check first, which stamped the gap's start as "right
+  now" instead of "whenever the gap actually began" and, as a side effect,
+  suppressed the separate check that would have gotten it right. Reordering
+  the two checks so the correct one runs first fixes it without changing
+  behavior on a normal day
+
 **Reliability & polish**
 - Error messages shown in the app (failed saves, exports, or page loads) now
   lead with what to do about it instead of just the raw technical detail —

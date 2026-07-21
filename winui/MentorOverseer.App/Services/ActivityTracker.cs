@@ -615,8 +615,27 @@ public sealed class ActivityTracker : IDisposable
 
         using var conn = AppPaths.OpenConnection();
 
-        HandleSessionLock(conn, now);
+        // Order matters here (2026-07-21 fix, confirmed via the 2026-07-20 diagnostics below):
+        // HandleSleepGap must run BEFORE HandleSessionLock. Both can set _idleSince/_idleNotified
+        // for the same poll, but HandleSleepGap anchors to `last` (the true last-known-good poll
+        // time, however long ago that was), while HandleSessionLock anchors to `now` (whenever
+        // this poll happens to be running, which can be far later than the actual lock — e.g. if
+        // Windows throttled this app's background timer for hours while it sat hidden in the
+        // tray, or the WM_WTSSESSION_CHANGE message itself was queued during sleep). With the old
+        // order, a poll that resumes after a long gap AND has a pending lock notification let
+        // HandleSessionLock go first, stamping _idleSince = now and _idleNotified = true — which
+        // then made HandleSleepGap's own `|| _idleNotified` guard skip it entirely one line later
+        // in the very same call, silently discarding the real gap. Confirmed live: 2026-07-21,
+        // tracking picked up at 10:35 instead of the configured 06:00 diary start, with
+        // HandleSessionLock's line logging idleSince=now and the immediately-following
+        // HandleIdleReturn logging a zero-length idleStart==idleEnd — and no HandleSleepGap line
+        // at all despite the process having been running continuously since the previous evening.
+        // Running HandleSleepGap first means it claims the gap (correctly, using `last`) before
+        // HandleSessionLock gets a chance to overwrite it with the much-less-accurate `now`; if
+        // there's no sleep gap, HandleSleepGap is a no-op and HandleSessionLock runs exactly as
+        // before.
         HandleSleepGap(conn, now, idleThresholdSec);
+        HandleSessionLock(conn, now);
         _lastPollAt = now;
 
         _currentWindow = title;

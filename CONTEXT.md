@@ -281,6 +281,31 @@ on 2026-07-17 after the round-7 audit)._
   instance (from the prior session's end-of-day/File-Explorer/blank-title batch, which was also
   still pending a rebuild) between turns; rebuilt Release and relaunched cleanly (log shows a normal
   startup, no errors) once confirmed stopped.
+- **2026-07-21, diary-tracking-gap RESOLVED (closes the 2026-07-15/07-20 open TODO)**: user reported
+  the same bug a third time — today's tracking started at 10:35 instead of the configured 06:00,
+  nothing accounted for the gap. This time the 2026-07-20 diagnostics (now live, deployed in that
+  session's Release rebuild) caught it directly: at 10:35:31, `HandleSessionLock` logged
+  `idleSince set to 2026-07-21T10:35:31` immediately followed by `HandleIdleReturn` logging
+  `idleStart=10:35:31 idleEnd=10:35:31` (zero-length, `willFire=False`) — and critically, NO
+  `HandleSleepGap` "gap detected" line at all, despite the live process (confirmed via its actual
+  `CreationDate`) having been running continuously since 21:36:57 the previous evening with no
+  restart. Root cause, now conclusively identified from this evidence plus `PollOnce`'s own control
+  flow: `HandleSessionLock` ran *before* `HandleSleepGap` in `PollOnce`. On a poll that resumes after
+  a long real gap (most likely Windows throttling this app's background timer for hours while
+  it sat hidden in the tray overnight — a documented power-management behavior, not something this
+  app controls) while also carrying a pending "session was locked" notification, `HandleSessionLock`
+  ran first and stamped `_idleSince = now` / `_idleNotified = true` using "whenever this poll
+  happens to run" as the gap's start — then, one line later in the *same* call,
+  `HandleSleepGap`'s own guard (`|| _idleNotified`) saw that flag already set and silently skipped
+  the check that would have anchored the gap correctly to `_lastPollAt` (the true last-known-good
+  time, however long ago). Net effect: the whole gap collapsed to zero and vanished with no diary
+  row, no prompt, no log trace of the real duration. **Fix**: swapped the call order so
+  `HandleSleepGap` runs first — it claims the gap correctly when there is one; when there isn't, it's
+  a no-op and `HandleSessionLock` behaves exactly as before. Verified via clean Debug build (0
+  warnings) + 83/83 tests. **Live in Release** — rebuilt and relaunched same session. Watch for one
+  more occurrence to confirm (the existing `HandleSleepGap`/`HandleIdleReturn` diagnostic lines are
+  enough to see it) since the underlying trigger (timer throttled while backgrounded overnight) isn't
+  something this fix prevents — only its previously-silent, gap-eating side effect.
 - **2026-07-20, diary-tracking-gap investigation (next occurrence of the 2026-07-15 open TODO)**:
   user reported today's diary starting at 07:59 instead of the configured 06:00 diary-start, with
   no accounting at all for the gap before it. Investigation (log + direct read-only DB query via
