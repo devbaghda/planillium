@@ -95,4 +95,4 @@ I'm sharing this publicly because I think the underlying idea might help someone
 
 ## License
 
-This repository is provided as an open-source portfolio and learning project. Please review the repository license terms before reuse or redistribution.
+[MIT](LICENSE) — third-party package licenses are inventoried separately in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

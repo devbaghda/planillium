@@ -5,6 +5,8 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+## v1.1.0 — 2026-07-21
+
 **New**
 - A new end-of-day reminder warns you once, a configurable number of hours before the
   day's review time (2 hours by default, adjustable in Settings), if today's or overdue
