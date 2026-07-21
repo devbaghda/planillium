@@ -28,6 +28,18 @@ Planillium helps the user:
 - review weekly performance through reports,
 - and stay engaged with a lightweight reward and scoring model.
 
+## A closer look
+
+*All previews below use sample/placeholder data, not a real user's activity history.*
+
+| Today | Schedule |
+|---|---|
+| ![Today page preview](media/today-demo.gif) | ![Schedule page preview](media/schedule-demo.gif) |
+
+| Plans | Settings |
+|---|---|
+| ![Plans page preview](media/plans-demo.gif) | ![Settings page preview](media/settings-demo.gif) |
+
 ## Concept
 
 This project is built around a simple idea:
