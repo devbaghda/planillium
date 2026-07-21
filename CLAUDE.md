@@ -19,11 +19,18 @@ that's already documented there or missing that something is already in progress
 - Push fixes to `origin` (both branches) when the user asks for it ("transfer to public
   version," "publish this," etc.) — this has been the pattern every session so far, but it's
   still been on request each time, not automatic. Don't push without being asked.
-- GitHub repo `devbaghda/mentor-overseer` is currently **Private**. Treat it as pre-public —
-  still avoid adding secrets/personal data (see CONTEXT.md's Open TODOs) — but there's no live
-  public-exposure risk today if something slips through.
-- Other worktrees/branches exist elsewhere for this repo (`mentor-overseer-test`,
-  `mentor-overseer-theme-test`, `code-refinement`) — this directory isn't the only checkout.
+- GitHub repo `devbaghda/mentor-overseer` is **Public** (flipped 2026-07-21, alongside the first
+  real installable release, `v1.1.0` — see `release/`). Never add secrets/personal data; there is
+  now a live public-exposure risk if something slips through. `.gitignore` excludes `data/`,
+  `config.json`, and `plans/active/*.json`; full-history scrub done 2026-07-18 (see CONTEXT.md).
+- A stray public duplicate, `devbaghda/planillium` (a single stale curated-snapshot commit from
+  2026-07-08, superseded by the real repo above), was found 2026-07-21 and flagged for deletion —
+  check CONTEXT.md's Open TODOs before assuming it's gone; deleting a GitHub repo needs a token
+  scope (`gh auth refresh -h github.com -s delete_repo`) this environment's auto-mode classifier
+  won't grant automatically, so it may still be pending the user's own action.
+- The `mentor-overseer-test`/`mentor-overseer-theme-test`/`code-refinement` worktrees this note
+  used to mention no longer exist on this machine as of a 2026-07-21 disk check (`git worktree
+  list` shows only this checkout) — don't assume they're still out there without checking first.
 
 ## Build & verify
 - `dotnet build -p:Platform=x64 -c Debug` (or `-c Release`) from `winui/MentorOverseer.App/` —

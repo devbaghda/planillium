@@ -744,3 +744,22 @@ on 2026-07-17 after the round-7 audit)._
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
+  - ~~Push v1.1.0, create the GitHub Release, flip `devbaghda/mentor-overseer` to Public~~ —
+    **done 2026-07-21.** Repo is now Public; `v1.1.0` tag pushed; GitHub Release created with
+    `Planillium-1.1.0-setup.exe` + `SHA256SUMS.txt` attached.
+  - **Delete the stray public `devbaghda/planillium` repo — blocked on a token scope, needs the
+    user's own action (2026-07-21).** A 2026-07-21 GitHub-account audit (`gh repo list devbaghda`)
+    found a second, separate public repo — `devbaghda/planillium` — sitting alongside the real
+    `mentor-overseer` repo: a single stale commit from 2026-07-08 ("curated public release" of an
+    early v1.0.0 snapshot, sanitized but long superseded by everything since). Its local source,
+    `C:\Users\devba\Desktop\CLAUDE\planillium-public`, is a clean, fully-pushed clone with nothing
+    unique in it. `gh repo delete devbaghda/planillium` failed — the CLI token lacks the
+    `delete_repo` scope, and both `gh auth refresh -h github.com -s delete_repo` (needs a browser
+    consent step) and a Recycle-Bin deletion of the local folder were blocked by this
+    environment's auto-mode safety classifier, which doesn't grant destructive-action permissions
+    automatically. **To finish this:** either run `gh auth refresh -h github.com -s delete_repo`
+    yourself (completes the browser prompt) so a future session can delete it via `gh repo delete
+    devbaghda/planillium --yes`, or delete it directly at
+    https://github.com/devbaghda/planillium/settings (Danger Zone → Delete this repository); the
+    local `planillium-public` folder can then be deleted the same way (or ask a session to retry
+    with your permission granted).
