@@ -211,6 +211,42 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-21, first real release build (v1.1.0) + public-readiness pass**: user asked to build the
+  distributable package and prepare to publish publicly. Found `release/release.ps1` +
+  `release/installer/app.iss` (Inno Setup) already existed from an earlier session but had never
+  actually been run — no `release/output/`, no GitHub Release, no evidence the pipeline worked
+  end-to-end. Two real gaps closed first: (1) the csproj's `<Version>` was still `1.0.0` while 159
+  commits had landed since that tag — bumped to `1.1.0` (no breaking data-format change, but
+  substantial new features/fixes) so the tag wouldn't lie about its tree. (2) README's "License"
+  section pointed at license terms that didn't exist anywhere in the repo — added an MIT `LICENSE`
+  (copyright held as the GitHub handle `devbaghda`, not the real name that was already scrubbed from
+  history per the 2026-07-18 purge) and fixed the README section to link it. Ran `release.ps1`
+  clean: `dotnet publish` (self-contained win-x64) → staged `dist/` → compiled via Inno Setup 6
+  (already installed on this machine) → `release/output/Planillium-1.1.0-setup.exe` (~61.6 MB) +
+  `SHA256SUMS.txt`. Verified beyond just "it compiled": confirmed `dist/config.json` matches the
+  sanitized `config.default.json` (not the real live config); ran the actual verification checklist
+  from `release/README.md` — fresh silent install to a disposable scratch directory (not the real
+  Program Files), smoke-launched it (first-run name/tracking-disclosure dialog, "No active plans
+  yet.", "0 pts", no crash — log showed a clean `Planillium v1.1.0 starting` with nothing else),
+  then ran the generated uninstaller and confirmed `data/` survived (by design — real user data was
+  written there during the smoke run) while everything else was removed cleanly with zero registry
+  residue (`HKCU\...\Uninstall` entry gone, no leftover `Run` key). Had to briefly stop the live
+  dev-tree instance for this (the app's own single-instance mutex correctly blocked the scratch
+  copy from launching alongside it — expected, not a bug) — did this at 11:51 local, nowhere near
+  the 20:00 EOD-timing caution, then rebuilt plain Release and relaunched the live instance
+  afterward at v1.1.0 (its restart-after-a-gap coincidentally re-confirmed the diary-tracking-gap
+  fix from earlier today: the ~14-minute gap while it was down correctly showed up as
+  `HandleSleepGap: gap detected ... willFire=True` in the log instead of vanishing). Tagged
+  `v1.1.0` locally (annotated, pointing at the exact commit the installer was built from) but
+  **deliberately did not push the tag, create a GitHub Release, or touch repo visibility** —
+  those are the genuinely hard-to-reverse, visible-to-others actions and the user hadn't asked for
+  them explicitly yet, unlike the build/verify work itself. **Open TODO / next decision point:**
+  push `v1.1.0`, attach `Planillium-1.1.0-setup.exe` + `SHA256SUMS.txt` to a GitHub Release, and
+  flip `devbaghda/mentor-overseer` from Private to Public (prerequisite the launch post has been
+  waiting on since 2026-07-20) — all three need the user's explicit go-ahead. Also unresolved:
+  the installer/exe are unsigned (no Authenticode cert), so first-run will show SmartScreen's
+  "unrecognized app" wall — expected and already documented in `release/README.md`, worth
+  mentioning in the launch post itself so it doesn't read as broken.
 - **2026-07-20, late-day task reminder + diary window-title investigation**: user asked for three
   things. (1) New feature: a once-a-day toast warns a configurable number of hours before
   `end_of_day_summary_time` (default 2h, `late_day_task_reminder_hours` in Settings) if today's or
