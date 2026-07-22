@@ -11,6 +11,16 @@ going forward; the original Python/Tkinter version is retired.
   their full, hidden content every time the page opened, not just the part
   you could actually see. They now build the rest only when you click
   "Show more."
+- Fixed the end-of-day reminders (the "tasks still open" nudge, and possibly
+  the evening review and morning kickoff prompts too) silently never firing
+  under a specific timing mechanism that could quietly stop working despite
+  showing no error — replaced with a more reliable one.
+- The Settings page's reminder-timing field was impossible to actually reach
+  — it was being pushed off the edge of the page with no visible sign
+  anything was missing.
+- The sidebar's point total is now labeled "Balance" so it doesn't look like
+  it should always match the Reports page's daily score (they measure two
+  different things: your running total vs. a live preview of today alone).
 
 ## v1.1.0 — 2026-07-21
 

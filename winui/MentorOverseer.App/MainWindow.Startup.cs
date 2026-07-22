@@ -68,13 +68,34 @@ public sealed partial class MainWindow
     // can't update one and miss the other (2026-07-18 audit finding R10-11).
     private static readonly TimeSpan WatcherPollInterval = TimeSpan.FromMinutes(1);
 
+    // System.Threading.Timer (not DispatcherQueueTimer) for all three watchers below
+    // (2026-07-22 fix). DispatcherQueueTimer.Tick was confirmed to silently never fire
+    // for the late-day-task-reminder watcher: timer.IsRunning read back True immediately
+    // after Start(), yet diagnostic Log.Info calls placed as the literal first statement
+    // of both the setup method and the Tick handler showed zero ticks across 60+ expected
+    // intervals over more than an hour of live testing. This is very likely also the
+    // unexplained root cause of the 2026-07-20 "end-of-day review never appeared" report,
+    // which was never conclusively diagnosed at the time — EOD/Kickoff shared the exact
+    // same _dq.CreateTimer() pattern, so switching all three at once rather than just the
+    // one under active investigation. System.Threading.Timer is a lower-level, non-WinRT
+    // primitive that reliably fires on a thread-pool thread; its callback marshals onto
+    // the UI thread via _dq.TryEnqueue, same as every other cross-thread callback in this
+    // app. Each MUST be stored in a field, not a local variable — unlike DispatcherQueueTimer
+    // (kept alive by the DispatcherQueue itself), a System.Threading.Timer with no other
+    // reference is eligible for GC at any time, which would silently stop it from firing.
+    private System.Threading.Timer? _eodTimer;
+    private System.Threading.Timer? _kickoffTimer;
+    private System.Threading.Timer? _lateDayReminderTimer;
+
     /// <summary>At the configured end-of-day time, offer the evening review once.</summary>
     private void StartEodWatcher()
     {
-        var timer = _dq.CreateTimer();
-        timer.Interval = WatcherPollInterval;
-        timer.Tick += async (_, _) => await ReviewDialog.Trigger(this);
-        timer.Start();
+        _eodTimer = new System.Threading.Timer(_ =>
+            _dq.TryEnqueue(async () =>
+            {
+                try { await ReviewDialog.Trigger(this); }
+                catch (Exception ex) { Log.Error("StartEodWatcher.Tick", ex); }
+            }), null, WatcherPollInterval, WatcherPollInterval);
     }
 
     /// <summary>At the configured start-of-day time, show the morning kickoff
@@ -83,10 +104,12 @@ public sealed partial class MainWindow
     /// next tick"; KickoffDialog's _showing guard keeps the two from double-showing.</summary>
     private void StartKickoffWatcher()
     {
-        var timer = _dq.CreateTimer();
-        timer.Interval = WatcherPollInterval;
-        timer.Tick += async (_, _) => await KickoffDialog.Trigger(this);
-        timer.Start();
+        _kickoffTimer = new System.Threading.Timer(_ =>
+            _dq.TryEnqueue(async () =>
+            {
+                try { await KickoffDialog.Trigger(this); }
+                catch (Exception ex) { Log.Error("StartKickoffWatcher.Tick", ex); }
+            }), null, WatcherPollInterval, WatcherPollInterval);
     }
 
     // Set once per calendar day the moment the reminder below actually fires (or is
@@ -116,28 +139,16 @@ public sealed partial class MainWindow
     /// in the tray, same reasoning as every other timed prompt in this file.</summary>
     private void StartLateDayTaskReminderWatcher()
     {
-        // Temporary probe (2026-07-22): CheckLateDayTaskReminder's own "tick fired" line
-        // (added the same investigation) has never once logged across multiple clean
-        // restarts and several minutes of uptime each time — this narrows whether the
-        // setup method itself even runs and successfully starts the timer, versus the
-        // timer starting but never actually ticking.
-        Log.Info("StartLateDayTaskReminderWatcher: setting up");
-        var timer = _dq.CreateTimer();
-        timer.Interval = WatcherPollInterval;
-        timer.IsRepeating = true;
-        timer.Tick += (_, _) => CheckLateDayTaskReminder();
-        timer.Start();
-        Log.Info($"StartLateDayTaskReminderWatcher: timer.IsRunning={timer.IsRunning}");
+        _lateDayReminderTimer = new System.Threading.Timer(_ =>
+            _dq.TryEnqueue(CheckLateDayTaskReminder), null, WatcherPollInterval, WatcherPollInterval);
     }
 
     private void CheckLateDayTaskReminder()
     {
-        // Temporary probe (2026-07-21): the diagnostic further down never once logged
-        // across 28+ ticks with genuinely pending tasks inside the trigger window — this
-        // line, placed before anything else in the method can throw, isolates whether the
-        // tick is even reaching this method at all versus something upstream (EodTime()/
-        // LateDayReminderLead(), both called before the try block below) silently throwing
-        // and getting swallowed by the DispatcherQueueTimer.Tick dispatch boundary.
+        // Kept as a cheap sanity check after the 2026-07-22 DispatcherQueueTimer ->
+        // System.Threading.Timer swap (see StartLateDayTaskReminderWatcher) — this line
+        // never once logged under the old timer despite it reporting IsRunning=true, so
+        // seeing it fire now on the new mechanism is the actual proof the fix worked.
         Log.Info("CheckLateDayTaskReminder: tick fired");
 
         var today = DateOnly.FromDateTime(DateTime.Today);

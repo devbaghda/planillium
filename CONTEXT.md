@@ -211,6 +211,45 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-22, DispatcherQueueTimer.Tick silently never firing — root cause found and fixed**:
+  investigating a "no late-day-task-reminder popped up despite genuinely open tasks" report (plus "no
+  tray unread dot" — same symptom, the toast never fired to trigger either), added `Log.Info` probes
+  at the very first statement of both `StartLateDayTaskReminderWatcher` (the timer setup) and
+  `CheckLateDayTaskReminder` (the `Tick` handler). Setup logged fine every time, including
+  `timer.IsRunning=True` read back immediately after `Start()` — but the tick-fired line never once
+  appeared across multiple clean-restart tests totaling 60+ expected 1-minute intervals over more than
+  an hour. Conclusively a `DispatcherQueueTimer` whose `Tick` event silently never fires despite
+  reporting itself as running — not a logic bug, not a swallowed exception (the probe was the literal
+  first line, before anything that could throw). This is very likely also the real explanation for the
+  2026-07-20 "end-of-day review never appeared" report, never conclusively diagnosed at the time —
+  `StartEodWatcher`/`StartKickoffWatcher` used the exact same `_dq.CreateTimer()` pattern. **Fix**:
+  replaced all three watchers' `DispatcherQueueTimer` with `System.Threading.Timer` (a lower-level,
+  non-WinRT primitive), callback marshaled onto the UI thread via the existing `_dq.TryEnqueue(...)`
+  pattern already used everywhere else in this file — each timer stored in a field (`_eodTimer`/
+  `_kickoffTimer`/`_lateDayReminderTimer`), since unlike `DispatcherQueueTimer` (kept alive by the
+  DispatcherQueue itself), an unreferenced `System.Threading.Timer` is GC-eligible and would silently
+  stop firing. Verified: clean Debug build (0 warnings) + 83/83 tests, then live in Release — the
+  tick-fired probe (kept in place as a permanent sanity check, not removed) logged within one interval
+  of the very first restart under the new mechanism, after never once firing under the old one.
+  **Not yet confirmed for EOD/Kickoff specifically** (same code shape, same fix applied, but the actual
+  trigger conditions for those two didn't come up again this session) — worth a quiet mental note if
+  either is ever reported missing again, though the fix should already cover it.
+  - New standing lesson (folded into `windows-app-auditor`'s architecture.md, threading section):
+    a `DispatcherQueueTimer` reporting `IsRunning=True` is not proof its `Tick` event will ever fire —
+    if a periodic WinUI dispatcher timer is suspected of silently not ticking, don't just check
+    `IsRunning`; add a `Log.Info` as the literal first statement of the `Tick` handler and watch for
+    at least several expected intervals before concluding it's healthy. If it's confirmed not firing,
+    `System.Threading.Timer` (callback marshaled via `_dq.TryEnqueue`) is a reliable lower-level
+    replacement — just remember to root it in a field, since it has no built-in owner keeping it alive
+    the way `DispatcherQueueTimer` does.
+- **2026-07-22, desktop shortcut icon fixed**: user reported the desktop shortcut showing a generic
+  icon. Cause: the shortcut's `IconLocation` still pointed at the pre-rename local folder path
+  (`CLAUDE\mentor-overseer\...`, before this project's folder was renamed to `CLAUDE\Planillium` on
+  disk) — that path no longer exists, so Windows silently fell back to a generic icon. The shortcut's
+  actual launch target was already correct (pointed at the current `Planillium` folder), only the
+  icon reference was stale. Fixed by pointing `IconLocation` at the exe itself (`Planillium.App.exe,0`)
+  rather than a separate loose `icon.ico` path — the exe already embeds that icon via the csproj's
+  `<ApplicationIcon>`, so this is one less path that can go stale on a future folder move.
 - **2026-07-21, Reports page slow-load fix**: user reported Reports "still" loads too slowly, after
   two earlier perf fixes this month (2026-07-18 closed-form plan-day math; R10-03's `Overrides()`
   memoization) hadn't fully resolved it. Measured before guessing (`time_diary` has no index on
