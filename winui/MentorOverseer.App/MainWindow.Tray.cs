@@ -89,7 +89,27 @@ public sealed partial class MainWindow
     private void OnUnreadChanged()
     {
         if (_tray is null || _plainIcon is null || _badgedIcon is null) return;
-        _dq.TryEnqueue(() => _tray.Icon = NotificationCenter.HasUnread ? _badgedIcon : _plainIcon);
+        _dq.TryEnqueue(() =>
+        {
+            // Diagnostic (2026-07-22 request): a user report of the tray icon briefly
+            // disappearing right after this exact swap (off-plan toast fired -> badge
+            // appeared -> clicking the icon made it vanish, though the process itself
+            // never actually died — confirmed still running/responding throughout, and
+            // the global UnhandledException logger caught nothing). Logging the swap
+            // itself, guarded, so a future occurrence can be time-correlated against
+            // whatever click/H.NotifyIcon activity happens in the same second, instead
+            // of guessing at a fix with no evidence of the actual mechanism.
+            try
+            {
+                var hasUnread = NotificationCenter.HasUnread;
+                _tray.Icon = hasUnread ? _badgedIcon : _plainIcon;
+                Log.Info($"MainWindow.OnUnreadChanged: swapped tray icon, hasUnread={hasUnread}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error("MainWindow.OnUnreadChanged (icon swap)", ex);
+            }
+        });
     }
 
     private void DisposeTray()
@@ -107,8 +127,24 @@ public sealed partial class MainWindow
     {
         _dq.TryEnqueue(() =>
         {
-            AppWindow.Show();
-            Activate();
+            // Diagnostic + defensive try/catch (2026-07-22 request): a user report of the
+            // whole app appearing to close right after clicking the tray icon (it hadn't
+            // actually — same process, still responding throughout), right after an
+            // off-plan toast had just swapped the tray icon to its badged version. This
+            // was the one dispatcher callback in this file with no guard at all, unlike
+            // OnNotificationInvoked's established "guarded dispatch" pattern elsewhere in
+            // MainWindow — bringing it in line, and logging entry/exit so a recurrence is
+            // provable instead of guessed at.
+            Log.Info("MainWindow.ShowFromTray: invoked");
+            try
+            {
+                AppWindow.Show();
+                Activate();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("MainWindow.ShowFromTray", ex);
+            }
         });
     }
 }

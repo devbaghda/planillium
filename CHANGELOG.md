@@ -5,6 +5,13 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Fixes**
+- Reports page loaded noticeably slower the more activity history and app
+  variety you'd built up — the "Time by App" and diary lists were building
+  their full, hidden content every time the page opened, not just the part
+  you could actually see. They now build the rest only when you click
+  "Show more."
+
 ## v1.1.0 — 2026-07-21
 
 **New**

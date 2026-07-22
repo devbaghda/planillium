@@ -211,6 +211,29 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-21, Reports page slow-load fix**: user reported Reports "still" loads too slowly, after
+  two earlier perf fixes this month (2026-07-18 closed-form plan-day math; R10-03's `Overrides()`
+  memoization) hadn't fully resolved it. Measured before guessing (`time_diary` has no index on
+  `date` at all — confirmed via `EXPLAIN QUERY PLAN`, every query is a full `SCAN time_diary` — but
+  a full simulated Render()'s worth of DB round-trips still only cost ~37ms against the live
+  3,010-row table, so the DB wasn't the bottleneck). Real cause: WinUI element construction on the
+  UI thread. `AppBreakdownPanel` (`ReportsPage.TimeByApp.cs`) built full row UI — including up to 10
+  sub-rows each — for every app in the `limit:100` breakdown, not just the 3 shown by default before
+  "Show more"; live data had 31 distinct apps in the current week alone, so ~28 apps' worth of rows
+  were being built and immediately hidden on every single render. Worse: the diary list
+  (`ReportsPage.Diary.cs`) built a full `Grid` (checkbox, 2 text blocks, edit/split buttons) for
+  every entry of the day being viewed, unconditionally, in a plain non-virtualizing `StackPanel` —
+  today alone had 178 entries live, some days peak at 289. Both run on every page nav, period
+  switch, and dialog close (`Render()` has no async boundary). Fixed both the same way: build only
+  the first N rows (`DefaultAppsShown` = 3, new `DefaultDiaryRowsShown` = 40) up front, defer the
+  rest behind a "Show more" click that builds them then (selection state for the diary list already
+  lived in `selectedIds`/`lastRows`, independent of what's been realized in the UI tree, so this
+  needed no changes to selection/mark-as logic). Verified: clean Debug build (0 warnings) + 83/83
+  tests, then live in Release — stopped/rebuilt/relaunched the real instance (comfortably before the
+  20:00 EOD-timing caution), confirmed via read-only UI Automation that Reports now shows "Show 28
+  more apps" / "Show 140 more" instead of eagerly-built content, that clicking both actually expands
+  correctly ("Show fewer apps, expanded"), and that no error/exception appeared in the log
+  afterward.
 - **2026-07-21, posting-plan content removed from the public repo — both tree and full history**:
   user's call — `posts/`, `POSTING_PLAN.md`, and the older `SOCIAL_POSTS.md` aren't part of the app
   and shouldn't be publicly visible on GitHub. Repo-wide audit (`git ls-tree` at root) confirmed

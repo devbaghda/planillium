@@ -62,13 +62,24 @@
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             BorderThickness="1">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock x:Name="ScoreValue" Text="—"
-                                       Style="{StaticResource BodyStrongTextBlockStyle}"
-                                       FontSize="18"/>
-                            <TextBlock Text="pts" VerticalAlignment="Bottom" Margin="0,0,0,2"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
+                        <StackPanel Spacing="2">
+                            <!-- Distinguishes this from the Reports page's "Today's Score" card
+                                 (a live formula preview, not yet in the ledger) — this number is
+                                 the actual running point balance, and without any label the two
+                                 read as if they should always match (2026-07-22 report: they
+                                 don't, by design — a same-day ledger entry like a replan fee can
+                                 move this while today's formula score is still just a preview). -->
+                            <TextBlock Text="BALANCE" FontSize="10" FontWeight="SemiBold"
+                                       CharacterSpacing="50"
                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Name="ScoreValue" Text="—"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           FontSize="18"/>
+                                <TextBlock Text="pts" VerticalAlignment="Bottom" Margin="0,0,0,2"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                     <StackPanel x:Name="PlanDriftPanel" Spacing="8"/>

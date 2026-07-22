@@ -116,14 +116,30 @@ public sealed partial class MainWindow
     /// in the tray, same reasoning as every other timed prompt in this file.</summary>
     private void StartLateDayTaskReminderWatcher()
     {
+        // Temporary probe (2026-07-22): CheckLateDayTaskReminder's own "tick fired" line
+        // (added the same investigation) has never once logged across multiple clean
+        // restarts and several minutes of uptime each time — this narrows whether the
+        // setup method itself even runs and successfully starts the timer, versus the
+        // timer starting but never actually ticking.
+        Log.Info("StartLateDayTaskReminderWatcher: setting up");
         var timer = _dq.CreateTimer();
         timer.Interval = WatcherPollInterval;
+        timer.IsRepeating = true;
         timer.Tick += (_, _) => CheckLateDayTaskReminder();
         timer.Start();
+        Log.Info($"StartLateDayTaskReminderWatcher: timer.IsRunning={timer.IsRunning}");
     }
 
     private void CheckLateDayTaskReminder()
     {
+        // Temporary probe (2026-07-21): the diagnostic further down never once logged
+        // across 28+ ticks with genuinely pending tasks inside the trigger window — this
+        // line, placed before anything else in the method can throw, isolates whether the
+        // tick is even reaching this method at all versus something upstream (EodTime()/
+        // LateDayReminderLead(), both called before the try block below) silently throwing
+        // and getting swallowed by the DispatcherQueueTimer.Tick dispatch boundary.
+        Log.Info("CheckLateDayTaskReminder: tick fired");
+
         var today = DateOnly.FromDateTime(DateTime.Today);
         if (_lateDayReminderShownDate == today) return;
 
@@ -149,6 +165,13 @@ public sealed partial class MainWindow
                 }
             }
             _lateDayReminderShownDate = today;
+            // Diagnostic (2026-07-21 request): a report that this never fires despite
+            // genuinely open tasks, with the log otherwise silent either way — this one
+            // line pins whether the check is even being reached and what it computed,
+            // same "instrument, don't guess" approach as DialogGate/ReviewDialog's
+            // existing 2026-07-20 diagnostics.
+            Log.Info($"CheckLateDayTaskReminder: plans={plans.Count} pending={pending} " +
+                     $"now={now:HH:mm:ss} windowStart={windowStart:HH:mm} dayEnd={dayEnd:HH:mm}");
             if (pending == 0) return;
 
             var remaining = dayEnd - now;

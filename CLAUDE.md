@@ -13,12 +13,17 @@ rules that aren't derivable from the code alone. Skipping it risks repeating a m
 that's already documented there or missing that something is already in progress.
 
 ## Repo & branches
-- `winui-rebuild` is the working branch; `master` is the default branch. History shows they're
-  kept in fast-forward-only sync (`git merge --ff-only`, never a merge commit) — check
-  `git log master..winui-rebuild` / the reverse before assuming they've diverged.
-- Push fixes to `origin` (both branches) when the user asks for it ("transfer to public
-  version," "publish this," etc.) — this has been the pattern every session so far, but it's
-  still been on request each time, not automatic. Don't push without being asked.
+- `winui-rebuild` is the local working branch; `master` is the default branch and, as of
+  2026-07-21, the **only** branch that exists on GitHub — `winui-rebuild` was deleted from the
+  remote (the two were always identical, fast-forward-only, so keeping both there was just
+  clutter for anyone browsing the repo). Locally, keep committing on `winui-rebuild` as before,
+  fast-forward local `master` up to it, but only ever push `master` to `origin` — pushing
+  `winui-rebuild` by name (e.g. a bare `git push` with its old upstream tracking still
+  configured) would silently recreate it on GitHub; push explicitly as `origin master` or push
+  `winui-rebuild` and immediately delete the remote branch again if that happens.
+- Push fixes to `origin` when the user asks for it ("transfer to public version," "publish
+  this," "github is ready for publication," etc.) — this has been the pattern every session so
+  far, but it's still been on request each time, not automatic. Don't push without being asked.
 - GitHub repo is `devbaghda/planillium` (renamed from `mentor-overseer` 2026-07-21, matching the
   app's actual display name — `git remote` already points here, no action needed). It's **Public**
   (flipped 2026-07-21, alongside the first real installable release, `v1.1.0` — see `release/`).

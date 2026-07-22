@@ -67,7 +67,14 @@ public sealed partial class ReportsPage
         // Everything past the top few apps goes into this collapsed container,
         // revealed by the "Show more" button below. Default view stays short —
         // the three biggest time sinks — with the full list one click away.
+        // Its rows are NOT built until that first click (see below) — with
+        // limit:100 upstream, eagerly building every app's row (plus up to 10
+        // sub-rows each) on every single Render() meant constructing upwards
+        // of a thousand WinUI elements nobody would ever scroll to, on every
+        // page nav/period switch/dialog close (found while investigating a
+        // 2026-07-21 "Reports takes too long to load" report).
         var overflow = new StackPanel { Spacing = 4, Visibility = Visibility.Collapsed };
+        var overflowBuilt = false;
 
         void AddAppRow(StackPanel target, string app, ReportData.AppUsage usage)
         {
@@ -142,10 +149,10 @@ public sealed partial class ReportsPage
             target.Children.Add(subPanel);
         }
 
-        for (var i = 0; i < breakdown.Count; i++)
-            AddAppRow(i < DefaultAppsShown ? panel : overflow, breakdown[i].App, breakdown[i].Usage);
+        for (var i = 0; i < Math.Min(DefaultAppsShown, breakdown.Count); i++)
+            AddAppRow(panel, breakdown[i].App, breakdown[i].Usage);
 
-        if (overflow.Children.Count > 0)
+        if (breakdown.Count > DefaultAppsShown)
         {
             panel.Children.Add(overflow);
             var hidden = breakdown.Count - DefaultAppsShown;
@@ -161,6 +168,12 @@ public sealed partial class ReportsPage
             AutomationProperties.SetName(moreBtn, $"{moreLabel}, collapsed");
             moreBtn.Click += (_, _) =>
             {
+                if (!overflowBuilt)
+                {
+                    for (var i = DefaultAppsShown; i < breakdown.Count; i++)
+                        AddAppRow(overflow, breakdown[i].App, breakdown[i].Usage);
+                    overflowBuilt = true;
+                }
                 var showing = overflow.Visibility == Visibility.Visible;
                 overflow.Visibility = showing ? Visibility.Collapsed : Visibility.Visible;
                 moreBtn.Content = showing ? moreLabel : "Show fewer";

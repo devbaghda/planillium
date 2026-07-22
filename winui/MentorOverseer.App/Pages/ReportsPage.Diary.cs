@@ -403,13 +403,24 @@ public sealed partial class ReportsPage
         return grid;
     }
 
+    // Rows shown before "Show more" is needed — a single busy day can hold
+    // close to 300 entries (all built as plain Grids in a non-virtualizing
+    // StackPanel), so rendering every one of them unconditionally on every
+    // Render() was a real, measured contributor to a 2026-07-21 "Reports
+    // takes too long to load" report. Selection state lives in selectedIds/
+    // lastRows independent of what's actually been built, so rows built
+    // later by "Show more" still pick up the right checked state.
+    private const int DefaultDiaryRowsShown = 40;
+
     private StackPanel DiaryList(
         List<ReportData.DiaryEntry> diary,
         HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
     {
         var list = new StackPanel { Spacing = 4 };
-        foreach (var (id, date, start, end, dur, cat, window, desc) in diary)
+
+        Grid BuildRow(ReportData.DiaryEntry entry)
         {
+            var (id, date, start, end, dur, cat, window, desc) = entry;
             var row = new Grid { ColumnSpacing = 12 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
@@ -500,7 +511,28 @@ public sealed partial class ReportsPage
             row.Children.Add(what);
             row.Children.Add(edit);
             row.Children.Add(split);
-            list.Children.Add(row);
+            return row;
+        }
+
+        var shown = Math.Min(DefaultDiaryRowsShown, diary.Count);
+        for (var i = 0; i < shown; i++)
+            list.Children.Add(BuildRow(diary[i]));
+
+        if (diary.Count > shown)
+        {
+            var hidden = diary.Count - shown;
+            var moreBtn = new HyperlinkButton
+            {
+                Content = $"Show {hidden} more",
+                Margin = new Thickness(0, 6, 0, 0),
+            };
+            moreBtn.Click += (_, _) =>
+            {
+                list.Children.Remove(moreBtn);
+                for (var i = shown; i < diary.Count; i++)
+                    list.Children.Add(BuildRow(diary[i]));
+            };
+            list.Children.Add(moreBtn);
         }
         return list;
     }
