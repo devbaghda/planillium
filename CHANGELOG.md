@@ -5,6 +5,16 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+## v1.2.0 — 2026-07-22
+
+**New**
+- You can now have more than 2 plan ideas without losing any of them. Hit
+  the 2-active-plan limit and "Add Plan" now offers to save the new one as
+  a queued idea instead of just blocking you — see it anytime on the Plans
+  page under "Queued ideas," start it immediately once a slot is free, or
+  delete it if it's no longer worth pursuing. Finishing and archiving a
+  plan now also offers to start one of your queued ideas right away.
+
 **Fixes**
 - Reports page loaded noticeably slower the more activity history and app
   variety you'd built up — the "Time by App" and diary lists were building

@@ -37,11 +37,26 @@ public static class AddPlanDialog
 
     public static async Task<bool> ShowAsync(Page host)
     {
+        var queueOnly = false;
         if (PlanStore.LoadActivePlans().Count >= MaxPlans)
         {
-            await Message(host, $"Maximum {MaxPlans} active plans",
-                "Archive a completed plan first — Plans page → Archive.");
-            return false;
+            // Used to just block outright here. Now offers a way forward that doesn't
+            // lose the idea (2026-07-22 request): save it to plans/queued instead of
+            // plans/active — PlansPage's "Queued ideas" section lists it, and finishing
+            // either active plan now offers to start one straight from there.
+            var choice = new ContentDialog
+            {
+                Title = $"Maximum {MaxPlans} active plans",
+                Content = "Archive a completed plan first to make room, or save this idea " +
+                          "for later — you'll be offered it again once you finish one of " +
+                          "your current plans.",
+                PrimaryButtonText = "Save idea for later",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = host.XamlRoot,
+            };
+            if (await DialogGate.ShowAsync(choice) != ContentDialogResult.Primary) return false;
+            queueOnly = true;
         }
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 520 };
@@ -160,9 +175,9 @@ public static class AddPlanDialog
 
         var dialog = new ContentDialog
         {
-            Title = "Add Plan",
+            Title = queueOnly ? "Save Plan Idea" : "Add Plan",
             Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
-            PrimaryButtonText = "Import plan",
+            PrimaryButtonText = queueOnly ? "Save idea" : "Import plan",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = host.XamlRoot,
@@ -171,7 +186,7 @@ public static class AddPlanDialog
         // Keep the dialog open on failed import: cancel the close, show the error.
         dialog.PrimaryButtonClick += (_, args) =>
         {
-            var problem = TryImport(reply.Text);
+            var problem = TryImport(reply.Text, queueOnly);
             if (problem != null)
             {
                 Show(error, problem);
@@ -255,8 +270,12 @@ public static class AddPlanDialog
         error.Visibility = Visibility.Visible;
     }
 
-    /// <summary>Returns an error message, or null on success (plan file written).</summary>
-    private static string? TryImport(string replyText)
+    /// <summary>Returns an error message, or null on success (plan file written).
+    /// <paramref name="queueOnly"/> writes to plans/queued instead of plans/active and
+    /// skips the start_date default — a queued idea hasn't started yet, and its
+    /// start_date gets set for real by PlanStore.ActivateQueuedPlan whenever it's
+    /// actually picked to start (2026-07-22 request).</summary>
+    private static string? TryImport(string replyText, bool queueOnly = false)
     {
         if (replyText.Trim().Length == 0)
             return "Paste Claude's reply first.";
@@ -290,14 +309,19 @@ public static class AddPlanDialog
             // (2026-07-14 round-6 audit finding #1).
             if (!PlanStore.IsValidPlanId(id))
                 return "Plan 'id' must be a short kebab-case slug (lowercase a-z, 0-9, '-').";
+            // Checked against both active and queued — an id colliding with a queued idea
+            // would silently overwrite it the moment that idea's own file got activated
+            // later, since both eventually land in the same plans/active/{id}.json path.
             if (PlanStore.LoadActivePlans().Any(p => p.Id == id))
                 return $"A plan with id '{id}' is already active.";
+            if (PlanStore.LoadQueuedPlans().Any(p => p.Id == id))
+                return $"A queued idea with id '{id}' already exists.";
 
             // Fill defaults the Python importer would have asked for.
             var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)!;
             var output = new Dictionary<string, object?>();
             foreach (var (k, v) in dict) output[k] = v;
-            if (!dict.ContainsKey("start_date"))
+            if (!queueOnly && !dict.ContainsKey("start_date"))
                 output["start_date"] = DateTime.Today.ToIsoDate();
             if (!dict.ContainsKey("color"))
                 output["color"] = "#bf5af2";
@@ -308,9 +332,10 @@ public static class AddPlanDialog
             // (2026-07-14 round-6 audit finding #8).
             try
             {
-                Directory.CreateDirectory(AppPaths.ActivePlansDir);
+                var targetDir = queueOnly ? AppPaths.QueuedPlansDir : AppPaths.ActivePlansDir;
+                Directory.CreateDirectory(targetDir);
                 JsonFileIO.WriteAllTextAtomic(
-                    Path.Combine(AppPaths.ActivePlansDir, $"{id}.json"),
+                    Path.Combine(targetDir, $"{id}.json"),
                     JsonSerializer.Serialize(output, JsonFileIO.Indented));
             }
             catch (Exception ex)
@@ -320,17 +345,5 @@ public static class AddPlanDialog
             }
             return null;
         }
-    }
-
-    private static async Task Message(Page host, string title, string body)
-    {
-        var msg = new ContentDialog
-        {
-            Title = title,
-            Content = body,
-            CloseButtonText = "OK",
-            XamlRoot = host.XamlRoot,
-        };
-        await DialogGate.ShowAsync(msg);
     }
 }

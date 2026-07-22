@@ -24,12 +24,23 @@ public static class PlanStore
     /// with no log entry and a comment promising UI surfacing that was
     /// never built).
     /// </summary>
-    public static List<Plan> LoadActivePlans(out List<string> failedFiles)
+    public static List<Plan> LoadActivePlans(out List<string> failedFiles) =>
+        LoadPlansFrom(AppPaths.ActivePlansDir, out failedFiles);
+
+    /// <summary>Plan ideas saved for later (2026-07-22) — same shape as active plans, but
+    /// never fed into scoring/Today/Schedule (nothing reads plans/queued except this and
+    /// the Plans page's own "Queued ideas" list) until <see cref="ActivateQueuedPlan"/>
+    /// moves one into plans/active.</summary>
+    public static List<Plan> LoadQueuedPlans() => LoadQueuedPlans(out _);
+    public static List<Plan> LoadQueuedPlans(out List<string> failedFiles) =>
+        LoadPlansFrom(AppPaths.QueuedPlansDir, out failedFiles);
+
+    private static List<Plan> LoadPlansFrom(string dir, out List<string> failedFiles)
     {
         var plans = new List<Plan>();
         failedFiles = new List<string>();
-        if (!Directory.Exists(AppPaths.ActivePlansDir)) return plans;
-        foreach (var file in Directory.GetFiles(AppPaths.ActivePlansDir, "*.json").OrderBy(f => f))
+        if (!Directory.Exists(dir)) return plans;
+        foreach (var file in Directory.GetFiles(dir, "*.json").OrderBy(f => f))
         {
             try
             {
@@ -41,7 +52,7 @@ public static class PlanStore
                 // A malformed plan file shouldn't take the whole app down —
                 // but it must leave a trace, both for diagnosis (the log)
                 // and for the user (failedFiles, surfaced as an InfoBar).
-                Log.Error($"PlanStore.LoadActivePlans({Path.GetFileName(file)})", ex);
+                Log.Error($"PlanStore.LoadPlansFrom({Path.GetFileName(file)})", ex);
                 failedFiles.Add(Path.GetFileName(file));
             }
         }
@@ -118,11 +129,43 @@ public static class PlanStore
     /// </summary>
     public static bool IsValidPlanId(string planId) => ValidPlanId.IsMatch(planId);
 
-    private static string PlanFilePath(string planId)
+    private static string PlanFilePath(string planId) => PlanFilePath(planId, AppPaths.ActivePlansDir);
+
+    private static string PlanFilePath(string planId, string dir)
     {
         if (!IsValidPlanId(planId))
             throw new ArgumentException($"'{planId}' isn't a valid plan id (expected kebab-case-slug).");
-        return Path.Combine(AppPaths.ActivePlansDir, $"{planId}.json");
+        return Path.Combine(dir, $"{planId}.json");
+    }
+
+    /// <summary>Moves a queued plan idea into plans/active, resetting its start_date to
+    /// today — a queued plan's start_date (if it even has one; AddPlanDialog never sets
+    /// one while queueing, see TryImport) reflects when the idea was captured, not when
+    /// it actually starts, and every plan-day calculation in the app keys off this field.
+    /// Surgical JsonNode patch, same as SetExcludedWeekdays, so hand-authored extras
+    /// (mentor_note, briefing, etc.) survive untouched. Not wrapped in a single atomic
+    /// transaction across both files — matches this file's existing Archive/Restore
+    /// two-step File.Move convention (PlansPage.xaml.cs) rather than inventing a new
+    /// pattern just for this.</summary>
+    public static void ActivateQueuedPlan(string planId)
+    {
+        var queuedPath = PlanFilePath(planId, AppPaths.QueuedPlansDir);
+        var node = JsonNode.Parse(File.ReadAllText(queuedPath)) as JsonObject
+            ?? throw new InvalidOperationException($"Queued plan '{planId}' isn't a JSON object.");
+        node["start_date"] = DateTime.Today.ToIsoDate();
+        Directory.CreateDirectory(AppPaths.ActivePlansDir);
+        JsonFileIO.WriteAllTextAtomic(
+            PlanFilePath(planId, AppPaths.ActivePlansDir), node.ToJsonString(JsonFileIO.Indented));
+        File.Delete(queuedPath);
+    }
+
+    /// <summary>Discards a queued idea outright — unlike an active/archived plan, nothing
+    /// (no completions, no score ledger entries, no diary rows) is ever keyed to a plan
+    /// that never left the queue, so there's no orphaned data to worry about cleaning up.</summary>
+    public static void DeleteQueuedPlan(string planId)
+    {
+        var path = PlanFilePath(planId, AppPaths.QueuedPlansDir);
+        if (File.Exists(path)) File.Delete(path);
     }
 
     /// <summary>

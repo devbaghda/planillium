@@ -30,6 +30,7 @@ public sealed partial class PlansPage : Page
     private void Render()
     {
         ActiveList.Children.Clear();
+        QueuedList.Children.Clear();
         ArchivedList.Children.Clear();
         SaveErrorBar.IsOpen = false;
 
@@ -38,6 +39,8 @@ public sealed partial class PlansPage : Page
         try
         {
             plans = PlanStore.LoadActivePlans(out var failedFiles);
+            var queued = PlanStore.LoadQueuedPlans(out var failedQueuedFiles);
+            failedFiles.AddRange(failedQueuedFiles);
             if (failedFiles.Count > 0)
             {
                 LoadErrorBar.Title = failedFiles.Count == 1
@@ -52,6 +55,17 @@ public sealed partial class PlansPage : Page
             {
                 LoadErrorBar.IsOpen = false;
             }
+
+            foreach (var idea in queued)
+                QueuedList.Children.Add(QueuedRow(idea, plans.Count));
+            if (queued.Count == 0)
+                QueuedList.Children.Add(new TextBlock
+                {
+                    Text = "No queued ideas — plans saved for later show up here.",
+                    FontSize = 12,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                });
+
             using var db = new Database();
             completions = db.LoadCompletions();
 
@@ -252,6 +266,67 @@ public sealed partial class PlansPage : Page
         }
         Render();
         (App.MainWindow as MainWindow)?.RefreshScore();
+
+        // A slot just freed up — if there's anywhere to put it, offer straight away
+        // instead of making the user remember to check the Queued ideas section
+        // themselves (2026-07-22 request).
+        var queued = PlanStore.LoadQueuedPlans();
+        if (queued.Count > 0 && await Dialogs.StartQueuedPlanDialog.ShowAsync(this, queued))
+        {
+            Render();
+            (App.MainWindow as MainWindow)?.RefreshScore();
+        }
+    }
+
+    private Grid QueuedRow(Plan idea, int activeCount)
+    {
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new TextBlock { Text = idea.Name, VerticalAlignment = VerticalAlignment.Center });
+
+        var start = new Button { Content = "Start now", IsEnabled = activeCount < 2 };
+        ToolTipService.SetToolTip(start, activeCount < 2
+            ? "Move this idea to your active plans, starting today"
+            : "Archive an active plan first — max 2 active.");
+        start.Click += (_, _) =>
+        {
+            try
+            {
+                PlanStore.ActivateQueuedPlan(idea.Id);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("PlansPage.StartQueuedIdea", ex);
+                SaveErrorBar.IsOpen = true;
+                return;
+            }
+            Render();
+            (App.MainWindow as MainWindow)?.RefreshScore();
+        };
+        Grid.SetColumn(start, 1);
+        grid.Children.Add(start);
+
+        var delete = new Button { Content = "Delete" };
+        delete.Click += async (_, _) =>
+        {
+            var confirm = new ContentDialog
+            {
+                Title = $"Delete '{idea.Name}'?",
+                Content = "This idea hasn't started yet — deleting it can't be undone.",
+                PrimaryButtonText = "Delete",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot,
+            };
+            if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+            PlanStore.DeleteQueuedPlan(idea.Id);
+            Render();
+        };
+        Grid.SetColumn(delete, 2);
+        grid.Children.Add(delete);
+        return grid;
     }
 
     private Grid ArchivedRow(string file, int activeCount)

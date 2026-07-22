@@ -38,6 +38,11 @@ public static class AppPaths
     }
 
     public static string ActivePlansDir => Path.Combine(Root, "plans", "active");
+    /// <summary>Plan ideas saved for later — created when a user hits the active-plan limit
+    /// but still wants to capture an idea instead of losing it (2026-07-22 request). Inert:
+    /// nothing here is loaded into scoring/Today/Schedule until a plan is activated (moved
+    /// to <see cref="ActivePlansDir"/> with its start_date reset).</summary>
+    public static string QueuedPlansDir => Path.Combine(Root, "plans", "queued");
     public static string DbPath => Path.Combine(Root, "data", "progress.db");
 
     /// <summary>

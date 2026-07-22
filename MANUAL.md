@@ -26,7 +26,11 @@ This app is best for people working on:
 
 ### Plans
 
-You can keep up to two active plans at once.
+You can keep up to two active plans at once. Have a third idea before you're ready to drop one
+of the current two? "Add Plan" at the limit offers to save it as a queued idea instead of
+turning you away — it shows up under "Queued ideas" on the Plans page, where you can start it
+the moment a slot frees up (or delete it if it's no longer worth pursuing). Finishing and
+archiving a plan also offers to start one of your queued ideas right there.
 
 Each plan can include:
 

@@ -37,6 +37,8 @@ Planillium/
 │                              Windows Credential Manager via CredentialStore, not on disk)
 ├── plans/
 │   ├── active/             ← up to 2 active plan JSONs (e.g. netherlands.json)
+│   ├── queued/             ← plan ideas saved for later (2026-07-22) — inert until
+│   │                          activated (PlanStore.ActivateQueuedPlan resets start_date)
 │   └── archive/            ← completed plans moved here; frees a slot for a new plan
 ├── data/
 │   ├── progress.db         ← SQLite — see Database schema below
@@ -151,7 +153,8 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
      its `task_completions` row, keyed by assigned day, silently unmarking it and
      moving it to tomorrow).
 8. Archive: plan moves to `plans/archive/` when ALL tasks done; frees a slot (max 2
-   active plans)
+   active plans). Archiving now also offers to immediately start a queued idea if one
+   exists (2026-07-22) — see business rule 11.
 9. Score floor: daily score floors at −10; a `weekly_comeback_bonus` (20 pts) rewards
    a full week back on track after a bad stretch; a `multi_task_bonus_per_extra_task`
    (3 pts, added 2026-07-09) rewards each task completed beyond the first one on the
@@ -173,6 +176,14 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
     also doesn't fire on a manually-off day (`ActivityTracker.IsFullyOffToday`) — but
     unlike a recurring rest day, tracking itself still runs normally on a manual day off
     (diary rows keep getting written); only scoring and the alert are suppressed.
+11. **Queued plan ideas (2026-07-22)**: hitting the 2-active-plan limit in "Add Plan" no
+    longer just blocks — it offers to save the new plan to `plans/queued/` instead. A
+    queued plan is completely inert (not loaded into scoring/Today/Schedule, no
+    `start_date` set at creation) until `PlanStore.ActivateQueuedPlan` moves it to
+    `plans/active/` and resets `start_date` to the activation date. Two entry points to
+    activate one: the Plans page's own "Queued ideas" section ("Start now," enabled only
+    when a slot is free), or a suggestion dialog offered automatically right after
+    archiving a plan frees one up.
 
 ---
 
@@ -211,6 +222,30 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit)._
 
+- **2026-07-22, queued plan ideas (v1.2.0)**: user asked for a way to not lose a 3rd plan idea
+  while capped at 2 active plans — capture it as a "to-do," then get offered it once a slot
+  frees up. New `plans/queued/` dir (mirrors `plans/active/`/`plans/archive/`), `PlanStore`
+  gained `LoadQueuedPlans`/`ActivateQueuedPlan`/`DeleteQueuedPlan` (`LoadActivePlans` refactored
+  to share the file-loading loop via a new private `LoadPlansFrom`). `AddPlanDialog`'s at-limit
+  block became a choice ("Archive a completed plan first" vs. "Save idea for later") — picking
+  the latter runs the exact same wizard/import flow, just targeting `plans/queued/` and skipping
+  the `start_date` default (a queued idea hasn't started; `ActivateQueuedPlan` sets the real
+  `start_date` at activation time via the same surgical-JsonNode-patch pattern
+  `SetExcludedWeekdays` already uses, so hand-authored extras survive). `PlansPage` gained a
+  "Queued ideas" section (Start now/Delete, Start disabled at the limit with a tooltip
+  explaining why — same convention as Restore); `ArchiveAsync` now offers a new
+  `StartQueuedPlanDialog` picker right after a successful archive if any ideas are queued.
+  Verified end-to-end in a disposable `MENTOR_ROOT` sandbox (2 synthetic active plans at the
+  limit, not the user's real data): at-limit choice → queue → file written correctly with no
+  `start_date` → Queued ideas UI renders with correct button states → completed+archived a
+  synthetic plan → post-archive suggestion appeared (correctly serialized behind an
+  unrelated stray dialog from the test script itself via `DialogGate`, no crash) → activation
+  moved the file to `plans/active/` with `start_date` reset to the activation date. Clean
+  Debug build (0 warnings) + 83/83 tests (no new automated tests added — like Archive/Restore,
+  these are file-I/O-driven UI flows with no existing test-fixture pattern in this suite to
+  extend, consistent with how the sibling features were never unit-tested either). Shipped as
+  v1.2.0 (see release/ + the pushed GitHub Release) since the app is public now — first
+  version bump since v1.1.0's initial public release.
 - **2026-07-22, DispatcherQueueTimer.Tick silently never firing — root cause found and fixed**:
   investigating a "no late-day-task-reminder popped up despite genuinely open tasks" report (plus "no
   tray unread dot" — same symptom, the toast never fired to trigger either), added `Log.Info` probes
