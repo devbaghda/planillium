@@ -1,9 +1,38 @@
 # Changelog
 
-Newest first. This tracks the WinUI app (`winui/MentorOverseer.App`) — the one app
+Newest first. This tracks the WinUI app (`winui/Planillium.App`) — the one app
 going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
+
+**Removed**
+- The Reports page's "Exclusion Impact" panel. It showed different-looking lateness numbers than
+  the sidebar's "days late from plan" figure for the same plan, which read as a bug (it wasn't —
+  the two measured different things), and wasn't earning its keep. Removed rather than relabeled.
+
+**Fixes**
+- The tray icon's red "unread" dot now actually shows you what it was about. Clicking the
+  tray icon used to just open the app with no way to tell what triggered the dot — now it
+  shows a short "While you were away" recap of the notification(s) that fired.
+- The red dot could get permanently stuck on after being read — and, separately, this same bug
+  was almost certainly behind an earlier "the app seemed to close when I clicked the tray icon"
+  report. Root cause: the tray icon was reusing the same two icon images over and over, but the
+  tray-icon library disposes an icon once you move on to a different one, so the second time an
+  already-used image came back around it was already gone. Fixed by building a fresh icon image
+  each time instead of reusing one.
+- The "while you were away" recap could silently fail to appear if it happened to be triggered
+  right at startup (a notification that fired while the app was closed, seen the moment it's
+  reopened) — fixed a startup-timing gap where it could try to show before the window was fully
+  ready.
+
+**New**
+- The Diary list on the Reports page now splits what used to be one combined "App - Page" column
+  into two: App (e.g. "Chrome," "Telegram") and Page (e.g. "GitHub," a contact's name) — and both
+  are independently filterable, on top of the existing category filter, combinable however you
+  like. A new "All time" checkbox lets any of these filters search across your full retention
+  window instead of just the day you're looking at. A running subtotal (entry count + total time)
+  now shows above the list, reflecting whatever's currently filtered/searched. A "Clear filters"
+  button resets everything (category/app/page/all-time) at once.
 
 ## v1.2.0 — 2026-07-22
 

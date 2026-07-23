@@ -18,7 +18,7 @@ JRSoftware.InnoSetup`) on the machine building the release.
 
 ## Versioning
 
-The `<Version>` in `winui\MentorOverseer.App\MentorOverseer.App.csproj` is the one
+The `<Version>` in `winui\Planillium.App\Planillium.App.csproj` is the one
 source of truth — `release.ps1` reads it, the compiled app reads it back via
 `Services\AppVersion.cs` and shows it in Settings → Data and in the first line of
 `data\mentor-winui.log`. Bump it, commit, *then* release. Semver: MAJOR for a

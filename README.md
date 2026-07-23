@@ -70,7 +70,7 @@ The current app is a WinUI 3 desktop application for Windows built with .NET 8.
 
 ## Project structure
 
-- [winui/MentorOverseer.App](winui/MentorOverseer.App) — main application source code
+- [winui/Planillium.App](winui/Planillium.App) — main application source code
 - [plans](plans) — active and archived plan definitions
 - [data](data) — local state and database files
 - [release](release) — packaging and installer workflow
@@ -89,7 +89,7 @@ dotnet build -p:Platform=x64 -c Release
 Run from the WinUI project directory:
 
 ```powershell
-cd winui/MentorOverseer.App
+cd winui/Planillium.App
 dotnet build -p:Platform=x64 -c Release
 ```
 

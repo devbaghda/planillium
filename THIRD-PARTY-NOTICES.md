@@ -1,7 +1,7 @@
 # Third-Party Notices
 
-Planillium (`winui/MentorOverseer.App`) is built on the open-source and Microsoft-provided
-packages below. Versions match `winui/MentorOverseer.App/packages.lock.json` — that lock
+Planillium (`winui/Planillium.App`) is built on the open-source and Microsoft-provided
+packages below. Versions match `winui/Planillium.App/packages.lock.json` — that lock
 file is the authoritative source if this list ever drifts from it.
 
 This is an engineering-level inventory, not a legal opinion — verify current license text

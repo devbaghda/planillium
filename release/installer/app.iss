@@ -27,7 +27,7 @@ OutputBaseFilename=Planillium-{#AppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=..\..\winui\MentorOverseer.App\Assets\icon.ico
+SetupIconFile=..\..\winui\Planillium.App\Assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 ; No code signing cert yet — see release\README.md. Unsigned installers get
 ; SmartScreen's "unrecognized app" wall; acceptable for a private, single-user

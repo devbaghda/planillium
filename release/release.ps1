@@ -26,7 +26,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot    = Split-Path -Parent $PSScriptRoot
 $ReleaseDir  = $PSScriptRoot
-$ProjectPath = Join-Path $RepoRoot "winui\MentorOverseer.App\MentorOverseer.App.csproj"
+$ProjectPath = Join-Path $RepoRoot "winui\Planillium.App\Planillium.App.csproj"
 $DistDir     = Join-Path $ReleaseDir "dist"
 $OutputDir   = Join-Path $ReleaseDir "output"
 $InstallerIss = Join-Path $ReleaseDir "installer\app.iss"
@@ -69,7 +69,7 @@ if (-not $SkipPublish) {
     if ($LASTEXITCODE -ne 0) { Fail "dotnet publish failed" }
 
     $PublishDir = Join-Path $RepoRoot `
-        "winui\MentorOverseer.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish"
+        "winui\Planillium.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish"
     if (-not (Test-Path $PublishDir)) { Fail "publish output not found at $PublishDir" }
 
     Step "Staging dist\"

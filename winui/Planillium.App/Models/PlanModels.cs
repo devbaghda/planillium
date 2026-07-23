@@ -1,0 +1,193 @@
+using System.Globalization;
+using System.Linq;
+using System.Text.Json.Serialization;
+
+namespace Planillium.App.Models;
+
+// Mirrors the plan JSON schema used by the Python app (plans/active/*.json).
+// This format is the compatibility contract — do not rename fields.
+
+public class Plan
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("color")] public string? Color { get; set; }
+    [JsonPropertyName("start_date")] public string StartDate { get; set; } = "";
+    [JsonPropertyName("total_days")] public int? TotalDays { get; set; }
+    [JsonPropertyName("phases")] public List<Phase> Phases { get; set; } = new();
+    [JsonPropertyName("briefing")] public PlanBriefing? Briefing { get; set; }
+
+    /// <summary>Days of the week this plan never schedules anything on —
+    /// .NET DayOfWeek values (0=Sunday..6=Saturday). Per-plan, editable any
+    /// time from the Plans page. When today falls on one of these, the plan
+    /// day counter simply doesn't advance — day N's tasks land on the next
+    /// non-excluded date instead, cascading if that's excluded too.</summary>
+    [JsonPropertyName("excluded_weekdays")] public List<int> ExcludedWeekdays { get; set; } = new();
+
+    // CultureInfo.InvariantCulture: StartDate is always written in fixed ISO yyyy-MM-dd
+    // (DateExtensions.ToIsoDate) — parsing it back with the reader's current culture
+    // could silently fail on a non-Gregorian-calendar locale, resetting this plan's whole
+    // day-numbering to "starts today" with no error shown (2026-07-18 audit finding R11-03).
+    public DateOnly StartDateParsed =>
+        DateOnly.TryParse(StartDate, CultureInfo.InvariantCulture, out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+
+    public bool IsExcluded(DateOnly d) => ExcludedWeekdays.Contains((int)d.DayOfWeek);
+
+    /// <summary>Whether this plan is off on date d — a recurring exclusion, or a manually
+    /// marked-off day. The single source of truth for that rule: ScoreService's scoring
+    /// exemption and ActivityTracker's off-plan-alert suppression used to each hand-roll this
+    /// independently and could silently drift apart (2026-07-18 audit finding R8-04). Takes
+    /// the caller's own "is planDay marked off" lookup rather than a Database/connection type,
+    /// since the two current callers query plan_days_off through different access patterns
+    /// (a cached per-plan set vs. a single-row check on an already-open connection).</summary>
+    public bool IsOffOn(DateOnly d, Func<string, int, bool> isMarkedOff) =>
+        IsExcluded(d) || isMarkedOff(Id, PlanDayForDate(d));
+
+    /// <summary>How many non-excluded days fall in each 7-day cycle — the exclusion
+    /// pattern is by weekday, so it repeats every week. 0 only in the degenerate case
+    /// where every weekday is excluded (nothing is ever due); the picker dialog doesn't
+    /// stop a user from selecting all 7, so DateForPlanDay/PlanDayForDate fall back to a
+    /// plain walk rather than divide by zero when that happens.</summary>
+    private int NonExcludedPerWeek => 7 - ExcludedWeekdays.Distinct().Count();
+
+    /// <summary>Calendar date day N's tasks actually land on. With no exclusions this is
+    /// exactly StartDateParsed.AddDays(planDay - 1). With exclusions, the weekly pattern
+    /// repeats, so full weeks are skipped in closed form (round-12 audit — the previous
+    /// day-by-day walk was O(planDay), called on nearly every render/click) and only the
+    /// remainder (at most one more week) is walked.</summary>
+    public DateOnly DateForPlanDay(int planDay)
+    {
+        if (ExcludedWeekdays.Count == 0) return StartDateParsed.AddDays(planDay - 1);
+        var perWeek = NonExcludedPerWeek;
+        if (perWeek <= 0) return DateForPlanDaySlow(planDay);
+        var fullWeeks = (planDay - 1) / perWeek;
+        var count = fullWeeks * perWeek;
+        var date = StartDateParsed.AddDays(fullWeeks * 7);
+        while (true)
+        {
+            if (!IsExcluded(date))
+            {
+                count++;
+                if (count == planDay) return date;
+            }
+            date = date.AddDays(1);
+        }
+    }
+
+    private DateOnly DateForPlanDaySlow(int planDay)
+    {
+        var date = StartDateParsed;
+        var count = 0;
+        while (true)
+        {
+            if (!IsExcluded(date))
+            {
+                count++;
+                if (count == planDay) return date;
+            }
+            date = date.AddDays(1);
+        }
+    }
+
+    /// <summary>Inverse of DateForPlanDay — how many non-excluded days have
+    /// elapsed from the start date through (and including) target. If
+    /// target itself is excluded, the count doesn't advance for it, so the
+    /// result is the same as the last non-excluded day before it (nothing
+    /// new becomes due on an excluded day; work picks back up where it left
+    /// off on the next valid day). Same closed-form full-weeks shortcut as
+    /// DateForPlanDay, only walking the remainder day by day.</summary>
+    public int PlanDayForDate(DateOnly target)
+    {
+        if (ExcludedWeekdays.Count == 0)
+            return target.DayNumber - StartDateParsed.DayNumber + 1;
+        if (target < StartDateParsed)
+            return target.DayNumber - StartDateParsed.DayNumber + 1;
+        var perWeek = NonExcludedPerWeek;
+        if (perWeek <= 0) return 0;
+        var totalCalendarDays = target.DayNumber - StartDateParsed.DayNumber + 1;
+        var fullWeeks = totalCalendarDays / 7;
+        var count = fullWeeks * perWeek;
+        var date = StartDateParsed.AddDays(fullWeeks * 7);
+        var remainder = totalCalendarDays % 7;
+        for (var i = 0; i < remainder; i++, date = date.AddDays(1))
+            if (!IsExcluded(date)) count++;
+        return count;
+    }
+
+    public int PlanDay => PlanDayForDate(DateOnly.FromDateTime(DateTime.Today));
+
+    public int TotalDaysComputed
+    {
+        get
+        {
+            if (TotalDays is int t && t > 0) return t;
+            var max = 0;
+            foreach (var ph in Phases)
+                foreach (var task in ph.Tasks)
+                    if (task.Day > max) max = task.Day;
+            return max;
+        }
+    }
+
+    /// <summary>
+    /// Days late (positive) or ahead (negative) of this plan's originally-due
+    /// finish date — the single source of truth both the Plans page card and
+    /// the sidebar status line read from, so they can't drift apart from each
+    /// other the way two independently-typed copies of this formula could.
+    /// The originally-due date comes from un-overridden <see cref="TotalDaysComputed"/>,
+    /// which never moves; the currently-due date follows wherever the last
+    /// task's <see cref="AssignedTask.AssignedDay"/> has ended up after any
+    /// reschedules/day-offs/early finishes.
+    /// </summary>
+    public int DriftDays(List<AssignedTask> tasks) =>
+        CurrentEndDate(tasks).DayNumber - DateForPlanDay(TotalDaysComputed).DayNumber;
+
+    /// <summary>Calendar date the plan is currently projected to finish on,
+    /// after any reschedules/day-offs/early finishes — the same figure
+    /// <see cref="DriftDays"/> compares against the originally-due date.</summary>
+    public DateOnly CurrentEndDate(List<AssignedTask> tasks) =>
+        DateForPlanDay(tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : TotalDaysComputed);
+}
+
+/// <summary>The 4-point strategic briefing the plan-generation templates ask
+/// Claude for, saved with the plan (main.py's _show_plan_briefing_dialog
+/// shape — see PlanTemplates.cs for the exact field meanings).</summary>
+public class PlanBriefing
+{
+    [JsonPropertyName("high_leverage")] public List<string> HighLeverage { get; set; } = new();
+    [JsonPropertyName("ignore_completely")] public string? IgnoreCompletely { get; set; }
+    [JsonPropertyName("common_time_wasters")] public string? CommonTimeWasters { get; set; }
+    [JsonPropertyName("realistic_timeline")] public string? RealisticTimeline { get; set; }
+}
+
+public class Phase
+{
+    [JsonPropertyName("phase")] public int Number { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("tasks")] public List<PlanTask> Tasks { get; set; } = new();
+}
+
+public class PlanTask
+{
+    [JsonPropertyName("day")] public int Day { get; set; }
+    [JsonPropertyName("task")] public string Text { get; set; } = "";
+    [JsonPropertyName("detail")] public string? Detail { get; set; }
+    [JsonPropertyName("mentor_note")] public string? MentorNote { get; set; }
+    [JsonPropertyName("category")] public string? Category { get; set; }
+    [JsonPropertyName("duration_min")] public int? DurationMin { get; set; }
+}
+
+/// <summary>A task as it appears in a day list: original day + assigned day after overrides.</summary>
+public class AssignedTask
+{
+    public required PlanTask Task { get; init; }
+    public required int OriginalDay { get; init; }
+    public required int AssignedDay { get; init; }
+    public bool Completed { get; set; }
+    public bool Overdue { get; set; }
+
+    /// <summary>"N day(s) late — from day N" — Today and Schedule each built this
+    /// caption by hand with the identical format string (round-5 audit finding #31;
+    /// Schedule's own code comment already flagged the duplication without fixing it).</summary>
+    public string OverdueCaption(int planDay) => $"{planDay - AssignedDay} day(s) late — from day {AssignedDay}";
+}

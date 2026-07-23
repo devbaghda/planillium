@@ -1,4 +1,4 @@
-# CLAUDE.md — Planillium / Mentor-Overseer
+# CLAUDE.md — Planillium
 
 Operating instructions for Claude Code in this repository. **Read `CONTEXT.md` first** —
 it has the actual project facts (architecture, schema, business rules, history). This file
@@ -38,7 +38,7 @@ that's already documented there or missing that something is already in progress
   list` shows only this checkout) — don't assume they're still out there without checking first.
 
 ## Build & verify
-- `dotnet build -p:Platform=x64 -c Debug` (or `-c Release`) from `winui/MentorOverseer.App/` —
+- `dotnet build -p:Platform=x64 -c Debug` (or `-c Release`) from `winui/Planillium.App/` —
   no Visual Studio needed.
 - The user's live instance normally runs the **Release** exe
   (`bin\x64\Release\net8.0-windows10.0.19041.0\Planillium.App.exe`), not Debug. Before calling a
@@ -48,14 +48,14 @@ that's already documented there or missing that something is already in progress
   `end_of_day_summary_time` before stopping the live instance — stopping it early can skip that
   day's evening-review popup entirely. Then stop → rebuild Release → relaunch → bring to
   foreground.
-- `dotnet test` from `winui/MentorOverseer.App.Tests/` runs the automated suite (added
+- `dotnet test` from `winui/Planillium.App.Tests/` runs the automated suite (added
   2026-07-09, covers `ScoreService`'s schedule-shifting logic — the one area that's changed
   repeatedly with a real regression that shipped). **It is a source-file link, not a
-  `ProjectReference`** to `MentorOverseer.App` — that project's `UseWinUI=true` pulls in
+  `ProjectReference`** to `Planillium.App` — that project's `UseWinUI=true` pulls in
   MSIX/PRI-resource-generation targets that need Visual Studio's Windows App SDK workload
   installed, which this environment doesn't have; a plain `ProjectReference` fails to build here.
   If you add a test that needs another plain-C# file from the main app, link it the same way
-  (`<Compile Include="..\MentorOverseer.App\...\File.cs" Link="App\File.cs" />`) — don't add a
+  (`<Compile Include="..\Planillium.App\...\File.cs" Link="App\File.cs" />`) — don't add a
   `ProjectReference` without first confirming `dotnet build` on this machine can actually handle
   a `UseWinUI=true` transitive reference (it couldn't as of 2026-07-09).
 

@@ -1,9 +1,17 @@
-# Mentor-Overseer — Project Context
+# Planillium — Project Context
 
-**Display name is "Planillium"** (renamed 2026-07-08, prepping to open-source as a
-portfolio piece — detail in Session handoff notes). Repo folder, C# namespace, and
-this doc's title stay `MentorOverseer` on purpose — internal, invisible to users.
-Compiled exe: `Planillium.App.exe`.
+**Display name is "Planillium"** (renamed 2026-07-08; the app was originally internally
+called Mentor-Overseer). The repo folder, GitHub repo, and C# namespace were all still
+`MentorOverseer` for a while after the display-name rename — kept that way deliberately at
+first (internal, invisible to users) — but the user confirmed wanting a full internal
+rename too now that the app is public, done 2026-07-23: project folders/csproj files are
+`winui/Planillium.App`/`winui/Planillium.App.Tests`, the C# namespace is `Planillium.App`
+throughout. Three deliberate exceptions, all legacy-compatibility values that must keep
+referencing *old* name(s) for existing-install migration/cleanup: `AppInfo.LegacyStartupRegistryValue` +
+`CredentialStore`'s `LegacyService` (so an existing TickTick token isn't orphaned),
+`StartupService.LegacyNames` (registry Run-key sweep — also lists `"Mentor-Overseer"`/`"NetherlandsMentor"`
+from even earlier names), and `release/installer/app.iss`'s `DelRunKeyLegacy1`/`Legacy2`/`Legacy3`
+entries (mirrors the same list). Compiled exe: `Planillium.App.exe`.
 
 ## What this app is
 A desktop personal mentor and accountability companion that tracks the user's progress
@@ -21,7 +29,7 @@ keeps him on-plan, logs his full day (06:00–20:00), and generates weekly repor
 
 ## App architecture
 
-**The WinUI app (`winui/MentorOverseer.App`) is THE app.** It started as a Python/
+**The WinUI app (`winui/Planillium.App`) is THE app.** It started as a Python/
 Tkinter app (main.py), was fully rebuilt in WinUI 3/.NET 8 over 2026-07-06/07, and the
 Python source was removed from the repo on 2026-07-08 once the WinUI app had shipped
 everything it did (still recoverable from git history/tags if ever needed).
@@ -46,14 +54,14 @@ Planillium/
 │   └── mentor-winui.log    ← app log
 ├── release/                ← Inno Setup installer pipeline (release.ps1, app.iss) — see
 │                              the windows-app-releaser skill for how to cut a build
-└── winui/MentorOverseer.App/  ← WinUI 3 / .NET 8 source — see Tech stack below
+└── winui/Planillium.App/  ← WinUI 3 / .NET 8 source — see Tech stack below
 ```
 
 ---
 
 ## Tech stack
 - **Framework:** WinUI 3 / .NET 8 (`net8.0-windows10.0.19041.0`), Windows App SDK 1.8.260529003
-- **Build:** `dotnet build -p:Platform=x64 -c Release` from `winui/MentorOverseer.App/` —
+- **Build:** `dotnet build -p:Platform=x64 -c Release` from `winui/Planillium.App/` —
   no Visual Studio required. Unpackaged, self-contained (`WindowsPackageType=None`,
   `WindowsAppSDKSelfContained=true`), no admin rights needed.
 - **Database:** SQLite via `Microsoft.Data.Sqlite`
@@ -184,6 +192,13 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
     activate one: the Plans page's own "Queued ideas" section ("Start now," enabled only
     when a slot is free), or a suggestion dialog offered automatically right after
     archiving a plan frees one up.
+12. The sidebar/Plans-page "Xd late from plan" (`Plan.DriftDays`) measures reschedule/overdue
+    slip *beyond* the plan's own excluded-weekday pattern (current last-task date vs. the
+    originally-due date, both already mapped through the exclusion pattern) — this is now the
+    only "days late" figure in the app. Reports used to also show a second, differently-computed
+    figure (the "Exclusion Impact" panel); removed 2026-07-23 for showing a different-looking
+    number for the same plan that read as a bug (it wasn't — see the 2026-07-23 session note)
+    and for not earning its keep otherwise.
 
 ---
 
@@ -220,538 +235,271 @@ archive — full blow-by-blow detail for any entry lives in git log/commit messa
 Compress aggressively rather than letting this grow forever (compressed 852→224 lines on
 2026-07-06; ~230→~50 lines on 2026-07-09; rounds 1-5 condensed 2026-07-15; three 07-15 turns
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
-on 2026-07-17 after the round-7 audit)._
+on 2026-07-17 after the round-7 audit; ~680→~110 lines on 2026-07-22; ~630→~300 lines on
+2026-07-23, folding the 07-18 through 07-22 entries down to their essential facts)._
 
+- **2026-07-23, "days late" mismatch investigated — not a bug, confirmed by hand-computing
+  both figures against real data**: user flagged the sidebar showing "13d late from plan" for
+  *both* active plans while Reports' Exclusion Impact panel showed "4 day(s) later"/"6 day(s)
+  later" for them respectively, plus "1 task(s) currently overdue." Read `Plan.DriftDays`
+  (`Models/PlanModels.cs`) and the Exclusion Impact panel's `shiftDays` (`ReportsPage.xaml.cs`)
+  side by side — a doc comment already flagged (round-4 audit) that these are deliberately
+  different measurements sharing no name, but the user hit the same *visual* confusion again
+  since the on-screen text alone doesn't say so. Independently hand-recomputed both from the
+  real plan JSONs (`start_date`, `total_days`, `excluded_weekdays` — both plans exclude
+  Sat/Sun) and the real `task_overrides` table (read-only query) for each plan's actual
+  rescheduled task days: got **DriftDays = 13 for both plans** (coincidence — each computed
+  independently from its own start date/overrides, verified to genuinely both land on 13) and
+  **shiftDays = 4 / 6** respectively — an exact match to what the user saw, confirming the
+  numbers are correct, not a shared-state bug. Root of the confusion: DriftDays measures how
+  much a plan's *finish* has slipped from reschedules/overdue tasks on top of its normal
+  weekend-exclusion pattern; shiftDays measures something unrelated — how many calendar days
+  the weekend-exclusion pattern *alone* has cost reaching *today's* plan-day, ignoring any
+  reschedule. First fix attempt: added a one-line clarifying note under the Exclusion Impact
+  panel's header explaining the distinction. **Superseded same session**: the user decided the
+  panel wasn't worth keeping at all ("I think it is useless") — removed `ExclusionImpactCard`
+  and its call site entirely rather than keep clarifying it. The sidebar's "late from plan"
+  figure (`Plan.DriftDays`) is now the only "days late" readout in the app; business rule 12
+  (above) reflects this. Verified: clean Debug build, 0 warnings, after both the add and the
+  removal.
+- **2026-07-23, Diary app/page column split + all-time filter + subtotal**: user request — split
+  the diary's combined "App - Page" display into two independently filterable columns (e.g.
+  App="Chrome"/Page="GitHub", or App="Telegram"/Page="Liza Ponomarenko"), let the category/app/page
+  filters search the whole retention window instead of just the day on screen, and show a running
+  subtotal (entry count + total time) for whatever's currently filtered. `ReportsPage.Diary.cs`:
+  `DiaryList`'s row `Grid` now has separate App/Page/Details columns (was one combined "what"
+  column) built from `AppNames.Group`/`AppNames.Sub` directly rather than the combined `Label`;
+  `_diaryAppFilter` now matches `Group` only (was `Label`) and a new `_diaryPageFilter` matches
+  `Sub` — both persisted static fields, survive navigation like the existing search/date state.
+  New `_diaryAllTime` bool (a "All time (not just this day)" checkbox) widens the query range to
+  the same window free-text search already used (`today−retention` to `today`) without requiring
+  search text — factored as `wideRange = searching || _diaryAllTime` everywhere the old `searching`
+  check alone used to gate date-nav enablement, the header's caption, and whether a day-only or
+  wide-range query runs. A new subtotal `TextBlock` above the results sums `filteredList`'s
+  `Dur` and formats via a new `FormatDuration` helper. **Bug caught and fixed during live
+  verification**: the "All time" checkbox's handler initially only called `RenderDiaryResults()`
+  (like the other filter combos), which updates the list but not `DiaryHeader()` (built once per
+  full `Render()`) — so the "TIME DIARY · ALL TIME" caption and the date-nav arrows' disabled
+  state lagged a step behind the checkbox until something else triggered a full page render.
+  Fixed by having the checkbox's handler call `Render()` instead, matching what the date-nav
+  buttons already do for the same reason. Verified live end-to-end via read-only UI Automation
+  against the real running instance (no data mutation): all three filter combos and the "All time"
+  checkbox render with correct option lists (app options are bare group names like "Chrome",
+  not the old combined label); selecting "Chrome" in the app filter narrowed the subtotal to "9
+  entries · 11m total"; toggling "All time" widened it to "3341 entries · 222h 11m total" across
+  the full 90-day retention window with the caption/date-nav updating immediately after the fix;
+  "Clear filters" correctly reset everything back to the default single-day view. Clean
+  Debug+Release build (0 warnings) + 86/86 tests both before and after the live-caught fix.
+- **2026-07-23, full internal rename away from `MentorOverseer`**: user confirmed wanting this
+  2026-07-21 ("Yes, rename it everywhere, including internally (bigger job)"), queued until now.
+  Scope: C# namespace `MentorOverseer.App` → `Planillium.App` across all 76 `.cs` files (`namespace`/
+  `using` lines only — a targeted replace, not a blind string swap, since a blind one would have
+  broken three intentional legacy-compatibility values, below); `x:Class` in all 7 XAML files updated
+  to match (missed by the initial namespace-only pass, caught before it could cause a build
+  failure); project folders `winui/MentorOverseer.App`→`winui/Planillium.App` and
+  `...App.Tests`→`...App.Tests` renamed, along with both `.csproj` files and the Tests project's
+  `RootNamespace`/`Compile Include` paths; `Planillium.App.csproj`'s own `RootNamespace` updated to
+  match its already-correct `AssemblyName`; path references updated in `README.md`,
+  `THIRD-PARTY-NOTICES.md`, `CHANGELOG.md`, `CLAUDE.md`, `release/release.ps1`,
+  `release/README.md`, and `release/installer/app.iss`'s icon path. **Deliberately left untouched**
+  (confirmed by reading each site's actual logic, not just grepping): `AppInfo.LegacyStartupRegistryValue`
+  (`"MentorOverseer"`) and `CredentialStore`'s `LegacyService` that reads it; `StartupService.LegacyNames`
+  (also lists even-older `"Mentor-Overseer"`/`"NetherlandsMentor"`); and `app.iss`'s
+  `DelRunKeyLegacy1`/`Legacy2`/`Legacy3` uninstall steps, which mirror that same list. All three are
+  real, intentional backward-compatibility code, not stale references.
+  **A folder-rename permission wall**: `git mv`/`Directory.Move` on both project folders initially
+  failed with plain "Access denied" despite no individual file being exclusively locked (verified by
+  attempting to open every file for exclusive read/write first) — traced to two background
+  processes holding directory-level handles: the C# Dev Kit's MSBuild `BuildHost` and a lingering
+  `vstest.console` host from an earlier `dotnet test` run, both killed safely (routine IDE/tooling
+  processes that restart on their own). Even after that, the top-level directory rename still failed
+  — worked around by creating the new folder fresh and moving every item into it individually
+  (confirmed zero per-file failures) rather than renaming the directory entry itself, then deleting
+  the now-empty original. Verified end-to-end: clean Debug+Release build (0 warnings) + 86/86 tests
+  from the new paths; live instance rebuilt and relaunched from `winui/Planillium.App/bin/...`
+  (confirmed via `Get-Process ... | Select Path`), clean startup log with no errors, and read-only UI
+  Automation confirmed every nav page (Today/Schedule/Reports/Plans/Settings) still renders
+  correctly post-rename.
+
+**Pre-2026-07-18 arc, condensed** (full detail in git log / the linked artifacts): WinUI 3
+rebuild landed 07-07 as v1.0.0 (18 findings fixed at ship time, TickTick secret purged from
+git history and rotated). Audit rounds 1-6 (07-09 to 07-15) introduced the mechanisms every
+later round built on — `Database.RunInTransaction`, `DateExtensions.ToIsoTimestamp()`,
+`JsonFileIO` atomic writes, `PlanStore.IsValidPlanId`, transactional dialogs with a `SaveErrorBar`
+— plus fixed diary column width, window-clamp-to-monitor, the completed-task-shift data-loss
+bug (business rule 7), move-to-today backward compaction, `ReviewDialog` reentrancy, three
+Add-Plan wizard templates keying phases wrong, and an idle-detection double-counting bug (open
+question at the time: some already-written overlapping `time_diary` rows from before the fix —
+resolved below, 07-18 full scan). 07-16 fixed day-off/reschedule task-shifting to skip over
+already-taken days (`NextWorkingDay`/`PrevWorkingDay`). 07-17's full 5-category audit (1
+High/9 Medium/~15 Low-Info) added `TreatWarningsAsErrors`, a shared `CategoryStyle.cs` color
+table, a "Clear all my data" Settings action, and Settings autosave; the same day added the
+day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `RecalculateDayScore`,
+`IsFullyOffToday`).
+
+- **2026-07-18, rounds 8–11 audits + remediation** (round 8 artifact:
+  https://claude.ai/code/artifact/016b54c5-9852-4e12-9092-c5fdb799b4e9 — full findings/fixes in
+  git log): 4 rounds, ~60 findings total (0 Critical, 1 High × 2 rounds, rest Medium/Low/Info),
+  all fixed same-day each round, each verified via clean Debug+Release build + growing test
+  suite (19→83 tests) + `dotnet list package --vulnerable`. Headline fixes: **R8-01** (High)
+  `ScoreService.CurrentStreak` took an optional `asOf` instead of always anchoring
+  `DateTime.Today`, fixing a silent streak-bonus-zeroing bug when editing past diary entries
+  (same bug also found/fixed in `ReportData.WeekStats`); **R8-05** unconditional export-file
+  deletion on "Clear all my data" (user's explicit choice over an opt-in checkbox), whose own
+  re-audit caught 2 new silent-failure issues in that same fix, closed same day (see Standing
+  lessons). Round 9's sub-agents failed outright on a usage-limit error, ran as one direct pass
+  instead (found `ExportFileNames` duplicate-literal + `Log.Friendly` wrapping for ~10
+  raw-exception-message sites). Round 10 cross-confirmed sibling gaps rounds 8/9 had missed in
+  untouched files, added `CredentialStore.Delete`/"Disconnect TickTick",
+  `ScoreService.Overrides()` memoization, a "Your name" Settings field. Round 11's **R11-01**
+  (missing try/catch on round 10's own new Disconnect button) was independently caught by two
+  different audit passes landing on the same finding. Also: closed-form
+  `PlanDayForDate`/`DateForPlanDay` performance fix (see Standing lessons); a full-history scan
+  found 42 overlapping `time_diary` row-pairs (06-29 through 07-16), only 2 matching the known
+  bug signature — **user's call: leave the data untouched**; and the personal-data git-history
+  purge (real name → "the user" across 134 commits + stripped `config.json`/
+  `plans/active/*.json`/a stray `obj/` tree, via `git filter-repo` in an isolated scratch clone
+  — see Standing lessons for why never in-place). Same week: `posting-plan`/`project-media`
+  global skills built and bootstrapped for this project with a first drafted post.
+- **2026-07-20, three investigations**: (1) late-day task reminder feature shipped
+  (`late_day_task_reminder_hours` Settings field, reuses `TodayPage`'s own "today's open tasks"
+  definition). (2) `AppNames.Sub()` never had a case for "File Explorer," silently dropping the
+  folder/tab name from every such diary row — fixed. (3) Unread-notification tray dot
+  (`NotificationCenter.cs`, persisted counter cleared on window `Activated`, GDI+-composited
+  red-dot badge icon) plus diagnostic logging for a then-unexplained "no EOD popup appeared"
+  report — the diagnostics added here caught the real diary-tracking-gap bug the next day.
+- **2026-07-21, diary-tracking-gap RESOLVED** (closed a bug reported three times since 07-15):
+  root cause was `PollOnce`'s call order — `HandleSessionLock` ran *before* `HandleSleepGap`, so
+  on a poll resuming after a long real gap (e.g. Windows throttling the app's timer overnight
+  while backgrounded) with a pending lock notification, the lock handler stamped the gap's start
+  as "now" and `HandleSleepGap`'s own `_idleNotified` guard then silently skipped the check that
+  would have anchored it correctly — the whole gap collapsed to zero with no trace. Fixed by
+  swapping the call order. Live in Release, confirmed via the existing diagnostic log lines.
+- **2026-07-21, three more shipped items**: Reports page slow-load fix (root cause was eager
+  WinUI element construction for every diary row, even hidden ones; fixed with a "build first N,
+  defer the rest behind Show More" pattern). Posting-plan content (`posts/`, `POSTING_PLAN.md`,
+  `SOCIAL_POSTS.md`) removed from the public repo, both current tree and full git history (same
+  scratch-clone `git filter-repo` approach) since it isn't part of the app. GitHub repo renamed
+  `devbaghda/mentor-overseer` → `devbaghda/planillium` to match the app's display name, after
+  deleting a stray duplicate repo that had been squatting the `planillium` name since 07-08.
+- **2026-07-21, first real release build (v1.1.0) + public-readiness pass**: `release/release.ps1`
+  (Inno Setup pipeline) existed but had never actually been run — ran it clean for the first
+  time: version bumped 1.0.0→1.1.0, an MIT `LICENSE` added, full verify checklist run (fresh
+  install to a disposable directory, smoke test, uninstall-preserves-data check). Repo flipped
+  Private→Public, `v1.1.0` tag pushed, GitHub Release created with the installer + checksum
+  attached. Unsigned (no Authenticode cert) — first run shows SmartScreen's "unrecognized app"
+  wall, documented rather than fixed (would need a paid cert).
+- **2026-07-22, desktop shortcut icon fixed**: `IconLocation` still pointed at the pre-rename
+  local folder path (before `CLAUDE\mentor-overseer` → `CLAUDE\Planillium` on disk), so Windows
+  silently fell back to a generic icon even though the launch target itself was correct. Fixed
+  by pointing `IconLocation` at the exe itself (`Planillium.App.exe,0`, which already embeds the
+  icon via the csproj) instead of a separate loose path that can go stale on a future move.
+- **2026-07-22, `DispatcherQueueTimer.Tick` silently never firing — root cause found and fixed**:
+  investigating "no late-day-task-reminder popped up despite genuinely open tasks" (plus "no
+  tray unread dot," same underlying symptom), a `Log.Info` probe as the literal first line of
+  the `Tick` handler never once fired across 60+ expected intervals over an hour, despite
+  `timer.IsRunning` reading `True` immediately after `Start()`. Conclusively a `DispatcherQueueTimer`
+  whose `Tick` silently never fires despite reporting itself as running — likely also the real
+  explanation for a 07-20 "EOD review never appeared" report that used the same timer pattern
+  and was never conclusively diagnosed at the time. **Fix**: all three watchers (EOD, kickoff,
+  late-day-reminder) now use `System.Threading.Timer` instead, callback marshaled onto the UI
+  thread via `_dq.TryEnqueue(...)`, each rooted in a field (unlike `DispatcherQueueTimer`, an
+  unreferenced `System.Threading.Timer` is GC-eligible). Verified live — the same probe fired
+  within one interval of the first restart under the new mechanism. Standing lesson folded into
+  the global `windows-app-auditor` skill: `IsRunning=True` is not proof a `DispatcherQueueTimer`
+  will ever tick — instrument the handler's first line and watch several intervals before
+  trusting it.
 - **2026-07-22, queued plan ideas (v1.2.0)**: user asked for a way to not lose a 3rd plan idea
   while capped at 2 active plans — capture it as a "to-do," then get offered it once a slot
-  frees up. New `plans/queued/` dir (mirrors `plans/active/`/`plans/archive/`), `PlanStore`
-  gained `LoadQueuedPlans`/`ActivateQueuedPlan`/`DeleteQueuedPlan` (`LoadActivePlans` refactored
-  to share the file-loading loop via a new private `LoadPlansFrom`). `AddPlanDialog`'s at-limit
-  block became a choice ("Archive a completed plan first" vs. "Save idea for later") — picking
-  the latter runs the exact same wizard/import flow, just targeting `plans/queued/` and skipping
-  the `start_date` default (a queued idea hasn't started; `ActivateQueuedPlan` sets the real
-  `start_date` at activation time via the same surgical-JsonNode-patch pattern
-  `SetExcludedWeekdays` already uses, so hand-authored extras survive). `PlansPage` gained a
-  "Queued ideas" section (Start now/Delete, Start disabled at the limit with a tooltip
-  explaining why — same convention as Restore); `ArchiveAsync` now offers a new
-  `StartQueuedPlanDialog` picker right after a successful archive if any ideas are queued.
-  Verified end-to-end in a disposable `MENTOR_ROOT` sandbox (2 synthetic active plans at the
-  limit, not the user's real data): at-limit choice → queue → file written correctly with no
-  `start_date` → Queued ideas UI renders with correct button states → completed+archived a
-  synthetic plan → post-archive suggestion appeared (correctly serialized behind an
-  unrelated stray dialog from the test script itself via `DialogGate`, no crash) → activation
-  moved the file to `plans/active/` with `start_date` reset to the activation date. Clean
-  Debug build (0 warnings) + 83/83 tests (no new automated tests added — like Archive/Restore,
-  these are file-I/O-driven UI flows with no existing test-fixture pattern in this suite to
-  extend, consistent with how the sibling features were never unit-tested either). Shipped as
-  v1.2.0 (see release/ + the pushed GitHub Release) since the app is public now — first
-  version bump since v1.1.0's initial public release.
-- **2026-07-22, DispatcherQueueTimer.Tick silently never firing — root cause found and fixed**:
-  investigating a "no late-day-task-reminder popped up despite genuinely open tasks" report (plus "no
-  tray unread dot" — same symptom, the toast never fired to trigger either), added `Log.Info` probes
-  at the very first statement of both `StartLateDayTaskReminderWatcher` (the timer setup) and
-  `CheckLateDayTaskReminder` (the `Tick` handler). Setup logged fine every time, including
-  `timer.IsRunning=True` read back immediately after `Start()` — but the tick-fired line never once
-  appeared across multiple clean-restart tests totaling 60+ expected 1-minute intervals over more than
-  an hour. Conclusively a `DispatcherQueueTimer` whose `Tick` event silently never fires despite
-  reporting itself as running — not a logic bug, not a swallowed exception (the probe was the literal
-  first line, before anything that could throw). This is very likely also the real explanation for the
-  2026-07-20 "end-of-day review never appeared" report, never conclusively diagnosed at the time —
-  `StartEodWatcher`/`StartKickoffWatcher` used the exact same `_dq.CreateTimer()` pattern. **Fix**:
-  replaced all three watchers' `DispatcherQueueTimer` with `System.Threading.Timer` (a lower-level,
-  non-WinRT primitive), callback marshaled onto the UI thread via the existing `_dq.TryEnqueue(...)`
-  pattern already used everywhere else in this file — each timer stored in a field (`_eodTimer`/
-  `_kickoffTimer`/`_lateDayReminderTimer`), since unlike `DispatcherQueueTimer` (kept alive by the
-  DispatcherQueue itself), an unreferenced `System.Threading.Timer` is GC-eligible and would silently
-  stop firing. Verified: clean Debug build (0 warnings) + 83/83 tests, then live in Release — the
-  tick-fired probe (kept in place as a permanent sanity check, not removed) logged within one interval
-  of the very first restart under the new mechanism, after never once firing under the old one.
-  **Not yet confirmed for EOD/Kickoff specifically** (same code shape, same fix applied, but the actual
-  trigger conditions for those two didn't come up again this session) — worth a quiet mental note if
-  either is ever reported missing again, though the fix should already cover it.
-  - New standing lesson (folded into `windows-app-auditor`'s architecture.md, threading section):
-    a `DispatcherQueueTimer` reporting `IsRunning=True` is not proof its `Tick` event will ever fire —
-    if a periodic WinUI dispatcher timer is suspected of silently not ticking, don't just check
-    `IsRunning`; add a `Log.Info` as the literal first statement of the `Tick` handler and watch for
-    at least several expected intervals before concluding it's healthy. If it's confirmed not firing,
-    `System.Threading.Timer` (callback marshaled via `_dq.TryEnqueue`) is a reliable lower-level
-    replacement — just remember to root it in a field, since it has no built-in owner keeping it alive
-    the way `DispatcherQueueTimer` does.
-- **2026-07-22, desktop shortcut icon fixed**: user reported the desktop shortcut showing a generic
-  icon. Cause: the shortcut's `IconLocation` still pointed at the pre-rename local folder path
-  (`CLAUDE\mentor-overseer\...`, before this project's folder was renamed to `CLAUDE\Planillium` on
-  disk) — that path no longer exists, so Windows silently fell back to a generic icon. The shortcut's
-  actual launch target was already correct (pointed at the current `Planillium` folder), only the
-  icon reference was stale. Fixed by pointing `IconLocation` at the exe itself (`Planillium.App.exe,0`)
-  rather than a separate loose `icon.ico` path — the exe already embeds that icon via the csproj's
-  `<ApplicationIcon>`, so this is one less path that can go stale on a future folder move.
-- **2026-07-21, Reports page slow-load fix**: user reported Reports "still" loads too slowly, after
-  two earlier perf fixes this month (2026-07-18 closed-form plan-day math; R10-03's `Overrides()`
-  memoization) hadn't fully resolved it. Measured before guessing (`time_diary` has no index on
-  `date` at all — confirmed via `EXPLAIN QUERY PLAN`, every query is a full `SCAN time_diary` — but
-  a full simulated Render()'s worth of DB round-trips still only cost ~37ms against the live
-  3,010-row table, so the DB wasn't the bottleneck). Real cause: WinUI element construction on the
-  UI thread. `AppBreakdownPanel` (`ReportsPage.TimeByApp.cs`) built full row UI — including up to 10
-  sub-rows each — for every app in the `limit:100` breakdown, not just the 3 shown by default before
-  "Show more"; live data had 31 distinct apps in the current week alone, so ~28 apps' worth of rows
-  were being built and immediately hidden on every single render. Worse: the diary list
-  (`ReportsPage.Diary.cs`) built a full `Grid` (checkbox, 2 text blocks, edit/split buttons) for
-  every entry of the day being viewed, unconditionally, in a plain non-virtualizing `StackPanel` —
-  today alone had 178 entries live, some days peak at 289. Both run on every page nav, period
-  switch, and dialog close (`Render()` has no async boundary). Fixed both the same way: build only
-  the first N rows (`DefaultAppsShown` = 3, new `DefaultDiaryRowsShown` = 40) up front, defer the
-  rest behind a "Show more" click that builds them then (selection state for the diary list already
-  lived in `selectedIds`/`lastRows`, independent of what's been realized in the UI tree, so this
-  needed no changes to selection/mark-as logic). Verified: clean Debug build (0 warnings) + 83/83
-  tests, then live in Release — stopped/rebuilt/relaunched the real instance (comfortably before the
-  20:00 EOD-timing caution), confirmed via read-only UI Automation that Reports now shows "Show 28
-  more apps" / "Show 140 more" instead of eagerly-built content, that clicking both actually expands
-  correctly ("Show fewer apps, expanded"), and that no error/exception appeared in the log
-  afterward.
-- **2026-07-21, posting-plan content removed from the public repo — both tree and full history**:
-  user's call — `posts/`, `POSTING_PLAN.md`, and the older `SOCIAL_POSTS.md` aren't part of the app
-  and shouldn't be publicly visible on GitHub. Repo-wide audit (`git ls-tree` at root) confirmed
-  these three were the only "not the app" tracked paths — `CLAUDE.md`/`CONTEXT.md` were
-  deliberately kept (dev history/process docs, not marketing drafts).
-  **Part 1 (current tree):** moved the `posts/media/*` images to a new top-level `media/` folder
-  first (README embeds them), rewrote README's image references to the new path, then
-  `git rm --cached` the three paths (files kept on local disk, just untracked — the user still
-  needs them to actually post) and added them to `.gitignore`; committed and pushed right away so
-  the live repo was fixed without waiting on part 2.
-  **Part 2 (full history purge):** the repo's been public since earlier the same day and these
-  paths were already in several pushed commits, so the tree-only fix alone would still leave them
-  recoverable from GitHub's commit history. Same `git filter-repo`-in-a-fresh-clone approach as the
-  2026-07-18 personal-data purge, three passes on one scratch clone: (1) `--path-rename
-  posts/media/:media/` across all history, so old commits' layout matches the new one; (2)
-  `--invert-paths --path posts/ --path POSTING_PLAN.md --path SOCIAL_POSTS.md --force` to drop
-  those paths from every commit; (3) `--replace-text` rewriting the literal string `posts/media/`
-  → `media/` in every blob's text content, so a historical README/CONTEXT.md doesn't point at a
-  path that no longer exists in that commit's own rewritten tree. Verified before pushing: local
-  commit count 166 → 159 on the purged clone (the 7 dropped commits were ones that touched only
-  the now-removed paths and became fully empty — filter-repo prunes those by default; spot-checked
-  against the real commit list, matches exactly what you'd expect from the posting-plan-only
-  commits); zero hits for the three paths across all history in the clone; tip-tree content
-  identical to pre-purge except one expected line (a session note's own prose mentioning the old
-  path got caught by the same text replacement). Force-pushed `master`+`winui-rebuild`+both tags
-  (`v1.0.0`'s hash also changed — expected, filter-repo regenerates the whole commit graph even
-  for commits whose content didn't change), then reset the real local working copy to match.
-  **Residual, not on GitHub:** two purely-local branches (`audit-fixes-2026-07-09`,
-  `code-refinement`) still have the old pre-purge history — same as the 2026-07-18 purge's own
-  note, these were never pushed to origin so they don't affect what's public; left untouched rather
-  than deleted without being asked. If a genuinely clean local state matters too, that's a separate
-  ask.
-- **2026-07-21, GitHub repo renamed to match app branding**: `devbaghda/mentor-overseer` →
-  `devbaghda/planillium` (`gh repo rename`), freed up by deleting the stray duplicate that
-  previously held that name (see entry below). Local `origin` remote updated to match; doc
-  references to the old repo name updated in `CLAUDE.md` and the launch-post draft — historical
-  session notes below that describe past actions (e.g. "flipped `devbaghda/mentor-overseer` to
-  Public") were deliberately left as-is since they're accurate records of what the repo was
-  actually called at the time.
-- **2026-07-21, first real release build (v1.1.0) + public-readiness pass**: user asked to build the
-  distributable package and prepare to publish publicly. Found `release/release.ps1` +
-  `release/installer/app.iss` (Inno Setup) already existed from an earlier session but had never
-  actually been run — no `release/output/`, no GitHub Release, no evidence the pipeline worked
-  end-to-end. Two real gaps closed first: (1) the csproj's `<Version>` was still `1.0.0` while 159
-  commits had landed since that tag — bumped to `1.1.0` (no breaking data-format change, but
-  substantial new features/fixes) so the tag wouldn't lie about its tree. (2) README's "License"
-  section pointed at license terms that didn't exist anywhere in the repo — added an MIT `LICENSE`
-  (copyright held as the GitHub handle `devbaghda`, not the real name that was already scrubbed from
-  history per the 2026-07-18 purge) and fixed the README section to link it. Ran `release.ps1`
-  clean: `dotnet publish` (self-contained win-x64) → staged `dist/` → compiled via Inno Setup 6
-  (already installed on this machine) → `release/output/Planillium-1.1.0-setup.exe` (~61.6 MB) +
-  `SHA256SUMS.txt`. Verified beyond just "it compiled": confirmed `dist/config.json` matches the
-  sanitized `config.default.json` (not the real live config); ran the actual verification checklist
-  from `release/README.md` — fresh silent install to a disposable scratch directory (not the real
-  Program Files), smoke-launched it (first-run name/tracking-disclosure dialog, "No active plans
-  yet.", "0 pts", no crash — log showed a clean `Planillium v1.1.0 starting` with nothing else),
-  then ran the generated uninstaller and confirmed `data/` survived (by design — real user data was
-  written there during the smoke run) while everything else was removed cleanly with zero registry
-  residue (`HKCU\...\Uninstall` entry gone, no leftover `Run` key). Had to briefly stop the live
-  dev-tree instance for this (the app's own single-instance mutex correctly blocked the scratch
-  copy from launching alongside it — expected, not a bug) — did this at 11:51 local, nowhere near
-  the 20:00 EOD-timing caution, then rebuilt plain Release and relaunched the live instance
-  afterward at v1.1.0 (its restart-after-a-gap coincidentally re-confirmed the diary-tracking-gap
-  fix from earlier today: the ~14-minute gap while it was down correctly showed up as
-  `HandleSleepGap: gap detected ... willFire=True` in the log instead of vanishing). Tagged
-  `v1.1.0` locally (annotated, pointing at the exact commit the installer was built from) but
-  **deliberately did not push the tag, create a GitHub Release, or touch repo visibility** —
-  those are the genuinely hard-to-reverse, visible-to-others actions and the user hadn't asked for
-  them explicitly yet, unlike the build/verify work itself. **Open TODO / next decision point:**
-  push `v1.1.0`, attach `Planillium-1.1.0-setup.exe` + `SHA256SUMS.txt` to a GitHub Release, and
-  flip `devbaghda/mentor-overseer` from Private to Public (prerequisite the launch post has been
-  waiting on since 2026-07-20) — all three need the user's explicit go-ahead. Also unresolved:
-  the installer/exe are unsigned (no Authenticode cert), so first-run will show SmartScreen's
-  "unrecognized app" wall — expected and already documented in `release/README.md`, worth
-  mentioning in the launch post itself so it doesn't read as broken.
-- **2026-07-20, late-day task reminder + diary window-title investigation**: user asked for three
-  things. (1) New feature: a once-a-day toast warns a configurable number of hours before
-  `end_of_day_summary_time` (default 2h, `late_day_task_reminder_hours` in Settings) if today's or
-  overdue tasks are still open across active plans — reuses `TodayPage.BuildPlanView`'s exact
-  "today's tasks" definition (`AssignedDay == planDay && !Completed`, plus `Overdue`) so it can't
-  disagree with what the Today page itself shows, and naturally skips a day every relevant plan
-  already excludes (no separate rest-day special-case needed). New `MainWindow.Startup.cs` watcher
-  (`StartLateDayTaskReminderWatcher`), same one-tick-per-minute pattern as the existing EOD/kickoff
-  watchers. (2) Investigated "why do so many diary rows just say 'File Explorer'" — first pass
-  wrongly concluded this wasn't a bug (checked only the raw `time_diary` table, which does have the
-  folder/tab name in every row, e.g. `'last INAILs - File Explorer'`). User pushed back with a
-  screenshot of the actual Reports diary list still showing bare "File Explorer (198m)" rows — that
-  screenshot was the real per-row list, not the "Time by App" summary chart, so the grouping
-  explanation was wrong. Real cause: `AppNames.Sub()` (`Services/AppNames.cs`), which the Reports
-  page's row label goes through, only extracts a sub-detail (filename/project/chat/etc.) for a fixed
-  set of apps — browsers, messengers, VS Code, and a hardcoded Office/Adobe list (`FileSubApps`) —
-  and "File Explorer" was never in that list, so its `Group()` name alone ("File Explorer") was
-  shown and the folder name in front of it silently dropped, for every File Explorer row, not just
-  one. Fixed by adding a case to `Sub()` that returns the leading segment (the folder/tab name) when
-  the app group is "File Explorer" — same idea as the existing `FileSubApps` filename case. (3) The
-  "-" entries the user saw were rows with a genuinely empty `window` value (118 rows, all `neutral`,
-  ~1-2 min each — a window with a blank title bar, most commonly the desktop itself briefly focused
-  mid-app-switch) — this WAS a real, if minor, gap: `ActivityTracker.ActiveWindowTitle` now falls
-  back to the process name when both the raw title and the `ExeAppNames` lookup come up empty, so
-  these show e.g. "explorer" instead of nothing. Both (2) and (3) verified via clean Debug build (0
-  warnings) + 83/83 tests. **Not yet in the live Release instance** — held off rebuilding/relaunching
-  since the original request landed right at/after the 20:00 `end_of_day_summary_time`, and
-  CLAUDE.md's own caution is not to risk skipping that day's evening-review popup; pending the user's
-  go-ahead on timing.
-  - Lesson: when re-investigating a report the app's own screen contradicts, check what the *screen
-    the user is looking at* actually does with the data, not just the raw table — a value can be
-    correct in storage and still wrong on screen if a formatting/grouping step between the two drops
-    information for a case it wasn't written to handle. Folded into the `windows-app-auditor` global
-    skill's "verify, don't vibe" section.
-- **2026-07-20, unread-notification tray dot + missing-EOD-notification report**: user reported no
-  end-of-day review notification appeared one evening, and asked for all notifications to stay
-  "unread" (tray icon shows a dot) until the app is actually looked at. (1) The missing-notification
-  report couldn't be conclusively root-caused: the live process had been running continuously since
-  well before 20:00 and was still alive over an hour past it, `winui_state.json`'s `last_review`
-  never advanced past the previous day, and the log had zero entries (not even an error) in that
-  window — ruling out a crash but not narrowing down which of several plausible causes (a stuck
-  `DialogGate` semaphore held by an earlier undismissed dialog; `window.IsOnScreen()` misreading
-  state; a toast that fired but was never noticed) actually happened. Per the audit skill's own
-  "instrument, don't guess" principle, added diagnostic-only logging instead of a speculative fix:
-  `DialogGate.ShowAsync` now logs a `Warn` if a wait for the gate exceeds 15s (would catch a stuck
-  dialog starving the queue), and `ReviewDialog.Trigger` logs once/day the first time it actually
-  attempts to offer the review, naming whether the window was on-screen. Next occurrence should be
-  diagnosable from the log. (2) New `Services/NotificationCenter.cs`: a persisted unread counter
-  (`unread_notifications` in `winui_state.json`, via `StateService`) that `ToastNotifier.Show`
-  increments on every successful toast (centralized there so all current+future call sites
-  participate automatically) and that `MainWindow`'s `Activated` event clears — "read" means the
-  window was brought to the foreground, there's no separate per-notification inbox. `MainWindow.Tray.cs`
-  builds two cached `System.Drawing.Icon`s once at startup (plain + a badged version with a red dot
-  composited via GDI+ `FillEllipse` onto the existing `icon.ico`) and swaps `_tray.Icon` between them
-  on `NotificationCenter.UnreadChanged`; the badged icon's `Icon.FromHandle`-wrapped HICON is
-  destroyed explicitly in `Closed` (that call doesn't take ownership of the handle, a known .NET GDI
-  gotcha — left unhandled it would leak one handle for the life of the badge, though since it's only
-  built once per process run, not per toggle, this is a fixed one-time cost, not unbounded growth).
-  Verified: clean Debug build (0 warnings) + 83/83 tests; the mark-unread→mark-read round trip was
-  confirmed end-to-end via a throwaway instance (`MENTOR_ROOT` pointed at a scratch folder, a
-  pre-seeded `unread_notifications: 1`, launched, confirmed it reset to `0` on window activation);
-  the badge composite itself was verified by rendering the exact same GDI+ calls standalone and
-  visually inspecting the output (a clear red dot with a white ring, bottom-right corner) — the tray
-  shell's own overflow-flyout UI resisted UI-Automation-driven inspection (auto-closes when a
-  non-foreground process invokes it) so the live tray icon wasn't itself screenshotted, but the
-  underlying draw call is proven correct and `TaskbarIcon.Icon` is a plain property assignment.
-  **Both items are now in the live Release instance** — the user closed the previously-running
-  instance (from the prior session's end-of-day/File-Explorer/blank-title batch, which was also
-  still pending a rebuild) between turns; rebuilt Release and relaunched cleanly (log shows a normal
-  startup, no errors) once confirmed stopped.
-- **2026-07-21, diary-tracking-gap RESOLVED (closes the 2026-07-15/07-20 open TODO)**: user reported
-  the same bug a third time — today's tracking started at 10:35 instead of the configured 06:00,
-  nothing accounted for the gap. This time the 2026-07-20 diagnostics (now live, deployed in that
-  session's Release rebuild) caught it directly: at 10:35:31, `HandleSessionLock` logged
-  `idleSince set to 2026-07-21T10:35:31` immediately followed by `HandleIdleReturn` logging
-  `idleStart=10:35:31 idleEnd=10:35:31` (zero-length, `willFire=False`) — and critically, NO
-  `HandleSleepGap` "gap detected" line at all, despite the live process (confirmed via its actual
-  `CreationDate`) having been running continuously since 21:36:57 the previous evening with no
-  restart. Root cause, now conclusively identified from this evidence plus `PollOnce`'s own control
-  flow: `HandleSessionLock` ran *before* `HandleSleepGap` in `PollOnce`. On a poll that resumes after
-  a long real gap (most likely Windows throttling this app's background timer for hours while
-  it sat hidden in the tray overnight — a documented power-management behavior, not something this
-  app controls) while also carrying a pending "session was locked" notification, `HandleSessionLock`
-  ran first and stamped `_idleSince = now` / `_idleNotified = true` using "whenever this poll
-  happens to run" as the gap's start — then, one line later in the *same* call,
-  `HandleSleepGap`'s own guard (`|| _idleNotified`) saw that flag already set and silently skipped
-  the check that would have anchored the gap correctly to `_lastPollAt` (the true last-known-good
-  time, however long ago). Net effect: the whole gap collapsed to zero and vanished with no diary
-  row, no prompt, no log trace of the real duration. **Fix**: swapped the call order so
-  `HandleSleepGap` runs first — it claims the gap correctly when there is one; when there isn't, it's
-  a no-op and `HandleSessionLock` behaves exactly as before. Verified via clean Debug build (0
-  warnings) + 83/83 tests. **Live in Release** — rebuilt and relaunched same session. Watch for one
-  more occurrence to confirm (the existing `HandleSleepGap`/`HandleIdleReturn` diagnostic lines are
-  enough to see it) since the underlying trigger (timer throttled while backgrounded overnight) isn't
-  something this fix prevents — only its previously-silent, gap-eating side effect.
-- **2026-07-20, diary-tracking-gap investigation (next occurrence of the 2026-07-15 open TODO)**:
-  user reported today's diary starting at 07:59 instead of the configured 06:00 diary-start, with
-  no accounting at all for the gap before it. Investigation (log + direct read-only DB query via
-  a PowerShell-loaded `Microsoft.Data.Sqlite` — CLI `sqlite3` isn't installed on this machine;
-  native `e_sqlite3.dll` had to be added to `PATH` from the build output's
-  `runtimes/win-x64/native/` folder before `SQLitePCL.Batteries_V2.Init()` would succeed) confirmed
-  this is real, not just "the PC was off": `time_diary` has zero rows for 2026-07-19 (a genuine
-  rest day — both active plans exclude Sat+Sun) but ALSO a second, cleaner occurrence the same
-  morning mid-session with no reboot/rest-day involved — a 198-minute continuous "neutral - File
-  Explorer" block (08:04→11:22) that should have been split by idle detection but wasn't. Both
-  `ActivityTracker.HandleIdleReturn` log lines that morning show `idleStart` landing only ~1 poll
-  interval (60s) before `idleEnd`, instead of reflecting the true, much longer preceding gap.
-  Traced every `_idleSince`/`_idleNotified` write site in `ActivityTracker.cs`: all four are
-  correctly gated so `_idleSince` should stay frozen at the true idle-start once `_idleNotified`
-  is true, and the timer is already confirmed non-reentrant (one-shot + re-arm, `Start()`
-  correctly built) — yet the evidence shows it isn't staying frozen. Root cause NOT conclusively
-  found from static reading alone; rather than ship a speculative fix, added `Log.Info` diagnostics
-  to the two `_idleSince` writers that were previously silent (`HandleSessionLock`,
-  `HandleActiveSession`'s idle branch — commit pending) so the *next* occurrence pins which path
-  actually fires and what value it writes. Verified via clean Debug build (0 warnings) + 83/83
-  tests; **not yet in the live Release instance** — the diagnostic won't take effect until the
-  user rebuilds Release and relaunches, done on their own schedule per the EOD-time caution in
-  CLAUDE.md. **Open TODO: watch the log for the next occurrence of this exact signature**
-  (idleStart within ~1-2 poll intervals of idleEnd despite a much longer real gap) and check which
-  of the two new log lines fired beforehand.
-- **2026-07-18, two new global skills + first posting-plan content**: user asked (scheduled via a
-  local one-shot cron job to start at 14:30, since a cloud routine can't touch local `~/.claude/skills`
-  files) to build two reusable global skills. Both live in the canonical `Desktop/CLAUDE/skills` repo
-  (edit there, never directly in `~/.claude/skills` — a previous session's direct edit to the deployed
-  copy got silently overwritten by this session's `install-skills.sh --global` run, caught and
-  reconciled per `knowledge-upkeep`'s own warned failure mode). **`posting-plan`**: maintains a
-  per-project `POSTING_PLAN.md` + `posts/` folder, drafts LinkedIn/Reddit posts in a human voice,
-  triggers proactively alongside `knowledge-upkeep` at shipped milestones — never publishes (no
-  platform connector exists). Bootstrapped for this project: `POSTING_PLAN.md` now exists here with a
-  real drafted post (`posts/2026-07-18-plan-day-perf-fix.md`, about the closed-form perf fix below) plus
-  two queued ideas (round-11 audit, the WinUI-rebuild arc) — ready for the user to review and post.
-  **`project-media`**: one-page project presentations via the Artifact tool (always available); short
-  animated content scoped honestly after verifying this machine's real capabilities (2026-07-18):
-  ffmpeg NOT installed, Playwright available via `npx` and can drive the system-installed Edge browser
-  with no download needed, no video-generation API connected — so it defaults to an animated one-pager
-  (no video file needed) and documents the exact `winget install ffmpeg` gap-closing steps for real
-  video export rather than assuming a pipeline that isn't there. Neither skill is Planillium-specific;
-  both apply to any future project.
-- **2026-07-18, plan-day math performance fix** (user-requested, not an audit round): closed
-  out the last open-TODO performance item — see the Open TODOs entry above (now struck
-  through) for the closed-form approach and test coverage. Verified via clean Debug build
-  (0 warnings; Release skipped since the live exe was running and holding it locked) + 83/83
-  tests (up from 19 — new `PlanModelsSchedulingTests.cs`). Also added a "simplicity is king"
-  lesson to the global `windows-code-refiner`/`windows-app-auditor` skills after this fix —
-  see Standing lessons.
-- **2026-07-18, round-11 audit + fix** (5 parallel background sub-agents, all completed —
-  extra scrutiny requested on round 10's new code since it hadn't been re-audited yet). 4
-  Medium + 6 Low + 5 Info, all 15 fixed same session, verified via clean Debug build (0
-  warnings — Release build skipped this pass since the live exe was running and holding the
-  output file locked) + 19/19 tests. Headline: **R11-01**, a real gap in round 10's own new
-  "Disconnect TickTick" button (no try/catch, unlike every sibling on the page) — caught
-  *independently* by two different audit passes (UX and Security) landing on the exact same
-  finding, a good confidence signal for the remediation-loop's "re-check the fix's own new
-  code" lesson. Other fixes: **R11-02** `MainWindow`'s tracker-startup fire-and-forget Task
-  had no try/catch, the one sibling that missed a pattern three other call sites in the same
-  file already use; **R11-03** four places reading back a date/time the app itself wrote
-  (a plan's `StartDate`, work hours, EOD time) weren't pinned to `InvariantCulture` like the
-  write side already was — `PlanModels.StartDateParsed` was the more serious one, could
-  silently reset a plan's day-numbering on a non-Gregorian-calendar locale; **R11-04** new
-  `DateExtensions.TryParseIsoDate` closes the read-side gap `ToIsoDate` never had a
-  counterpart for — `ReportData.cs` had hand-typed the same parse expression 6 times;
-  **R11-05** deleted a redundant "belt-and-suspenders" copy of the `sl_reason_date`
-  index-creation SQL in `ScoreService`'s constructor — `Database.EnsureSchema` (which the
-  `Database` object passed into that constructor has already run) is the only copy that
-  actually knows how to migrate that index, so the second copy could only ever be a silent
-  no-op if it ever went stale; **R11-06** new `Services/ExportFiles.cs` is now the *one*
-  source of truth for the three export filenames — R9-01 had already unified the *delete*
-  side, this closes the *write* side (`DataExport.cs`/`ReportExport.cs` no longer retype the
-  names); **R11-07/08/09/10/12** Settings polish (Disconnect button naming/ellipsis
-  convention, name-save confirmation, retention-days upper bound, "Clear all my data"
-  confirmation text now mentions settings/name aren't touched); **R11-13/14** `CredentialStore`
-  hardening — `Delete` now logs a warning on a genuine (non-"not found") `CredDeleteW`
-  failure instead of leaving no trace, and `Write` zeroes the plaintext secret's managed and
-  unmanaged buffers immediately after use instead of leaving them for the GC/allocator;
-  **R11-15** the one remaining `ScoreReason` SQL-interpolation site (`RecalculateDayScore`'s
-  DELETE) parameterized to match the rest of the file's convention. **R11-11** (TickTick
-  disconnect is local-only, doesn't revoke server-side at TickTick) and **R11-16**
-  (`ActivityTracker`'s 2026-07-15 diagnostic `Log.Info` lines) were investigated, not code-
-  fixed: R11-11 would need a TickTick-side revoke endpoint, out of scope; R11-16's log data
-  was actually reviewed this round (17 real firings across 3 days) and shows the diagnostic
-  working as intended — the two `willFire=False` entries are both correctly explained by the
-  idle period starting after that day's 20:00 diary-hours cutoff, not a bug — so the lines
-  stay in place as still-useful, low-cost instrumentation rather than orphaned scaffolding.
-  Security pass came back completely clean again (zero new findings) apart from the R11-01
-  cross-confirmation.
-- **2026-07-18, round-10 audit + fix** (5 parallel background sub-agents this time — all 5
-  completed successfully, unlike round 9's outright failures). 4 Medium + 5 Low + 4 Info, all
-  13 fixed same session, verified via clean Release build (0 warnings) + 19/19 tests. Two
-  themes: (1) round 9's own fixes (`Log.Friendly`, `ExportFileNames`) were applied correctly
-  everywhere they were sent, but missed sibling instances of the same shape in files that
-  round didn't touch — cross-confirmed independently by two different agents (UX and
-  code-quality) landing on the identical `TickTickConnectDialog.cs`/`TickTickSection.cs` gap;
-  (2) a real regression in my own round-9 fix: wrapping `ThrowIfExportFilesRemain`'s deliberate
-  "your data was cleared, but a file survived" message in `Log.Friendly`'s "Couldn't clear..."
-  prefix produced a self-contradicting string. Fixes: new `ExportCleanupException` type lets
-  `RunClearActionAsync` display that one message as-is instead of double-wrapping it (R10-01);
-  new `CredentialStore.Delete`/`TickTickAuth.Disconnect` + a "Disconnect TickTick" Settings
-  button, also folded into "Clear all my data" — previously no in-app way existed to remove the
-  3 Credential-Manager-stored TickTick secrets, only Windows Credential Manager by hand (R10-02,
-  Medium/privacy); `ScoreService.Overrides()` memoizes `task_overrides` per plan the same way
-  `DaysOff` already was, single invalidation point in `SaveOverride` (R10-03, was causing 100+
-  redundant SQL round-trips per Reports week-render); `TickTickConnectDialog`/`TickTickSection`
-  routed through `Log.Friendly` (R10-04); `TickTickAuth.RedirectUri` exposed `internal` and read
-  by the connect dialog instead of a second hardcoded copy of the callback URL (R10-05, same
-  "two copies of one fact" shape as round-5 finding #15, just one file over); `AppNames.cs`'s
-  three independently-typed dash-separator lists unified into one `DashChars` source (R10-06);
-  `SpendDialog`'s two raw ledger-reason literals folded into `ScoreReason` (R10-07); several
-  Settings error-copy wording passes for consistency (R10-08/09/10); shared
-  `WatcherPollInterval` constant for the EOD/kickoff timers (R10-11); `Log.Friendly` gained an
-  optional `action` parameter for call sites with a more specific fix than the generic "try
-  again" (R10-12 — applied to `TickTickAuth`'s port-in-use message; `App.xaml.cs`'s
-  fatal-startup dialog deliberately left alone, per the audit's own note that its
-  multi-paragraph native-MessageBox shape isn't a clean fit); new "Your name" field added to
-  Settings, previously only settable once at first run via `NameSetupDialog` (R10-13). Security
-  pass came back completely clean — zero new findings.
-- **2026-07-18, round-9 audit + fix (no artifact — flat table in chat, per standing
-  preference)**: The 5 background sub-agents originally launched for this round all failed
-  outright on a session usage-limit error before producing any output — ran the full 5-category
-  pass directly (no sub-agents) instead. Found 1 Medium + 1 Info, both fixed same session (no
-  separate re-audit loop needed — small enough to fix and verify inline): **R9-01** (Medium,
-  code quality/privacy) — the 3-filename export list (`report.html`/`report.csv`/
-  `full-export.json`) that both "Clear activity history" and "Clear all my data" use to also
-  delete exported copies was typed out as two independent array literals
-  (`SettingsPage.xaml.cs:226` and `:448`) — another instance of this project's recurring
-  duplicated-lookup-table bug class, and one sitting directly in the R8-05 privacy-fix code path;
-  unified into one `ExportFileNames` constant. **R9-02** (Info) — ~10 spots across
-  Settings/Today/Plans/Reports/Schedule pages showed a caught exception's raw `.Message` as the
-  entire error string; added `Log.Friendly(what, ex)` (technical detail kept, in parentheses,
-  since for this app's actual solo-developer audience it's useful for self-diagnosis — just no
-  longer the *whole* message) and routed all ~10 sites through it. Everything else checked clean
-  on direct re-verification: R8-05's export-delete fix and its own re-audit-caught silent-failure
-  fix still intact, `ClearAllData`'s table list still covers all 9 schema tables, no locale
-  regressions, no new instances of the duplicated-lookup-table pattern beyond R9-01, icon-only
-  buttons still have `AutomationProperties` names, timer reentrancy/disposal/dialog-gating/
-  single-instance-mutex/credential-handling all still correct. Verified via clean Release build
-  (0 warnings) + 19/19 tests both before and after the fix, plus `dotnet list package
-  --vulnerable` (both projects clean).
-- **2026-07-18, round-8 full audit + same-day remediation** (5 parallel passes — architecture/
-  security/UX/code-quality/privacy; report — note the user's since-established preference is
-  flat-text findings in chat, not an artifact, going forward:
-  https://claude.ai/code/artifact/016b54c5-9852-4e12-9092-c5fdb799b4e9): 0 Critical, 1 High, 8
-  Medium, 7 Low, 3 Info. **All 19 fixed same day** across 4 commits (295e333, 5fb45b1, 42867f7,
-  ea37165) after the user asked to fix the findings — triaged 18 AUTO-FIX + 1 NEEDS-DECISION
-  (R8-05: unconditional export-file deletion, user chose "delete unconditionally" over an
-  opt-in checkbox). Full 5-pass re-audit afterward confirmed all 19 resolved with zero
-  regressions in 4 of the 5 categories; the privacy re-audit caught 2 new issues introduced by
-  its own R8-05 fix (both "clear data" actions silently swallowed a locked-file delete failure
-  into the log instead of telling the user — the exact "logged but not surfaced" gap the fix
-  itself should have closed) — fixed in a 4th commit, verified, no further findings. New
-  regression test: `ScoreServiceScoringTests.RecalculateDayScore_PreservesThatDaysOwnStreakBonus_NotTodays`
-  (19 tests total, up from 18). Headline fix (R8-01, High): `ScoreService.CurrentStreak` now
-  takes an optional `asOf` date instead of always anchoring on `DateTime.Today`, so
-  `RecalculateDayScore` (called whenever a past diary entry is edited/split/bulk-recategorized)
-  no longer silently zeroes a day's real streak bonus — the identical bug was also found and
-  fixed in `ReportData.WeekStats` while fixing this one. Other fixes worth remembering: new
-  `Plan.IsOffOn` unifies a day-off predicate that `ScoreService`/`ActivityTracker` used to each
-  hand-roll (R8-04); new `ScoreReason`/`DiaryCategory.EditableOptions`/`TimeByApp.StackedCategories`
-  close out three more instances of this project's recurring duplicated-lookup-table pattern
-  (R8-09/11/13); `MoveTaskToToday` now transaction-wrapped like its three siblings (R8-03,
-  repeat of the round-5 finding #27 shape). Full original list, plain-English explanations, and
-  the fix commits are in the artifact above and in git log 5f067d7..HEAD.
-- **2026-07-18, diary-overlap re-audit + git-history purge**: Two open TODOs, both resolved.
-  (1) Full-history scan of `time_diary` found 42 overlapping row-pairs (06-29 through 07-16),
-  not just the single 07-15 instance previously flagged — see the Open TODOs entry above for
-  the count and the user's decision to leave the data untouched rather than guess-correct 40
-  pairs with no confirmed single cause. (2) Personal-data git-history purge — see the Open
-  TODOs entry above (now struck through) for full detail; also picked up two things not
-  originally scoped: an accidentally-committed `obj/` build-artifact tree (would have risked
-  binary corruption from the name text-replace — Microsoft's own "David" Hebrew-script font
-  name inside a Windows DLL was a false-positive match) and commit-message text (filter-repo's
-  `--replace-text` only touches file blobs, not messages — needed a second `--replace-message`
-  pass to actually finish the job).
-- **2026-07-07 to 07-15, WinUI rebuild through round-6 audit** (full detail in git log; artifact
-  links kept for the rounds that have them). v1.0.0 shipped 07-07 (18 findings fixed), app renamed
-  "Planillium" (display only). TickTick secret purged from git history via `filter-branch` +
-  rotated 07-08/09 (Credential Manager entry still needs the user to reconnect TickTick from Settings
-  to pick up the new secret — see Open TODOs). Audit rounds, each verified with full Debug+Release
-  build + tests + `dotnet list package --vulnerable` + live UIA pass: rounds 1-2
-  (https://claude.ai/code/artifact/1f5b15bb-c6d5-4ea0-a1db-a46b984db19e, 07-09) — diary column
-  width, window-clamp-to-monitor, completed-task-shift data loss (business rule 7), move-to-today
-  backward compaction, `multi_task_bonus_per_extra_task`, `config.json`/`plans/active/*.json`
-  gitignored (history not purged — Open TODOs); round 3
-  (https://claude.ai/code/artifact/8bcbfc6d-c998-4084-840c-23e8641483c2) — `ReviewDialog`
-  reentrancy guard, per-task Reschedule, God-Object file splits; round 4
-  (https://claude.ai/code/artifact/edcb4afc-aea5-429d-bb30-4889c3b04ba6) — `Plan.DriftDays`
-  unified, SQLite CVE-2025-6965 pin; round 5
-  (https://claude.ai/code/artifact/e54a2317-7406-49ab-bc77-7607b9920860) — introduced
-  `Database.RunInTransaction`/`CreateCommand` and `DateExtensions.ToIsoTimestamp()`, the two
-  mechanisms every later round keys off; round 6
-  (https://claude.ai/code/artifact/4575736f-87f3-4926-b233-6135aaac0530, 07-14, remediated 07-15)
-  — `PlanStore.IsValidPlanId` unified, several dialogs made transactional with a `bool?`
-  return + new `SaveErrorBar`, `DateExtensions.ToIsoTimeOfDay()`/`ToDisplayDate()`,
-  `Services/JsonFileIO.cs` atomic writes, Reports period selector unified to one `RadioButtons`
-  group. Same evening (07-15), three more turns: `ReviewDialog._offeredOn` was being set by any
-  `ShowCore` call (not just automatic), so a manual "Evening review" click burned the day's
-  automatic EOD offer — fixed, plus a 30s live-refresh timer added to the Reports diary section;
-  a missing post-overnight-gap "where were you" prompt was investigated but not conclusively
-  root-caused — `Log.Info` diagnostics added at the sleep-gap/idle-return decision points
-  (**open TODO: watch the log next occurrence**); skills housekeeping (reconciled canonical
-  `Desktop/CLAUDE/skills` vs deployed `~/.claude/skills`, added global skill `knowledge-upkeep`);
-  **found live** via a user screenshot — `ActivityTracker.HandleActiveSession`'s idle-detected
-  branch closed the outgoing session through "now" instead of the real idle-start instant,
-  double-counting up to 10 min of on/off-plan time against idle for as long as idle detection has
-  existed — fixed by computing idle-start once, shared with `_idleSince` (**open TODO: the
-  already-written overlapping rows this caused in `data/progress.db`, e.g. on-plan 11:41→11:51
-  inside idle "Break" 11:40→11:55, are still uncorrected, pending the user's explicit go-ahead naming
-  the specific rows — there may be older instances further back too, not audited**); all three
-  "Add Plan" wizard templates fixed (keyed phases as `"title"` instead of `"name"`, silently
-  dropping phase names on import); idle-return dialog now shows the actual clock time range;
-  sidebar gained a "Finishes dd.MM.yyyy" line (`Plan.CurrentEndDate`).
-- **2026-07-16, reschedule/day-off shifting bugs** (full detail in git log): Fixed three related
-  bugs. `RescheduleTaskDialog`/`ReplanOverdueDialog` allowed only tomorrow-or-later as a
-  reschedule target, so an overdue task could never be moved to *today* (fixed: `MinDate` now
-  uses `plan.PlanDay`). Root cause shared by two more reports: `MarkDayOff`/`UnmarkDayOff`/
-  `RescheduleTask`/`MoveTaskToToday` shifted tasks by a blind `±1` with no awareness that another
-  day might already be marked off, so a shift could land a task directly on a day-off day while
-  leaving a plain working day looking empty — fixed with `NextWorkingDay`/`PrevWorkingDay`
-  helpers (skip over `plan_days_off` entries) used at all four shift sites. 4 new regression
-  tests. Verified with full build+test+live relaunch.
-- **2026-07-17, full 5-category audit + remediation** (full detail in git log/commit messages):
-  Ran all 5 `windows-app-auditor` passes in parallel (architecture/security/UX/code-quality/
-  privacy). Fixed 1 High (an unobserved-`Task` risk on the toast-notification click-through,
-  mirroring a bug class already fixed elsewhere — `MainWindow.xaml.cs`), 9 Medium, and ~15
-  Low/Info. Highlights: `StateService.Save` now uses the atomic-write helper; the tray pill and
-  Reports page now read activity-category colors from one shared `Services/CategoryStyle.cs`
-  table instead of two independently-drifted copies (the "fix one sibling, miss the other"
-  pattern recurring a 4th time — see Standing lessons); `TreatWarningsAsErrors` turned on so a
-  plain build now enforces the zero-warnings bar a manual `/warnaserror` flag used to;
-  TickTick's connect dialog now discloses what data syncs before you connect it; `MANUAL.md`'s
-  privacy section rewritten to actually describe window-title tracking/retention/export; a new
-  **"Clear all my data" Settings action** wipes every remaining table (task_completions/
-  overrides/day-offs/notes/score_ledger/ticktick_sync) plus the debug log — previously only
-  activity-history and reflections had any delete path at all; Settings' hours/reminders/
-  keyword-list fields now autosave like the rest of the page instead of needing an explicit
-  "Save settings" click; `DiaryCategory`/`MessengerApps` shared-constant classes replaced
-  scattered string literals across 11+2 files; `ReportData.Buckets` split into
-  `MonthBuckets`/`YearBuckets`; a few functions had their pure data-decisions pulled out of
-  UI-building code (`TodayPage.BuildPlanView`, `ReportExport.GatherWeekReportData`,
-  `TickTickAuth.TryParseCallbackRequest`, `IdleReturnDialog.BuildSegments`) — `ReportsPage.
-  Diary.BuildDiarySection` and a few other verbose-but-already-data-separated UI builders
-  (`PlansPage.PlanCard`, `ReviewDialog.BuildReviewPanel`, `ReportsPage.TimeByApp.
-  AppBreakdownPanel`) were deliberately left unsplit after inspection showed no real hidden
-  business-logic-in-UI risk, only inherent WinUI UI-construction verbosity, or (BuildDiarySection,
-  IdleReturnDialog) genuine shared-closure-state across UI modes. Both projects confirmed clean
-  via `dotnet list package --vulnerable`. Verified with full Debug+Release build + all 14 tests +
-  live Release relaunch + log check. Deferred (see Open TODOs): git-history purge, keyboard/
-  dark-mode/timing items that need a live human check, not a code change.
-- **2026-07-17, day-off scoring feature (same day, after the audit)**: the user asked for four
-  related changes to how day-offs interact with scoring — see business rule 10 for the settled
-  behavior. Confirmed two design decisions with the user first: the exemption only fires when
-  *every* active plan is off that day (not just one), and a brought-in/completed task earns only
-  its own task-completion credit, not full normal scoring for the whole day. Implementation:
-  `ScoreService.AllPlansScoringExempt` (new) gates `ComputeDayScore`'s on/off-plan/missed/streak
-  terms (TaskPoints/MultiTaskBonus never gated); `DayTaskCounts`'s per-plan skip now only fires
-  for a *recurring* exclusion, not a manual day-off (a manually-off day-number is real and
-  unique, so a task moved onto it — e.g. via Move-to-today — must still be counted, which it
-  silently wasn't before); `ScoreService.RecalculateDayScore` (new) lets `daily_score` be
-  recomputed after the fact, wired into `EditDiaryEntryDialog`/`SplitDiaryEntryDialog`/
-  `ReportsPage.Diary.MarkSelected` so editing/splitting/bulk-recategorizing a diary entry
-  refreshes that date's score instead of leaving it stale forever; `ReportData`'s
-  `WeekStats`/`MonthBuckets`/`YearBuckets`/`AppBreakdown`/`TopDistractions` all now exclude
-  exempt dates from their totals too (the user confirmed: totals, not just score) while the raw
-  Diary list stays untouched; `ActivityTracker.IsFullyOffToday` (new, separate from the existing
-  recurring-only `IsRestDayToday`) suppresses the off-plan nag alert on a manually-off day
-  without pausing tracking itself. `ScoreService.DaysOff` gained a per-instance memoization
-  (with cache invalidation on `MarkDayOff`/`UnmarkDayOff`) since `AllPlansScoringExempt` can now
-  run hundreds of times in one Reports render (once per date in a Year view). 6 new regression
-  tests (`ScoreServiceScoringTests.cs`). Verified with full Debug+Release build + all 18 tests +
-  live Release relaunch + log check.
+  frees up. New `plans/queued/` dir, `PlanStore` gained `LoadQueuedPlans`/`ActivateQueuedPlan`/
+  `DeleteQueuedPlan`. `AddPlanDialog`'s at-limit block became a choice ("Archive a completed plan
+  first" vs. "Save idea for later") — the latter runs the same wizard/import flow targeting
+  `plans/queued/`, skipping `start_date` (set later at activation via the same surgical-JsonNode-
+  patch pattern `SetExcludedWeekdays` uses). `PlansPage` gained a "Queued ideas" section (Start
+  now/Delete); `ArchiveAsync` now offers a `StartQueuedPlanDialog` picker right after a
+  successful archive if any ideas are queued. Verified end-to-end in a disposable `MENTOR_ROOT`
+  sandbox (synthetic data, not the user's real plans): at-limit choice → queue → correct file
+  written → Queued ideas UI renders correctly → archive → post-archive suggestion appears
+  (correctly serialized via `DialogGate`) → activation moves the file to `plans/active/` with
+  `start_date` reset. Clean Debug build (0 warnings) + 83/83 tests (no new automated tests —
+  file-I/O-driven UI flow with no existing test-fixture pattern to extend, consistent with
+  Archive/Restore). Shipped as v1.2.0.
+- **2026-07-22, tray icon stuck-badge bug root-caused and fixed**: user reported the red dot
+  stayed on even after clicking through the recap dialog (below). The live log's stack trace
+  pinned it exactly: `System.ObjectDisposedException: Object name: 'Icon'` at `Icon.get_Handle()`,
+  called from `H.NotifyIcon.TaskbarIcon.UpdateIcon`. Root cause: the old code cached exactly two
+  long-lived `Icon` objects (plain/badged) and handed the same object to `TaskbarIcon.Icon`
+  repeatedly — but `TaskbarIcon` disposes whatever icon it's replacing once a new one is
+  assigned, so the *second* time either cached object came back around it had already been
+  disposed out from under it, throwing and leaving the tray permanently stuck on whatever badge
+  state it was in. Almost certainly also the real explanation for an earlier, never-conclusively-
+  diagnosed "tray icon vanished / app appeared to close after clicking" report — same code path,
+  same failure mode. Confirmed the app itself never actually closed during any of this (a
+  read-only `time_diary` query around both exception timestamps showed continuous, ungapped
+  tracking rows straight through them). **Fix**: `MainWindow.Tray.cs` rewritten to never reuse an
+  `Icon` object across more than one assignment — the badged variant is pre-rendered to real
+  `.ico` bytes once at startup (via `Icon.Save`, not the old `Icon.FromHandle` wrapper), and a
+  brand-new `Icon` is constructed from either those bytes or the plain icon file on every swap,
+  left undisposed by our code (consistent with `TaskbarIcon` taking ownership). This also let the
+  old shutdown-time `DestroyIcon`/handle-tracking cleanup be deleted entirely. Verified: clean
+  Debug+Release build (0 warnings) + 86/86 tests; live click-through wasn't feasible this session
+  (tray UI can't be reliably driven by UI Automation, and seeding a repro needs either a genuine
+  toast or hand-editing live `winui_state.json`, which needs the user's confirmation per
+  CLAUDE.md's data-write rule) — stopped/rebuilt/relaunched the live instance regardless,
+  confirmed clean startup; **actual click-through was later confirmed live the same evening**,
+  see the recap-dialog entry below.
+- **2026-07-22, diary category/app filtering added**: user request — filter the Reports page's
+  Diary list by column, confirmed to mean category (on_plan/off_plan/paid/neutral/idle) and app,
+  combinable. `ReportsPage.Diary.cs` gained two persisted (survives-navigation) static fields
+  `_diaryCategoryFilter`/`_diaryAppFilter`, two `ComboBox`es in `BuildDiarySection`, and a "Clear
+  filters" button. Filters apply independently of the free-text search box and, unlike it, work
+  in single-day view too. Verified live via read-only UI Automation against the real running
+  instance (no data mutation): selecting "Off-plan" showed exactly 22 rows, cross-checked
+  against a direct read-only DB query (exact match); adding an app filter on top narrowed to 13,
+  all matching; "Clear filters" correctly reset both.
+- **2026-07-22, tray unread-dot recap added, then a startup race in it fixed same evening**:
+  user reported the red dot appeared correctly (07-20's `NotificationCenter` fix) but clicking
+  the tray icon opened the app with nowhere to see what the notification had been about.
+  `StateService.AppState` gained a `PendingNotifications` list (capped at 10, oldest dropped
+  first); `NotificationCenter.Record` (renamed from `MarkUnread`) now stores title/message/
+  timestamp alongside incrementing the unread count, and `NotificationCenter.TakePending`
+  (replaces `MarkAllRead`) returns and clears both in one step. New
+  `Dialogs/PendingNotificationsDialog.cs` shows a "While you were away" recap (oldest first).
+  New `NotificationCenterTests.cs` (3 tests, 86 total). **Follow-up bug caught live the same
+  evening**: a leftover unread notification from before a relaunch triggered the recap dialog on
+  the very first `Activated` event during startup — before `Content.XamlRoot` was ready —
+  throwing `ArgumentException` ("This element does not have a XamlRoot") into an unobserved
+  fire-and-forget task, the same race `InitTrackingAsync` had already been fixed for once
+  before. Fixed the same way: the recap check is now a guarded `CheckPendingNotifications()`
+  method, wired to both `Activated` and `root.Loaded` — whichever fires with a valid `XamlRoot`
+  first drains the pending state and shows the dialog. Verified live end-to-end: a real "Day's
+  winding down" toast fired, a fresh relaunch picked up its persisted unread state on startup
+  with no exception, and read-only UI Automation confirmed the "While you were away" dialog
+  rendered with the exact title/message before being closed — this also stands as the delayed
+  live click-through confirmation for the stuck-badge fix above.
+- **2026-07-22, Settings layout overflow + sidebar/Reports score-label confusion fixed**:
+  `SettingsPage.xaml`'s hours-and-reminders row was overflowing the 720px content column by
+  ~200px, silently clipping `LateDayReminderHours` off-screen — split into two stacked rows.
+  Separately, the sidebar's point total and Reports' "Today's Score" looked like the same number
+  but aren't (sidebar = running balance; Reports = a live formula preview) — added a small
+  "BALANCE" caption above the sidebar figure to distinguish them.
+- **2026-07-22, Reddit launch post filtered by r/ClaudeAI's karma gate**: the published Reddit
+  post showed "removed by Reddit's filters" but remained visible to the OP with a real
+  upvote/comment — the tell for an automatic hold, not a mod removal. Turned out to be
+  r/ClaudeAI's own posted rule: 50+ karma required for the main feed, otherwise redirected to a
+  Project Showcase Megathread. Reformatted the post into a shorter Megathread-comment version
+  (`posts/2026-07-20-launch-announcement-reddit.md`) for the user to paste there instead.
+  **Lesson for future `posting-plan` use**: a Reddit post showing "removed by Reddit's filters"
+  to the OP while still visible with engagement is an automatic hold, not a rejection — check
+  the subreddit's own posted rules/sidebar for a karma gate or megathread-redirect rule before
+  assuming a mod-approval request is the right next step.
+- *(Also not yet resolved from 2026-07-17's audit: "keyboard/dark-mode/timing items that need a
+  live human check" were deferred at the time as needing hands-on verification — never confirmed
+  done in any later session; worth a quiet check next time Settings/theming is touched.)* Also
+  from 2026-07-20's window-title investigation: `ActivityTracker.ActiveWindowTitle` now falls
+  back to the process name when both the raw title and the `ExeAppNames` lookup are empty
+  (previously ~118 diary rows/day showed a bare "-", most commonly the desktop briefly focused
+  mid-app-switch).
 - **Standing lessons** (apply every session, not just the one that taught them):
   - **Simplicity is king: prefer the algebraic/closed-form fix over a caching layer when the
     thing being repeated has structure to exploit.** The `PlanDayForDate`/`DateForPlanDay`
@@ -798,7 +546,8 @@ on 2026-07-17 after the round-7 audit)._
     data — verify data-mutating logic by code inspection + a clean build, not by clicking
     it live. Any direct write to `data/progress.db` outside the app's own code path needs
     the user's explicit confirmation naming the specific table/change first — the harness's
-    auto-mode classifier enforces this and will block an unnamed attempt.
+    auto-mode classifier enforces this and will block an unnamed attempt. Read-only queries
+    against it (cross-validating a UI figure against ground truth) are always fine.
   - `CopyFromScreen`/GDI `BitBlt` doesn't capture WinUI3 Mica/DirectComposition content —
     use `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons,
     UI Automation `BoundingRectangle` beats pixel-diffing screenshots.
@@ -819,78 +568,43 @@ on 2026-07-17 after the round-7 audit)._
     working copy afterward. Also: `--replace-text` only rewrites file blob content, not commit
     messages — a separate `--replace-message` pass is needed to actually remove a string from
     "history" in the sense a user means it (2026-07-18).
+  - **When a code comment already anticipates a source of confusion (e.g. "these two numbers
+    can legitimately differ"), the comment alone doesn't prevent a real user from hitting that
+    exact confusion again** — the 2026-07-23 DriftDays/shiftDays report is the round-4 finding's
+    predicted confusion happening for real, a year of code-comments later. If a fix for this
+    class of thing is ever revisited, put the clarification where the user actually looks (the
+    UI itself), not only in a doc comment only a future session will read.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **Diary-tracking-gap bug (2026-07-20): root cause not yet found, diagnostics added.** Watch the
-    log for another occurrence of `HandleIdleReturn`'s `idleStart` landing only ~1-2 poll intervals
-    before `idleEnd` despite a much longer real gap (two confirmed today: 06:00-07:59, and a
-    198-minute unbroken "File Explorer" block idle detection should have split). The two previously-
-    silent `_idleSince` writers (`HandleSessionLock`, `HandleActiveSession`'s idle branch) now log —
-    check which fires next time and what value it writes. Fix intentionally deferred until the
-    mechanism is actually pinned, not guessed.
-  - **LinkedIn/Reddit autonomous-publish for `posting-plan`: direction not yet decided, deferred by
-    the user (2026-07-20) rather than answered.** Reddit is realistically buildable — a "script" app
-    at reddit.com/prefs/apps (instant approval) + OAuth2, credentials in Windows Credential Manager
-    like TickTick's, gated behind per-post confirmation. LinkedIn is not: the official API needs a
-    slow/uncertain review (often expects a Company Page) and browser-automation posting was declined
-    outright as a LinkedIn ToS violation risking the account — the fallback (paste-ready drafts vs.
-    pursuing the official API application) is still an open choice. Revisit when the user wants to
-    pick a direction; don't build either without their explicit go-ahead given real accounts/ToS are
-    involved.
+  - **Tray icon reportedly vanished entirely after being clicked (2026-07-22), not yet
+    root-caused independently** — though the 2026-07-22 stuck-badge investigation (see above)
+    found a very likely same-root-cause explanation (`ObjectDisposedException` in the old tray
+    icon code) and fixed it; watch the log if this specific symptom (app appearing to fully
+    close, not just fail to reopen) recurs post-fix.
   - **A full-history scan (2026-07-17/18) found 42 overlapping diary-row pairs from 06-29 through
     07-16, not just the one 07-15 instance previously flagged, plus 2 rows with end_time before
     start_time.** Only 2 of the 42 cleanly match the documented `HandleActiveSession` bug
-    signature (active row's end == idle row's end, active row started at/before idle start);
-    the other 40 are mostly 1-2 minute boundary artifacts with no single confirmed cause. The
-    user's call: leave all of it untouched rather than guess-correct real data (2026-07-18).
-    Not expected to be revisited unless a clear mechanism for the other 40 turns up.
-  - ~~`Plan.PlanDayForDate`/`DateForPlanDay`'s day-by-day walk for plans with excluded weekdays~~
-    — **fixed 2026-07-18.** Since the exclusion pattern is by weekday, it repeats every 7
-    calendar days — replaced the O(days-elapsed) walk with a closed-form "skip full weeks,
-    walk only the remainder" calculation (O(1) plus at most ~7 loop iterations). Kept the
-    old walk as a private fallback (`DateForPlanDaySlow`) only for the degenerate all-7-days-
-    excluded case (avoids a divide-by-zero; the picker dialog doesn't block that input, though
-    it was already a pre-existing infinite-loop risk untouched by this fix). New
-    `PlanModelsSchedulingTests.cs` brute-force-verifies the closed form against the plain walk
-    across every 0/1/2-weekday exclusion combination plus weekend/3-day cases, 400+ plan-days
-    each (83 tests total, up from 19) — deliberately no caching/memoization layer, since the
-    math alone is O(1) and doesn't need cache-invalidation bookkeeping the way e.g.
-    `ScoreService.DaysOff`'s per-instance cache does.
-  - ~~Rotate the TickTick OAuth client secret~~ — **user confirmed done 2026-07-09**
-    (rotated at developer.ticktick.com). One follow-up remains, not yet done: the app's
-    Windows Credential Manager entry still holds the *old* secret until the user reconnects
-    TickTick from Settings (disconnect → "Connect TickTick" → re-auth writes the new value
-    via `TickTickAuth.SaveClientSecret`) — until then, TickTick sync will fail with an
-    auth error using the now-invalid old secret.
-  - ~~Scrub personal data before making the repo public~~ — **done 2026-07-18.** Ran
-    `git filter-repo` in an isolated scratch clone (not in-place — this repo has 3 other live
-    `git worktree` checkouts sharing its object store, and filter-repo refuses/risks corruption
-    unless it's a fresh clone) to: strip `config.json`, `plans/active/*.json`, and an
-    accidentally-committed `winui/MentorOverseer.App/obj/` build-artifact tree from every
-    commit; and replace the developer's real first name with "the user" in both file content
-    and commit messages across all 134 commits (name only appeared in comments/docs, never a
-    credential — current-tree source/docs/installer were hand-edited to match first, in the
-    same pass, so the name doesn't reappear in the next commit either). Verified before
-    pushing: tip-tree file list and content identical to pre-purge (git blob diff, one
-    intentional line), both branches + `v1.0.0` tag intact, commit count unchanged (134), zero
-    "David" hits left anywhere in history. Force-pushed `master`+`winui-rebuild`+tag to origin,
-    resynced this working copy. The 3 other worktrees (`mentor-overseer-audit-test`,
-    `-test`, `-theme-test`) are on local-only branches never pushed to origin, so they're
-    untouched by this — no action needed unless/until someone tries to reconcile them against
-    the rewritten master/winui-rebuild.
+    signature; the other 40 are mostly 1-2 minute boundary artifacts with no single confirmed
+    cause. **Settled, not an action item**: the user's call was to leave the data untouched
+    rather than guess-correct it (2026-07-18); revisit only if a clear mechanism for the other 40
+    turns up on its own.
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
-  - ~~Push v1.1.0, create the GitHub Release, flip `devbaghda/mentor-overseer` to Public~~ —
-    **done 2026-07-21.** Repo is now Public; `v1.1.0` tag pushed; GitHub Release created with
-    `Planillium-1.1.0-setup.exe` + `SHA256SUMS.txt` attached.
-  - ~~Delete the stray public `devbaghda/planillium` repo~~ — **done 2026-07-21.** A GitHub-
-    account audit (`gh repo list devbaghda`) found a second, separate public repo sitting
-    alongside the real `mentor-overseer` repo: a single stale commit from 2026-07-08 ("curated
-    public release" of an early v1.0.0 snapshot, sanitized but long superseded by everything
-    since). First attempt failed (CLI token lacked the `delete_repo` scope; both the interactive
-    `gh auth refresh` and a Recycle-Bin deletion of the local `planillium-public` clone were
-    blocked by this environment's auto-mode safety classifier, which doesn't grant destructive-
-    action permissions automatically) — the user explicitly granted permission for both, then
-    completed the `gh auth refresh -h github.com -s delete_repo` browser device-code step
-    themselves; `gh repo delete devbaghda/planillium --yes` then succeeded (confirmed gone via
-    `gh repo view`), and the local clone was sent to the Recycle Bin (not a hard delete).
+  - One remaining follow-up from the 2026-07-09 TickTick client-secret rotation: the app's
+    Windows Credential Manager entry still holds the *old* secret until the user reconnects
+    TickTick from Settings (disconnect → "Connect TickTick" → re-auth writes the new value) —
+    until then, TickTick sync will fail with an auth error using the now-invalid old secret.
+  - **Resolved-and-closed, kept as one-line pointers for date reference** (full detail was here
+    before the 2026-07-23 compaction — see git log for that prose if ever needed): full internal
+    `MentorOverseer`→`Planillium` rename, done 2026-07-23 (see session note above); diary-
+    tracking-gap bug, resolved 2026-07-21 (`PollOnce` call-order fix); LinkedIn/Reddit
+    autonomous-publish for `posting-plan`, dropped 2026-07-22 (both platforms' APIs turned out
+    gated/unsuitable — a dormant Reddit OAuth2 tool was built and kept at
+    `~/Desktop/CLAUDE/skills/posting-plan/tools/reddit-publish/` in case policy changes);
+    `PlanDayForDate`/`DateForPlanDay` O(days-elapsed) walk, fixed 2026-07-18 (closed-form
+    replacement, see Standing lessons); TickTick OAuth client secret, rotated 2026-07-09 (user
+    confirmed at developer.ticktick.com); personal-data git-history scrub before going public,
+    done 2026-07-18 (`git filter-repo` scratch-clone, 134 commits, verified via blob diff);
+    v1.1.0 push + GitHub Release + repo flipped Public, done 2026-07-21; stray duplicate
+    `devbaghda/planillium` repo (a stale 07-08 snapshot squatting the name), deleted 2026-07-21
+    after the user granted the needed `delete_repo` OAuth scope and Recycle-Bin permissions.
