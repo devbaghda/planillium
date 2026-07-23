@@ -124,6 +124,31 @@ public static class ConfigService
         return TimeSpan.TryParse(start, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(8, 0, 0);
     }
 
+    /// <summary>Configured end of the working day ("working_hours.end"), default 20:00.</summary>
+    public static TimeSpan WorkEndTime()
+    {
+        var end = "20:00";
+        if (Root.TryGetProperty("working_hours", out var wh) &&
+            wh.TryGetProperty("end", out var v) && v.GetString() is { Length: > 0 } s) end = s;
+        return TimeSpan.TryParse(end, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(20, 0, 0);
+    }
+
+    /// <summary>Minutes of off-plan grace before the first reminder alert
+    /// ("reminder_grace_minutes"), default 15 — was previously re-derived independently
+    /// in both ActivityTracker and SettingsPage with its own copy of this same fallback,
+    /// risking the two silently disagreeing if one copy's default ever changed.</summary>
+    public static int ReminderGraceMinutes() =>
+        Root.TryGetProperty("reminder_grace_minutes", out var v) && v.TryGetInt32(out var n) ? n : 15;
+
+    /// <summary>Minutes between repeat reminder alerts ("reminder_interval_minutes"), default 5.</summary>
+    public static int ReminderIntervalMinutes() =>
+        Root.TryGetProperty("reminder_interval_minutes", out var v) && v.TryGetInt32(out var n) ? n : 5;
+
+    /// <summary>Minutes of no input before the user is considered idle
+    /// ("idle_threshold_minutes"), default 10.</summary>
+    public static int IdleThresholdMinutes() =>
+        Root.TryGetProperty("idle_threshold_minutes", out var v) && v.TryGetInt32(out var n) ? n : 10;
+
     /// <summary>How many days of detailed diary history to keep before it's
     /// rolled up (Database.DiaryRetentionDays is only the default now —
     /// this makes it user-configurable, 2026-07-09 audit finding #34).</summary>

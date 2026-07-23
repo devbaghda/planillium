@@ -1,4 +1,6 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 
 namespace Planillium.App;
@@ -27,16 +29,34 @@ public sealed partial class MainWindow
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr hIcon);
 
+    // The only previous way to stop being tracked was to quit the whole app — a heavier
+    // action than a short deliberate break really needs (2026-07-23 audit finding #17,
+    // "no lightweight pause option"). Session-only: a fresh launch always starts tracking
+    // again, same as today; this just adds a lighter in-between option while the app stays
+    // open.
+    private MenuFlyoutItem? _pauseTrackingItem;
+
+    // True only while the user has explicitly paused from the tray. RestartTracker() (Settings
+    // autosave, a diary re-categorization teaching a new keyword) checks this so an unrelated
+    // action doesn't silently un-pause tracking behind the user's back and leave the tray label
+    // lying about what's actually running (2026-07-23 re-audit finding: the first cut of this
+    // feature let RestartTracker unconditionally restart the tracker with no way to tell it was
+    // supposed to stay paused).
+    private bool _trackingPaused;
+
     private void InitTray()
     {
         try
         {
             var open = new MenuFlyoutItem { Text = $"Open {AppInfo.DisplayName}" };
             open.Click += (_, _) => ShowFromTray();
+            _pauseTrackingItem = new MenuFlyoutItem { Text = "Pause tracking" };
+            _pauseTrackingItem.Click += (_, _) => TogglePauseTracking();
             var quit = new MenuFlyoutItem { Text = "Quit (stops tracking)" };
             quit.Click += (_, _) => { _reallyClose = true; Close(); };
             var menu = new MenuFlyout();
             menu.Items.Add(open);
+            menu.Items.Add(_pauseTrackingItem);
             menu.Items.Add(new MenuFlyoutSeparator());
             menu.Items.Add(quit);
 
@@ -139,6 +159,36 @@ public sealed partial class MainWindow
     {
         NotificationCenter.UnreadChanged -= OnUnreadChanged;
         _tray?.Dispose();
+    }
+
+    /// <summary>Stops or restarts the tracker in place, without closing the window —
+    /// the tray's "Pause tracking" item. Mirrors RestartTracker's own stop/(re)start
+    /// halves; resuming builds a fresh ActivityTracker the same way Settings-save
+    /// already does, rather than trying to resurrect the paused one's in-flight state.</summary>
+    private void TogglePauseTracking()
+    {
+        if (_pauseTrackingItem is null) return;
+        if (Tracker is { Running: true })
+        {
+            Tracker.Stop();
+            _trackingPaused = true;
+            _pauseTrackingItem.Text = "Resume tracking";
+            ActivityText.Text = "Paused";
+            // The dot and window-name line used to keep showing whatever they last displayed
+            // while tracking was live, right next to a label saying it's paused — a mixed
+            // signal for a feature whose whole point is confirming tracking actually stopped
+            // (2026-07-23 UX re-audit). Reset both to the same neutral/blank state UpdatePill
+            // starts from before the first poll.
+            ActivityDot.Fill = (Brush)Application.Current.Resources[CategoryStyle.BrushKey(DiaryCategory.Neutral)];
+            ActivityWindow.Text = "";
+        }
+        else
+        {
+            _trackingPaused = false;
+            StartTracker();
+            _pauseTrackingItem.Text = "Pause tracking";
+        }
+        RaiseTrackingStateChanged();
     }
 
     public void HideToTray() => AppWindow.Hide();

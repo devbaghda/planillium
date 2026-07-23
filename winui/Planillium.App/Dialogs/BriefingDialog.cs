@@ -57,14 +57,8 @@ public static class BriefingDialog
         Section("WHERE MOST PEOPLE WASTE TIME", b.CommonTimeWasters);
         Section("REALISTIC TIMELINE", b.RealisticTimeline);
 
-        var dialog = new ContentDialog
-        {
-            Title = $"{plan.Name} — briefing",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 480 },
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, $"{plan.Name} — briefing",
+            new ScrollViewer { Content = panel, MaxHeight = 480 }, closeButtonText: "Close");
         await DialogGate.ShowAsync(dialog);
     }
 }

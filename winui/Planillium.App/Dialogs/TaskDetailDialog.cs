@@ -73,14 +73,7 @@ public static class TaskDetailDialog
             panel.Children.Add(block);
         }
 
-        var dialog = new ContentDialog
-        {
-            Title = task.Text,
-            Content = panel,
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, task.Text, panel, closeButtonText: "Close");
         await DialogGate.ShowAsync(dialog);
     }
 }

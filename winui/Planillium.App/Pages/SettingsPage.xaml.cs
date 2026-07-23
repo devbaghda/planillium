@@ -17,7 +17,9 @@ public sealed partial class SettingsPage : Page
             var theme = StateService.Load().Theme;
             ThemeChoice.SelectedIndex = theme switch
             {
-                "light" => 1, "dark" => 2, _ => 0,
+                "light" => 1,
+                "dark" => 2,
+                _ => 0,
             };
             OpacitySlider.Value = StateService.Load().Opacity;
             StartupToggle.IsOn = StartupService.IsEnabled;
@@ -26,12 +28,34 @@ public sealed partial class SettingsPage : Page
             LoadRules();
             _initialising = false;
 
-            var win = App.MainWindow as MainWindow;
-            TrackerInfo.Text = win?.Tracker is { Running: true }
-                ? "This app is tracking your activity (60s polls, diary 06:00–20:00)."
-                : "Tracking isn't running — check data/mentor-winui.log for why it failed to start.";
+            RefreshTrackerInfo();
+            if (App.MainWindow is MainWindow win) win.TrackingStateChanged += RefreshTrackerInfo;
             DataInfo.Text = $"{AppInfo.DisplayName} v{AppVersion.Current}\nShared data folder: " + AppPaths.Root;
         };
+        // Without this, the tracker-status paragraph below stays subscribed to a page
+        // instance the Frame has already discarded — harmless here (MainWindow outlives
+        // every page) but leaves a dangling handler each time Settings is re-navigated to
+        // (2026-07-23 UX re-audit fix).
+        Unloaded += (_, _) =>
+        {
+            if (App.MainWindow is MainWindow win) win.TrackingStateChanged -= RefreshTrackerInfo;
+        };
+    }
+
+    /// <summary>Re-reads the tracker's actual running state — called on load AND whenever
+    /// the tray's Pause/Resume toggle fires, so this paragraph can't disagree with the tray
+    /// menu's own label while Settings sits open (2026-07-23 UX re-audit: previously computed
+    /// once at page-load only).</summary>
+    private void RefreshTrackerInfo()
+    {
+        var win = App.MainWindow as MainWindow;
+        TrackerInfo.Text = win?.Tracker is { Running: true }
+            ? "This app is tracking your activity (60s polls, diary 06:00–20:00)."
+            // Running can be false either because it's paused from the tray (a normal,
+            // deliberate state, 2026-07-23 "Pause tracking") or because startup genuinely
+            // failed — phrased so it doesn't accuse a deliberate pause of being a bug.
+            : "Tracking isn't running — resume it from the tray icon, or check " +
+              "data/mentor-winui.log if you didn't pause it yourself.";
     }
 
     // ── rules & timing (writes the shared config.json) ───────────────────
@@ -46,22 +70,21 @@ public sealed partial class SettingsPage : Page
             return string.Join("\n", arr.EnumerateArray()
                 .Select(v => v.GetString() ?? "").Where(v => v.Length > 0));
         }
-        static string Time(System.Text.Json.JsonElement root, string key, string fallback) =>
-            root.TryGetProperty("working_hours", out var wh) &&
-            wh.TryGetProperty(key, out var v) && v.GetString() is { Length: > 0 } s ? s : fallback;
-        static int Num(System.Text.Json.JsonElement root, string key, int fallback) =>
-            root.TryGetProperty(key, out var v) && v.TryGetInt32(out var n) ? n : fallback;
         static double NumD(System.Text.Json.JsonElement root, string key, double fallback) =>
             root.TryGetProperty(key, out var v) && v.TryGetDouble(out var n) ? n : fallback;
 
-        WorkStart.Text = Time(cfg, "start", "08:00");
-        WorkEnd.Text = Time(cfg, "end", "20:00");
+        // Working-hours/reminder/idle defaults now come from ConfigService's shared
+        // methods rather than a second, independently-hardcoded copy of the same
+        // fallbacks ActivityTracker also reads — previously these could silently
+        // drift apart if one copy's default was ever changed without the other.
+        WorkStart.Text = ConfigService.WorkStartTime().ToString(@"hh\:mm");
+        WorkEnd.Text = ConfigService.WorkEndTime().ToString(@"hh\:mm");
         EodTimeBox.Text = cfg.TryGetProperty("end_of_day_summary_time", out var eod)
             ? eod.GetString() ?? "20:00" : "20:00";
-        GraceMin.Value = Num(cfg, "reminder_grace_minutes", 15);
-        RepeatMin.Value = Num(cfg, "reminder_interval_minutes", 5);
-        IdleMin.Value = Num(cfg, "idle_threshold_minutes", 10);
-        RetentionDays.Value = Num(cfg, "diary_retention_days", Database.DiaryRetentionDays);
+        GraceMin.Value = ConfigService.ReminderGraceMinutes();
+        RepeatMin.Value = ConfigService.ReminderIntervalMinutes();
+        IdleMin.Value = ConfigService.IdleThresholdMinutes();
+        RetentionDays.Value = ConfigService.DiaryRetentionDays();
         LateDayReminderHours.Value = NumD(cfg, "late_day_task_reminder_hours", 2.0);
         RulesOn.Text = Words(cfg, "activity_rules", DiaryCategory.OnPlan);
         RulesOff.Text = Words(cfg, "activity_rules", DiaryCategory.OffPlan);
@@ -218,17 +241,11 @@ public sealed partial class SettingsPage : Page
     /// R10-02).</summary>
     private async void TickTickDisconnect_Click(object sender, RoutedEventArgs e)
     {
-        var confirm = new ContentDialog
-        {
-            Title = "Disconnect TickTick?",
-            Content = "Removes the saved client ID, secret, and access tokens from this " +
-                      "PC. Your TickTick account and tasks themselves aren't affected — " +
-                      "you can reconnect any time.",
-            PrimaryButtonText = "Disconnect",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Disconnect TickTick?",
+            "Removes the saved client ID, secret, and access tokens from this " +
+            "PC. Your TickTick account and tasks themselves aren't affected — " +
+            "you can reconnect any time.",
+            primaryButtonText: "Disconnect", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         // Unlike every other mutating button on this page, this one had no try/catch —
@@ -327,15 +344,8 @@ public sealed partial class SettingsPage : Page
             confirmPanel.Children.Add(deleteExportsBox);
         }
 
-        var confirm = new ContentDialog
-        {
-            Title = "Clear activity history?",
-            Content = confirmPanel,
-            PrimaryButtonText = "Clear history",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear activity history?", confirmPanel,
+            primaryButtonText: "Clear history", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
         var deleteExports = deleteExportsBox.IsChecked == true;
 
@@ -460,16 +470,10 @@ public sealed partial class SettingsPage : Page
             return;
         }
 
-        var confirm = new ContentDialog
-        {
-            Title = "Clear my reflections?",
-            Content = $"Deletes {count} evening-review reflection(s). Your plans, task " +
-                      "completions, activity diary, and score are not affected. This cannot be undone.",
-            PrimaryButtonText = "Clear reflections",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear my reflections?",
+            $"Deletes {count} evening-review reflection(s). Your plans, task " +
+            "completions, activity diary, and score are not affected. This cannot be undone.",
+            primaryButtonText: "Clear reflections", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         await RunClearActionAsync(ClearReflectionsBtn, () =>
@@ -514,22 +518,16 @@ public sealed partial class SettingsPage : Page
             return;
         }
 
-        var confirm = new ContentDialog
-        {
-            Title = "Clear all my data?",
-            Content = $"Deletes {rowCount} row(s) across every data table this app keeps — " +
-                      "task completions, reschedules and day-offs, task notes, score history, " +
-                      "reflections, TickTick sync links, and the activity diary — plus the debug " +
-                      "log, your saved TickTick connection (client ID, secret, and tokens), and " +
-                      "any report.html/report.csv/full-export.json you've exported to the data " +
-                      "folder. Your plan definitions and the other settings on this page " +
-                      "(including your name) are not touched — use the Plans page to archive " +
-                      "or remove a plan. This cannot be undone.",
-            PrimaryButtonText = "Clear everything",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear all my data?",
+            $"Deletes {rowCount} row(s) across every data table this app keeps — " +
+            "task completions, reschedules and day-offs, task notes, score history, " +
+            "reflections, TickTick sync links, and the activity diary — plus the debug " +
+            "log, your saved TickTick connection (client ID, secret, and tokens), and " +
+            "any report.html/report.csv/full-export.json you've exported to the data " +
+            "folder. Your plan definitions and the other settings on this page " +
+            "(including your name) are not touched — use the Plans page to archive " +
+            "or remove a plan. This cannot be undone.",
+            primaryButtonText: "Clear everything", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         await RunClearActionAsync(ClearAllDataBtn, () =>

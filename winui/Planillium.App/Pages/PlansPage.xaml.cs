@@ -232,15 +232,9 @@ public sealed partial class PlansPage : Page
 
     private async Task ArchiveAsync(Plan plan)
     {
-        var confirm = new ContentDialog
-        {
-            Title = $"Archive '{plan.Name}'?",
-            Content = "It disappears from Today and frees a plan slot. You can restore it below any time.",
-            PrimaryButtonText = "Archive",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
+        var confirm = DialogControls.Build(XamlRoot, $"Archive '{plan.Name}'?",
+            "It disappears from Today and frees a plan slot. You can restore it below any time.",
+            primaryButtonText: "Archive", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
         var src = Path.Combine(AppPaths.ActivePlansDir, $"{plan.Id}.json");
@@ -286,10 +280,10 @@ public sealed partial class PlansPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(new TextBlock { Text = idea.Name, VerticalAlignment = VerticalAlignment.Center });
 
-        var start = new Button { Content = "Start now", IsEnabled = activeCount < 2 };
-        ToolTipService.SetToolTip(start, activeCount < 2
+        var start = new Button { Content = "Start now", IsEnabled = activeCount < AppInfo.MaxActivePlans };
+        ToolTipService.SetToolTip(start, activeCount < AppInfo.MaxActivePlans
             ? "Move this idea to your active plans, starting today"
-            : "Archive an active plan first — max 2 active.");
+            : $"Archive an active plan first — max {AppInfo.MaxActivePlans} active.");
         start.Click += (_, _) =>
         {
             try
@@ -308,18 +302,16 @@ public sealed partial class PlansPage : Page
         Grid.SetColumn(start, 1);
         grid.Children.Add(start);
 
-        var delete = new Button { Content = "Delete" };
+        var delete = new Button
+        {
+            Content = "Delete",
+            Style = (Style)Application.Current.Resources["DangerButtonStyle"],
+        };
         delete.Click += async (_, _) =>
         {
-            var confirm = new ContentDialog
-            {
-                Title = $"Delete '{idea.Name}'?",
-                Content = "This idea hasn't started yet — deleting it can't be undone.",
-                PrimaryButtonText = "Delete",
-                CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Close,
-                XamlRoot = XamlRoot,
-            };
+            var confirm = DialogControls.Build(XamlRoot, $"Delete '{idea.Name}'?",
+                "This idea hasn't started yet — deleting it can't be undone.",
+                primaryButtonText: "Delete", closeButtonText: "Cancel");
             if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
             PlanStore.DeleteQueuedPlan(idea.Id);
             Render();
@@ -352,12 +344,12 @@ public sealed partial class PlansPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
 
-        var restore = new Button { Content = "Restore", IsEnabled = activeCount < 2 };
+        var restore = new Button { Content = "Restore", IsEnabled = activeCount < AppInfo.MaxActivePlans };
         // Mirrors Archive's own tooltip pattern above — a disabled Restore used to give
         // no reason why (round-5 audit finding #21).
-        ToolTipService.SetToolTip(restore, activeCount < 2
+        ToolTipService.SetToolTip(restore, activeCount < AppInfo.MaxActivePlans
             ? "Bring this plan back to your active list"
-            : "Archive an active plan first — max 2 active.");
+            : $"Archive an active plan first — max {AppInfo.MaxActivePlans} active.");
         restore.Click += (_, _) =>
         {
             try

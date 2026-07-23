@@ -25,26 +25,31 @@ public static class TickTickSection
         host.Tag = generation;
         bool Current() => (int)host.Tag! == generation;
 
-        host.Children.Clear();
-        host.Children.Add(Header());
-
-        if (!TickTickService.IsAuthorized)
-        {
-            host.Children.Add(Muted("Not connected."));
-            var connect = new HyperlinkButton { Content = "Connect TickTick…", FontSize = 13 };
-            connect.Click += async (_, _) =>
-            {
-                if (await Dialogs.TickTickConnectDialog.ShowAsync(host.XamlRoot))
-                    await LoadAsync(host);
-            };
-            host.Children.Add(connect);
-            return;
-        }
-
-        var loading = Muted("Loading…");
-        host.Children.Add(loading);
+        // The whole body is wrapped, not just the network fetch below — a fault in the
+        // Clear/Header/IsAuthorized setup itself (e.g. a Credential Manager read fault)
+        // used to be an unobserved exception with nothing in the log (audit finding #1).
+        TextBlock? loading = null;
         try
         {
+            host.Children.Clear();
+            host.Children.Add(Header());
+
+            if (!TickTickService.IsAuthorized)
+            {
+                host.Children.Add(Muted("Not connected."));
+                var connect = new HyperlinkButton { Content = "Connect TickTick…", FontSize = 13 };
+                connect.Click += async (_, _) =>
+                {
+                    if (await Dialogs.TickTickConnectDialog.ShowAsync(host.XamlRoot))
+                        await LoadAsync(host);
+                };
+                host.Children.Add(connect);
+                return;
+            }
+
+            loading = Muted("Loading…");
+            host.Children.Add(loading);
+
             var tasks = await TickTickService.TasksDueTodayAsync();
             if (!Current()) return;
             host.Children.Remove(loading);
@@ -78,7 +83,7 @@ public static class TickTickSection
         {
             Log.Error("TickTickSection.Load", ex);
             if (!Current()) return;
-            host.Children.Remove(loading);
+            if (loading is not null) host.Children.Remove(loading);
             host.Children.Add(Muted(Log.Friendly("TickTick sync failed", ex)));
             var reconnect = new HyperlinkButton { Content = "Reconnect TickTick…", FontSize = 13 };
             reconnect.Click += async (_, _) =>
@@ -118,7 +123,8 @@ public static class TickTickSection
 
         var name = new TextBlock
         {
-            Text = t.Title, TextWrapping = TextWrapping.Wrap,
+            Text = t.Title,
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(name, 1);
@@ -152,7 +158,8 @@ public static class TickTickSection
             BorderThickness = new Thickness(1),
             Child = new TextBlock
             {
-                Text = t.ProjectName, FontSize = 11,
+                Text = t.ProjectName,
+                FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             },

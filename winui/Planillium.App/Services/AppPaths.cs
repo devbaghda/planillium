@@ -3,9 +3,7 @@ using Microsoft.Data.Sqlite;
 namespace Planillium.App.Services;
 
 /// <summary>
-/// Locates the shared data root — the existing Python app's folder holding
-/// config.json / plans/ / data/progress.db. The WinUI app reads and writes the
-/// SAME files, so both apps can run side by side during the migration.
+/// Locates the data root — config.json / plans/ / data/progress.db.
 /// Resolution order: MENTOR_ROOT env var, then walking up from the exe
 /// directory looking for a folder that has both "plans" and "config.json".
 /// </summary>
@@ -32,7 +30,7 @@ public static class AppPaths
                 dir = dir.Parent;
             }
             throw new DirectoryNotFoundException(
-                "Couldn't find the Mentor-Overseer data folder (config.json + plans/). " +
+                $"Couldn't find the {AppInfo.DisplayName} data folder (config.json + plans/). " +
                 "Set the MENTOR_ROOT environment variable to point at it.");
         }
     }

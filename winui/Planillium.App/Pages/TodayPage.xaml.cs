@@ -1,5 +1,6 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
@@ -7,7 +8,6 @@ using Planillium.App.Dialogs;
 using Planillium.App.Models;
 using Planillium.App.Services;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Pages;
 
 public sealed partial class TodayPage : Page
@@ -88,8 +88,7 @@ public sealed partial class TodayPage : Page
         SaveErrorBar.IsOpen = false;
         // App language is English — don't let the OS locale mix in Cyrillic
         // day names (audit finding #16).
-        Subtitle.Text = DateTime.Today.ToString("dddd dd.MM.yyyy",
-            System.Globalization.CultureInfo.InvariantCulture);
+        Subtitle.Text = DateTime.Today.ToDisplayDateWithYear();
 
         List<Plan> plans;
         Dictionary<(string, int, string), bool> completions;

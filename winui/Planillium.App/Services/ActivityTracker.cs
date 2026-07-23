@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -132,31 +131,21 @@ public sealed class ActivityTracker : IDisposable
                     if (v.GetString() is { Length: > 0 } str) list.Add(str.ToLowerInvariant());
             return list;
         }
-        static int Num(System.Text.Json.JsonElement cfg, string key, int fallback) =>
-            cfg.TryGetProperty(key, out var v) && v.TryGetInt32(out var n) ? n : fallback;
-        static TimeOnly T(System.Text.Json.JsonElement cfg, string key, string fallback)
-        {
-            var s = fallback;
-            if (cfg.TryGetProperty("working_hours", out var wh) &&
-                wh.TryGetProperty(key, out var v) && v.GetString() is { Length: > 0 } str) s = str;
-            // InvariantCulture on both: these are always fixed HH:mm strings (config.json's
-            // "working_hours", validated by SettingsPage's TryParseExact) — reading them
-            // back with the current culture could silently fall back on a locale where ':'
-            // isn't the time separator (2026-07-18 audit finding R11-03).
-            return TimeOnly.TryParse(s, CultureInfo.InvariantCulture, out var t)
-                ? t : TimeOnly.Parse(fallback, CultureInfo.InvariantCulture);
-        }
 
         _onPlan = Words(config, "activity_rules", DiaryCategory.OnPlan);
         _offPlan = Words(config, "activity_rules", DiaryCategory.OffPlan);
         _idleOnPlan = Words(config, "idle_activity_rules", DiaryCategory.OnPlan);
         _idleOffPlan = Words(config, "idle_activity_rules", DiaryCategory.OffPlan);
         _idleNeutral = Words(config, "idle_activity_rules", DiaryCategory.Neutral);
-        _workStart = T(config, "start", "08:00");
-        _workEnd = T(config, "end", "20:00");
-        _graceMin = Num(config, "reminder_grace_minutes", 15);
-        _repeatMin = Num(config, "reminder_interval_minutes", 5);
-        _idleThresholdMin = Num(config, "idle_threshold_minutes", 10);
+        // Scalar timing/threshold defaults now come from ConfigService's shared methods
+        // rather than a second, independently-hardcoded copy of the same fallbacks —
+        // this constructor is always called with ConfigService.Root itself (see
+        // MainWindow.Tracker.cs), so behavior is unchanged, just no longer duplicated.
+        _workStart = TimeOnly.FromTimeSpan(ConfigService.WorkStartTime());
+        _workEnd = TimeOnly.FromTimeSpan(ConfigService.WorkEndTime());
+        _graceMin = ConfigService.ReminderGraceMinutes();
+        _repeatMin = ConfigService.ReminderIntervalMinutes();
+        _idleThresholdMin = ConfigService.IdleThresholdMinutes();
     }
 
     public (string Cls, string Window) Status => (_currentClass, _currentWindow);

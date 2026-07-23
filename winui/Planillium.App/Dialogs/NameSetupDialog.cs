@@ -48,14 +48,8 @@ public static class NameSetupDialog
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         });
 
-        var dialog = new ContentDialog
-        {
-            Title = $"Welcome to {AppInfo.DisplayName}",
-            Content = panel,
-            PrimaryButtonText = "Continue",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = window.Content.XamlRoot,
-        };
+        var dialog = DialogControls.Build(window.Content.XamlRoot, $"Welcome to {AppInfo.DisplayName}", panel,
+            primaryButtonText: "Continue", defaultButton: ContentDialogButton.Primary);
 
         await DialogGate.ShowAsync(dialog);
 

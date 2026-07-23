@@ -133,7 +133,7 @@ public static class ReportExport
 
         var sb = new StringBuilder();
         var name = ReportData.PeriodName(period);
-        sb.AppendLine(Csv("Planillium report", name,
+        sb.AppendLine(Csv($"{AppInfo.DisplayName} report", name,
             "generated " + DateTime.Now.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)));
         sb.AppendLine();
 

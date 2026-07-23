@@ -52,14 +52,14 @@
             <TextBlock Text="HOURS &amp; REMINDERS" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <TextBox x:Name="WorkStart" Header="Work start" Width="110" PlaceholderText="08:00" LostFocus="Rules_Changed"/>
-                <TextBox x:Name="WorkEnd" Header="Work end" Width="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
-                <TextBox x:Name="EodTimeBox" Header="Day review at" Width="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
+                <TextBox x:Name="WorkStart" Header="Work start" MinWidth="110" PlaceholderText="08:00" LostFocus="Rules_Changed"/>
+                <TextBox x:Name="WorkEnd" Header="Work end" MinWidth="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
+                <TextBox x:Name="EodTimeBox" Header="Day review at" MinWidth="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <NumberBox x:Name="GraceMin" Header="Grace before alert (min)" Width="170" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                <NumberBox x:Name="RepeatMin" Header="Repeat every (min)" Width="150" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                <NumberBox x:Name="IdleMin" Header="Idle after (min)" Width="130" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                <NumberBox x:Name="GraceMin" Header="Grace before alert (min)" MinWidth="170" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                <NumberBox x:Name="RepeatMin" Header="Repeat every (min)" MinWidth="150" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                <NumberBox x:Name="IdleMin" Header="Idle after (min)" MinWidth="130" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
             </StackPanel>
             <!-- Split onto its own row (2026-07-21 fix): together with the row above, these
                  5 boxes needed ~918px, well past this page's 720px MaxWidth content column —
@@ -71,8 +71,8 @@
                 <!-- Maximum added (2026-07-18 audit finding R11-10): unbounded, this could
                      silently defeat the app's own documented "kept for a configurable
                      number of days, 90 by default" retention promise. -->
-                <NumberBox x:Name="RetentionDays" Header="Keep detailed diary (days)" Width="190" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                <NumberBox x:Name="LateDayReminderHours" Header="Warn if tasks open, before day ends (hrs)" Width="260" Minimum="0.25" Maximum="12" SmallChange="0.25" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                <NumberBox x:Name="RetentionDays" Header="Keep detailed diary (days)" MinWidth="190" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                <NumberBox x:Name="LateDayReminderHours" Header="Warn if tasks open, before day ends (hrs)" MinWidth="260" Minimum="0.25" Maximum="12" SmallChange="0.25" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
             </StackPanel>
 
             <TextBlock Text="ACTIVITY KEYWORDS  ·  one per line, matched inside window titles" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
@@ -108,9 +108,12 @@
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button x:Name="ExportAllBtn" Content="Export all my data…" Click="ExportAll_Click"/>
-                <Button x:Name="ClearHistoryBtn" Content="Clear activity history…" Click="ClearHistory_Click"/>
-                <Button x:Name="ClearReflectionsBtn" Content="Clear my reflections…" Click="ClearReflections_Click"/>
-                <Button x:Name="ClearAllDataBtn" Content="Clear all my data…" Click="ClearAllData_Click"/>
+                <Button x:Name="ClearHistoryBtn" Content="Clear activity history…" Click="ClearHistory_Click"
+                        Style="{StaticResource DangerButtonStyle}"/>
+                <Button x:Name="ClearReflectionsBtn" Content="Clear my reflections…" Click="ClearReflections_Click"
+                        Style="{StaticResource DangerButtonStyle}"/>
+                <Button x:Name="ClearAllDataBtn" Content="Clear all my data…" Click="ClearAllData_Click"
+                        Style="{StaticResource DangerButtonStyle}"/>
             </StackPanel>
             <TextBlock Text="Export writes every stored row (tasks, notes, score history, activity diary, evening reflections) to one JSON file. Clearing activity history removes the tracked window-activity diary only; clearing reflections removes your evening-review answers only. &quot;Clear all my data&quot; removes everything at once — task completions, reschedules/day-offs, notes, score history, reflections, TickTick sync links, the activity diary, and the debug log — but never your plan definitions themselves (archive or delete those from the Plans page). Your plans, task completions, and score are always untouched by the two narrower buttons above."
                        TextWrapping="Wrap" FontSize="12"

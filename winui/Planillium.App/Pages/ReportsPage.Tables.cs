@@ -20,7 +20,7 @@ public sealed partial class ReportsPage
         var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
         for (var c = 0; c < 5; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
-                { Width = c == 0 ? new GridLength(110) : GridLength.Auto });
+            { Width = c == 0 ? new GridLength(110) : GridLength.Auto });
         AddHeaderRow(grid, "Day", "Tasks", "On-plan", "Off-plan", "Score");
 
         foreach (var s in rows)
@@ -64,7 +64,7 @@ public sealed partial class ReportsPage
         var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
         for (var c = 0; c < 4; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
-                { Width = c == 0 ? new GridLength(170) : GridLength.Auto });
+            { Width = c == 0 ? new GridLength(170) : GridLength.Auto });
         AddHeaderRow(grid, "Period", "On-plan", "Off-plan", "Total");
 
         foreach (var b in buckets)

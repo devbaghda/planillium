@@ -142,7 +142,9 @@ tool, not a cloud-first collaboration app. Specifically:
   off-plan, neutral, idle, or paid time. That window title — which can include things like a
   document name, a website title, or a chat preview — is stored verbatim in your local activity
   diary, along with the app name and the time range. This pauses automatically while your PC is
-  locked or asleep, and stops the moment you quit the app from the tray. It also pauses entirely
+  locked or asleep, and stops the moment you quit the app from the tray. You can also pause it
+  in place for a short while without closing the app — right-click the tray icon and choose
+  "Pause tracking" (the same menu item then reads "Resume tracking"). It also pauses entirely
   on a recurring rest day (a weekday you've excluded for a plan). A single day manually marked
   "Day off" is different: tracking keeps running as normal on that day — only the off-plan
   reminder is silenced, so the diary can still record what you did without nagging you about it.

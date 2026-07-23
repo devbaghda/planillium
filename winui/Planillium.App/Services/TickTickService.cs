@@ -74,7 +74,7 @@ public sealed class TickTickService
             var pname = p.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
             if (pid.Length == 0) continue;
 
-            using var dataResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project/{pid}/data");
+            using var dataResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project/{Uri.EscapeDataString(pid)}/data");
             if (!dataResp.IsSuccessStatusCode) continue;
             using var data = JsonDocument.Parse(await dataResp.Content.ReadAsStringAsync());
             if (!data.RootElement.TryGetProperty("tasks", out var tasks)) continue;
@@ -96,7 +96,7 @@ public sealed class TickTickService
     public static async Task CompleteTaskAsync(string projectId, string taskId)
     {
         using var resp = await SendAsync(HttpMethod.Post,
-            $"{ApiBase}/project/{projectId}/task/{taskId}/complete");
+            $"{ApiBase}/project/{Uri.EscapeDataString(projectId)}/task/{Uri.EscapeDataString(taskId)}/complete");
         resp.EnsureSuccessStatusCode();
     }
 }

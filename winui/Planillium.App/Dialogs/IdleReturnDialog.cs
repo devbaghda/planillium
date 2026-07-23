@@ -1,9 +1,9 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Planillium.App.Services;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Dialogs;
 
 /// <summary>
@@ -138,15 +138,8 @@ public static class IdleReturnDialog
         toolbar.Children.Add(remainingText);
         splitRoot.Children.Add(toolbar);
 
-        dialog = new ContentDialog
-        {
-            Title = "Welcome back",
-            Content = root,
-            PrimaryButtonText = "Log it",
-            CloseButtonText = "Skip",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = window.Content.XamlRoot,
-        };
+        dialog = DialogControls.Build(window.Content.XamlRoot, "Welcome back", root,
+            primaryButtonText: "Log it", closeButtonText: "Skip", defaultButton: ContentDialogButton.Primary);
 
         var rows = new List<(NumberBox Dur, TextBox Desc, Button Remove)>();
 

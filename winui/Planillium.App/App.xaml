@@ -20,11 +20,34 @@
                   "swap the value, not the call sites" approach used there.
                   Dark theme's tertiary text wasn't reported as a problem, so
                   it's left at the WinUI default.
+
+                  NOTE: Services/ThemeSync.cs's `Fixed` dictionary carries this
+                  same #8F000000 value independently, for a different consumer
+                  (C# code that reads `Application.Current.Resources[key]`
+                  directly, which this ThemeDictionary override does not
+                  reach — see that file's own doc comment for why). If this
+                  value is ever retuned, update BOTH this override and
+                  ThemeSync.cs's "TextFillColorTertiaryBrush" entry, or XAML-
+                  declared controls and C#-built ones will disagree.
                 -->
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8F000000"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
+
+            <!--
+              Shared "this button erases something, permanently" style — before this,
+              every destructive action (Clear all my data, Delete) looked identical to a
+              routine button sitting right next to it; the confirmation dialog that
+              follows a click was already correct, but nothing distinguished the buttons
+              themselves beforehand (2026-07-23 audit finding #13). Reuses
+              SystemFillColorCriticalBrush, the same brush already used elsewhere in the
+              app for this exact meaning (e.g. TickTick's "HIGH" priority badge), rather
+              than inventing a new color.
+            -->
+            <Style x:Key="DangerButtonStyle" TargetType="Button">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

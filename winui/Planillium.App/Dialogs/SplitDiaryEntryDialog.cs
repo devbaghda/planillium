@@ -1,9 +1,9 @@
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Planillium.App.Services;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Dialogs;
 
 /// <summary>
@@ -44,15 +44,8 @@ public static class SplitDiaryEntryDialog
         toolbar.Children.Add(remainingText);
         root.Children.Add(toolbar);
 
-        var dialog = new ContentDialog
-        {
-            Title = "Split diary entry",
-            Content = root,
-            PrimaryButtonText = "Split",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, "Split diary entry", root,
+            primaryButtonText: "Split", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
         var rows = new List<(NumberBox Dur, ComboBox Cat, TextBox Desc, Button Remove)>();
 

@@ -47,15 +47,8 @@ public static class ExcludedWeekdaysDialog
             panel.Children.Add(box);
         }
 
-        var dialog = new ContentDialog
-        {
-            Title = $"{plan.Name} — excluded days",
-            Content = panel,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, $"{plan.Name} — excluded days", panel,
+            primaryButtonText: "Save", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
         if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return false;
 
@@ -71,13 +64,13 @@ public static class ExcludedWeekdaysDialog
             // user clicked Save), so failing silently here would leave no
             // visible sign the choice wasn't actually persisted — a second,
             // small dialog is the only way left to say so.
-            await DialogGate.ShowAsync(new ContentDialog
-            {
-                Title = "Couldn't save",
-                Content = "The excluded days didn't save — nothing changed. Try again in a moment.",
-                CloseButtonText = "OK",
-                XamlRoot = xamlRoot,
-            });
+            // DefaultButton explicitly None here, matching this dialog's original un-set
+            // behavior (the app's stock ContentDialog default) rather than the factory's own
+            // Close default used everywhere else — this one dialog never had Enter wired to
+            // its "OK" button, and this migration isn't the place to silently change that.
+            await DialogGate.ShowAsync(DialogControls.Build(xamlRoot, "Couldn't save",
+                "The excluded days didn't save — nothing changed. Try again in a moment.",
+                closeButtonText: "OK", defaultButton: ContentDialogButton.None));
             return false;
         }
         return true;

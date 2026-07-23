@@ -70,15 +70,8 @@ public static class TickTickConnectDialog
         panel.Children.Add(secretBox);
         panel.Children.Add(statusRow);
 
-        var dialog = new ContentDialog
-        {
-            Title = "Connect TickTick",
-            Content = panel,
-            PrimaryButtonText = "Save & authorize",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = root,
-        };
+        var dialog = DialogControls.Build(root, "Connect TickTick", panel,
+            primaryButtonText: "Save & authorize", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
         var connected = false;
         dialog.PrimaryButtonClick += async (d, args) =>

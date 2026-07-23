@@ -1,12 +1,12 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Pages;
 
 // The time-diary section (search, mark-selected, edit/split) — see
@@ -120,7 +120,9 @@ public sealed partial class ReportsPage
 
         var filterRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8),
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         filterRow.Children.Add(categoryBox);
         filterRow.Children.Add(appBox);
@@ -147,7 +149,8 @@ public sealed partial class ReportsPage
         var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
         var selectedLabel = new TextBlock
         {
-            VerticalAlignment = VerticalAlignment.Center, FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };
         var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
@@ -347,58 +350,21 @@ public sealed partial class ReportsPage
             _diaryAppFilter = null;
             _diaryPageFilter = null;
             _diaryAllTime = false;
-            RenderDiaryResults();
+            // The search box sits directly above this button and reads as part of the same
+            // filter row — leaving it untouched made "Clear filters" look broken when a typed
+            // search term kept the list scoped after a click (2026-07-23 UX re-audit).
+            _diarySearch = "";
+            // Full Render(), not RenderDiaryResults() — this button resets _diaryAllTime (and
+            // now _diarySearch), both of which DiaryHeader()'s wideMode reads to decide the
+            // "ALL TIME" caption and whether the date-nav arrows are enabled. The allTimeBox
+            // checkbox's own handlers already call Render() for the same reason; this button
+            // was the one sibling still calling the partial refresh and left the header stale.
+            Render();
         };
 
-        void MarkSelected(string category)
-        {
-            if (selectedIds.Count == 0) return;
-            try
-            {
-                using var db = new Database();
-                var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var affectedDates = new HashSet<DateOnly>();
-                // All-or-nothing: this used to write each selected row as its
-                // own separate statement with no shared transaction, so a
-                // failure partway through a multi-row selection (an ordinary
-                // "database briefly busy" moment, since the background
-                // tracker writes to the same file) could relabel some rows
-                // and silently leave others untouched, with no error shown
-                // (2026-07-14 round-6 audit finding #4 — found independently
-                // by two review passes).
-                db.RunInTransaction(() =>
-                {
-                    foreach (var id in selectedIds)
-                    {
-                        var row = lastRows.FirstOrDefault(e => e.Id == id);
-                        if (row is null || row.Id != id) continue;
-                        db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
-                        var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
-                        if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
-                        affectedDates.Add(row.Date);
-                    }
-                });
-                foreach (var keyword in learned)
-                    ConfigService.LearnActivityRule(keyword, category);
-                if (learned.Count > 0)
-                    (App.MainWindow as MainWindow)?.RestartTracker();
-                // A bulk re-category can span several different days — recompute each
-                // affected day's score so none of them keep showing a stale figure
-                // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
-                // re-category into a reported failure.
-                ScoreService.TryRecalculateDayScores(db, affectedDates, "ReportsPage.MarkSelected.RecalculateScore");
-            }
-            catch (Exception ex)
-            {
-                Log.Error("ReportsPage.MarkSelected", ex);
-                SaveErrorBar.IsOpen = true;
-            }
-            selectedIds.Clear();
-            RenderDiaryResults();
-        }
-        markOnBtn.Click += (_, _) => MarkSelected(DiaryCategory.OnPlan);
-        markOffBtn.Click += (_, _) => MarkSelected(DiaryCategory.OffPlan);
-        markNeutralBtn.Click += (_, _) => MarkSelected(DiaryCategory.Neutral);
+        markOnBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OnPlan, selectedIds, lastRows, RenderDiaryResults);
+        markOffBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OffPlan, selectedIds, lastRows, RenderDiaryResults);
+        markNeutralBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.Neutral, selectedIds, lastRows, RenderDiaryResults);
 
         selectAllBox.Checked += (_, _) =>
         {
@@ -430,14 +396,7 @@ public sealed partial class ReportsPage
         // while the file's already open, before it accumulates enough
         // history to actually be felt.
         _diarySearchDebounceAction = RenderDiaryResults;
-        if (_diarySearchDebounce is null)
-        {
-            _diarySearchDebounce = DispatcherQueue.CreateTimer();
-            _diarySearchDebounce.Interval = TimeSpan.FromMilliseconds(250);
-            _diarySearchDebounce.IsRepeating = false;
-            _diarySearchDebounce.Tick += (_, _) => _diarySearchDebounceAction?.Invoke();
-        }
-        var searchDebounce = _diarySearchDebounce;
+        var searchDebounce = EnsureDiarySearchDebounceTimer();
         // Today's own rows are in scope whenever the single day shown IS today, or "All time"
         // is on (its wide range always includes today) — either way freshly-tracked rows for
         // today could appear while this section sits open.
@@ -460,6 +419,30 @@ public sealed partial class ReportsPage
         // past-only day view is finished history (nothing new will ever appear), and a search
         // already re-renders itself on its own typing debounce above.
         _diaryLiveRefreshAction = RenderDiaryResults;
+        EnsureDiaryLiveRefreshTimer();
+        SyncLiveRefresh();
+    }
+
+    /// <summary>Lazily creates the search-input debounce timer once, reused across renders
+    /// (see the field's own doc comment) — pulled out of BuildDiarySection so that ~400-line
+    /// method isn't also responsible for timer lifecycle bookkeeping (code-quality audit
+    /// finding #7).</summary>
+    private DispatcherQueueTimer EnsureDiarySearchDebounceTimer()
+    {
+        if (_diarySearchDebounce is null)
+        {
+            _diarySearchDebounce = DispatcherQueue.CreateTimer();
+            _diarySearchDebounce.Interval = TimeSpan.FromMilliseconds(250);
+            _diarySearchDebounce.IsRepeating = false;
+            _diarySearchDebounce.Tick += (_, _) => _diarySearchDebounceAction?.Invoke();
+        }
+        return _diarySearchDebounce;
+    }
+
+    /// <summary>Lazily creates the "today's rows might still be growing" live-refresh
+    /// timer once, reused across renders — see EnsureDiarySearchDebounceTimer's doc comment.</summary>
+    private DispatcherQueueTimer EnsureDiaryLiveRefreshTimer()
+    {
         if (_diaryLiveRefresh is null)
         {
             _diaryLiveRefresh = DispatcherQueue.CreateTimer();
@@ -467,7 +450,59 @@ public sealed partial class ReportsPage
             _diaryLiveRefresh.IsRepeating = true;
             _diaryLiveRefresh.Tick += (_, _) => _diaryLiveRefreshAction?.Invoke();
         }
-        SyncLiveRefresh();
+        return _diaryLiveRefresh;
+    }
+
+    /// <summary>The bulk "mark selected rows as on/off-plan/neutral" action — pulled out of
+    /// BuildDiarySection as its own self-contained DB-transaction block (code-quality audit
+    /// finding #7); takes the handful of closures it actually needs as parameters rather than
+    /// capturing the whole method's local state.</summary>
+    private void MarkSelectedDiaryRows(string category, HashSet<long> selectedIds,
+        List<ReportData.DiaryEntry> lastRows, Action renderDiaryResults)
+    {
+        if (selectedIds.Count == 0) return;
+        try
+        {
+            using var db = new Database();
+            var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var affectedDates = new HashSet<DateOnly>();
+            // All-or-nothing: this used to write each selected row as its
+            // own separate statement with no shared transaction, so a
+            // failure partway through a multi-row selection (an ordinary
+            // "database briefly busy" moment, since the background
+            // tracker writes to the same file) could relabel some rows
+            // and silently leave others untouched, with no error shown
+            // (2026-07-14 round-6 audit finding #4 — found independently
+            // by two review passes).
+            db.RunInTransaction(() =>
+            {
+                foreach (var id in selectedIds)
+                {
+                    var row = lastRows.FirstOrDefault(e => e.Id == id);
+                    if (row is null || row.Id != id) continue;
+                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
+                    var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
+                    if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
+                    affectedDates.Add(row.Date);
+                }
+            });
+            foreach (var keyword in learned)
+                ConfigService.LearnActivityRule(keyword, category);
+            if (learned.Count > 0)
+                (App.MainWindow as MainWindow)?.RestartTracker();
+            // A bulk re-category can span several different days — recompute each
+            // affected day's score so none of them keep showing a stale figure
+            // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
+            // re-category into a reported failure.
+            ScoreService.TryRecalculateDayScores(db, affectedDates, "ReportsPage.MarkSelected.RecalculateScore");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReportsPage.MarkSelected", ex);
+            SaveErrorBar.IsOpen = true;
+        }
+        selectedIds.Clear();
+        renderDiaryResults();
     }
 
     // ── diary ────────────────────────────────────────────────────────────
@@ -624,7 +659,8 @@ public sealed partial class ReportsPage
 
             var select = new CheckBox
             {
-                MinWidth = 0, VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 0,
+                VerticalAlignment = VerticalAlignment.Center,
                 IsChecked = selectedIds.Contains(id),
             };
             AutomationProperties.SetName(select,

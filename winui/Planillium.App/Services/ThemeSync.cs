@@ -64,6 +64,12 @@ public static class ThemeSync
     // value (#72000000, ~45% opacity) is ~3.35:1 contrast on white, below
     // WCAG AA's 4.5:1 for the small captions/labels this app uses it for.
     // Bumped to ~56% opacity for ~4.9:1.
+    //
+    // NOTE: App.xaml's Light ThemeDictionary carries this same #8F000000
+    // value independently, for XAML-declared `{ThemeResource
+    // TextFillColorTertiaryBrush}` bindings that this dictionary's writes
+    // don't reach (see this class's own doc comment above). If this value
+    // is ever retuned, update BOTH here and App.xaml's override.
     private static readonly Dictionary<string, (Color Light, Color Dark)> Fixed = new()
     {
         ["TextFillColorPrimaryBrush"] = (Color.FromArgb(0xE4, 0, 0, 0), Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),

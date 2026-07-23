@@ -24,6 +24,10 @@ going forward; the original Python/Tkinter version is retired.
   right at startup (a notification that fired while the app was closed, seen the moment it's
   reopened) — fixed a startup-timing gap where it could try to show before the window was fully
   ready.
+- Old diary detail (window titles, per-entry activity) was only ever rolled up and discarded when
+  the app happened to be freshly launched on a new day — if the app was left running for several
+  days straight, retention cleanup could fall behind. It's now checked once a day while the app is
+  running, not just at startup.
 
 **New**
 - The Diary list on the Reports page now splits what used to be one combined "App - Page" column
@@ -33,6 +37,9 @@ going forward; the original Python/Tkinter version is retired.
   window instead of just the day you're looking at. A running subtotal (entry count + total time)
   now shows above the list, reflecting whatever's currently filtered/searched. A "Clear filters"
   button resets everything (category/app/page/all-time) at once.
+- The tray icon's right-click menu now has a "Pause tracking" option for a short deliberate break
+  without closing the app — it flips to "Resume tracking" while paused. A fresh launch always
+  starts tracking again regardless of how you left it.
 
 ## v1.2.0 — 2026-07-22
 

@@ -1,12 +1,12 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 using Windows.ApplicationModel.DataTransfer;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Dialogs;
 
 /// <summary>
@@ -16,7 +16,8 @@ namespace Planillium.App.Dialogs;
 /// </summary>
 public static class AddPlanDialog
 {
-    private const int MaxPlans = 2;
+    private const int MaxPlans = AppInfo.MaxActivePlans;
+    private const long MaxImportFileBytes = 5 * 1024 * 1024;
 
     private record Mode(string Label, string Template, string Field1Label,
         string Field1Hint, string Field2Hint, string Field3Hint, bool Reformat);
@@ -44,17 +45,12 @@ public static class AddPlanDialog
             // lose the idea (2026-07-22 request): save it to plans/queued instead of
             // plans/active — PlansPage's "Queued ideas" section lists it, and finishing
             // either active plan now offers to start one straight from there.
-            var choice = new ContentDialog
-            {
-                Title = $"Maximum {MaxPlans} active plans",
-                Content = "Archive a completed plan first to make room, or save this idea " +
-                          "for later — you'll be offered it again once you finish one of " +
-                          "your current plans.",
-                PrimaryButtonText = "Save idea for later",
-                CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Primary,
-                XamlRoot = host.XamlRoot,
-            };
+            var choice = DialogControls.Build(host.XamlRoot, $"Maximum {MaxPlans} active plans",
+                "Archive a completed plan first to make room, or save this idea " +
+                "for later — you'll be offered it again once you finish one of " +
+                "your current plans.",
+                primaryButtonText: "Save idea for later", closeButtonText: "Cancel",
+                defaultButton: ContentDialogButton.Primary);
             if (await DialogGate.ShowAsync(choice) != ContentDialogResult.Primary) return false;
             queueOnly = true;
         }
@@ -78,7 +74,9 @@ public static class AddPlanDialog
         var area = new TextBox { PlaceholderText = Modes[0].Field3Hint, Header = "Area of expertise" };
         var ownPlan = new TextBox
         {
-            AcceptsReturn = true, Height = 120, TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            Height = 120,
+            TextWrapping = TextWrapping.Wrap,
             Header = "Your own plan text",
             PlaceholderText = "Paste your own plan text here — or load it from a file below…",
             Visibility = Visibility.Collapsed,
@@ -91,7 +89,9 @@ public static class AddPlanDialog
 
         var prompt = new TextBox
         {
-            AcceptsReturn = true, IsReadOnly = true, Height = 110,
+            AcceptsReturn = true,
+            IsReadOnly = true,
+            Height = 110,
             TextWrapping = TextWrapping.Wrap,
             Header = "Generated prompt",
             PlaceholderText = "Generated prompt appears here — copy it into claude.ai",
@@ -104,14 +104,17 @@ public static class AddPlanDialog
 
         var reply = new TextBox
         {
-            AcceptsReturn = true, Height = 110, TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            Height = 110,
+            TextWrapping = TextWrapping.Wrap,
             Header = "Claude's reply",
             PlaceholderText = "…then paste Claude's whole reply (with the ```json block) here",
         };
         var error = new TextBlock
         {
             Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
-            TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
         };
 
         modeBox.SelectionChanged += (_, _) =>
@@ -173,15 +176,10 @@ public static class AddPlanDialog
         panel.Children.Add(reply);
         panel.Children.Add(error);
 
-        var dialog = new ContentDialog
-        {
-            Title = queueOnly ? "Save Plan Idea" : "Add Plan",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
-            PrimaryButtonText = queueOnly ? "Save idea" : "Import plan",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = host.XamlRoot,
-        };
+        var dialog = DialogControls.Build(host.XamlRoot, queueOnly ? "Save Plan Idea" : "Add Plan",
+            new ScrollViewer { Content = panel, MaxHeight = 560 },
+            primaryButtonText: queueOnly ? "Save idea" : "Import plan", closeButtonText: "Cancel",
+            defaultButton: ContentDialogButton.Primary);
 
         // Keep the dialog open on failed import: cancel the close, show the error.
         dialog.PrimaryButtonClick += (_, args) =>
@@ -218,6 +216,18 @@ public static class AddPlanDialog
             var file = await picker.PickSingleFileAsync();
             if (file is null) return;
             pickedFileName = Path.GetFileName(file.Path);
+
+            // A plan file is plain text (or a small .docx) — no legitimate plan needs
+            // anywhere near this much space. Checked before reading anything into memory,
+            // since a corrupted or booby-trapped file (e.g. a .docx-shaped zip bomb) had
+            // nothing stopping it from being fully read/decompressed otherwise
+            // (2026-07-23 audit finding #12).
+            if (new FileInfo(file.Path).Length > MaxImportFileBytes)
+            {
+                Show(error, $"That file is larger than {MaxImportFileBytes / (1024 * 1024)} MB — " +
+                            "too big to be a plan document. Pick a different file.");
+                return;
+            }
 
             var ext2 = Path.GetExtension(file.Path).ToLowerInvariant();
             if (ext2 == ".json")

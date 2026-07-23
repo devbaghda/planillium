@@ -26,9 +26,20 @@ public sealed partial class MainWindow
     {
         _ = Task.Run(() =>
         {
-            CatchUpScores();
-            PruneOldDiary();
-            _dq.TryEnqueue(RefreshScore);
+            // CatchUpScores/PruneOldDiary already guard their own bodies; this wraps the
+            // whole lambda too, for the same reason every other fire-and-forget call site
+            // in this app does — an unobserved exception here (e.g. from TryEnqueue itself)
+            // would otherwise surface nowhere (2026-07-23 audit finding #20).
+            try
+            {
+                CatchUpScores();
+                PruneOldDiary();
+                _dq.TryEnqueue(RefreshScore);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("RunStartupCatchUp", ex);
+            }
         });
     }
 
@@ -86,6 +97,11 @@ public sealed partial class MainWindow
     private System.Threading.Timer? _eodTimer;
     private System.Threading.Timer? _kickoffTimer;
     private System.Threading.Timer? _lateDayReminderTimer;
+    private System.Threading.Timer? _diaryPruneTimer;
+
+    // Guards CheckDiaryPrune the same way _lateDayReminderShownDate guards its own
+    // once-a-day check below.
+    private DateOnly? _diaryPrunedDate;
 
     /// <summary>At the configured end-of-day time, offer the evening review once.</summary>
     private void StartEodWatcher()
@@ -141,6 +157,25 @@ public sealed partial class MainWindow
     {
         _lateDayReminderTimer = new System.Threading.Timer(_ =>
             _dq.TryEnqueue(CheckLateDayTaskReminder), null, WatcherPollInterval, WatcherPollInterval);
+    }
+
+    /// <summary>Re-runs the retention prune once a day while the app keeps running —
+    /// previously PruneOldDiary only ran once, at RunStartupCatchUp (app launch), so a
+    /// long session with no restart could leave rows past the configured retention window
+    /// sitting around until the next launch (2026-07-23 audit finding #18). Same
+    /// once-a-minute poll + once-per-calendar-day guard pattern as the watchers above.</summary>
+    private void StartDiaryPruneWatcher()
+    {
+        _diaryPruneTimer = new System.Threading.Timer(_ =>
+            _dq.TryEnqueue(CheckDiaryPrune), null, WatcherPollInterval, WatcherPollInterval);
+    }
+
+    private void CheckDiaryPrune()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (_diaryPrunedDate == today) return;
+        _diaryPrunedDate = today;
+        PruneOldDiary();
     }
 
     private void CheckLateDayTaskReminder()

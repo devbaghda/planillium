@@ -69,15 +69,8 @@ public static class ReplanOverdueDialog
             Content = listPanel,
         });
 
-        var dialog = new ContentDialog
-        {
-            Title = "Replan overdue tasks",
-            Content = panel,
-            PrimaryButtonText = $"Replan · {ScoreService.ReplanFlatFee} pts",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, "Replan overdue tasks", panel,
+            primaryButtonText: $"Replan · {ScoreService.ReplanFlatFee} pts", closeButtonText: "Cancel");
 
         if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return null;
 

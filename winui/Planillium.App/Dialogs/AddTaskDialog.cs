@@ -63,15 +63,8 @@ public static class AddTaskDialog
         panel.Children.Add(category);
         panel.Children.Add(error);
 
-        var dialog = new ContentDialog
-        {
-            Title = $"Add a task to {plan.Name}",
-            Content = panel,
-            PrimaryButtonText = "Add",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, $"Add a task to {plan.Name}", panel,
+            primaryButtonText: "Add", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
         // Keep the dialog open on a missing title/date instead of closing
         // and silently doing nothing (same pattern as AddPlanDialog's

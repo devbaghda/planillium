@@ -1,8 +1,7 @@
-using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 
@@ -151,16 +150,12 @@ public static class ReviewDialog
                 Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             });
 
-        var dialog = new ContentDialog
-        {
-            Title = $"{DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture)} — day review",
-            Content = panel,
-            PrimaryButtonText = $"Close the day · {(stats.FinalTotal >= 0 ? "+" : "")}{stats.FinalTotal} pts",
-            CloseButtonText = beforeEod ? "Close" : "Later",
-            IsPrimaryButtonEnabled = !beforeEod,
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = window.Content.XamlRoot,
-        };
+        var dialog = DialogControls.Build(window.Content.XamlRoot,
+            $"{DateTime.Today.ToDisplayDateFull()} — day review", panel,
+            primaryButtonText: $"Close the day · {(stats.FinalTotal >= 0 ? "+" : "")}{stats.FinalTotal} pts",
+            closeButtonText: beforeEod ? "Close" : "Later",
+            defaultButton: ContentDialogButton.Primary,
+            isPrimaryButtonEnabled: !beforeEod);
 
         var result = await DialogGate.ShowAsync(dialog);
         if (result == ContentDialogResult.Primary && !PersistReview(db, score, stats.Today, reflection, window))
@@ -272,10 +267,11 @@ public static class ReviewDialog
         {
             IsIndeterminate = false,
             Value = s.Total > 0 ? s.Done * 100.0 / s.Total : 0,
-            Width = 72, Height = 72,
+            Width = 72,
+            Height = 72,
         };
         var ringRow = new StackPanel
-            { Orientation = Orientation.Horizontal, Spacing = 18 };
+        { Orientation = Orientation.Horizontal, Spacing = 18 };
         ringRow.Children.Add(ring);
         var ringText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         ringText.Children.Add(new TextBlock

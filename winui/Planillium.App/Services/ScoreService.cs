@@ -332,8 +332,10 @@ public sealed class ScoreService : IDisposable
                     if (done) continue;
                     result.Add((plan, new AssignedTask
                     {
-                        Task = task, OriginalDay = task.Day,
-                        AssignedDay = assigned, Overdue = true,
+                        Task = task,
+                        OriginalDay = task.Day,
+                        AssignedDay = assigned,
+                        Overdue = true,
                     }, dayNum - assigned));
                 }
         }

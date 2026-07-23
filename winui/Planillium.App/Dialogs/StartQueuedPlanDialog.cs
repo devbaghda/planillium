@@ -22,10 +22,8 @@ public static class StartQueuedPlanDialog
         var list = new RadioButtons { SelectedIndex = 0 };
         foreach (var plan in queued) list.Items.Add(plan.Name);
 
-        var dialog = new ContentDialog
-        {
-            Title = "Start a queued idea?",
-            Content = new StackPanel
+        var dialog = DialogControls.Build(host.XamlRoot, "Start a queued idea?",
+            new StackPanel
             {
                 Spacing = 10,
                 Children =
@@ -39,11 +37,7 @@ public static class StartQueuedPlanDialog
                     list,
                 },
             },
-            PrimaryButtonText = "Start",
-            CloseButtonText = "Not now",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = host.XamlRoot,
-        };
+            primaryButtonText: "Start", closeButtonText: "Not now", defaultButton: ContentDialogButton.Primary);
 
         if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return false;
         var chosen = queued[list.SelectedIndex];

@@ -141,6 +141,7 @@ public sealed partial class MainWindow : Window
         StartEodWatcher();
         StartKickoffWatcher();
         StartLateDayTaskReminderWatcher();
+        StartDiaryPruneWatcher();
 
         InitTray();
         // Click-to-reopen for kickoff/idle-return toasts. Best-effort: if this
@@ -272,10 +273,10 @@ public sealed partial class MainWindow : Window
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
         switch (tag)
         {
-            case "today":    ContentFrame.Navigate(typeof(TodayPage)); break;
+            case "today": ContentFrame.Navigate(typeof(TodayPage)); break;
             case "schedule": ContentFrame.Navigate(typeof(SchedulePage)); break;
-            case "reports":  ContentFrame.Navigate(typeof(ReportsPage)); break;
-            case "plans":    ContentFrame.Navigate(typeof(PlansPage)); break;
+            case "reports": ContentFrame.Navigate(typeof(ReportsPage)); break;
+            case "plans": ContentFrame.Navigate(typeof(PlansPage)); break;
         }
     }
 }

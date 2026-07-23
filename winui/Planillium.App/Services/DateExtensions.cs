@@ -39,6 +39,17 @@ internal static class DateExtensions
     public static string ToDisplayDate(this DateTime d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
     public static string ToDisplayDate(this DateOnly d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
 
+    /// <summary>Full weekday name, no year — "Tuesday 15.07." KickoffDialog and
+    /// ReviewDialog each hand-typed this identically; migrated onto this shared
+    /// helper alongside ToDisplayDate/ToDisplayDateWithYear rather than leaving
+    /// three call sites' worth of date formatting with no single named home
+    /// (2026-07-23 audit finding #14).</summary>
+    public static string ToDisplayDateFull(this DateTime d) => d.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>Full weekday name plus year — "Thursday 23.07.2026," TodayPage's header.
+    /// See ToDisplayDateFull's doc comment.</summary>
+    public static string ToDisplayDateWithYear(this DateTime d) => d.ToString("dddd dd.MM.yyyy", CultureInfo.InvariantCulture);
+
     /// <summary>The read-side counterpart of ToIsoDate — every one of this file's other
     /// helpers covers the write direction, but the reverse ("turn a stored yyyy-MM-dd
     /// string back into a DateOnly") was still hand-typed 6 times in ReportData.cs alone

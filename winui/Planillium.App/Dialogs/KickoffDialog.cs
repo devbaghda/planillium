@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -105,7 +104,7 @@ public static class KickoffDialog
         var budget = todayTasks.Sum(x => x.Task.Task.DurationMin ?? 30);
 
         var panel = new StackPanel { Spacing = 14, MinWidth = 460 };
-        var dateText = DateTime.Today.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
+        var dateText = DateTime.Today.ToDisplayDateFull();
         panel.Children.Add(new TextBlock
         {
             // "0 tasks, 0h 00m of focused work" is a demotivating way to
@@ -175,22 +174,14 @@ public static class KickoffDialog
         }
 
         var name = ConfigService.UserName is { Length: > 0 } n ? n : "there";
-        var dialog = new ContentDialog
-        {
-            Title = $"Good morning, {name}.",
-            Content = panel,
-            PrimaryButtonText = "Start the day",
-            // The only recurring dialog in the app with no secondary/close
-            // button at all — every sibling (ReviewDialog, IdleReturnDialog)
-            // offers a way out (2026-07-14 round-6 audit finding #24).
-            // "Start the day" doesn't do anything besides dismiss the card
-            // (the day's tasks are already visible on Today regardless), so
-            // this is a genuine escape hatch, not a hidden way to skip
-            // something that otherwise wouldn't happen.
-            CloseButtonText = "Later",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = window.Content.XamlRoot,
-        };
+        // The only recurring dialog in the app with no secondary/close button at all —
+        // every sibling (ReviewDialog, IdleReturnDialog) offers a way out (2026-07-14
+        // round-6 audit finding #24). "Start the day" doesn't do anything besides dismiss
+        // the card (the day's tasks are already visible on Today regardless), so this is a
+        // genuine escape hatch, not a hidden way to skip something that otherwise wouldn't
+        // happen.
+        var dialog = DialogControls.Build(window.Content.XamlRoot, $"Good morning, {name}.", panel,
+            primaryButtonText: "Start the day", closeButtonText: "Later", defaultButton: ContentDialogButton.Primary);
         await DialogGate.ShowAsync(dialog);
 
         MarkShownToday();

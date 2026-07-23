@@ -57,6 +57,10 @@
          under test actually depends on - see the comment above for why this
          is a source link rather than a ProjectReference. -->
     <Compile Include="..\Planillium.App\Models\PlanModels.cs" Link="App\PlanModels.cs" />
+    <!-- Needed by AppPaths.cs since its data-folder-not-found exception started
+         referencing AppInfo.DisplayName instead of a hardcoded name (2026-07-23
+         audit finding #2). -->
+    <Compile Include="..\Planillium.App\Services\AppInfo.cs" Link="App\AppInfo.cs" />
     <Compile Include="..\Planillium.App\Services\AppPaths.cs" Link="App\AppPaths.cs" />
     <Compile Include="..\Planillium.App\Services\ConfigService.cs" Link="App\ConfigService.cs" />
     <Compile Include="..\Planillium.App\Services\Database.cs" Link="App\Database.cs" />

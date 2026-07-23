@@ -90,12 +90,15 @@ public static class TaskNoteView
             taskLabel is { Length: > 0 } ? $"Note for: {taskLabel}" : "Task note");
         var editRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8,
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
             Visibility = Visibility.Collapsed,
         };
         var save = new Button
         {
-            Content = "Save", FontSize = 12, Padding = new Thickness(10, 4, 10, 4),
+            Content = "Save",
+            FontSize = 12,
+            Padding = new Thickness(10, 4, 10, 4),
         };
         var cancel = new HyperlinkButton { Content = "Cancel", FontSize = 12 };
         editRow.Children.Add(save);

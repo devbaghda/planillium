@@ -1,10 +1,10 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Pages;
 
 // Top-distractions list and the "time by app" expandable bar breakdown —
@@ -29,13 +29,15 @@ public sealed partial class ReportsPage
             var name = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis };
             var track = new Border
             {
-                Height = 8, CornerRadius = new CornerRadius(4),
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
                 VerticalAlignment = VerticalAlignment.Center,
                 Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
             };
             var fill = new Border
             {
-                Height = 8, CornerRadius = new CornerRadius(4),
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Width = Math.Max(8, 300.0 * minutes / Math.Max(maxMin, 1)),
                 Background = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
@@ -211,7 +213,9 @@ public sealed partial class ReportsPage
             var item = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             item.Children.Add(new Border
             {
-                Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
+                Width = 8,
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
                 VerticalAlignment = VerticalAlignment.Center,
                 Background = (Brush)Application.Current.Resources[brushKey],
             });
@@ -252,7 +256,8 @@ public sealed partial class ReportsPage
         const double barWidth = 260.0;
         var track = new Border
         {
-            Height = 8, CornerRadius = new CornerRadius(4),
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
             VerticalAlignment = VerticalAlignment.Center,
             Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
         };
@@ -270,7 +275,8 @@ public sealed partial class ReportsPage
             if (w >= 1)
                 segments.Children.Add(new Border
                 {
-                    Width = w, Height = 8,
+                    Width = w,
+                    Height = 8,
                     Background = (Brush)Application.Current.Resources[CategoryBrushKey(category)],
                 });
         }

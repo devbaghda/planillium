@@ -35,6 +35,14 @@ public class PendingNotification
     [JsonPropertyName("at")] public string AtIso { get; set; } = "";
 }
 
+/// <summary>
+/// UI-thread-only by convention — unlike ConfigService.Root (which is genuinely read from
+/// both the UI thread and ActivityTracker's background poll timer, and so carries an explicit
+/// lock), every current caller of Load()/Save() runs on the UI thread. If a future background
+/// watcher ever needs to touch this cache, that's a deliberate decision that should come with
+/// the same kind of guard ConfigService uses — not an accidental race (code-quality audit
+/// finding #10).
+/// </summary>
 public static class StateService
 {
     private static string PathOf => System.IO.Path.Combine(AppPaths.Root, "data", "winui_state.json");

@@ -9,12 +9,26 @@ namespace Planillium.App;
 // for the file split.
 public sealed partial class MainWindow
 {
+    /// <summary>Fires whenever the tray's Pause/Resume tracking toggle changes state, so a
+    /// page that's already open (Settings) can refresh its own tracker-status text without
+    /// needing to be re-navigated to (2026-07-23 UX re-audit: toggling from the tray while
+    /// Settings was already the open page left its status paragraph describing stale state).</summary>
+    public event Action? TrackingStateChanged;
+
+    internal void RaiseTrackingStateChanged() => TrackingStateChanged?.Invoke();
+
     /// <summary>Stop and re-create the tracker — Settings saves call this so
-    /// new keywords/thresholds apply immediately.</summary>
+    /// new keywords/thresholds apply immediately. Respects a tray-initiated pause
+    /// (2026-07-23 re-audit finding): an unrelated Settings edit or diary
+    /// re-categorization used to silently un-pause tracking and leave the tray's
+    /// "Resume tracking" label lying about what was actually running. While paused,
+    /// this just stops and stays stopped — the new config takes effect whenever the
+    /// user resumes from the tray themselves.</summary>
     public void RestartTracker()
     {
         Tracker?.Stop();
         Tracker = null;
+        if (_trackingPaused) return;
         StartTracker();
     }
 

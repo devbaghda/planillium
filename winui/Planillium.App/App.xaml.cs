@@ -36,7 +36,7 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Log.Info($"Planillium v{AppVersion.Current} starting");
+        Log.Info($"{AppInfo.DisplayName} v{AppVersion.Current} starting");
 
         // Optional test-only isolation: MENTOR_INSTANCE_SUFFIX lets a build
         // running from a separate worktree/branch (e.g. this audit-fixes
@@ -82,11 +82,11 @@ public partial class App : Application
         {
             Log.Error("MainWindow construction failed — exiting", ex);
             MessageBoxW(IntPtr.Zero,
-                "Planillium couldn't find its data folder and can't start.\n\n" +
+                $"{AppInfo.DisplayName} couldn't find its data folder and can't start.\n\n" +
                 "If you moved the install, or set MENTOR_ROOT, check that it " +
                 "points at a folder containing config.json and plans\\.\n\n" +
                 $"Details: {ex.Message}",
-                "Planillium — startup failed", MbIconError);
+                $"{AppInfo.DisplayName} — startup failed", MbIconError);
             _instanceMutex?.ReleaseMutex();
             Environment.Exit(1);
             return;

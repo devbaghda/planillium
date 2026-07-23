@@ -20,13 +20,19 @@ purpose.
 
 ## Transitive dependencies
 
+Regenerated directly against `packages.lock.json` (2026-07-23 audit finding #19 — this
+table had drifted from its own declared source of truth: a few entries were missing
+outright and one native-engine package was misnamed).
+
 | Package | License |
 |---|---|
 | H.NotifyIcon, H.GeneratedIcons.System.Drawing | MIT |
 | Microsoft.Data.Sqlite.Core | MIT |
-| SQLitePCLRaw.core / .lib.e_sqlite3 / .provider.e_sqlite3 | Apache-2.0 |
-| SQLite (native engine, bundled via SQLitePCLRaw) | Public domain |
-| System.Drawing.Common, System.Memory, Microsoft.Win32.SystemEvents | MIT (.NET runtime libraries) |
+| SQLitePCLRaw.core / .config.e_sqlite3 / .provider.e_sqlite3 | Apache-2.0 |
+| SourceGear.sqlite3 (native SQLite engine, bundled via SQLitePCLRaw) | Public domain |
+| System.Drawing.Common, System.Numerics.Tensors, Microsoft.Win32.SystemEvents | MIT (.NET runtime libraries) |
+| Microsoft.Windows.SDK.BuildTools.MSIX | MS-EULA (build-time only, pulled in transitively via Microsoft.WindowsAppSDK.Base) |
+| Microsoft.WindowsAppSDK.AI / .Base / .DWrite / .Foundation / .InteractiveExperiences / .ML / .Runtime / .Widgets / .WinUI | MIT (sub-packages of Microsoft.WindowsAppSDK, listed as a direct dependency above) |
 | Microsoft.Web.WebView2 (WebView2Loader.dll) | Microsoft Edge WebView2 SDK license (not MIT) — pulled in transitively via Microsoft.WindowsAppSDK.WinUI; confirmed physically shipped in the Release build output (round-5 audit finding #14, previously undocumented here) |
 
 Everything above is permissive (MIT/Apache-2.0/public domain) with one exception —

@@ -43,14 +43,9 @@ public static class PendingNotificationsDialog
             panel.Children.Add(row);
         }
 
-        var dialog = new ContentDialog
-        {
-            Title = items.Count == 1 ? "While you were away" : $"While you were away ({items.Count})",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 360 },
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = window.Content.XamlRoot,
-        };
+        var dialog = DialogControls.Build(window.Content.XamlRoot,
+            items.Count == 1 ? "While you were away" : $"While you were away ({items.Count})",
+            new ScrollViewer { Content = panel, MaxHeight = 360 }, closeButtonText: "Close");
 
         await DialogGate.ShowAsync(dialog);
     }

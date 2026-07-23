@@ -25,6 +25,9 @@ public static class TickTickAuth
     internal const int HttpTimeoutSeconds = 15;
 
     private const int RedirectPort = 8765;
+    // How long one accepted connection gets to send its request before it's abandoned —
+    // separate from the overall 120s flow timeout (2026-07-23 audit finding #11).
+    private static readonly TimeSpan PerConnectionReadTimeout = TimeSpan.FromSeconds(3);
     // Built from RedirectPort rather than typed out separately — the two used to be
     // independent literals, so changing one without noticing the other would make the
     // app listen on a different port than it told TickTick to answer on, hanging
@@ -138,7 +141,16 @@ public static class TickTickAuth
                     // window and send garbage, so a malformed request is treated the same as
                     // a stray one (answer, keep waiting) rather than letting a parse exception
                     // escape the whole auth flow (2026-07-09 audit finding #23).
-                    var query = await TryParseCallbackRequest(stream, timeout.Token);
+                    //
+                    // A per-connection timeout, linked to (but much shorter than) the overall
+                    // 120s flow timeout: another local process could otherwise connect and
+                    // simply never send a byte, tying up the accept loop's only read for the
+                    // rest of the whole auth window and starving the real browser callback
+                    // (2026-07-23 audit finding #11). If the overall timeout fires first, this
+                    // token cancels too and the loop unwinds the same way it already did.
+                    using var perConnection = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+                    perConnection.CancelAfter(PerConnectionReadTimeout);
+                    var query = await TryParseCallbackRequest(stream, perConnection.Token);
                     if (query is null)
                     {
                         await Respond(stream, 400, "Bad request", "Waiting for TickTick…");
@@ -166,7 +178,7 @@ public static class TickTickAuth
                     }
 
                     var code = query["code"]!;
-                    await Respond(stream, 200, "Authorized!", "Return to Mentor Overseer.");
+                    await Respond(stream, 200, "Authorized!", $"Return to {AppInfo.DisplayName}.");
                     return await ExchangeCodeAsync(code, codeVerifier);
                 }
             }

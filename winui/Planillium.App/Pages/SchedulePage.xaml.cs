@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
@@ -7,7 +8,6 @@ using Planillium.App.Models;
 using Planillium.App.Services;
 using Planillium.App.Views;
 
-using Microsoft.UI.Xaml.Automation;
 namespace Planillium.App.Pages;
 
 /// <summary>

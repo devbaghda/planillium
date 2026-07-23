@@ -85,15 +85,8 @@ public static class SpendDialog
         };
         panel.Children.Add(costText);
 
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = panel,
-            PrimaryButtonText = confirmLabel,
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = window.Content.XamlRoot,
-        };
+        var dialog = DialogControls.Build(window.Content.XamlRoot, title, panel,
+            primaryButtonText: confirmLabel, closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
         void Update()
         {

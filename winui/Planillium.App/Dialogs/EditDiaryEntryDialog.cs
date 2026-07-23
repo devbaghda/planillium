@@ -31,7 +31,9 @@ public static class EditDiaryEntryDialog
 
         var durBox = new NumberBox
         {
-            Header = "Duration (min)", Value = durationMin, Minimum = 1,
+            Header = "Duration (min)",
+            Value = durationMin,
+            Minimum = 1,
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
         };
         panel.Children.Add(durBox);
@@ -68,16 +70,10 @@ public static class EditDiaryEntryDialog
         startBox.TextChanged += (_, _) => Recalc();
         endBox.TextChanged += (_, _) => Recalc();
 
-        var dialog = new ContentDialog
-        {
-            Title = "Edit diary entry",
-            Content = panel,
-            PrimaryButtonText = "Save",
-            SecondaryButtonText = "Delete",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, "Edit diary entry", panel,
+            primaryButtonText: "Save", secondaryButtonText: "Delete", closeButtonText: "Cancel",
+            defaultButton: ContentDialogButton.Primary,
+            secondaryButtonStyle: (Style)Application.Current.Resources["DangerButtonStyle"]);
 
         dialog.PrimaryButtonClick += (sender, args) =>
         {
@@ -116,16 +112,10 @@ public static class EditDiaryEntryDialog
                 // already gives (2026-07-18 audit finding R8-08: this one used to be a
                 // bare "Delete this diary entry?" with no Content at all).
                 var label = Array.Find(DiaryCategory.EditableOptions, c => c.Value == category).Label ?? category;
-                var confirm = new ContentDialog
-                {
-                    Title = "Delete this diary entry?",
-                    Content = $"The {label} entry from {start}–{end} on {date.ToDisplayDate()} will be " +
-                              "permanently removed, and that day's score will be recalculated. This can't be undone.",
-                    PrimaryButtonText = "Delete",
-                    CloseButtonText = "Cancel",
-                    DefaultButton = ContentDialogButton.Close,
-                    XamlRoot = xamlRoot,
-                };
+                var confirm = DialogControls.Build(xamlRoot, "Delete this diary entry?",
+                    $"The {label} entry from {start}–{end} on {date.ToDisplayDate()} will be " +
+                    "permanently removed, and that day's score will be recalculated. This can't be undone.",
+                    primaryButtonText: "Delete", closeButtonText: "Cancel");
                 if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;
                 db.DeleteDiaryEntry(id);
                 ScoreService.TryRecalculateDayScores(db, [date], "EditDiaryEntryDialog.RecalculateScore");

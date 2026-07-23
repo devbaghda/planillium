@@ -57,15 +57,8 @@ public static class RescheduleTaskDialog
         });
         panel.Children.Add(picker);
 
-        var dialog = new ContentDialog
-        {
-            Title = "Reschedule task",
-            Content = panel,
-            PrimaryButtonText = "Move",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-        };
+        var dialog = DialogControls.Build(xamlRoot, "Reschedule task", panel,
+            primaryButtonText: "Move", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
         if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return null;
         if (picker.Date is not { } picked) return null;
