@@ -200,8 +200,20 @@ public sealed partial class MainWindow : Window
     {
         if (Content is not FrameworkElement { XamlRoot: not null }) return;
         var pending = NotificationCenter.TakePending();
-        if (pending.Count > 0)
-            _ = PendingNotificationsDialog.ShowAsync(this, pending);
+        if (pending.Count == 0) return;
+        // Guarded like every other fire-and-forget dispatch in this file (2026-07-24 audit
+        // finding #3) — an unguarded fault here becomes an unobserved task exception, and the
+        // practical effect is the recap silently never appearing with nothing in the log to
+        // explain why, even though TakePending() already cleared the tray's unread dot. Called
+        // directly (not via _dq.TryEnqueue) since this method itself runs on the UI thread
+        // already, from the Activated event handler above.
+        _ = ShowPendingNotificationsGuardedAsync(pending);
+    }
+
+    private async Task ShowPendingNotificationsGuardedAsync(List<PendingNotification> pending)
+    {
+        try { await PendingNotificationsDialog.ShowAsync(this, pending); }
+        catch (Exception ex) { Log.Error("PendingNotificationsDialog.ShowAsync", ex); }
     }
 
     private bool _notificationActivationWired;

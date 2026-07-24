@@ -271,6 +271,12 @@ public sealed partial class SettingsPage : Page
 
     private async void ExportAll_Click(object sender, RoutedEventArgs e)
     {
+        // Disabled + "Exporting…" status while it runs, matching the Clear buttons' own
+        // RunClearActionAsync pattern — without this, nothing visibly happens when clicked,
+        // which invites a double-click into two concurrent exports writing the same file
+        // (2026-07-24 audit finding #6).
+        ExportAllBtn.IsEnabled = false;
+        SaveStatus.Text = "Exporting…";
         try
         {
             // Off the UI thread — this opens the DB and reads every user table, which will
@@ -283,6 +289,10 @@ public sealed partial class SettingsPage : Page
         {
             Log.Error("SettingsPage.ExportAll", ex);
             SaveStatus.Text = Log.Friendly("Couldn't export your data", ex);
+        }
+        finally
+        {
+            ExportAllBtn.IsEnabled = true;
         }
     }
 

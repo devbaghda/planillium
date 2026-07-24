@@ -81,6 +81,12 @@ if (-not $SkipPublish) {
     # walks up from the exe looking for a folder with BOTH config.json and a
     # "plans" subfolder - without these the very first launch throws.
     Copy-Item $DefaultConfig (Join-Path $DistDir "config.json")
+
+    # MIT/Apache/WebView2 attribution must travel with the installed app, not just live in the
+    # repo (2026-07-24 audit finding #5) — app.iss's [Files] "..\dist\*" wildcard picks these up
+    # automatically once they're staged here, no installer script change needed.
+    Copy-Item (Join-Path $RepoRoot "LICENSE") $DistDir
+    Copy-Item (Join-Path $RepoRoot "THIRD-PARTY-NOTICES.md") $DistDir
     New-Item -ItemType Directory -Force -Path (Join-Path $DistDir "plans\active")   | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DistDir "plans\archive")  | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DistDir "data")           | Out-Null

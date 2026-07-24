@@ -41,8 +41,9 @@ public static class NameSetupDialog
                    "measure on-plan time. Everything it tracks stays local on this " +
                    "machine — reminder notifications may briefly appear in Windows' " +
                    "own notification area, so turn off notification sync to other " +
-                   "devices if that matters to you. Quit from the tray icon anytime " +
-                   "to stop tracking.",
+                   "devices if that matters to you. Right-click the tray icon and " +
+                   "choose \"Pause tracking\" to stop temporarily without closing the " +
+                   "app, or quit from the tray icon to stop it entirely.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],

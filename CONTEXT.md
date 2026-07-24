@@ -236,77 +236,59 @@ Compress aggressively rather than letting this grow forever (compressed 852→22
 2026-07-06; ~230→~50 lines on 2026-07-09; rounds 1-5 condensed 2026-07-15; three 07-15 turns
 condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one paragraph each
 on 2026-07-17 after the round-7 audit; ~680→~110 lines on 2026-07-22; ~630→~300 lines on
-2026-07-23 morning; ~610→~180 lines later the same day; ~494→~130 lines that same evening
-after re-audit iteration 2 landed)._
+2026-07-23 morning; ~610→~180 lines later the same day; ~494→~130 lines that same evening after
+re-audit iteration 2 landed; ~486→~90 lines on 2026-07-24 after that day's own audit round)._
 
-- **2026-07-23, full day**: three morning items shipped — (1) confirmed the sidebar's "days
-  late from plan" and Reports' old "Exclusion Impact" panel measured genuinely different things
-  (not a shared-state bug), user called the second panel "useless" so it was removed outright,
-  `Plan.DriftDays` is now the app's only "days late" readout (business rule 12); (2) Diary's
-  "App - Page" column split into independently filterable App/Page columns + an "All time"
-  checkbox + live subtotal (live-verification caught the checkbox only refreshing the list, not
-  the header/date-nav — fixed to call the full `Render()`); (3) full internal rename
-  `MentorOverseer`→`Planillium` across all `.cs`/XAML/project files, three legacy-compat values
-  deliberately left untouched (`AppInfo.LegacyStartupRegistryValue`, `CredentialStore.LegacyService`,
-  `StartupService.LegacyNames`). All three verified clean build + 86/86 tests.
-  Then a full 5-category audit (24 findings: 0 Critical/High, 9 Medium, 10 Low, 5 Info) →
-  "fix all": 18 straightforward AUTO-FIX items applied directly — unguarded
-  `TickTickSection.LoadAsync` try/catch; old-name strings → `AppInfo.DisplayName`; a shared
-  `AppInfo.MaxActivePlans` constant (replacing 5 hand-typed `2`s); `ConfigService` gained
-  `WorkStartTime/WorkEndTime/ReminderGraceMinutes/ReminderIntervalMinutes/IdleThresholdMinutes`
-  (fixed a duplicated-default drift between `ActivityTracker` and `SettingsPage`); `ReportsPage.
-  Diary`'s bulk mark-as-category action + two lazy-init timers extracted into named methods; a
-  per-connection read-timeout fix in `TickTickAuth`'s loopback listener (local-DoS); a file-size
-  cap on plan import; `Uri.EscapeDataString` on TickTick IDs; a `DangerButtonStyle` resource on
-  genuinely destructive buttons only; two `DateExtensions` date-format helpers; a daily
-  diary-retention-prune watcher (previously only ran once at launch); `THIRD-PARTY-NOTICES.md`
-  regenerated; `dotnet format` + using-order fixes. Four items needed the user's own call (asked
-  once, batched): **#9** two abandoned local git branches still held the user's real name/an old
-  plan file — user chose delete, both `git branch -D`'d (later `git gc --prune=now`'d clean by
-  the privacy re-audit). **#17** added a "Pause tracking" tray menu item, session-only. **#6**
-  all 26 `ContentDialog` construction sites across 19 files migrated onto one shared factory,
-  `Dialogs/DialogControls.Build(...)`, each site's exact original title/buttons/`DefaultButton`
-  preserved. **#8** (splitting `ActivityTracker`'s Win32-interop code out of its 819-line
-  God-Object shape) — user chose to **defer** to its own focused session; still open, see below.
-  Two regression catches during remediation, both verified against real usage *before* applying
-  the audit's own suggested fix rather than after: the contrast-color finding's suggested delete
-  of `App.xaml`'s override would have broken real `{ThemeResource}` XAML bindings — kept both
-  copies, added cross-reference comments instead; the fixed-pixel-width finding's suggested
-  `MinWidth` switch was applied to `SettingsPage.xaml` but would have undone a deliberate
-  fixed-width layout decision in `ReportsPage.Diary.cs` — left that one alone. A live incident,
-  likely self-inflicted: the live Release exe was stopped twice (file-lock) to verify the fixes,
-  and the second stop appears (by log timeline) to have landed on top of an open, unanswered
-  idle-return "welcome back" dialog and killed it mid-interaction — not a code defect, no data
-  lost (evening review's gap-sweep re-catches it), folded into the global `windows-app-auditor`
-  skill's runtime-safety rules.
-  **Re-audit iteration 2** (same 5 parallel passes against the fixed code): Security came back
-  clean. Architecture found one real regression — the new "Pause tracking" feature was silently
-  undone by `RestartTracker()` (called on every Settings autosave/diary re-categorization), with
-  the tray label left lying about actual state — fixed with a `_trackingPaused` field checked in
-  `RestartTracker()` (`MainWindow.Tray.cs`/`MainWindow.Tracker.cs`). Code-quality found one Low —
-  `SettingsPage.xaml.cs`'s `RetentionDays.Value` still read a local closure instead of the
-  already-added `ConfigService.DiaryRetentionDays()`, the exact "fixed one sibling, missed the
-  other" pattern this round was meant to eliminate — fixed (one line). Privacy found two Lows —
-  the deleted git branches' commits were still dangling/unreachable (fixed via `git reflog expire
-  --expire=now --all && git gc --prune=now`, verified via `git fsck --unreachable`), and
-  MANUAL.md/CHANGELOG.md hadn't been updated for this round's user-visible changes (fixed —
-  MANUAL.md's "Activity tracking" bullet now mentions Pause tracking; CHANGELOG's Unreleased
-  section gained entries for Pause tracking and the daily prune-watcher fix). The UX pass was
-  re-run after being stopped once earlier — 26-site dialog-factory migration came back clean
-  (every button/`DefaultButton` diffed against its pre-migration original), but found 3 new
-  issues in this round's own new surface, all fixed: pausing tracking only updated the sidebar's
-  text label, leaving the colored dot and "current window" line stuck on stale state
-  (`MainWindow.Tray.cs`'s `TogglePauseTracking` now also resets both); Settings' tracker-status
-  paragraph was computed once at page-load only, so toggling Pause from the tray while Settings
-  was already open left it lying (added a `MainWindow.TrackingStateChanged` event, mirroring the
-  existing `NotificationCenter.UnreadChanged` pattern, that `SettingsPage` subscribes to);
-  Diary's "Clear filters" button didn't clear the adjacent search box, and — a second gap found
-  by inspection while fixing that, not by the audit — it also called the partial
-  `RenderDiaryResults()` instead of `Render()`, so clearing "All time" left the header
-  caption/date-nav stale (same bug class as the morning's "All time" checkbox fix, on the one
-  sibling handler that still hadn't been updated to match). Verified: clean Debug build (0
-  warnings) + 86/86 tests; Release build's copy step hit the live instance's file lock as
-  expected — left it running rather than kill it a third time same day.
+- **2026-07-23, full day**: full internal rename `MentorOverseer`→`Planillium` (3 legacy-compat
+  values deliberately untouched); Diary's "App - Page" column split into filterable App/Page +
+  "All time" + subtotal; removed Reports' redundant "Exclusion Impact" panel, `Plan.DriftDays` is
+  now the app's only "days late" readout (business rule 12). Then a full 5-category audit (24
+  findings) → "fix all": 18 auto-fixed (try/catch hardening, `AppInfo.MaxActivePlans`/`ConfigService`
+  helpers/`DateExtensions` consolidating several duplicated-default and hand-typed-format bugs,
+  loopback-listener DoS fix, plan-import size cap, a daily diary-prune watcher, `THIRD-PARTY-
+  NOTICES.md` regen). Four items needed the user's call: deleted 2 stale git branches with old
+  personal data; added a tray "Pause tracking" toggle; migrated all 26 `ContentDialog` sites onto
+  one shared `DialogControls.Build` factory; **deferred** splitting `ActivityTracker`'s 819-line
+  God-Object shape to its own session (still open, see below). Two regression catches verified
+  against real usage *before* applying the audit's own suggested fix (a contrast-color override
+  that real XAML bindings needed; a `MinWidth` switch that would've undone a deliberate
+  fixed-width layout elsewhere) — both avoided. A likely self-inflicted live incident: stopping
+  the live Release exe twice to verify fixes probably landed on top of an open idle-return dialog
+  and killed it mid-interaction (not a code defect, no data lost, folded into the global
+  `windows-app-auditor` skill). A same-day **re-audit** (5 passes against the fixes) caught and
+  closed 4 new regressions: Pause tracking silently undone by `RestartTracker()` (fixed with a
+  `_trackingPaused` field); one sibling missed the `ConfigService.DiaryRetentionDays()`
+  consolidation; the deleted branches' git objects were still dangling (`git gc --prune=now`'d
+  clean); MANUAL/CHANGELOG hadn't caught up to the new features (fixed); plus 3 UX gaps in the
+  new surface (Pause tracking's stale status pill/window line, Settings' stale tracker-status
+  text, Diary's "Clear filters" not resetting search/header state) — all fixed same day. Verified
+  throughout: clean Debug build + 86/86 tests; Release build's copy step hit the live instance's
+  file lock as expected each time, never force-killed a third time.
+- **2026-07-24, full 5-category re-audit → "fix all" (22 findings, 0 Critical, 1 High, 8 Medium,
+  5 Low, 8 Info)**: a fresh audit against the prior day's fully-remediated code, independently
+  re-verified every earlier fix still held (dialog factory, Pause tracking's pill, the git-branch
+  cleanup, PE-level ASLR/DEP/CFG, the SQLite CVE pin) — nothing regressed. One real fresh
+  regression: today's App/Page filter-column split could push Diary's "Clear filters"/"All time"
+  controls off-screen at the app's minimum window width, fixed by wrapping that row in a
+  horizontal `ScrollViewer` (same pattern as the results list below it). Other fixes applied
+  directly: a fire-and-forget dialog call given the same try/catch guard every sibling already
+  has; "Export all my data" got the same busy-state the Clear buttons already have; a failed
+  spend/purchase now surfaces a toast instead of silently pretending to succeed; the first-run
+  privacy disclosure now mentions "Pause tracking," not just quitting; one more duplicated
+  `dd.MM.yyyy`/`dddd dd.MM` date format consolidated into `DateExtensions`
+  (`ToDisplayDateNumeric`/`ToDisplayDateFull(DateOnly)`); `SetDefaultDllDirectories` added at
+  startup (DLL-hijack hardening, currently no live hole since every loaded DLL is already a
+  KnownDLL); reworded a raw `JsonException` message shown verbatim on bad plan-JSON paste;
+  documented that "Export all my data" snapshots aren't covered by the 90-day retention window;
+  cleared a stale local git remote-tracking ref (`git fetch --prune`). Three items needed the
+  user's call (asked once, batched): removed the installer's "install for all users" option
+  entirely (it could both fail to save under `Program Files` and let other Windows accounts read
+  the activity diary — `app.iss`'s `PrivilegesRequiredOverridesAllowed` line removed); skipped
+  code signing for now (no cert/budget — stays a documented tradeoff in `release/README.md`);
+  added a weekly GitHub Actions dependency-vulnerability scan
+  (`.github/workflows/dependency-scan.yml`). Verified: clean Debug build (0 warnings) + 86/86
+  tests; Release build not re-verified (live instance still running the same PID from the day
+  before — left it alone rather than force a rebuild for an optional verification step).
 
 **Pre-2026-07-18 arc, condensed** (full detail in git log / the linked artifacts): WinUI 3
 rebuild landed 07-07 as v1.0.0 (18 findings fixed at ship time, TickTick secret purged from

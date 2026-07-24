@@ -122,14 +122,25 @@ public sealed partial class ReportsPage
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Margin = new Thickness(0, 0, 0, 8),
         };
         filterRow.Children.Add(categoryBox);
         filterRow.Children.Add(appBox);
         filterRow.Children.Add(pageBox);
         filterRow.Children.Add(allTimeBox);
         filterRow.Children.Add(clearFiltersBtn);
-        Body.Children.Add(filterRow);
+        // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
+        // can exceed the actual content width at the app's enforced 900px window floor once the
+        // NavigationView pane and page padding are subtracted — without this, "Clear filters"
+        // and the "All time" checkbox can be clipped off-screen with no way to reach them
+        // (2026-07-24 audit finding #1, a regression from the App/Page column split). Same
+        // HorizontalScrollBarVisibility="Auto" treatment as diaryScroller below, just for one row.
+        Body.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = filterRow,
+        });
 
         // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
         // below, right along with the list itself.

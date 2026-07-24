@@ -152,7 +152,9 @@ tool, not a cloud-first collaboration app. Specifically:
   prompt is stored as free text, locally, exactly as you wrote it.
 - **Retention.** Diary detail (including window titles) is kept for a configurable number of days
   (90 by default, adjustable in Settings) before being rolled up into daily totals and the
-  per-entry detail is discarded.
+  per-entry detail is discarded. A file you create yourself with "Export all my data" is a
+  deliberate snapshot and isn't covered by this — it sits untouched until you delete it, even
+  after the data it was taken from has aged out.
 - **Export and clearing your data.** Settings has an "Export all my data" action that writes
   everything the app has stored into one file, narrower "Clear" actions for just your activity
   history or just your evening reflections, and a "Clear all my data" action that wipes every

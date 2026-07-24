@@ -299,7 +299,14 @@ public static class AddPlanDialog
 
         JsonDocument doc;
         try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { return "That JSON doesn't parse: " + e.Message; }
+        catch (JsonException e)
+        {
+            // The raw JsonException.Message is parser-position jargon (line/byte offsets) —
+            // plain language here, the technical detail stays in the log (2026-07-24 audit
+            // finding #14), matching this dialog's other error copy.
+            Log.Warn("AddPlanDialog.Validate", e.Message);
+            return "That JSON doesn't parse — check it's the complete reply including the ```json fence.";
+        }
 
         using (doc)
         {

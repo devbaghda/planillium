@@ -5,6 +5,22 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Fixes (2026-07-24 audit round)**
+- The Diary page's row of filter dropdowns could run wider than the screen at the app's
+  smallest usable window size, pushing "Clear filters" and the "All time" checkbox off the
+  visible edge with nothing to scroll to reach them.
+- "Export all my data" now shows "Exporting…" and disables itself while it runs, instead of
+  giving no feedback at all (which invited a double-click into two overlapping exports).
+- A failed "Buy entertainment time" or "Log spend" no longer silently pretends to succeed —
+  you'll now see a notification if the points ledger didn't actually save.
+- The one-time first-run privacy notice now mentions "Pause tracking" from the tray as the
+  lighter option, alongside quitting the app entirely.
+- The installer no longer offers an "install for all users" choice — it always installs to
+  your own private folder, closing both a save-failure risk and a privacy exposure (other
+  Windows accounts on a shared PC could otherwise read the activity diary).
+- The open-source license/attribution file now actually ships inside the installed app,
+  not just in the source repo.
+
 **Removed**
 - The Reports page's "Exclusion Impact" panel. It showed different-looking lateness numbers than
   the sidebar's "days late from plan" figure for the same plan, which read as a bug (it wasn't —

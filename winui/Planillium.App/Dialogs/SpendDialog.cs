@@ -119,7 +119,14 @@ public static class SpendDialog
         }
         catch (Exception ex)
         {
+            // The dialog has already closed by this point (ShowAsync above only returns once
+            // it has), so nothing in it can show an error — previously this just logged and
+            // called RefreshScore() regardless, leaving the user believing the purchase/spend
+            // went through when it didn't (2026-07-24 audit finding #7). A toast is the one
+            // way left to surface it after the fact.
             Log.Error("SpendDialog (confirm)", ex);
+            ToastNotifier.Show(title, Log.Friendly("Couldn't save that — your balance wasn't changed", ex), tag: null);
+            return;
         }
         window.RefreshScore();
     }

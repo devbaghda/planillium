@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -248,7 +247,7 @@ public sealed partial class SchedulePage : Page
                 VerticalAlignment = VerticalAlignment.Top,
             };
             AutomationProperties.SetName(toggle,
-                $"{(isOff ? "Undo day off" : "Day off")}: {date.ToString("dddd dd.MM", CultureInfo.InvariantCulture)}");
+                $"{(isOff ? "Undo day off" : "Day off")}: {date.ToDisplayDateFull()}");
             var d = day;
             toggle.Click += (_, _) => PlanScoreAction.Run(plan,
                 (score, p) => { if (isOff) score.UnmarkDayOff(p, d); else score.MarkDayOff(p, d); },

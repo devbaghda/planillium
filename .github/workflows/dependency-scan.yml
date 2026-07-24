@@ -1,0 +1,29 @@
+name: Dependency vulnerability scan
+
+# Weekly automated check so a newly-disclosed CVE in a dependency (e.g. the SQLite
+# advisory already tracked in packages.lock.json) surfaces within days instead of
+# waiting for the next manual full audit (2026-07-24 audit finding #16).
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore winui/Planillium.App/Planillium.App.csproj
+      - name: Check for vulnerable packages
+        run: |
+          $output = dotnet list winui/Planillium.App/Planillium.App.csproj package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $output
+          if ($output -match "has the following vulnerable packages") {
+            Write-Error "Vulnerable dependency found — see job log for details."
+            exit 1
+          }
+        shell: pwsh

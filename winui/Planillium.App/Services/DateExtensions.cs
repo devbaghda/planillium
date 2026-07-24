@@ -46,6 +46,18 @@ internal static class DateExtensions
     /// (2026-07-23 audit finding #14).</summary>
     public static string ToDisplayDateFull(this DateTime d) => d.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
 
+    /// <summary>DateOnly counterpart of ToDisplayDateFull — SchedulePage's day-off toggle
+    /// works with a DateOnly and had no matching overload to migrate onto, so it kept
+    /// hand-typing "dddd dd.MM" on its own (2026-07-24 audit finding #12).</summary>
+    public static string ToDisplayDateFull(this DateOnly d) => d.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>Numeric-only "15.07.2026," no weekday — the sidebar's "Finishes ..." line
+    /// and the Plans page's "Originally due ..." line both hand-typed this identically
+    /// despite each one's own comment noting they're deliberately meant to stay in sync
+    /// (2026-07-24 audit finding #9) — the same drift risk every other helper in this
+    /// file exists to prevent, on a format shape none of them covered yet.</summary>
+    public static string ToDisplayDateNumeric(this DateOnly d) => d.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+
     /// <summary>Full weekday name plus year — "Thursday 23.07.2026," TodayPage's header.
     /// See ToDisplayDateFull's doc comment.</summary>
     public static string ToDisplayDateWithYear(this DateTime d) => d.ToString("dddd dd.MM.yyyy", CultureInfo.InvariantCulture);

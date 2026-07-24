@@ -294,11 +294,10 @@ public sealed partial class MainWindow
                     < 0 => $"{-driftDays}d ahead of plan",
                     _ => "On track",
                 };
-                // Same "dd.MM.yyyy" formatting the Plans page card uses for
+                // Same ToDisplayDateNumeric formatting the Plans page card uses for
                 // its own "Originally due" line, so the two readouts of the
                 // same underlying date don't drift apart visually.
-                var finishText = "Finishes " +
-                    plan.CurrentEndDate(tasks).ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                var finishText = "Finishes " + plan.CurrentEndDate(tasks).ToDisplayDateNumeric();
 
                 var nameBlock = new TextBlock
                 {

@@ -13,9 +13,22 @@ public partial class App : Application
     // app uses (its mutex fix, 2026-07-02); two instances would double-track.
     private static Mutex? _instanceMutex;
 
+    private const uint LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800;
+    private const uint LOAD_LIBRARY_SEARCH_USER_DIRS = 0x00000400;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetDefaultDllDirectories(uint directoryFlags);
+
     public App()
     {
         InitializeComponent();
+
+        // Every native DLL this app actually loads today (user32/advapi32/wtsapi32) is one of
+        // Windows' own protected "KnownDLLs," always loaded from the real system folder
+        // regardless of what's next to the exe — so there's no real DLL-hijack hole today. This
+        // costs nothing and removes any doubt if a native dependency less inherently protected
+        // is ever added later (2026-07-24 audit finding #10).
+        SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS);
 
         // Global safety net: without these, one stray exception in an async
         // path is a silent process death with zero diagnostics.

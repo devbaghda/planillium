@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -145,7 +144,7 @@ public sealed partial class PlansPage : Page
         // "(+Nd)"/"(-Nd)" is how far the plan's actual finish has since
         // drifted from that: later from reschedules/day-offs pushing tasks
         // back, earlier from pulling a task forward and compacting the gap.
-        var dueLine = $"Originally due {originalEndDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}";
+        var dueLine = $"Originally due {originalEndDate.ToDisplayDateNumeric()}";
         if (driftDays != 0)
             dueLine += driftDays > 0 ? $" — now {driftDays}d later" : $" — now {-driftDays}d earlier";
         left.Children.Add(new TextBlock

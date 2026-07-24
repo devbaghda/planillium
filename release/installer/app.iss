@@ -15,11 +15,15 @@ AppId={{F9C80A85-CB70-4F91-ABDC-9C5D9F0FE86C}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
+; {autopf} resolves per-user (e.g. %LocalAppData%\Programs) since PrivilegesRequired=lowest
+; has no override to elevate — deliberately no "install for all users" choice (2026-07-24
+; audit finding #2): that option could both fail to save (Program Files isn't writable by a
+; standard account) and let other Windows logins on the same PC read this app's activity
+; diary, since Program Files' default ACL grants all local accounts read access.
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\output
