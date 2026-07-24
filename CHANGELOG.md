@@ -5,6 +5,12 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Fixes**
+- The Today and Schedule pages no longer get stuck showing yesterday if you leave the app open
+  overnight without switching pages — they used to only pick up the new day when you navigated
+  away and back, since nothing was watching for midnight to actually pass while they stayed on
+  screen.
+
 **Fixes (2026-07-24 audit round)**
 - The Diary page's row of filter dropdowns could run wider than the screen at the app's
   smallest usable window size, pushing "Clear filters" and the "All time" checkbox off the

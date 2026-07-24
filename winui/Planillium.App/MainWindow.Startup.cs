@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Dialogs;
+using Planillium.App.Pages;
 using Planillium.App.Services;
 
 namespace Planillium.App;
@@ -98,10 +99,15 @@ public sealed partial class MainWindow
     private System.Threading.Timer? _kickoffTimer;
     private System.Threading.Timer? _lateDayReminderTimer;
     private System.Threading.Timer? _diaryPruneTimer;
+    private System.Threading.Timer? _dayChangeTimer;
 
     // Guards CheckDiaryPrune the same way _lateDayReminderShownDate guards its own
     // once-a-day check below.
     private DateOnly? _diaryPrunedDate;
+
+    // Tracks the last calendar date this watcher actually saw, so it can tell "the day
+    // rolled over" apart from "still the same day, minute N of the poll."
+    private DateOnly? _lastSeenDate;
 
     /// <summary>At the configured end-of-day time, offer the evening review once.</summary>
     private void StartEodWatcher()
@@ -176,6 +182,41 @@ public sealed partial class MainWindow
         if (_diaryPrunedDate == today) return;
         _diaryPrunedDate = today;
         PruneOldDiary();
+    }
+
+    /// <summary>Catches the app just sitting open, on Today or Schedule, across midnight.
+    /// Both pages use NavigationCacheMode="Enabled" and only ever recompute their
+    /// "today"-relative content (task list, plan day, date subtitle) from OnNavigatedTo —
+    /// which doesn't fire again on its own overnight, so without this the only way to see
+    /// the new day was to switch to another page and back (2026-07-24 user report). Same
+    /// once-a-minute poll pattern as the watchers above, just comparing dates instead of
+    /// clock times.</summary>
+    private void StartDayChangeWatcher()
+    {
+        _lastSeenDate = DateOnly.FromDateTime(DateTime.Today);
+        _dayChangeTimer = new System.Threading.Timer(_ =>
+            _dq.TryEnqueue(CheckDayChange), null, WatcherPollInterval, WatcherPollInterval);
+    }
+
+    private void CheckDayChange()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (_lastSeenDate == today) return;
+        _lastSeenDate = today;
+        try
+        {
+            // Sidebar's plan-drift/finish-date readouts are date-dependent too.
+            RefreshScore();
+            switch (ContentFrame.Content)
+            {
+                case TodayPage todayPage: todayPage.Render(); break;
+                case SchedulePage schedulePage: schedulePage.Render(); break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("CheckDayChange", ex);
+        }
     }
 
     private void CheckLateDayTaskReminder()

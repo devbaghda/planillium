@@ -79,7 +79,13 @@ public sealed partial class TodayPage : Page
     // TickTick section lives in Views/TickTickSection (network I/O out of
     // this page's rendering code).
 
-    private void Render()
+    /// <summary>Internal (not private) so MainWindow's day-change watcher can force a
+    /// refresh when the calendar date rolls over while this cached page instance stays on
+    /// screen — previously the only way to see a new day's tasks/date was to switch away to
+    /// another page and back, since NavigationCacheMode="Enabled" means OnNavigatedTo (the
+    /// only place this was called from) doesn't fire again on its own overnight (2026-07-24
+    /// user report).</summary>
+    internal void Render()
     {
         Sections.Children.Clear();
         // Every render clears any stale error from a previous failed save —

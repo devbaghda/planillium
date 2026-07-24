@@ -289,6 +289,17 @@ re-audit iteration 2 landed; ~486→~90 lines on 2026-07-24 after that day's own
   (`.github/workflows/dependency-scan.yml`). Verified: clean Debug build (0 warnings) + 86/86
   tests; Release build not re-verified (live instance still running the same PID from the day
   before — left it alone rather than force a rebuild for an optional verification step).
+  **Separately, a user-reported bug root-caused and fixed the same day**: "I usually need to
+  change the menu and come back to see the change of the day." Cause: `TodayPage`/`SchedulePage`
+  both use `NavigationCacheMode="Enabled"` and only ever recompute their "today"-relative content
+  (task list, plan day, date subtitle) from `OnNavigatedTo` — which doesn't fire again on its own
+  overnight if the app just sits open on one of them, so the display stays frozen on yesterday
+  until you navigate away and back (the exact "change menu and come back" workaround the user
+  described). Fixed with a new watcher, `MainWindow.Startup.cs`'s `StartDayChangeWatcher` (same
+  once-a-minute poll pattern as the EOD/Kickoff/diary-prune watchers), which detects the calendar
+  date rolling over and calls `Render()` (now `internal`, was `private`) on whichever of the two
+  pages is currently the active `ContentFrame.Content`, plus `RefreshScore()` for the sidebar's
+  own date-dependent plan-drift/finish-date readouts. Verified via clean Debug build + 86/86 tests.
 
 **Pre-2026-07-18 arc, condensed** (full detail in git log / the linked artifacts): WinUI 3
 rebuild landed 07-07 as v1.0.0 (18 findings fixed at ship time, TickTick secret purged from

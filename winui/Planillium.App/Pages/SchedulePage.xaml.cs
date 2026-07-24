@@ -34,7 +34,11 @@ public sealed partial class SchedulePage : Page
 
     private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
 
-    private void Render()
+    /// <summary>Internal (not private) so MainWindow's day-change watcher can force a
+    /// refresh when the calendar date rolls over while this cached page stays on screen —
+    /// see TodayPage.Render's matching doc comment for the full reasoning (2026-07-24 user
+    /// report).</summary>
+    internal void Render()
     {
         Sections.Children.Clear();
         // Every render clears any stale error from a previous failed save —
