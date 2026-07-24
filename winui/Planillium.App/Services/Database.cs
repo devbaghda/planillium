@@ -241,6 +241,7 @@ public sealed class Database : IDisposable
     {
         var cutoff = DateOnly.FromDateTime(DateTime.Today).AddDays(-retentionDays)
             .ToIsoDate();
+        var deletedRows = 0;
 
         // Wrapped so a failure between the rollup INSERT and the raw-row
         // DELETE can't leave a day double-counted (rolled up AND still
@@ -270,9 +271,22 @@ public sealed class Database : IDisposable
             {
                 del.CommandText = "DELETE FROM time_diary WHERE date < $cutoff";
                 del.Parameters.AddWithValue("$cutoff", cutoff);
-                del.ExecuteNonQuery();
+                deletedRows = del.ExecuteNonQuery();
             }
         });
+
+        // ClearActivityHistory/ClearAllData already VACUUM after deleting diary rows for
+        // exactly this reason — this automatic, once-a-day path was the one place that
+        // lesson hadn't been applied, so window-title content MANUAL.md tells the user is
+        // "discarded" after retentionDays could still be recovered from the raw db file
+        // indefinitely (2026-07-24 audit finding #8). Gated on deletedRows so a normal
+        // startup with nothing new to prune doesn't pay a full-file-rewrite cost every time.
+        if (deletedRows > 0)
+        {
+            using var vacuum = CreateCommand();
+            vacuum.CommandText = "VACUUM";
+            vacuum.ExecuteNonQuery();
+        }
     }
 
     /// <summary>Most common past idle-answer descriptions (excludes the "no real

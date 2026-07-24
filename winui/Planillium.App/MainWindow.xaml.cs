@@ -179,6 +179,14 @@ public sealed partial class MainWindow : Window
             if (_notificationActivationWired)
                 AppNotificationManager.Default.NotificationInvoked -= OnNotificationInvoked;
             if (_hwnd != IntPtr.Zero) WTSUnRegisterSessionNotification(_hwnd);
+            // Harmless today (the process exits right after Closed fires, so Windows
+            // reclaims these regardless) but every other resource here is torn down
+            // explicitly — these five were the one gap (2026-07-24 audit finding #13).
+            _eodTimer?.Dispose();
+            _kickoffTimer?.Dispose();
+            _lateDayReminderTimer?.Dispose();
+            _diaryPruneTimer?.Dispose();
+            _dayChangeTimer?.Dispose();
         };
 
         // Being brought to the foreground is still the trigger (2026-07-20 request), but as of

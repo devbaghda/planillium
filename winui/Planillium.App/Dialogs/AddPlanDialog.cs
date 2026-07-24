@@ -265,6 +265,14 @@ public static class AddPlanDialog
         using var zip = System.IO.Compression.ZipFile.OpenRead(path);
         var entry = zip.GetEntry("word/document.xml")
             ?? throw new InvalidDataException("Not a .docx file (no word/document.xml inside).");
+        // The caller's MaxImportFileBytes check above only looks at the .docx's compressed
+        // size on disk — a deflate stream can expand roughly 1000:1, so a small, ordinary-
+        // looking file could still inflate to gigabytes in memory once read. entry.Length is
+        // the *uncompressed* size, checkable before ever opening the stream (2026-07-24 audit
+        // finding #9 — the zip-bomb guard this method's own doc comment describes didn't
+        // actually cover this path).
+        if (entry.Length > MaxImportFileBytes)
+            throw new InvalidDataException("That document's content is larger than expected — pick a different file.");
         using var reader = new StreamReader(entry.Open());
         var xml = reader.ReadToEnd();
         xml = xml.Replace("</w:p>", "\n");

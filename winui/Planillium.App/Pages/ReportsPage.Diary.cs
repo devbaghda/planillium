@@ -57,6 +57,7 @@ public sealed partial class ReportsPage
     private DispatcherQueueTimer? _diaryLiveRefresh;
     private Action? _diaryLiveRefreshAction;
     private static readonly TimeSpan DiaryLiveRefreshInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DiarySearchDebounceInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
@@ -443,7 +444,7 @@ public sealed partial class ReportsPage
         if (_diarySearchDebounce is null)
         {
             _diarySearchDebounce = DispatcherQueue.CreateTimer();
-            _diarySearchDebounce.Interval = TimeSpan.FromMilliseconds(250);
+            _diarySearchDebounce.Interval = DiarySearchDebounceInterval;
             _diarySearchDebounce.IsRepeating = false;
             _diarySearchDebounce.Tick += (_, _) => _diarySearchDebounceAction?.Invoke();
         }
@@ -681,7 +682,7 @@ public sealed partial class ReportsPage
             Grid.SetColumn(select, 0);
             row.Children.Add(select);
 
-            var time = Dim(showDate ? $"{date:dd.MM} · {start} → {end}" : $"{start} → {end}");
+            var time = Dim(showDate ? $"{date.ToDisplayDateShort()} · {start} → {end}" : $"{start} → {end}");
             var catText = new TextBlock
             {
                 Text = cat.Replace('_', '-'),

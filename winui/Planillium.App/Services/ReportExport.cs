@@ -102,7 +102,7 @@ public static class ReportExport
               }
             </style></head><body>
             <h1>Planillium</h1>
-            <div class="sub">Weekly Report · generated {{DateTime.Now.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)}}</div>
+            <div class="sub">Weekly Report · generated {{DateTime.Now.ToDisplayDateTimeStamp()}}</div>
             <h2>The week</h2>
             <table><tr><th>Day</th><th>Tasks</th><th>On-plan</th><th>Off-plan</th><th>Score</th></tr>{{dayRows}}</table>
             <h2>Top distractions (this week)</h2>
@@ -134,7 +134,7 @@ public static class ReportExport
         var sb = new StringBuilder();
         var name = ReportData.PeriodName(period);
         sb.AppendLine(Csv($"{AppInfo.DisplayName} report", name,
-            "generated " + DateTime.Now.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)));
+            "generated " + DateTime.Now.ToDisplayDateTimeStamp()));
         sb.AppendLine();
 
         if (period is ReportPeriod.Day or ReportPeriod.Week)

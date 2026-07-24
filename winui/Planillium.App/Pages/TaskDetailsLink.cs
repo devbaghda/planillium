@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Planillium.App.Models;
 
@@ -23,6 +24,11 @@ internal static class TaskDetailsLink
             Padding = padding,
             VerticalAlignment = verticalAlignment,
         };
+        // A day with several tasks used to announce every one of these identically
+        // ("Details, hyperlink") to a screen reader, with no way to tell which task a given
+        // link belonged to — the same gap already fixed for the task checkbox itself
+        // (2026-07-24 audit finding #4).
+        AutomationProperties.SetName(details, $"Details: {task.Text}");
         details.Click += async (_, _) => await Dialogs.TaskDetailDialog.ShowAsync(xamlRoot, task);
         return details;
     }

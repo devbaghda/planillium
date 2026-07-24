@@ -15,6 +15,25 @@ namespace Planillium.App.Views;
 /// </summary>
 public static class TaskNoteView
 {
+    // Incremented/decremented on the UI thread only (EnterEdit/ExitEdit both run there,
+    // same as MainWindow's day-change watcher callback) — no locking needed. Lets
+    // MainWindow's day-change watcher tell "a note is mid-edit right now" apart from
+    // "safe to rebuild the page," so its forced Render() can't silently wipe unsaved
+    // typing (2026-07-24 audit finding #2 — notes have no autosave, and this watcher is
+    // the first trigger in the app that can rebuild a page's whole UI tree with no user
+    // action behind it).
+    private static int _activeEditCount;
+    public static bool AnyEditInProgress => _activeEditCount > 0;
+
+    /// <summary>Zeroes the counter — call at the very start of a page's Render(), before
+    /// rebuilding its note widgets from scratch. Without this, an edit left open when some
+    /// *other* action (not the day-change watcher) rebuilds the page would leak the count
+    /// upward forever (the old widget, and its EnterEdit/ExitEdit closure, is discarded
+    /// without ExitEdit ever running) — permanently blocking the day-change watcher from
+    /// ever refreshing again. Safe to call unconditionally: a fresh render is about to
+    /// replace every note widget's live state regardless of why it was triggered.</summary>
+    public static void ResetActiveEdits() => _activeEditCount = 0;
+
     /// <summary>Convenience overload that also owns the save-to-database
     /// closure (open a Database, call SetTaskNote, log on failure) — this
     /// exact block used to be copy-pasted, unchanged apart from the log
@@ -106,6 +125,8 @@ public static class TaskNoteView
         root.Children.Add(editBox);
         root.Children.Add(editRow);
 
+        var editActive = false;
+
         void EnterEdit()
         {
             editBox.Text = noteText.Text;
@@ -113,6 +134,8 @@ public static class TaskNoteView
             editBox.Visibility = Visibility.Visible;
             editRow.Visibility = Visibility.Visible;
             editBox.Focus(FocusState.Programmatic);
+            editActive = true;
+            _activeEditCount++;
         }
 
         void ExitEdit()
@@ -120,6 +143,7 @@ public static class TaskNoteView
             editBox.Visibility = Visibility.Collapsed;
             editRow.Visibility = Visibility.Collapsed;
             display.Visibility = Visibility.Visible;
+            if (editActive) { editActive = false; _activeEditCount--; }
         }
 
         editLink.Click += (_, _) => EnterEdit();

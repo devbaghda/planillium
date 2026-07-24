@@ -38,8 +38,16 @@ public sealed partial class SchedulePage : Page
     /// refresh when the calendar date rolls over while this cached page stays on screen —
     /// see TodayPage.Render's matching doc comment for the full reasoning (2026-07-24 user
     /// report).</summary>
-    internal void Render()
+    /// <param name="scrollToToday">Whether a freshly-built plan should snap its viewport to
+    /// today's row. True for every real navigation/user action; MainWindow's day-change
+    /// watcher passes false — without this, its silent midnight refresh would yank the view
+    /// back to today even if the user was deliberately looking at a different day
+    /// (2026-07-24 audit finding #3).</param>
+    internal void Render(bool scrollToToday = true)
     {
+        // See TaskNoteView.ResetActiveEdits' doc comment — every note widget below is about
+        // to be rebuilt from scratch regardless of why this Render() was called.
+        TaskNoteView.ResetActiveEdits();
         Sections.Children.Clear();
         // Every render clears any stale error from a previous failed save —
         // otherwise the banner outlives the failure it reported, even once
@@ -65,7 +73,7 @@ public sealed partial class SchedulePage : Page
             // originally added to match Today per 2026-07-09 audit finding #33).
             Subtitle.Text = "No active plans.";
             Sections.Children.Add(Views.EmptyPlansState.Build(this,
-                "Add a plan on the Plans page, or right here, to see it on your schedule.", Render));
+                "Add a plan on the Plans page, or right here, to see it on your schedule.", () => Render()));
             return;
         }
         Subtitle.Text = "Move tasks, take days off — the plan flexes, the goal doesn't.";
@@ -77,7 +85,7 @@ public sealed partial class SchedulePage : Page
             var completions = db.LoadCompletions();
 
             foreach (var plan in plans)
-                RenderPlan(plan, db, score, completions);
+                RenderPlan(plan, db, score, completions, scrollToToday);
         }
         catch (Exception ex)
         {
@@ -106,7 +114,7 @@ public sealed partial class SchedulePage : Page
     }
 
     private void RenderPlan(Plan plan, Database db, ScoreService score,
-        Dictionary<(string, int, string), bool> completions)
+        Dictionary<(string, int, string), bool> completions, bool scrollToToday)
     {
         var planDay = plan.PlanDay;
         var tasks = PlanStore.TasksFor(plan, db, completions);
@@ -183,7 +191,7 @@ public sealed partial class SchedulePage : Page
         // to Loaded (rather than called inline like the old eager StackPanel
         // version could) because the repeater can't realize/measure an item
         // by index until it's actually been through a layout pass.
-        if (todayIndex >= 0)
+        if (todayIndex >= 0 && scrollToToday)
         {
             var idx = todayIndex;
             repeater.Loaded += (_, _) =>

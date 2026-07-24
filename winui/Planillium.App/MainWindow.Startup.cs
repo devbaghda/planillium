@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -109,30 +110,31 @@ public sealed partial class MainWindow
     // rolled over" apart from "still the same day, minute N of the poll."
     private DateOnly? _lastSeenDate;
 
+    /// <summary>Shared construction for every once-a-minute watcher timer below — was
+    /// copy-pasted 5 times with an identical shape (2026-07-24 audit finding #7). Not just
+    /// tidiness: this file's own history includes a real bug from exactly this kind of
+    /// hand-copied timer code (DispatcherQueueTimer.Tick silently never firing), so one
+    /// shared, already-correct implementation is safer than trusting every future watcher
+    /// to retype it right.</summary>
+    private System.Threading.Timer StartWatcherTimer(DispatcherQueueHandler onTick) =>
+        new(_ => _dq.TryEnqueue(onTick), null, WatcherPollInterval, WatcherPollInterval);
+
     /// <summary>At the configured end-of-day time, offer the evening review once.</summary>
-    private void StartEodWatcher()
+    private void StartEodWatcher() => _eodTimer = StartWatcherTimer(async () =>
     {
-        _eodTimer = new System.Threading.Timer(_ =>
-            _dq.TryEnqueue(async () =>
-            {
-                try { await ReviewDialog.Trigger(this); }
-                catch (Exception ex) { Log.Error("StartEodWatcher.Tick", ex); }
-            }), null, WatcherPollInterval, WatcherPollInterval);
-    }
+        try { await ReviewDialog.Trigger(this); }
+        catch (Exception ex) { Log.Error("StartEodWatcher.Tick", ex); }
+    });
 
     /// <summary>At the configured start-of-day time, show the morning kickoff
     /// once — regardless of which page happens to be open. Today page's own
     /// Loaded check still covers "opened after start time, before this timer's
     /// next tick"; KickoffDialog's _showing guard keeps the two from double-showing.</summary>
-    private void StartKickoffWatcher()
+    private void StartKickoffWatcher() => _kickoffTimer = StartWatcherTimer(async () =>
     {
-        _kickoffTimer = new System.Threading.Timer(_ =>
-            _dq.TryEnqueue(async () =>
-            {
-                try { await KickoffDialog.Trigger(this); }
-                catch (Exception ex) { Log.Error("StartKickoffWatcher.Tick", ex); }
-            }), null, WatcherPollInterval, WatcherPollInterval);
-    }
+        try { await KickoffDialog.Trigger(this); }
+        catch (Exception ex) { Log.Error("StartKickoffWatcher.Tick", ex); }
+    });
 
     // Set once per calendar day the moment the reminder below actually fires (or is
     // decided not to, because nothing's pending) — the guard that keeps it from
@@ -159,49 +161,59 @@ public sealed partial class MainWindow
     /// the app already uses) naturally contributes nothing, so a full day off never
     /// nags. Uses a toast (not a dialog) since the app spends most of its life hidden
     /// in the tray, same reasoning as every other timed prompt in this file.</summary>
-    private void StartLateDayTaskReminderWatcher()
-    {
-        _lateDayReminderTimer = new System.Threading.Timer(_ =>
-            _dq.TryEnqueue(CheckLateDayTaskReminder), null, WatcherPollInterval, WatcherPollInterval);
-    }
+    private void StartLateDayTaskReminderWatcher() =>
+        _lateDayReminderTimer = StartWatcherTimer(CheckLateDayTaskReminder);
 
     /// <summary>Re-runs the retention prune once a day while the app keeps running —
     /// previously PruneOldDiary only ran once, at RunStartupCatchUp (app launch), so a
     /// long session with no restart could leave rows past the configured retention window
     /// sitting around until the next launch (2026-07-23 audit finding #18). Same
     /// once-a-minute poll + once-per-calendar-day guard pattern as the watchers above.</summary>
-    private void StartDiaryPruneWatcher()
+    private void StartDiaryPruneWatcher() => _diaryPruneTimer = StartWatcherTimer(CheckDiaryPrune);
+
+    /// <summary>Shared "have we already handled this calendar day" guard — was hand-copied
+    /// identically in CheckDiaryPrune and CheckDayChange (2026-07-24 audit finding #7).
+    /// CheckLateDayTaskReminder's own guard is deliberately NOT migrated onto this: it only
+    /// commits _lateDayReminderShownDate once it's decided whether to actually notify, not
+    /// immediately on first seeing the new day, which is a genuinely different shape.</summary>
+    private static bool DayAdvanced(ref DateOnly? lastSeen, DateOnly today)
     {
-        _diaryPruneTimer = new System.Threading.Timer(_ =>
-            _dq.TryEnqueue(CheckDiaryPrune), null, WatcherPollInterval, WatcherPollInterval);
+        if (lastSeen == today) return false;
+        lastSeen = today;
+        return true;
     }
 
     private void CheckDiaryPrune()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        if (_diaryPrunedDate == today) return;
-        _diaryPrunedDate = today;
+        if (!DayAdvanced(ref _diaryPrunedDate, DateOnly.FromDateTime(DateTime.Today))) return;
         PruneOldDiary();
     }
 
-    /// <summary>Catches the app just sitting open, on Today or Schedule, across midnight.
-    /// Both pages use NavigationCacheMode="Enabled" and only ever recompute their
-    /// "today"-relative content (task list, plan day, date subtitle) from OnNavigatedTo —
-    /// which doesn't fire again on its own overnight, so without this the only way to see
-    /// the new day was to switch to another page and back (2026-07-24 user report). Same
-    /// once-a-minute poll pattern as the watchers above, just comparing dates instead of
-    /// clock times.</summary>
+    /// <summary>Catches the app just sitting open, on Today/Schedule/Plans/Reports, across
+    /// midnight. All four pages use NavigationCacheMode="Enabled" and only ever recompute
+    /// their "today"-relative content (task list, plan day, date subtitle, drift figures)
+    /// from OnNavigatedTo — which doesn't fire again on its own overnight, so without this
+    /// the only way to see the new day was to switch to another page and back (2026-07-24
+    /// user report). Plans/Reports were missed in the first cut of this fix — three
+    /// independent audit passes caught the gap the same day (2026-07-24 audit finding #1).
+    /// Same once-a-minute poll pattern as the watchers above, just comparing dates instead
+    /// of clock times.</summary>
     private void StartDayChangeWatcher()
     {
         _lastSeenDate = DateOnly.FromDateTime(DateTime.Today);
-        _dayChangeTimer = new System.Threading.Timer(_ =>
-            _dq.TryEnqueue(CheckDayChange), null, WatcherPollInterval, WatcherPollInterval);
+        _dayChangeTimer = StartWatcherTimer(CheckDayChange);
     }
 
     private void CheckDayChange()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         if (_lastSeenDate == today) return;
+        // Task notes have no autosave — this is the first trigger in the app that can
+        // rebuild a page's whole UI tree with no user action behind it, so an edit left
+        // open at the exact wrong moment could otherwise be silently wiped with no warning
+        // (2026-07-24 audit finding #2). Don't commit _lastSeenDate either: retry next
+        // minute rather than treating today as "already handled."
+        if (Views.TaskNoteView.AnyEditInProgress) return;
         _lastSeenDate = today;
         try
         {
@@ -209,8 +221,13 @@ public sealed partial class MainWindow
             RefreshScore();
             switch (ContentFrame.Content)
             {
-                case TodayPage todayPage: todayPage.Render(); break;
-                case SchedulePage schedulePage: schedulePage.Render(); break;
+                case TodayPage p: p.Render(); break;
+                // scrollToToday: false — this is a silent background refresh, not a real
+                // navigation; snapping the view back to today would yank it out from under
+                // someone deliberately looking at a different day (2026-07-24 audit finding #3).
+                case SchedulePage p: p.Render(scrollToToday: false); break;
+                case PlansPage p: p.Render(); break;
+                case ReportsPage p: p.Render(); break;
             }
         }
         catch (Exception ex)

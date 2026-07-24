@@ -9,7 +9,16 @@ going forward; the original Python/Tkinter version is retired.
 - The Today and Schedule pages no longer get stuck showing yesterday if you leave the app open
   overnight without switching pages — they used to only pick up the new day when you navigated
   away and back, since nothing was watching for midnight to actually pass while they stayed on
-  screen.
+  screen. The Plans and Reports pages had the identical problem and are now covered too. If a
+  task note happens to be open and unsaved right when the day rolls over, the automatic refresh
+  now waits rather than silently discarding it, and Schedule no longer snaps back to today's row
+  out from under you if you were deliberately looking at a different day.
+- Screen readers can now tell which task a "Details" link belongs to, and which plan each of the
+  Plans page's per-card buttons (Add task/Excluded days/Briefing/Archive) act on — previously
+  every one of these sounded identical when read aloud.
+- The automatic once-a-day cleanup of old activity history now compacts the database file after
+  deleting old rows, matching the manual "Clear" buttons — previously "deleted" window-title
+  content could still linger, recoverable, in the raw database file.
 
 **Fixes (2026-07-24 audit round)**
 - The Diary page's row of filter dropdowns could run wider than the screen at the app's

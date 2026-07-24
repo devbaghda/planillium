@@ -98,7 +98,12 @@ public sealed partial class ReportsPage : Page
         };
     }
 
-    private void Render()
+    /// <summary>Internal (not private) so MainWindow's day-change watcher can force a
+    /// refresh when the calendar date rolls over while this cached page stays on screen —
+    /// same reasoning as TodayPage/SchedulePage's own Render() (2026-07-24 audit finding #1:
+    /// the original day-change fix covered those two pages but missed this structurally
+    /// identical one, which anchors its entire Day/Week/Month/Year view on DateTime.Today).</summary>
+    internal void Render()
     {
         Body.Children.Clear();
         SaveErrorBar.IsOpen = false;

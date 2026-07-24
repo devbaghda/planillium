@@ -176,6 +176,13 @@ tool, not a cloud-first collaboration app. Specifically:
 - Treat the app as a coach, not just a checklist.
 - Use the reschedule and day-off features when real life changes the plan.
 
+## Uninstalling
+
+Uninstalling the app deliberately leaves your plans and activity history on disk — the same
+way most Windows uninstallers avoid silently destroying your files. If you're uninstalling
+because you're retiring or handing off the PC, run "Clear all my data" from Settings first to
+wipe your activity history and reflections before uninstalling.
+
 ## Troubleshooting
 
 ### The app does not start

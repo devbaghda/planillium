@@ -4,8 +4,9 @@ namespace Planillium.App.Services;
 
 /// <summary>
 /// Locates the data root — config.json / plans/ / data/progress.db.
-/// Resolution order: MENTOR_ROOT env var, then walking up from the exe
-/// directory looking for a folder that has both "plans" and "config.json".
+/// Resolution order: MENTOR_ROOT env var (test/dev builds only — see below),
+/// then walking up from the exe directory looking for a folder that has both
+/// "plans" and "config.json".
 /// </summary>
 public static class AppPaths
 {
@@ -17,9 +18,20 @@ public static class AppPaths
         {
             if (_root != null) return _root;
 
+            // #if DEBUG-gated like its siblings, MENTOR_PAGE (MainWindow.xaml.cs) and
+            // MENTOR_INSTANCE_SUFFIX (App.xaml.cs) — a real user running the shipped
+            // Release exe has no legitimate reason to redirect the app's entire data root
+            // via an environment variable, and leaving it live there meant anything able to
+            // set an env var before launch (a script, a modified shortcut) could point the
+            // app at an arbitrary folder of its choosing (2026-07-24 audit finding #10).
+            // Genuinely still needed in Debug: Planillium.App.Tests' TestRootFixture relies
+            // on this exact hook to isolate the test suite's SQLite file from the real
+            // data/progress.db (dotnet test builds Debug by default, so this stays live for it).
+#if DEBUG
             var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
             if (!string.IsNullOrEmpty(env) && Directory.Exists(env))
                 return _root = env;
+#endif
 
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
@@ -30,8 +42,11 @@ public static class AppPaths
                 dir = dir.Parent;
             }
             throw new DirectoryNotFoundException(
-                $"Couldn't find the {AppInfo.DisplayName} data folder (config.json + plans/). " +
-                "Set the MENTOR_ROOT environment variable to point at it.");
+                $"Couldn't find the {AppInfo.DisplayName} data folder (config.json + plans/)."
+#if DEBUG
+                + " Set the MENTOR_ROOT environment variable to point at it."
+#endif
+                );
         }
     }
 

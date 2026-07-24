@@ -1,5 +1,6 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
@@ -26,7 +27,12 @@ public sealed partial class PlansPage : Page
         Render();
     }
 
-    private void Render()
+    /// <summary>Internal (not private) so MainWindow's day-change watcher can force a
+    /// refresh when the calendar date rolls over while this cached page stays on screen —
+    /// same reasoning as TodayPage/SchedulePage's own Render() (2026-07-24 audit finding #1:
+    /// the original day-change fix covered those two pages but missed this structurally
+    /// identical one, which shows date-dependent "Day X of Y"/"Originally due" figures).</summary>
+    internal void Render()
     {
         ActiveList.Children.Clear();
         QueuedList.Children.Clear();
@@ -168,6 +174,10 @@ public sealed partial class PlansPage : Page
         if (plan.Briefing != null)
         {
             var briefing = new Button { Content = "📋 Briefing", VerticalAlignment = VerticalAlignment.Center };
+            // With up to 2 active plans shown side by side, their per-card buttons used to
+            // sound identical to a screen reader ("Briefing, button" twice in a row) with no
+            // spoken cue for which plan each one acts on (2026-07-24 audit finding #5).
+            AutomationProperties.SetName(briefing, $"Briefing: {plan.Name}");
             briefing.Click += async (_, _) => await BriefingDialog.ShowAsync(XamlRoot, plan);
             Grid.SetColumn(briefing, 1);
             grid.Children.Add(briefing);
@@ -178,6 +188,7 @@ public sealed partial class PlansPage : Page
         // dialog's own field was already headered "Task" three lines below
         // it (2026-07-09 audit finding #32).
         var addStep = new Button { Content = "+ Add task", VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(addStep, $"Add task: {plan.Name}");
         addStep.Click += async (_, _) =>
         {
             var ok = await AddTaskDialog.ShowAsync(XamlRoot, plan);
@@ -196,6 +207,7 @@ public sealed partial class PlansPage : Page
         grid.Children.Add(addStep);
 
         var excludeDays = new Button { Content = "Excluded days…", VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(excludeDays, $"Excluded days: {plan.Name}");
         excludeDays.Click += async (_, _) =>
         {
             if (await ExcludedWeekdaysDialog.ShowAsync(XamlRoot, plan))
@@ -215,6 +227,7 @@ public sealed partial class PlansPage : Page
         };
         ToolTipService.SetToolTip(archive,
             complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
+        AutomationProperties.SetName(archive, $"Archive: {plan.Name}");
         archive.Click += async (_, _) => await ArchiveAsync(plan);
         Grid.SetColumn(archive, 4);
         grid.Children.Add(archive);

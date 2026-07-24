@@ -58,6 +58,20 @@ internal static class DateExtensions
     /// file exists to prevent, on a format shape none of them covered yet.</summary>
     public static string ToDisplayDateNumeric(this DateOnly d) => d.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
 
+    /// <summary>"15.07" — no weekday, no year. The Diary list's date column hand-typed this
+    /// via a plain interpolation (`$"{date:dd.MM}"`), which formats using the *current*
+    /// culture by default rather than InvariantCulture like every other date in this app
+    /// (2026-07-24 audit finding #12). Both format shapes here are numeric-only with a
+    /// literal '.', so the practical blast radius was small, but it's the one date readout
+    /// in the app that wasn't going through this file at all.</summary>
+    public static string ToDisplayDateShort(this DateOnly d) => d.ToString("dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>"15.07.2026 14:32" — ReportExport's HTML and CSV "generated ..." lines
+    /// both hand-typed this identically (2026-07-24 audit finding #12), the same
+    /// same-format-two-copies drift risk every other helper in this file exists to
+    /// prevent, just not yet covered on this one shape.</summary>
+    public static string ToDisplayDateTimeStamp(this DateTime d) => d.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
+
     /// <summary>Full weekday name plus year — "Thursday 23.07.2026," TodayPage's header.
     /// See ToDisplayDateFull's doc comment.</summary>
     public static string ToDisplayDateWithYear(this DateTime d) => d.ToString("dddd dd.MM.yyyy", CultureInfo.InvariantCulture);

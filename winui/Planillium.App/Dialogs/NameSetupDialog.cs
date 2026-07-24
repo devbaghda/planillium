@@ -43,7 +43,9 @@ public static class NameSetupDialog
                    "own notification area, so turn off notification sync to other " +
                    "devices if that matters to you. Right-click the tray icon and " +
                    "choose \"Pause tracking\" to stop temporarily without closing the " +
-                   "app, or quit from the tray icon to stop it entirely.",
+                   "app, or quit from the tray icon to stop it entirely. Diary detail " +
+                   "ages out after 90 days by default (adjustable in Settings, which " +
+                   "also has Export/Clear actions for everything tracked).",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],

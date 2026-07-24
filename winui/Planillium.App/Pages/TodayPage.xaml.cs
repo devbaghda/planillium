@@ -87,6 +87,9 @@ public sealed partial class TodayPage : Page
     /// user report).</summary>
     internal void Render()
     {
+        // See TaskNoteView.ResetActiveEdits' doc comment — every note widget below is about
+        // to be rebuilt from scratch regardless of why this Render() was called.
+        Views.TaskNoteView.ResetActiveEdits();
         Sections.Children.Clear();
         // Every render clears any stale error from a previous failed save —
         // otherwise the banner outlives the failure it reported, even once
@@ -211,7 +214,7 @@ public sealed partial class TodayPage : Page
         var header = $"{plan.Name}  ·  Day {planDay} of {plan.TotalDaysComputed}";
         if (planDay <= 0)
             return new PlanTodayView(header,
-                $"Starts {plan.StartDateParsed:dd.MM.yyyy} — {1 - planDay} day(s) to go.",
+                $"Starts {plan.StartDateParsed.ToDisplayDateNumeric()} — {1 - planDay} day(s) to go.",
                 false, new List<AssignedTask>(), new List<AssignedTask>(), null, null);
 
         var overdue = tasks.Where(t => t.Overdue).OrderBy(t => t.AssignedDay).ToList();
