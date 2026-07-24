@@ -3,6 +3,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Planillium.App.Dialogs;
 using Planillium.App.Pages;
 using Planillium.App.Services;
@@ -115,7 +116,16 @@ public sealed partial class MainWindow
     /// tidiness: this file's own history includes a real bug from exactly this kind of
     /// hand-copied timer code (DispatcherQueueTimer.Tick silently never firing), so one
     /// shared, already-correct implementation is safer than trusting every future watcher
-    /// to retype it right.</summary>
+    /// to retype it right.
+    ///
+    /// This recurring (not one-shot/re-arm) timer is only safe because every current
+    /// <paramref name="onTick"/> either finishes synchronously before the next dispatcher
+    /// item runs, or is async with its own check-then-set guard (e.g. ReviewDialog/
+    /// KickoffDialog's _showing flag) that closes before any real await — nothing here
+    /// enforces that. A future watcher whose body awaits something slow (network, a long
+    /// query) with no such guard could let ticks queue up on the dispatcher faster than
+    /// they drain (2026-07-24 audit finding #12). Add your own guard if that's not true for
+    /// your onTick.</summary>
     private System.Threading.Timer StartWatcherTimer(DispatcherQueueHandler onTick) =>
         new(_ => _dq.TryEnqueue(onTick), null, WatcherPollInterval, WatcherPollInterval);
 
@@ -186,7 +196,13 @@ public sealed partial class MainWindow
     private void CheckDiaryPrune()
     {
         if (!DayAdvanced(ref _diaryPrunedDate, DateOnly.FromDateTime(DateTime.Today))) return;
-        PruneOldDiary();
+        // PruneAndRollupDiary's VACUUM cost scales with the whole database file, not just
+        // the rows being removed, and this watcher's callback runs on the UI thread (via
+        // StartWatcherTimer's _dq.TryEnqueue) — calling it inline here would freeze the app
+        // once a day, for longer the more the database has grown (2026-07-24 audit finding
+        // #1, round 3). RunStartupCatchUp already does the same prune off-thread at launch;
+        // match that instead of blocking the screen.
+        _ = Task.Run(PruneOldDiary);
     }
 
     /// <summary>Catches the app just sitting open, on Today/Schedule/Plans/Reports, across
@@ -208,17 +224,25 @@ public sealed partial class MainWindow
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         if (_lastSeenDate == today) return;
-        // Task notes have no autosave — this is the first trigger in the app that can
-        // rebuild a page's whole UI tree with no user action behind it, so an edit left
-        // open at the exact wrong moment could otherwise be silently wiped with no warning
-        // (2026-07-24 audit finding #2). Don't commit _lastSeenDate either: retry next
-        // minute rather than treating today as "already handled."
-        if (Views.TaskNoteView.AnyEditInProgress) return;
+        // An in-progress task-note edit used to make this bail out and retry next minute
+        // (2026-07-24 audit finding #2) — that guard is gone now that TaskNoteView itself
+        // preserves an open, unsaved draft across any rebuild (round 3, finding #4), so
+        // notes are safe regardless of what triggers Render(). This also fixes the sidebar
+        // score/plan-drift readouts getting stuck for as long as a note stayed open, which
+        // that guard's blanket "return before RefreshScore()" caused as a side effect
+        // (2026-07-24 audit finding #8).
+        //
+        // Reports' diary bulk-selection has no equivalent persistence yet (selectedIds is
+        // torn down and rebuilt fresh by Render(), unlike notes) — same shape of problem,
+        // narrower fix: skip and retry next minute rather than silently drop the selection
+        // (2026-07-24 audit finding #3).
+        if (ContentFrame.Content is ReportsPage { HasActiveDiarySelection: true }) return;
         _lastSeenDate = today;
         try
         {
             // Sidebar's plan-drift/finish-date readouts are date-dependent too.
             RefreshScore();
+            var refreshed = true;
             switch (ContentFrame.Content)
             {
                 case TodayPage p: p.Render(); break;
@@ -228,12 +252,47 @@ public sealed partial class MainWindow
                 case SchedulePage p: p.Render(scrollToToday: false); break;
                 case PlansPage p: p.Render(); break;
                 case ReportsPage p: p.Render(); break;
+                default: refreshed = false; break;
             }
+            // Otherwise this refresh is completely invisible — someone actively reading
+            // Reports or Plans could see numbers change under them with no explanation at
+            // all (2026-07-24 audit finding #7). One shared animation on ContentFrame (the
+            // host all four pages sit in) covers whichever is on screen without needing any
+            // per-page changes.
+            if (refreshed) FlashContentRefresh();
         }
         catch (Exception ex)
         {
             Log.Error("CheckDayChange", ex);
         }
+    }
+
+    /// <summary>Brief opacity dip-and-recover on the page host — see CheckDayChange's own
+    /// comment for why this exists. Deliberately subtle (a few hundred ms, never fully
+    /// transparent) so it reads as "the view just updated," not as an alarming flicker.</summary>
+    private void FlashContentRefresh()
+    {
+        var fadeOut = new DoubleAnimation
+        {
+            From = 1.0,
+            To = 0.55,
+            Duration = new Duration(TimeSpan.FromMilliseconds(150)),
+        };
+        var fadeIn = new DoubleAnimation
+        {
+            From = 0.55,
+            To = 1.0,
+            BeginTime = TimeSpan.FromMilliseconds(150),
+            Duration = new Duration(TimeSpan.FromMilliseconds(250)),
+        };
+        Storyboard.SetTarget(fadeOut, ContentFrame);
+        Storyboard.SetTargetProperty(fadeOut, "Opacity");
+        Storyboard.SetTarget(fadeIn, ContentFrame);
+        Storyboard.SetTargetProperty(fadeIn, "Opacity");
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(fadeOut);
+        storyboard.Children.Add(fadeIn);
+        storyboard.Begin();
     }
 
     private void CheckLateDayTaskReminder()
@@ -346,52 +405,11 @@ public sealed partial class MainWindow
             {
                 var tasks = PlanStore.TasksFor(plan, db, completions);
                 var driftDays = plan.DriftDays(tasks);
-                var status = driftDays switch
-                {
-                    > 0 => $"{driftDays}d late from plan",
-                    < 0 => $"{-driftDays}d ahead of plan",
-                    _ => "On track",
-                };
                 // Same ToDisplayDateNumeric formatting the Plans page card uses for
                 // its own "Originally due" line, so the two readouts of the
                 // same underlying date don't drift apart visually.
-                var finishText = "Finishes " + plan.CurrentEndDate(tasks).ToDisplayDateNumeric();
-
-                var nameBlock = new TextBlock
-                {
-                    Text = plan.Name,
-                    FontSize = 11,
-                    TextWrapping = TextWrapping.NoWrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                };
-                ToolTipService.SetToolTip(nameBlock, plan.Name);
-
-                var block = new StackPanel { Spacing = 1 };
-                block.Children.Add(nameBlock);
-                block.Children.Add(new TextBlock
-                {
-                    Text = status,
-                    FontSize = 13,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.Resources[
-                        driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"],
-                });
-                block.Children.Add(new TextBlock
-                {
-                    Text = finishText,
-                    FontSize = 11,
-                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                });
-                // Same subtle-fill chrome the activity pill above it uses, so
-                // the footer reads as one deliberate widget stack rather than
-                // bare text bolted under two chip-styled ones.
-                PlanDriftPanel.Children.Add(new Border
-                {
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(10, 6, 10, 6),
-                    Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
-                    Child = block,
-                });
+                var finishText = plan.CurrentEndDate(tasks).ToDisplayDateNumeric();
+                PlanDriftPanel.Children.Add(Views.PlanDriftCard.Build(plan.Name, driftDays, finishText));
             }
         }
         catch (Exception ex)

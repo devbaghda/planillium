@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Planillium.App.Services;
@@ -119,7 +118,7 @@ public sealed partial class SettingsPage : Page
         foreach (var (box, label) in new[]
                  { (WorkStart, "Work start"), (WorkEnd, "Work end"), (EodTimeBox, "Day review at") })
         {
-            if (!TimeOnly.TryParseExact(box.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            if (!DateExtensions.TryParseTimeOfDay(box.Text.Trim(), out _))
             {
                 SaveStatus.Text = $"{label} must be HH:MM (e.g. 08:00).";
                 return;

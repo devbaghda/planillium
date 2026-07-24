@@ -96,8 +96,15 @@ public partial class App : Application
             Log.Error("MainWindow construction failed — exiting", ex);
             MessageBoxW(IntPtr.Zero,
                 $"{AppInfo.DisplayName} couldn't find its data folder and can't start.\n\n" +
-                "If you moved the install, or set MENTOR_ROOT, check that it " +
-                "points at a folder containing config.json and plans\\.\n\n" +
+                "If you moved the install, check that it's next to a folder containing " +
+#if DEBUG
+                "config.json and plans\\, or that MENTOR_ROOT points at one.\n\n" +
+#else
+                // MENTOR_ROOT is a Debug/test-only hook (see AppPaths.Root) — telling a real
+                // Release user to set it would send them down a dead end (2026-07-24 audit
+                // finding #9).
+                "config.json and plans\\.\n\n" +
+#endif
                 $"Details: {ex.Message}",
                 $"{AppInfo.DisplayName} — startup failed", MbIconError);
             _instanceMutex?.ReleaseMutex();

@@ -238,99 +238,65 @@ condensed same evening; rounds 1-6 + all 07-15/07-16 entries condensed into one 
 on 2026-07-17 after the round-7 audit; ~680→~110 lines on 2026-07-22; ~630→~300 lines on
 2026-07-23 morning; ~610→~180 lines later the same day; ~494→~130 lines that same evening after
 re-audit iteration 2 landed; ~486→~90 lines on 2026-07-24 after that day's own audit round;
-~509→~65 lines later the same day after a second 07-24 audit round + fix)._
+~509→~65 lines later the same day after a second 07-24 audit round + fix; ~256→~220 lines that
+same evening after a third 07-24 audit round + fix)._
 
 - **2026-07-23, full day**: full internal rename `MentorOverseer`→`Planillium` (3 legacy-compat
-  values deliberately untouched); Diary's "App - Page" column split into filterable App/Page +
-  "All time" + subtotal; removed Reports' redundant "Exclusion Impact" panel, `Plan.DriftDays` is
-  now the app's only "days late" readout (business rule 12). Then a full 5-category audit (24
-  findings) → "fix all": 18 auto-fixed (try/catch hardening, `AppInfo.MaxActivePlans`/`ConfigService`
-  helpers/`DateExtensions` consolidating several duplicated-default and hand-typed-format bugs,
-  loopback-listener DoS fix, plan-import size cap, a daily diary-prune watcher, `THIRD-PARTY-
-  NOTICES.md` regen). Four items needed the user's call: deleted 2 stale git branches with old
-  personal data; added a tray "Pause tracking" toggle; migrated all 26 `ContentDialog` sites onto
-  one shared `DialogControls.Build` factory; **deferred** splitting `ActivityTracker`'s 819-line
-  God-Object shape to its own session (still open, see below). Two regression catches verified
-  against real usage *before* applying the audit's own suggested fix (a contrast-color override
-  that real XAML bindings needed; a `MinWidth` switch that would've undone a deliberate
-  fixed-width layout elsewhere) — both avoided. A likely self-inflicted live incident: stopping
-  the live Release exe twice to verify fixes probably landed on top of an open idle-return dialog
-  and killed it mid-interaction (not a code defect, no data lost, folded into the global
-  `windows-app-auditor` skill). A same-day **re-audit** (5 passes against the fixes) caught and
-  closed 4 new regressions: Pause tracking silently undone by `RestartTracker()` (fixed with a
-  `_trackingPaused` field); one sibling missed the `ConfigService.DiaryRetentionDays()`
-  consolidation; the deleted branches' git objects were still dangling (`git gc --prune=now`'d
-  clean); MANUAL/CHANGELOG hadn't caught up to the new features (fixed); plus 3 UX gaps in the
-  new surface (Pause tracking's stale status pill/window line, Settings' stale tracker-status
-  text, Diary's "Clear filters" not resetting search/header state) — all fixed same day. Verified
-  throughout: clean Debug build + 86/86 tests; Release build's copy step hit the live instance's
-  file lock as expected each time, never force-killed a third time.
-- **2026-07-24, full 5-category re-audit → "fix all" (22 findings, 0 Critical, 1 High, 8 Medium,
-  5 Low, 8 Info)**: a fresh audit against the prior day's fully-remediated code, independently
-  re-verified every earlier fix still held (dialog factory, Pause tracking's pill, the git-branch
-  cleanup, PE-level ASLR/DEP/CFG, the SQLite CVE pin) — nothing regressed. One real fresh
-  regression: today's App/Page filter-column split could push Diary's "Clear filters"/"All time"
-  controls off-screen at the app's minimum window width, fixed by wrapping that row in a
-  horizontal `ScrollViewer` (same pattern as the results list below it). Other fixes applied
-  directly: a fire-and-forget dialog call given the same try/catch guard every sibling already
-  has; "Export all my data" got the same busy-state the Clear buttons already have; a failed
-  spend/purchase now surfaces a toast instead of silently pretending to succeed; the first-run
-  privacy disclosure now mentions "Pause tracking," not just quitting; one more duplicated
-  `dd.MM.yyyy`/`dddd dd.MM` date format consolidated into `DateExtensions`
-  (`ToDisplayDateNumeric`/`ToDisplayDateFull(DateOnly)`); `SetDefaultDllDirectories` added at
-  startup (DLL-hijack hardening, currently no live hole since every loaded DLL is already a
-  KnownDLL); reworded a raw `JsonException` message shown verbatim on bad plan-JSON paste;
-  documented that "Export all my data" snapshots aren't covered by the 90-day retention window;
-  cleared a stale local git remote-tracking ref (`git fetch --prune`). Three items needed the
-  user's call (asked once, batched): removed the installer's "install for all users" option
-  entirely (it could both fail to save under `Program Files` and let other Windows accounts read
-  the activity diary — `app.iss`'s `PrivilegesRequiredOverridesAllowed` line removed); skipped
-  code signing for now (no cert/budget — stays a documented tradeoff in `release/README.md`);
-  added a weekly GitHub Actions dependency-vulnerability scan
-  (`.github/workflows/dependency-scan.yml`). Verified: clean Debug build (0 warnings) + 86/86
-  tests; Release build not re-verified (live instance still running the same PID from the day
-  before — left it alone rather than force a rebuild for an optional verification step).
-  **Separately, a user-reported bug root-caused and fixed the same day**: "I usually need to
-  change the menu and come back to see the change of the day." Cause: `TodayPage`/`SchedulePage`
-  both use `NavigationCacheMode="Enabled"` and only recompute their "today"-relative content from
-  `OnNavigatedTo`, which doesn't fire on its own overnight. First fix: a new watcher,
-  `MainWindow.Startup.cs`'s `StartDayChangeWatcher` (same once-a-minute pattern as the EOD/
-  Kickoff/diary-prune watchers), detecting the date rolling over and calling `Render()` (made
-  `internal`) on whichever page is `ContentFrame.Content`, plus `RefreshScore()`. Verified clean
-  Debug build + 86/86 tests, committed (`33b86ec`).
-  **A second same-day full 5-category audit against that fix** (22 findings, 0 Critical, 1 High,
-  8 Medium, 5 Low, 8 Info) immediately caught a real gap in it — **three independent passes**
-  (architecture/UX/code-quality) all separately flagged that the fix covered only `TodayPage`/
-  `SchedulePage` and missed `PlansPage`/`ReportsPage`, which share the identical cached-page
-  staleness exposure (`PlansPage`'s "Day X of Y"/drift figures, `ReportsPage`'s whole Day/Week/
-  Month/Year view) — the project's own repeatedly-documented "fix one sibling, miss the other"
-  pattern recurring in the very session that shipped the first fix. Also found: the watcher's
-  forced `Render()` could silently wipe an unsaved, mid-typing task note (notes have no
-  autosave) — fixed with a `TaskNoteView.AnyEditInProgress` counter (incremented/decremented by
-  `EnterEdit`/`ExitEdit`, reset at the top of every `Render()` so it can't leak from an edit torn
-  down by some *other* render trigger) that `CheckDayChange` checks before rebuilding, retrying
-  next minute instead of committing `_lastSeenDate`. Schedule's per-plan auto-scroll-to-today
-  also used to re-fire on every forced refresh, yanking the view out from under someone
-  deliberately looking at a different day — `Render`/`RenderPlan` gained a `scrollToToday`
-  parameter, `false` only from the day-change watcher's `SchedulePage` case. Other fixes this
-  round: the 5 `MainWindow` watcher timers' duplicated construction/guard boilerplate extracted
-  into `StartWatcherTimer`/`DayAdvanced` helpers (the exact class of hand-copied code that
-  already caused a real silent-timer bug once in this file); the 5 timers now `Dispose()`d on
-  window close; one `ToDisplayDateNumeric` call site missed by the prior round's consolidation
-  (`TodayPage`'s "Starts ... — Nd to go" line); two more duplicated date formats folded into
-  `DateExtensions` (`ToDisplayDateTimeStamp`, `ToDisplayDateShort`); screen-reader names added to
-  the "Details" link (per-task) and Plans page's per-card buttons (per-plan) — previously
-  identical-sounding entries with no way to tell which task/plan each belonged to; the automatic
-  daily diary-retention prune now `VACUUM`s (gated on whether it actually deleted rows) — the
-  manual "Clear" buttons already did this, the automatic path was the one gap, meaning "aged out"
-  window-title content could otherwise still be recovered from the raw db file; a `.docx` plan
-  import's zip-bomb guard now checks the *uncompressed* entry size (a small file could still
-  inflate to gigabytes — the existing check only looked at the file's compressed size on disk);
-  `MENTOR_ROOT` gated behind `#if DEBUG` to match its two siblings (still live for
-  `Planillium.App.Tests`' `TestRootFixture`, which needs it and builds Debug); MANUAL.md gained an
-  "Uninstalling" note (data survives uninstall by design) and the first-run disclosure now
-  mentions the 90-day retention window and Settings' Export/Clear actions. Verified: clean Debug
-  build (0 warnings) + 86/86 tests + `dotnet format --verify-no-changes` clean.
+  values deliberately untouched); Diary App/Page filter split; removed Reports' redundant
+  "Exclusion Impact" panel (`Plan.DriftDays` now the only "days late" readout, business rule 12).
+  Full 5-category audit (24 findings) → fix-all: 18 auto-fixed (try/catch hardening, `AppInfo`/
+  `ConfigService`/`DateExtensions` helpers, loopback-listener DoS fix, plan-import size cap, a
+  daily diary-prune watcher, `THIRD-PARTY-NOTICES.md` regen); 4 needed the user's call (deleted 2
+  stale git branches with old personal data; tray "Pause tracking" toggle; all 26 `ContentDialog`
+  sites migrated onto one `DialogControls.Build` factory; `ActivityTracker`'s 819-line God-Object
+  split **deferred**, still open — see below). Same-day re-audit (5 passes) caught and closed 4
+  regressions (Pause tracking undone by `RestartTracker()`; a sibling missed the retention-days
+  consolidation; dangling git objects from the branch deletes; stale docs) plus 3 UX gaps, all
+  fixed same day. Verified: clean build + 86/86 tests throughout.
+- **2026-07-24, three same-day audit rounds** (22, then 22, then 12 findings; 0 Critical
+  throughout):
+  - **Round 1** (1 High): re-verified every 07-23 fix still held; one fresh regression (Diary's
+    App/Page filter row overflowing at min window width, fixed with a `ScrollViewer`); plus a
+    fire-and-forget try/catch gap, "Export all my data" busy-state, a silently-failing
+    spend/purchase now toasts, first-run disclosure mentions "Pause tracking," one more
+    duplicated date format, `SetDefaultDllDirectories` hardening, a raw `JsonException` reworded.
+    3 needed the user's call: removed installer's "install for all users" (privacy + save-failure
+    risk); code signing deferred (documented tradeoff); weekly dependency-scan Action added.
+    **Separately, a real user bug root-caused same day**: "have to switch pages to see the new
+    day" — `TodayPage`/`SchedulePage`'s `NavigationCacheMode="Enabled"` pages never recompute
+    "today" overnight. Fixed with `MainWindow.Startup.cs`'s `StartDayChangeWatcher` (`Render()`
+    made `internal`), committed `33b86ec`.
+  - **Round 2** (1 High) against that fix: **3 independent passes** caught the same gap — the fix
+    only covered Today/Schedule, missed `PlansPage`/`ReportsPage` (identical cached-page
+    staleness). Also found the forced `Render()` could wipe an unsaved task note (fixed:
+    `TaskNoteView.AnyEditInProgress` counter) and Schedule's auto-scroll re-snapping on every
+    refresh (fixed: `scrollToToday` param). Other fixes: 5 watcher timers' boilerplate extracted
+    into `StartWatcherTimer`/`DayAdvanced`; timers now `Dispose()`d; a missed `ToDisplayDateNumeric`
+    site; 2 more date formats consolidated; screen-reader names on the Details link + Plans
+    per-card buttons; daily diary-prune now `VACUUM`s; docx zip-bomb guard checks uncompressed
+    size; `MENTOR_ROOT` gated behind `#if DEBUG`; MANUAL.md/first-run disclosure updated.
+    Committed `c37a97a`, pushed.
+  - **Round 3** (1 High) — this round's own regressions and misses: the round-2 VACUUM fix moved
+    onto the UI thread via the shared watcher helper, would've frozen the app once a day (fixed:
+    back onto a background `Task.Run`, matching `RunStartupCatchUp`'s existing pattern). The
+    round-2 docx zip-bomb fix (`entry.Length` check) trusted a size the zip's own header declares,
+    not real decompressed bytes — fixed by reading with a running byte-count instead. Reports'
+    diary bulk-selection had the identical wipe-on-refresh risk notes had (fixed with a mirrored
+    `HasActiveDiarySelection` guard). **Notes got a stronger fix than a guard**: `TaskNoteView`
+    now persists an open, unsaved draft (`_openDrafts`, keyed by planId+taskText) across ANY
+    rebuild, not just the day-change watcher's — this let the watcher's note guard be removed
+    entirely, which incidentally un-stuck the sidebar score/drift readouts that guard had been
+    silently blocking. `ReportsPage.Diary.cs`'s two remaining `DispatcherQueueTimer`s (search
+    debounce, live refresh) migrated to `System.Threading.Timer`, closing the last instance of an
+    API already root-caused as unreliable elsewhere in this app. `VACUUM` now also runs `PRAGMA
+    wal_checkpoint(TRUNCATE)` (a plain checkpoint doesn't truncate the WAL side-file, so deleted
+    content could linger there) — factored into one `VacuumAndCheckpoint()` helper used by all 3
+    delete paths. Added a subtle Storyboard fade on `ContentFrame` so the day-change watcher's
+    refresh isn't invisible. `RefreshPlanDrift`'s card-building UI extracted to
+    `Views/PlanDriftCard.cs` (was inline in a watcher-coordination file). A parse-side `HH:mm`
+    sibling of the existing `ToIsoTimeOfDay` write helper added (`DateExtensions.
+    TryParseTimeOfDay`), used at all 6 hand-typed call sites across 3 files. Verified: clean build
+    (0 warnings) + 86/86 tests + `dotnet format --verify-no-changes` clean.
 
 **Pre-2026-07-18 arc, condensed** (full detail in git log / the linked artifacts): WinUI 3
 rebuild landed 07-07 as v1.0.0 (18 findings fixed at ship time, TickTick secret purged from

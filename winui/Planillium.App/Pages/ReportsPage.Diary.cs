@@ -42,7 +42,15 @@ public sealed partial class ReportsPage
     // a timer armed just before a re-render fires into the CURRENT render's
     // RenderDiaryResults closure instead of a stale one from a torn-down
     // diary panel (round-4 audit finding).
-    private DispatcherQueueTimer? _diarySearchDebounce;
+    //
+    // System.Threading.Timer (not DispatcherQueueTimer) — same swap MainWindow.Startup.cs's
+    // watchers already made, for the same reason: DispatcherQueueTimer.Tick was confirmed to
+    // silently stop firing there with no error and IsRunning still reading true, and this
+    // page's two timers used the exact same WinRT API the fix moved away from everywhere
+    // else (2026-07-24 audit finding #5). These only run while the page is on screen, unlike
+    // the hidden background watchers, but that's a lower-risk profile, not proof this API is
+    // safe here.
+    private System.Threading.Timer? _diarySearchDebounce;
     private Action? _diarySearchDebounceAction;
 
     // Diary rows previously only ever appeared on navigation/search/edit —
@@ -54,10 +62,20 @@ public sealed partial class ReportsPage
     // debounce, and ticking underneath a many-day search result would just
     // be wasted work). Stopped in OnNavigatedFrom so it doesn't keep
     // querying the DB in the background once the page is cached-but-hidden.
-    private DispatcherQueueTimer? _diaryLiveRefresh;
+    private System.Threading.Timer? _diaryLiveRefresh;
     private Action? _diaryLiveRefreshAction;
     private static readonly TimeSpan DiaryLiveRefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DiarySearchDebounceInterval = TimeSpan.FromMilliseconds(250);
+
+    // selectedIds (below, local to BuildDiarySection) is rebuilt from scratch on every full
+    // Render() — mirroring its count here at the one place it already changes
+    // (UpdateMarkToolbar) lets MainWindow's day-change watcher check "is there a bulk
+    // selection in progress" without restructuring selectedIds itself. Same shape as
+    // TaskNoteView.AnyEditInProgress: a forced background refresh can rebuild this page's
+    // whole tree with no user action behind it, which would otherwise silently drop a
+    // selection the same way an unsaved note almost was (2026-07-24 audit finding #3).
+    private int _diarySelectedCount;
+    internal bool HasActiveDiarySelection => _diarySelectedCount > 0;
 
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
@@ -207,6 +225,7 @@ public sealed partial class ReportsPage
         void UpdateMarkToolbar()
         {
             var n = selectedIds.Count;
+            _diarySelectedCount = n;
             selectedLabel.Text = n > 0 ? $"{n} selected" : "";
             markOnBtn.IsEnabled = markOffBtn.IsEnabled = markNeutralBtn.IsEnabled = n > 0;
 
@@ -415,15 +434,14 @@ public sealed partial class ReportsPage
         void SyncLiveRefresh()
         {
             if ((_diaryDate == today || _diaryAllTime) && _diarySearch.Trim().Length == 0)
-                _diaryLiveRefresh?.Start();
+                _diaryLiveRefresh?.Change(DiaryLiveRefreshInterval, DiaryLiveRefreshInterval);
             else
-                _diaryLiveRefresh?.Stop();
+                _diaryLiveRefresh?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
         }
         searchBox.TextChanged += (_, _) =>
         {
             _diarySearch = searchBox.Text;
-            searchDebounce.Stop();
-            searchDebounce.Start();
+            searchDebounce.Change(DiarySearchDebounceInterval, System.Threading.Timeout.InfiniteTimeSpan);
             SyncLiveRefresh();
         };
 
@@ -439,31 +457,18 @@ public sealed partial class ReportsPage
     /// (see the field's own doc comment) — pulled out of BuildDiarySection so that ~400-line
     /// method isn't also responsible for timer lifecycle bookkeeping (code-quality audit
     /// finding #7).</summary>
-    private DispatcherQueueTimer EnsureDiarySearchDebounceTimer()
-    {
-        if (_diarySearchDebounce is null)
-        {
-            _diarySearchDebounce = DispatcherQueue.CreateTimer();
-            _diarySearchDebounce.Interval = DiarySearchDebounceInterval;
-            _diarySearchDebounce.IsRepeating = false;
-            _diarySearchDebounce.Tick += (_, _) => _diarySearchDebounceAction?.Invoke();
-        }
-        return _diarySearchDebounce;
-    }
+    private System.Threading.Timer EnsureDiarySearchDebounceTimer() =>
+        _diarySearchDebounce ??= new System.Threading.Timer(
+            _ => DispatcherQueue.TryEnqueue(() => _diarySearchDebounceAction?.Invoke()),
+            null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
 
     /// <summary>Lazily creates the "today's rows might still be growing" live-refresh
-    /// timer once, reused across renders — see EnsureDiarySearchDebounceTimer's doc comment.</summary>
-    private DispatcherQueueTimer EnsureDiaryLiveRefreshTimer()
-    {
-        if (_diaryLiveRefresh is null)
-        {
-            _diaryLiveRefresh = DispatcherQueue.CreateTimer();
-            _diaryLiveRefresh.Interval = DiaryLiveRefreshInterval;
-            _diaryLiveRefresh.IsRepeating = true;
-            _diaryLiveRefresh.Tick += (_, _) => _diaryLiveRefreshAction?.Invoke();
-        }
-        return _diaryLiveRefresh;
-    }
+    /// timer once, reused across renders — see EnsureDiarySearchDebounceTimer's doc comment.
+    /// Starts idle (infinite due-time); SyncLiveRefresh arms/disarms the actual period.</summary>
+    private System.Threading.Timer EnsureDiaryLiveRefreshTimer() =>
+        _diaryLiveRefresh ??= new System.Threading.Timer(
+            _ => DispatcherQueue.TryEnqueue(() => _diaryLiveRefreshAction?.Invoke()),
+            null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
 
     /// <summary>The bulk "mark selected rows as on/off-plan/neutral" action — pulled out of
     /// BuildDiarySection as its own self-contained DB-transaction block (code-quality audit

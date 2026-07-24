@@ -267,13 +267,26 @@ public static class AddPlanDialog
             ?? throw new InvalidDataException("Not a .docx file (no word/document.xml inside).");
         // The caller's MaxImportFileBytes check above only looks at the .docx's compressed
         // size on disk — a deflate stream can expand roughly 1000:1, so a small, ordinary-
-        // looking file could still inflate to gigabytes in memory once read. entry.Length is
-        // the *uncompressed* size, checkable before ever opening the stream (2026-07-24 audit
-        // finding #9 — the zip-bomb guard this method's own doc comment describes didn't
-        // actually cover this path).
-        if (entry.Length > MaxImportFileBytes)
-            throw new InvalidDataException("That document's content is larger than expected — pick a different file.");
-        using var reader = new StreamReader(entry.Open());
+        // looking file could still inflate to gigabytes in memory once read.
+        //
+        // entry.Length looked like a fix for that (it's documented as the *uncompressed*
+        // size), but it's a number the zip's own header declares — exactly what an attacker
+        // crafting the file controls, so it proves nothing about what actually comes out
+        // (2026-07-24 audit finding #2, round 3: the round-2 fix didn't close this). Reading
+        // the real bytes with a running count, and bailing the moment the count itself
+        // passes the limit, can't be lied to the same way.
+        using var entryStream = entry.Open();
+        using var bounded = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = entryStream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            if (bounded.Length + read > MaxImportFileBytes)
+                throw new InvalidDataException("That document's content is larger than expected — pick a different file.");
+            bounded.Write(buffer, 0, read);
+        }
+        bounded.Position = 0;
+        using var reader = new StreamReader(bounded);
         var xml = reader.ReadToEnd();
         xml = xml.Replace("</w:p>", "\n");
         var text = Regex.Replace(xml, "<[^>]+>", "");

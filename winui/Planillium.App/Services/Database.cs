@@ -281,12 +281,7 @@ public sealed class Database : IDisposable
         // "discarded" after retentionDays could still be recovered from the raw db file
         // indefinitely (2026-07-24 audit finding #8). Gated on deletedRows so a normal
         // startup with nothing new to prune doesn't pay a full-file-rewrite cost every time.
-        if (deletedRows > 0)
-        {
-            using var vacuum = CreateCommand();
-            vacuum.CommandText = "VACUUM";
-            vacuum.ExecuteNonQuery();
-        }
+        if (deletedRows > 0) VacuumAndCheckpoint();
     }
 
     /// <summary>Most common past idle-answer descriptions (excludes the "no real
@@ -376,9 +371,7 @@ public sealed class Database : IDisposable
             cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup;";
             cmd.ExecuteNonQuery();
         });
-        using var vacuum = CreateCommand();
-        vacuum.CommandText = "VACUUM";
-        vacuum.ExecuteNonQuery();
+        VacuumAndCheckpoint();
     }
 
     private static readonly string[] ExportedTables =
@@ -415,9 +408,26 @@ public sealed class Database : IDisposable
             cmd.CommandText = string.Join(" ", ExportedTables.Select(t => $"DELETE FROM {t};"));
             cmd.ExecuteNonQuery();
         });
+        VacuumAndCheckpoint();
+    }
+
+    /// <summary>Compacts the database file and truncates the WAL side-file — pulled out
+    /// since this exact pair now runs after every bulk-delete path (automatic retention
+    /// prune, "Clear activity history", "Clear all my data"). VACUUM alone rewrites the
+    /// main file but a plain checkpoint only resets the WAL's write pointer; it doesn't
+    /// truncate/zero the bytes still physically sitting past that pointer, so fragments of
+    /// just-deleted content (window titles, in this app's case) could still be recoverable
+    /// there even after VACUUM. TRUNCATE forces it back to empty (2026-07-24 audit finding
+    /// #6). SQLite refuses to run VACUUM inside a transaction, so this must be called
+    /// outside any RunInTransaction block.</summary>
+    private void VacuumAndCheckpoint()
+    {
         using var vacuum = CreateCommand();
         vacuum.CommandText = "VACUUM";
         vacuum.ExecuteNonQuery();
+        using var checkpoint = CreateCommand();
+        checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        checkpoint.ExecuteNonQuery();
     }
 
     /// <summary>

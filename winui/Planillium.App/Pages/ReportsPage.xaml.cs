@@ -66,7 +66,7 @@ public sealed partial class ReportsPage : Page
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
-        _diaryLiveRefresh?.Stop();
+        _diaryLiveRefresh?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
     }
 
     private void ExportHtml_Click(object sender, RoutedEventArgs e)

@@ -31,8 +31,22 @@ public static class TaskNoteView
     /// upward forever (the old widget, and its EnterEdit/ExitEdit closure, is discarded
     /// without ExitEdit ever running) — permanently blocking the day-change watcher from
     /// ever refreshing again. Safe to call unconditionally: a fresh render is about to
-    /// replace every note widget's live state regardless of why it was triggered.</summary>
+    /// replace every note widget's live state regardless of why it was triggered — any
+    /// widget whose edit box is still open re-increments this on its own (see _openDrafts
+    /// below), so the count comes back accurate once the rebuild finishes.</summary>
     public static void ResetActiveEdits() => _activeEditCount = 0;
+
+    /// <summary>Unsaved draft text for a note whose edit box was open the instant some
+    /// *other* task's checkbox got toggled — that's a far more everyday trigger than the
+    /// day-change watcher, and it rebuilds the whole page (via Render()) exactly the same
+    /// way, tearing down and recreating every note widget from scratch. Without this, ticking
+    /// off task B would silently discard whatever was still being typed into task A's note,
+    /// even though nothing about task B's toggle should touch task A at all (2026-07-24 audit
+    /// finding #4, round 3 — the round-2 fix only covered the rarer autonomous-refresh case).
+    /// Keyed by the same (planId, taskText) pair Database.SetTaskNote uses, so the rebuilt
+    /// widget for the exact same task recognizes it should reopen already in edit mode with
+    /// this text, instead of falling back to whatever's actually saved.</summary>
+    private static readonly Dictionary<(string PlanId, string TaskText), string> _openDrafts = new();
 
     /// <summary>Convenience overload that also owns the save-to-database
     /// closure (open a Database, call SetTaskNote, log on failure) — this
@@ -58,7 +72,7 @@ public static class TaskNoteView
                 onError?.Invoke();
                 return false;
             }
-        }, taskText);
+        }, taskText, (planId, taskText));
 
     /// <param name="onSave">Returns whether the save actually succeeded — the
     /// displayed note only updates to the new text once this returns true
@@ -70,8 +84,16 @@ public static class TaskNoteView
     /// <param name="taskLabel">Task text this note belongs to, for the edit box's
     /// accessible name — a screen reader used to announce every task's note field
     /// identically, with no way to tell which task it belonged to (audit finding #9).</param>
-    public static FrameworkElement Build(string? initialNote, Func<string, bool> onSave, string? taskLabel = null)
+    /// <param name="draftKey">The (planId, taskText) this note belongs to — lets a note
+    /// still being typed survive a full page rebuild triggered by some unrelated action
+    /// (see _openDrafts above). Null for any caller that doesn't need that (there are none
+    /// today; the convenience overload above always supplies it).</param>
+    public static FrameworkElement Build(string? initialNote, Func<string, bool> onSave, string? taskLabel = null,
+        (string PlanId, string TaskText)? draftKey = null)
     {
+        var draftInit = "";
+        var hasDraft = draftKey is { } dk0 && _openDrafts.TryGetValue(dk0, out draftInit);
+
         var root = new StackPanel { Spacing = 4 };
 
         var display = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -96,7 +118,9 @@ public static class TaskNoteView
 
         var editBox = new TextBox
         {
-            Text = initialNote ?? "",
+            // Reopening mid-edit shows the unsaved draft, not the last-saved text — that's
+            // the whole point of restoring it.
+            Text = hasDraft ? draftInit : initialNote ?? "",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 60,
@@ -125,7 +149,20 @@ public static class TaskNoteView
         root.Children.Add(editBox);
         root.Children.Add(editRow);
 
-        var editActive = false;
+        // Starts true when restoring a draft — this instance is a continuation of an edit
+        // that was already in progress, not a fresh one, so it must count toward
+        // AnyEditInProgress the same way. ResetActiveEdits() (called at the top of every
+        // page Render()) already zeroed the counter before this widget was built, so
+        // re-incrementing here is what makes the count come back accurate rather than
+        // staying at zero forever.
+        var editActive = hasDraft;
+        if (hasDraft)
+        {
+            _activeEditCount++;
+            display.Visibility = Visibility.Collapsed;
+            editBox.Visibility = Visibility.Visible;
+            editRow.Visibility = Visibility.Visible;
+        }
 
         void EnterEdit()
         {
@@ -134,8 +171,8 @@ public static class TaskNoteView
             editBox.Visibility = Visibility.Visible;
             editRow.Visibility = Visibility.Visible;
             editBox.Focus(FocusState.Programmatic);
-            editActive = true;
-            _activeEditCount++;
+            if (!editActive) { editActive = true; _activeEditCount++; }
+            if (draftKey is { } dk) _openDrafts[dk] = editBox.Text;
         }
 
         void ExitEdit()
@@ -144,13 +181,20 @@ public static class TaskNoteView
             editRow.Visibility = Visibility.Collapsed;
             display.Visibility = Visibility.Visible;
             if (editActive) { editActive = false; _activeEditCount--; }
+            if (draftKey is { } dk) _openDrafts.Remove(dk);
         }
+
+        // Keeps the draft current with every keystroke — a rebuild can happen at any
+        // moment (the very next tick of a checkbox elsewhere), not just at a convenient
+        // pause, so there's no other reliable point to snapshot "what's typed so far."
+        if (draftKey is { } dkChanged)
+            editBox.TextChanged += (_, _) => { if (editActive) _openDrafts[dkChanged] = editBox.Text ?? ""; };
 
         editLink.Click += (_, _) => EnterEdit();
         cancel.Click += (_, _) => ExitEdit();
         save.Click += (_, _) =>
         {
-            var text = editBox.Text.Trim();
+            var text = (editBox.Text ?? "").Trim();
             if (!onSave(text)) return;
             noteText.Text = text;
             noteText.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;

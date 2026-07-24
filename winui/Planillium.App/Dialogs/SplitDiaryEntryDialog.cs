@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -24,7 +23,7 @@ public static class SplitDiaryEntryDialog
     public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
         string start, string end, int durationMin, string category, string window, string? description)
     {
-        if (!TimeOnly.TryParseExact(start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
+        if (!DateExtensions.TryParseTimeOfDay(start, out var startTime))
             return false;
 
         var root = new StackPanel { Spacing = 10, MinWidth = 460 };

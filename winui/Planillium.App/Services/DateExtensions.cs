@@ -31,6 +31,14 @@ internal static class DateExtensions
     public static string ToIsoTimeOfDay(this DateTime d) => d.ToString("HH:mm", CultureInfo.InvariantCulture);
     public static string ToIsoTimeOfDay(this TimeOnly t) => t.ToString("HH:mm", CultureInfo.InvariantCulture);
 
+    /// <summary>Parses the same "HH:mm" shape back — the write side above already had a
+    /// shared helper, but the read side (parsing a user-typed time back into a TimeOnly)
+    /// was still hand-typed with its own CultureInfo.InvariantCulture argument in 6 separate
+    /// places across 3 files, the same "one careless retype loses the culture argument" risk
+    /// this whole class exists to close off (2026-07-24 audit finding #11).</summary>
+    public static bool TryParseTimeOfDay(string s, out TimeOnly t) =>
+        TimeOnly.TryParseExact(s, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out t);
+
     /// <summary>Human-facing "Tue 15.07" display format — English day names
     /// regardless of OS locale, same InvariantCulture rule as every other
     /// persisted/displayed date in this app. Was hand-typed identically in 3

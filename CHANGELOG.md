@@ -18,7 +18,22 @@ going forward; the original Python/Tkinter version is retired.
   every one of these sounded identical when read aloud.
 - The automatic once-a-day cleanup of old activity history now compacts the database file after
   deleting old rows, matching the manual "Clear" buttons — previously "deleted" window-title
-  content could still linger, recoverable, in the raw database file.
+  content could still linger, recoverable, in the raw database file. It now also cleans up the
+  database's write-ahead-log file so nothing lingers there either.
+- Task notes now survive being interrupted mid-edit no matter what causes the page to redraw
+  (checking off a different task, the automatic midnight refresh, anything else) — previously
+  only the midnight case was protected, so ticking off one task's checkbox could silently
+  discard whatever you were still typing into a different task's note. The Reports page's diary
+  multi-select got the same protection against the midnight refresh specifically.
+- The overnight page refresh (Today/Schedule/Plans/Reports) now shows a brief, subtle flash so
+  it's clear the view just updated rather than looking like nothing happened.
+- Closed a remaining gap in the `.docx` plan-import safety check: it now measures the actual
+  unpacked content as it reads it, instead of trusting a size the file itself claims.
+- The daily database cleanup no longer runs on the same thread that draws the screen — it could
+  have caused a brief freeze once a day on an install with a lot of history.
+- The Reports page's two remaining timers (search-box typing delay, live refresh while open) were
+  switched to the same more reliable timer type already used to fix a similar bug elsewhere in
+  the app.
 
 **Fixes (2026-07-24 audit round)**
 - The Diary page's row of filter dropdowns could run wider than the screen at the app's

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Planillium.App.Services;
@@ -58,10 +57,8 @@ public static class EditDiaryEntryDialog
         // overwrites the duration field.
         void Recalc()
         {
-            if (TimeOnly.TryParseExact(startBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var s) &&
-                TimeOnly.TryParseExact(endBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var e))
+            if (DateExtensions.TryParseTimeOfDay(startBox.Text.Trim(), out var s) &&
+                DateExtensions.TryParseTimeOfDay(endBox.Text.Trim(), out var e))
             {
                 var diff = (e.ToTimeSpan() - s.ToTimeSpan()).TotalMinutes;
                 if (diff > 0) durBox.Value = diff;
@@ -77,10 +74,8 @@ public static class EditDiaryEntryDialog
 
         dialog.PrimaryButtonClick += (sender, args) =>
         {
-            if (!TimeOnly.TryParseExact(startBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out _) ||
-                !TimeOnly.TryParseExact(endBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out _))
+            if (!DateExtensions.TryParseTimeOfDay(startBox.Text.Trim(), out _) ||
+                !DateExtensions.TryParseTimeOfDay(endBox.Text.Trim(), out _))
             {
                 error.Text = "Start and end must be HH:MM (e.g. 08:00).";
                 args.Cancel = true;
