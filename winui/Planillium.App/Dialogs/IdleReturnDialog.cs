@@ -30,7 +30,10 @@ public static class IdleReturnDialog
     /// ActivityTracker's background poll, so most of the time nobody is
     /// looking at the (hidden) main window. If the toast is never clicked,
     /// nothing is lost: the evening review's gap sweep (ActivityTracker.
-    /// PendingDayGap) picks up the same unaccounted stretch later.
+    /// PendingDayGap for a stretch after today's last activity, PendingLeadingGap
+    /// for a stretch before today's first — added 2026-07-27 after PendingDayGap
+    /// alone was found not to cover a missed *morning* toast, see its own doc
+    /// comment) picks up the same unaccounted stretch later.
     /// </summary>
     public static Task Trigger(MainWindow window, int idleMinutes, DateTime idleStart)
     {

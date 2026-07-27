@@ -353,8 +353,21 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   are protected KnownDLLs regardless of search order, so there was no actual hijack hole this
   call was closing — removing it is a straight revert, not a tradeoff. Fixed same session as an
   unrelated in-flight change (Kickoff/Review dialogs + `ScoreService.AllPlansScoringExemptToday`
-  suppressing the two automatic day-start/evening-review prompts on a fully-off day) that was
-  left uncommitted from an earlier part of the day — not yet committed as of this note.
+  suppressing the two automatic day-start/evening-review prompts on a fully-off day). Committed
+  together (`4d0f161`) and pushed to `origin/master`.
+  Separately, same day: user noticed the Diary appearing to start whenever the PC was first
+  touched that morning (07:24) instead of the configured 06:00 diary start. Root cause: the
+  wake-from-sleep "welcome back, where were you?" toast (`IdleReturnDialog.Trigger`, fired from
+  `ActivityTracker.HandleIdleReturn`) is easy to miss while the app sits in the tray, and the
+  evening review's existing gap-sweep (`ActivityTracker.PendingDayGap`) only ever covered a
+  *trailing* gap (last activity → now) — a missed *morning* toast had no fallback at all, despite
+  `IdleReturnDialog.Trigger`'s own doc comment already claiming "nothing is lost." Added the
+  symmetric `ActivityTracker.PendingLeadingGap` + `Database.FirstDiaryStart`, wired into
+  `ReviewDialog.ReconcilePendingGap` alongside the existing trailing check — both morning and
+  evening gaps now get swept at evening review time. Today's actual missing 06:00–07:24 stretch
+  will be asked about at tonight's review (or a manually-opened one); not backfilled directly,
+  since only the user can say what that stretch actually was. Verified: clean build + 86/86
+  tests + relaunch confirmed clean before committing.
 - **Standing lessons** (apply every session, not just the one that taught them):
   - **A hardening fix that touches process-wide native init (DLL search order, security
     mitigations, anything set once at startup) isn't actually verified until the app has been

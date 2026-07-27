@@ -6,6 +6,12 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Fixes**
+- The Diary could appear to start the day whenever you first touched the PC that morning
+  instead of at the configured 06:00 start — if you woke the PC from sleep and the "welcome
+  back, where were you?" check-in was missed or dismissed, that whole stretch used to vanish
+  permanently instead of being asked about again later. The evening review now also sweeps up
+  a missed *morning* gap, not just a missed end-of-day one, so it gets asked about at review
+  time either way.
 - Fixed the app being completely unable to start (crashing instantly, every time, including at
   Windows startup) — caused by a 2026-07-24 security hardening change that, on this machine,
   broke the app's ability to load its own bundled display components at all. The change had

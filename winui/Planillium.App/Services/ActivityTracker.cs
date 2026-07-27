@@ -477,6 +477,38 @@ public sealed class ActivityTracker : IDisposable
     }
 
     /// <summary>
+    /// The leading-edge counterpart to <see cref="PendingDayGap"/>: if today's first
+    /// logged activity started well after the configured diary start (06:00 by default),
+    /// that morning stretch was idle/asleep and its own return-from-idle toast (fired from
+    /// the poll loop's HandleIdleReturn) either went unclicked or was raised while the app
+    /// was in the middle of the 2026-07-24/27 startup-crash incident and never got answered.
+    /// PendingDayGap alone can't catch this — it only anchors from the last diary row
+    /// forward, so a missed *morning* toast used to mean that stretch was gone for good
+    /// (the evening review's gap sweep never looked further back than the day's last
+    /// activity), contradicting its own doc comment's promise that a missed toast is never
+    /// actually lost (2026-07-27 user report: the diary appeared to start whenever the PC
+    /// was first used that day, not at 06:00 as configured). Null when the day is already
+    /// accounted for, today had no activity yet, or on a rest day.
+    /// </summary>
+    public (int Minutes, DateTime Start)? PendingLeadingGap(Database db)
+    {
+        if (IsRestDayToday()) return null;
+        var now = DateTime.Now;
+        var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
+        if (db.FirstDiaryStart(DateOnly.FromDateTime(now.Date)) is not DateTime firstStart) return null;
+        if (firstStart <= diaryStartToday) return null;
+
+        lock (_dayStateLock)
+        {
+            if (_accountedUntil is DateTime acc && diaryStartToday < acc) diaryStartToday = acc;
+        }
+        if (diaryStartToday >= firstStart) return null;
+
+        var mins = (int)(firstStart - diaryStartToday).TotalMinutes;
+        return mins >= _idleThresholdMin ? (mins, diaryStartToday) : null;
+    }
+
+    /// <summary>
     /// If the user was active earlier today but then stopped well before the
     /// tracked day ends, there's a stretch between their last logged activity
     /// and now (capped at the day's diary end) that was never asked about.
