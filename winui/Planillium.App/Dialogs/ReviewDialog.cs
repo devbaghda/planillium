@@ -60,7 +60,13 @@ public static class ReviewDialog
         // drifting 1-minute timer can skip the minute and never offer the
         // review that day.
         if (DateTime.Now.TimeOfDay < MainWindow.EodTime()) return false;
-        return StateService.Load().LastReview != today;
+        if (StateService.Load().LastReview == today) return false;
+        // Same day-off exemption as KickoffDialog.ShouldShow (see its comment) — a day every
+        // active plan considers off has nothing to close out, so the automatic "Day review
+        // ready" prompt shouldn't fire either (2026-07-27 user report). The manual "Evening
+        // review" button on Today still bypasses this entirely (ShowAsync direct, not
+        // Trigger/ShouldOffer) for anyone who wants to preview it anyway.
+        return !ScoreService.AllPlansScoringExemptToday();
     }
 
     /// <summary>

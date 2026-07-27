@@ -13,22 +13,28 @@ public partial class App : Application
     // app uses (its mutex fix, 2026-07-02); two instances would double-track.
     private static Mutex? _instanceMutex;
 
-    private const uint LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800;
-    private const uint LOAD_LIBRARY_SEARCH_USER_DIRS = 0x00000400;
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetDefaultDllDirectories(uint directoryFlags);
-
     public App()
     {
         InitializeComponent();
 
-        // Every native DLL this app actually loads today (user32/advapi32/wtsapi32) is one of
-        // Windows' own protected "KnownDLLs," always loaded from the real system folder
-        // regardless of what's next to the exe — so there's no real DLL-hijack hole today. This
-        // costs nothing and removes any doubt if a native dependency less inherently protected
-        // is ever added later (2026-07-24 audit finding #10).
-        SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS);
+        // REMOVED (2026-07-27): 2026-07-24 audit finding #10 added a SetDefaultDllDirectories
+        // call here as defense-in-depth against DLL-hijacking via the legacy CWD/PATH search
+        // order — but the app was never actually relaunched again after that fix shipped, so it
+        // sat untested for 3 days. Root-caused 2026-07-27 after the user reported the app
+        // wouldn't start: calling SetDefaultDllDirectories AT ALL — regardless of which
+        // directory flags are passed — breaks WinRT's native activation of the bundled Windows
+        // App SDK/WinUI3 DLLs (Microsoft.UI.Xaml.dll etc.) on this machine, surfacing as an
+        // unrecoverable "Cannot locate resource from
+        // ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml" crash on literally every
+        // launch. Confirmed by git-bisecting a clean Release build of the commit before this one
+        // (launches fine) against this commit (crashes) and by testing multiple flag
+        // combinations (still crashes) — the call itself is incompatible with this app's
+        // self-contained WinUI3 activation path, not just a missing flag. The finding's own
+        // reasoning already noted every DLL this app actually loads via explicit DllImport
+        // (user32/advapi32/wtsapi32) is a protected Windows KnownDLL, always resolved from the
+        // real system folder regardless of search-path manipulation — so there was no real
+        // hijack hole for this call to close in the first place; removing it is a straight
+        // revert, not a tradeoff.
 
         // Global safety net: without these, one stray exception in an async
         // path is a silent process death with zero diagnostics.

@@ -98,6 +98,30 @@ public sealed class ScoreService : IDisposable
     /// task on an otherwise-off day still earns its own credit.</summary>
     public bool AllPlansScoringExempt(DateOnly d) => _plans.Count > 0 && _plans.All(p => IsScoringExemptFor(p, d));
 
+    /// <summary>Convenience wrapper around <see cref="AllPlansScoringExempt"/> for callers
+    /// (KickoffDialog.ShouldShow, ReviewDialog.ShouldOffer) that don't already have a plans
+    /// list/Database/ScoreService in scope — those two automatic prompts used to fire on any
+    /// day at all, including a recurring rest day or a manually-marked day off, with no
+    /// exemption check whatsoever (unlike the late-day-task reminder and the off-plan nag
+    /// alert, which both already skip a fully-off day). Fails open (returns false, i.e. "not
+    /// exempt") on any error so a transient DB problem can't silently suppress the actual
+    /// prompt for the whole day.</summary>
+    public static bool AllPlansScoringExemptToday()
+    {
+        try
+        {
+            var plans = PlanStore.LoadActivePlans();
+            using var db = new Database();
+            using var score = new ScoreService(plans, db);
+            return score.AllPlansScoringExempt(DateOnly.FromDateTime(DateTime.Today));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ScoreService.AllPlansScoringExemptToday", ex);
+            return false;
+        }
+    }
+
     /// <summary>Every date in [from, to] where AllPlansScoringExempt holds — used to keep
     /// Reports' aggregate totals (weekly/monthly/yearly, Time-by-App, distractions)
     /// consistent with the score: day-off time is still tracked and visible in the raw

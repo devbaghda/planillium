@@ -34,8 +34,12 @@ public static class KickoffDialog
     {
         if (_showing) return false;
         if (DateTime.Now.TimeOfDay < ConfigService.WorkStartTime()) return false;
-        return StateService.Load().LastKickoff !=
-               DateTime.Today.ToIsoDate();
+        if (StateService.Load().LastKickoff == DateTime.Today.ToIsoDate()) return false;
+        // A day every active plan considers off (recurring rest day or a manual day-off)
+        // has no "start the day" to prompt for — matches the same day-off exemption already
+        // gating scoring and the off-plan nag alert (business rule 10); this prompt used to
+        // fire on those days too (2026-07-27 user report).
+        return !ScoreService.AllPlansScoringExemptToday();
     }
 
     /// <summary>

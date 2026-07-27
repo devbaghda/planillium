@@ -209,7 +209,7 @@ lists), `scoring` (task_completed/task_overdue_penalty/on_plan_hour/off_plan_hou
 streak_bonus_per_day/weekly_comeback_bonus), `score` (points_per_minute/
 points_per_currency_unit/currency_symbol — the "buy entertainment time" economy),
 `idle_activity_rules` (idle-dialog answer → category reclassification, the user
-populates via Settings), `start_with_windows`, `appearance.theme_mode`,
+populates via Settings), `appearance.theme_mode`,
 `late_day_task_reminder_hours` (added 2026-07-20, default 2.0 — how long before
 `end_of_day_summary_time` the once-a-day "tasks still open" toast fires). Edited via
 the in-app Settings dialog, which writes this file and restarts the activity tracker.
@@ -338,7 +338,34 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   showing ~118 bare "-" diary rows/day). Same week: `posting-plan`/`project-media` global skills
   bootstrapped; a Reddit launch post held by r/ClaudeAI's karma gate (not removed) was reformatted
   for the Megathread instead.
+- **2026-07-27**: App reported "won't start" (crashed instantly at Windows startup and on every
+  manual launch, always the same `XamlParseException: Cannot locate resource from ms-appx:///
+  Microsoft.UI.Xaml/Themes/themeresources.xaml`, before `OnLaunched`'s first log line ever
+  fires). Root-caused by git-bisecting clean Release builds commit-by-commit: `ece15f5`'s
+  `SetDefaultDllDirectories` call (07-24 audit finding #10, DLL-hijack hardening) breaks WinRT's
+  native activation of the bundled Windows App SDK/WinUI3 DLLs on this machine — reproduces with
+  every flag combination tried (including adding back the `LOAD_LIBRARY_SEARCH_APPLICATION_DIR`
+  the original fix omitted), only clears when the call is removed outright. The app hadn't
+  actually been relaunched since 07-24, so this sat live-but-untested for 3 days — see Standing
+  lessons below, this is the exact "re-run the check to close the loop" failure mode again, this
+  time for a runtime behavior instead of a compiler warning. Reverted in `App.xaml.cs`; the
+  finding's own text already established the app's real `DllImport`s (user32/advapi32/wtsapi32)
+  are protected KnownDLLs regardless of search order, so there was no actual hijack hole this
+  call was closing — removing it is a straight revert, not a tradeoff. Fixed same session as an
+  unrelated in-flight change (Kickoff/Review dialogs + `ScoreService.AllPlansScoringExemptToday`
+  suppressing the two automatic day-start/evening-review prompts on a fully-off day) that was
+  left uncommitted from an earlier part of the day — not yet committed as of this note.
 - **Standing lessons** (apply every session, not just the one that taught them):
+  - **A hardening fix that touches process-wide native init (DLL search order, security
+    mitigations, anything set once at startup) isn't actually verified until the app has been
+    launched fresh after it, not just built clean + unit-tested.** The 07-27 `SetDefaultDll
+    Directories` regression (see session note above) passed a clean build and the full test
+    suite on 07-24 and sat in `App.xaml.cs` for 3 days before anyone actually relaunched the
+    live GUI app — the same "trust that it looks right instead of re-running the exact check"
+    failure already called out below for compiler warnings, just for a runtime effect a
+    compiler/test suite can't see at all. After any change to process bootstrap/native interop,
+    actually relaunch the app once before calling the finding closed — don't let "builds clean"
+    stand in for it.
   - **Simplicity is king: prefer the algebraic/closed-form fix over a caching layer when the
     thing being repeated has structure to exploit.** The `PlanDayForDate`/`DateForPlanDay`
     O(days-elapsed) walk (round-5 finding #28) could have been "fixed" by memoizing results per

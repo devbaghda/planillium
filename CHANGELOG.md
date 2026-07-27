@@ -6,6 +6,13 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Fixes**
+- Fixed the app being completely unable to start (crashing instantly, every time, including at
+  Windows startup) — caused by a 2026-07-24 security hardening change that, on this machine,
+  broke the app's ability to load its own bundled display components at all. The change had
+  looked safe and passed every automated check at the time, but nothing had actually restarted
+  the app since, so the problem stayed invisible for three days until the next real restart
+  exposed it. Reverted the change; the underlying concern it was meant to address didn't apply
+  to this app in the first place, so nothing is lost by removing it.
 - The Today and Schedule pages no longer get stuck showing yesterday if you leave the app open
   overnight without switching pages — they used to only pick up the new day when you navigated
   away and back, since nothing was watching for midnight to actually pass while they stayed on
