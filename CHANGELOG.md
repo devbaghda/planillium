@@ -5,7 +5,37 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**New**
+- When you use the "Add Plan" wizard's Claude prompt, it now also asks Claude to list the
+  specific apps/tools/websites each day's task actually needs (e.g. "VS Code", "Anki", "Chrome -
+  Coursera") — right after you import the plan, those get taught to the same on-plan activity
+  list Settings' ACTIVITY KEYWORDS section edits by hand, so time you spend in them starts
+  counting as on-plan automatically instead of you having to add each one yourself later. A short
+  confirmation shows what was learned (with a reminder you can edit or remove any of it in
+  Settings), and a task's own "Details" popup now shows its tools list too.
+- A plan you already had active before this feature existed can get the same treatment: add a
+  "tools" list to its tasks (by hand-editing the plan file, or asking Claude to add one) and a
+  new "Teach on-plan apps…" button appears on that plan's card on the Plans page — click it
+  anytime to run the same teaching step a fresh import would have done automatically.
+- Editing or splitting a diary entry now suggests your most commonly used past descriptions as
+  you type, instead of requiring you to type the same recurring ones (like "lunch" or "dog walk")
+  in by hand every time.
+
 **Fixes**
+- Teaching an on-plan/off-plan keyword automatically (marking a diary entry, or importing a
+  plan's tools list) now refuses a bare browser name by itself (just "Chrome", "Edge", etc.) —
+  a browser hosts both on-plan and off-plan content depending on the tab, so teaching the whole
+  browser as one category would have silently misclassified everything in it going forward. Use
+  a specific site instead (e.g. "Chrome - LinkedIn" vs. "Chrome - Synology"); typing directly into
+  Settings' ACTIVITY KEYWORDS boxes is unaffected, since that's a deliberate manual edit rather
+  than an automatic guess.
+- The Reports page's content area was capped narrower than the window actually had room for, so
+  the Diary section's "Split" button needed horizontal scrolling to reach even on a wide window
+  with empty space on both sides. Widened the content column to fit the Diary section without
+  scrolling, without changing how any other Reports section is laid out.
+- The Diary's "Show more" link used to reveal every remaining hidden row in one click — on a
+  busy day or a wide search that could mean hundreds of rows appearing at once. It now reveals
+  50 at a time, re-showing the link (with an updated count) if more are still hidden.
 - The "While you were away" recap you get when reopening the app (instead of clicking the
   notification itself) told you to "click to log where you were" or "click to see today's plan"
   — but there was nothing to actually click; it was just a read-out of what the notification had

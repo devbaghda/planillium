@@ -9,7 +9,11 @@ namespace Planillium.App.Services;
 /// </summary>
 public static class AppNames
 {
-    private static readonly HashSet<string> Browsers = new(StringComparer.OrdinalIgnoreCase)
+    // internal, not private: ConfigService.LearnActivityRule reuses this exact set to refuse
+    // teaching a bare browser name as an on-plan/off-plan keyword (2026-07-28 request) — a
+    // browser hosts both on-plan and off-plan content depending on the tab, so "Chrome" alone
+    // is too wide to mean anything as a classification rule, unlike "Chrome - LinkedIn".
+    internal static readonly HashSet<string> Browsers = new(StringComparer.OrdinalIgnoreCase)
     {
         "google chrome", "chrome", "mozilla firefox", "firefox",
         "microsoft edge", "edge", "safari", "opera",

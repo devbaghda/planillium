@@ -35,6 +35,15 @@ public sealed partial class ReportsPage : Page
         BuildPeriodBar();
     }
 
+    // The Diary section's own list/card widths (ReportsPage.Diary.cs) — declared once here so
+    // this file's own column-width cap and Diary's card-clip fix can never drift apart the way
+    // two independently-hardcoded copies of the same number already have elsewhere in this app's
+    // history. DiaryListWidth is the row content's own required width (App/Page column split,
+    // 2026-07-23); DiaryCardWidth adds Card()'s horizontal padding (18+18) on top, since that's
+    // what actually has to fit without clipping (2026-07-28 — see ReportsPage.Diary.cs).
+    internal const double DiaryListWidth = 950;
+    internal const double DiaryCardWidth = DiaryListWidth + 36;
+
     // Centers ContentColumn explicitly instead of relying on
     // HorizontalAlignment/MaxWidth: RootScroller's own ActualWidth is set
     // top-down by the window/nav pane, so it's unaffected by how tall this
@@ -42,7 +51,12 @@ public sealed partial class ReportsPage : Page
     // comment for why the alignment-based approaches didn't hold still.
     private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        const double maxContentWidth = 880;
+        // Was a flat 880 — comfortably fit every OTHER section (they all stretch/wrap fine at
+        // any width up to this), but narrower than Diary's own required width, so Diary alone
+        // still needed horizontal scrolling to reach Edit/Split even on a wide window with
+        // plenty of unused space either side (2026-07-28 request). Widened to fit Diary too,
+        // with a little breathing room past what it strictly needs.
+        const double maxContentWidth = DiaryCardWidth + 20;
         var available = e.NewSize.Width - RootScroller.Padding.Left - RootScroller.Padding.Right;
         var width = Math.Min(maxContentWidth, Math.Max(0, available));
         ContentColumn.Width = width;

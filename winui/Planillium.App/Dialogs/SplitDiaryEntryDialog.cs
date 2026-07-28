@@ -46,7 +46,15 @@ public static class SplitDiaryEntryDialog
         var dialog = DialogControls.Build(xamlRoot, "Split diary entry", root,
             primaryButtonText: "Split", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
 
-        var rows = new List<(NumberBox Dur, ComboBox Cat, TextBox Desc, Button Remove)>();
+        // Surfaces your own most commonly-used descriptions as soon as you focus an empty
+        // row's description field, instead of retyping the same handful by hand every time
+        // a block gets split (2026-07-28 request) — same data EditDiaryEntryDialog now uses.
+        // Best-effort: a DB read failure just means no suggestions, not a broken dialog.
+        List<string> frequent;
+        try { using var db = new Database(); frequent = db.MostFrequentDescriptions(); }
+        catch (Exception ex) { Log.Error("SplitDiaryEntryDialog.MostFrequentDescriptions", ex); frequent = new(); }
+
+        var rows = new List<(NumberBox Dur, ComboBox Cat, AutoSuggestBox Desc, Button Remove)>();
 
         void UpdateState()
         {
@@ -70,11 +78,23 @@ public static class SplitDiaryEntryDialog
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
             catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
             AutomationProperties.SetName(catBox, "Category");
-            var descBox = new TextBox
+            var descBox = new AutoSuggestBox
             {
                 PlaceholderText = "description",
                 Text = prefillDesc ?? "",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
+                ItemsSource = frequent,
+            };
+            descBox.TextChanged += (sender, args) =>
+            {
+                if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+                sender.ItemsSource = sender.Text.Length == 0
+                    ? frequent
+                    : frequent.Where(d => d.Contains(sender.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+            };
+            descBox.GotFocus += (_, _) =>
+            {
+                if (descBox.Text.Length == 0 && frequent.Count > 0) descBox.IsSuggestionListOpen = true;
             };
             AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };

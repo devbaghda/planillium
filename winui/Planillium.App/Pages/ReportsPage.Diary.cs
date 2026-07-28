@@ -205,21 +205,19 @@ public sealed partial class ReportsPage
         // direction — without it, a Grid measured with infinite width can
         // collapse its Star column instead of sizing sensibly.
         // Widened from 820 (2026-07-23) — the App/Page column split added ~130px of row width.
-        var diaryResults = new StackPanel { Spacing = 0, MinWidth = 950 };
+        var diaryResults = new StackPanel { Spacing = 0, MinWidth = DiaryListWidth };
         var diaryScroller = new ScrollViewer
         {
             MaxHeight = 520,
             // Visible, not Auto (2026-07-28 user report: "can't split the unaccounted
-            // time") — the page's own content column caps at 880px (ReportsPage.xaml.cs'
-            // maxContentWidth) while a diary row's MinWidth above is 950px, so every row
-            // has always needed ~70px of horizontal scroll just to reach the Edit/Split
-            // buttons at its right edge (confirmed via UI Automation: both were
-            // IsOffscreen=True even in a 1920px-wide window — this was never a narrow-
-            // window edge case). Auto's overlay-style indicator only appears on hover and
-            // is easy to never notice at all, so the scrollable content silently looked
-            // complete without them. Visible keeps a permanent, unmissable scrollbar
-            // instead of resizing the deliberately-fixed column widths (see their own
-            // comment) or widening the page's shared max content column.
+            // time") — Auto's overlay-style indicator only appears on hover and is easy to
+            // never notice at all, so scrollable content used to silently look complete
+            // without it. The page's own content column (ReportsPage.xaml.cs'
+            // maxContentWidth) is now widened to fit a diary row's own MinWidth
+            // (DiaryCardWidth) on a wide-enough window, so this scroller/scrollbar mostly
+            // matters on a narrower one now — kept regardless as a belt-and-suspenders
+            // layer, since the row's fixed pixel columns can still exceed whatever width
+            // the window actually has to give.
             HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
             HorizontalScrollMode = ScrollMode.Enabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -361,11 +359,11 @@ public sealed partial class ReportsPage
             // Stretch, from being arranged at whatever narrower width diaryResults handed it
             // and then clipping away everything past that (2026-07-28: this is what was
             // actually eating Edit/Split, invisibly — not a scroll/alignment issue at all).
-            // MinWidth here has to cover the diary list's own MinWidth (950) *plus* this
-            // Border's horizontal Padding (18+18), or the clip region is still too narrow for
-            // what's arranged inside it.
+            // MinWidth here has to cover the diary list's own MinWidth (DiaryListWidth) *plus*
+            // this Border's horizontal Padding (18+18), or the clip region is still too narrow
+            // for what's arranged inside it — that sum is DiaryCardWidth (ReportsPage.xaml.cs).
             var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange));
-            diaryCard.MinWidth = 950 + 36;
+            diaryCard.MinWidth = DiaryCardWidth;
             diaryResults.Children.Add(diaryCard);
         }
         RenderDiaryResults();
@@ -672,16 +670,17 @@ public sealed partial class ReportsPage
     {
         // MinWidth must be repeated here, not just on diaryResults two levels up (2026-07-28
         // user report: "can't split the unaccounted time" — Edit/Split were being silently
-        // clipped, no scrollbar, no overhang). diaryResults' own MinWidth=950 only forces
-        // *that* StackPanel to claim 950px from the ScrollViewer; this StackPanel and the
-        // Card() Border between them both default to HorizontalAlignment.Stretch, which
-        // means each one gets arranged at whatever width its own parent hands it — and nothing
-        // upstream of diaryResults was actually offering 950px back down through that chain,
-        // so this level (and Card's Border) were both getting stretch-clipped to the visible
-        // ~880px viewport instead, quietly cutting off Edit/Split with no visual sign anything
-        // was missing. Confirmed via a live PrintWindow capture: no scrollbar, no overhang, the
-        // row just ends flush with the card edge.
-        var list = new StackPanel { Spacing = 4, MinWidth = 950 };
+        // clipped, no scrollbar, no overhang). diaryResults' own MinWidth=DiaryListWidth only
+        // forces *that* StackPanel to claim that much width from the ScrollViewer; this
+        // StackPanel and the Card() Border between them both default to
+        // HorizontalAlignment.Stretch, which means each one gets arranged at whatever width its
+        // own parent hands it — and nothing upstream of diaryResults was actually offering that
+        // width back down through that chain, so this level (and Card's Border) were both
+        // getting stretch-clipped to the page's content column width instead, quietly cutting
+        // off Edit/Split with no visual sign anything was missing. Confirmed via a live
+        // PrintWindow capture: no scrollbar, no overhang, the row just ends flush with the card
+        // edge.
+        var list = new StackPanel { Spacing = 4, MinWidth = DiaryListWidth };
 
         Grid BuildRow(ReportData.DiaryEntry entry)
         {
@@ -822,22 +821,34 @@ public sealed partial class ReportsPage
         for (var i = 0; i < shown; i++)
             list.Children.Add(BuildRow(diary[i]));
 
-        if (diary.Count > shown)
+        // One batch at a time, not the whole rest in one go (2026-07-28 request) — a busy
+        // search/date-range match can leave hundreds of rows hidden behind this button, and
+        // building them all at once defeats the whole point of DefaultDiaryRowsShown above
+        // (the same non-virtualizing-StackPanel cost that capped the initial render). Re-adds
+        // itself after each batch if there's still more left, so repeated clicks keep working.
+        const int showMoreIncrement = 50;
+        void AddShowMoreIfNeeded()
         {
+            if (shown >= diary.Count) return;
             var hidden = diary.Count - shown;
-            var moreBtn = new HyperlinkButton
+            HyperlinkButton moreBtn = null!;
+            moreBtn = new HyperlinkButton
             {
-                Content = $"Show {hidden} more",
+                Content = $"Show {Math.Min(showMoreIncrement, hidden)} more",
                 Margin = new Thickness(0, 6, 0, 0),
             };
             moreBtn.Click += (_, _) =>
             {
                 list.Children.Remove(moreBtn);
-                for (var i = shown; i < diary.Count; i++)
+                var next = Math.Min(shown + showMoreIncrement, diary.Count);
+                for (var i = shown; i < next; i++)
                     list.Children.Add(BuildRow(diary[i]));
+                shown = next;
+                AddShowMoreIfNeeded();
             };
             list.Children.Add(moreBtn);
         }
+        AddShowMoreIfNeeded();
         return list;
     }
 }

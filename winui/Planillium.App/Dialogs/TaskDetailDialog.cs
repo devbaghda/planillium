@@ -73,6 +73,29 @@ public static class TaskDetailDialog
             panel.Children.Add(block);
         }
 
+        if (task.Tools.Count > 0)
+        {
+            var block = new StackPanel { Spacing = 4 };
+            block.Children.Add(new TextBlock
+            {
+                Text = "TOOLS",
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                CharacterSpacing = 60,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            block.Children.Add(new TextBlock
+            {
+                // Taught to the on-plan activity library when this plan was imported (see
+                // PlanTask.Tools' own doc comment) — shown here so it's traceable from the
+                // task back to why time in these apps now counts as on-plan.
+                Text = string.Join(" · ", task.Tools),
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+            });
+            panel.Children.Add(block);
+        }
+
         var dialog = DialogControls.Build(xamlRoot, task.Text, panel, closeButtonText: "Close");
         await DialogGate.ShowAsync(dialog);
     }

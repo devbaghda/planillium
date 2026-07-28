@@ -43,7 +43,33 @@ public static class EditDiaryEntryDialog
         catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == category) is >= 0 and var i ? i : 0;
         panel.Children.Add(catBox);
 
-        var descBox = new TextBox { Header = "Description", Text = description ?? "" };
+        // AutoSuggestBox, not a plain TextBox — surfaces your own most commonly-used
+        // descriptions (across every category, not just idle-answer text) as soon as you
+        // focus an empty field, instead of you having to remember and retype them by hand
+        // every time (2026-07-28 request). Falls back to a plain empty suggestion list if
+        // the DB read fails, same as IdleReturnDialog's own MostFrequentIdleAnswers guard —
+        // a missing convenience, not a broken dialog.
+        List<string> frequent;
+        try { using var db = new Database(); frequent = db.MostFrequentDescriptions(); }
+        catch (Exception ex) { Log.Error("EditDiaryEntryDialog.MostFrequentDescriptions", ex); frequent = new(); }
+
+        var descBox = new AutoSuggestBox
+        {
+            Header = "Description",
+            Text = description ?? "",
+            ItemsSource = frequent,
+        };
+        descBox.TextChanged += (sender, args) =>
+        {
+            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+            sender.ItemsSource = sender.Text.Length == 0
+                ? frequent
+                : frequent.Where(d => d.Contains(sender.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+        };
+        descBox.GotFocus += (_, _) =>
+        {
+            if (descBox.Text.Length == 0 && frequent.Count > 0) descBox.IsSuggestionListOpen = true;
+        };
         panel.Children.Add(descBox);
 
         var error = new TextBlock

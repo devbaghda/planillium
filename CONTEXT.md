@@ -91,7 +91,7 @@ Planillium/
       "name": "Phase Name",
       "tasks": [
         { "day": 1, "task": "Task title", "detail": "...", "mentor_note": "...",
-          "category": "profile", "duration_min": 60 }
+          "category": "profile", "duration_min": 60, "tools": ["VS Code", "Chrome - Coursera"] }
       ]
     }
   ]
@@ -100,8 +100,15 @@ Planillium/
 Required fields: `id`, `name`, `phases`. `mentor_note` (per task) and `briefing`
 (plan-level) are what drives the app's "mentor" UI (💡 note under a task, MENTOR'S
 NOTE in Details, 📋 Briefing button) — a plan imported without them just won't show
-mentor commentary; that's a content gap in the source JSON, not a bug. The "Add Plan"
-wizard's 3 prompt templates (`Services/PlanTemplates.cs`) ask Claude to include both.
+mentor commentary; that's a content gap in the source JSON, not a bug. `tools` (per
+task, added 2026-07-28) is the list of specific apps/tools/websites that task needs —
+`AddPlanDialog` teaches every distinct one to `config.json`'s `activity_rules.on_plan`
+list right after a real (non-queued) import (`ConfigService.LearnActivityRule`, same
+mechanism the Diary's manual "mark on-plan" bulk action already used), with a short
+confirmation dialog naming what was learned. The "Add Plan" wizard's 3 prompt templates
+(`Services/PlanTemplates.cs`) ask Claude to include `mentor_note`, `briefing`, and
+`tools` (the Reformat template only fills `tools` where the user's own source text
+actually implies a specific tool, matching its existing "don't invent content" rule).
 
 ---
 
@@ -240,28 +247,26 @@ on 2026-07-17 after the round-7 audit; ~680→~110 lines on 2026-07-22; ~630→~
 re-audit iteration 2 landed; ~486→~90 lines on 2026-07-24 after that day's own audit round;
 ~509→~65 lines later the same day after a second 07-24 audit round + fix; ~256→~220 lines that
 same evening after a third 07-24 audit round + fix; ~570→~488 lines total on 2026-07-28 after
-two same-day fixes pushed the file back past the ~300-line threshold)._
+two same-day fixes pushed the file back past the ~300-line threshold; ~578→~566 lines later the
+same day after a third same-day round (condensed the 07-23/24 and 07-27 entries into tighter
+prose; left this same-day round's own entries less compressed since they're the freshest and
+most likely to matter next session — revisit at the next compaction pass)._
 
-- **2026-07-23, full day**: full internal rename `MentorOverseer`→`Planillium` (3 legacy-compat
-  values deliberately untouched); Diary App/Page filter split; removed Reports' redundant
-  "Exclusion Impact" panel (business rule 12). Full 5-category audit, 24 findings, fixed same day
-  (18 auto; 4 by user call: 2 stale branches with personal data deleted, tray "Pause tracking"
-  toggle, all 26 `ContentDialog` sites onto one `DialogControls.Build` factory, `ActivityTracker`'s
-  819-line God-Object split **deferred** — see Open TODOs). Same-day 5-pass re-audit closed 4
-  regressions + 3 UX gaps. Verified: clean build + 86/86 tests.
-- **2026-07-24, three same-day audit rounds** (22/22/12 findings, 0 Critical): round 1 re-verified
-  07-23 held, fixed a fresh Diary filter-row overflow plus ~7 smaller findings, and separately
-  root-caused/fixed "have to switch pages to see the new day" (`TodayPage`/`SchedulePage`'s
-  `NavigationCacheMode="Enabled"` never recomputed "today" overnight) via `StartDayChangeWatcher`
-  (`33b86ec`). Round 2 (3 independent passes) caught the watcher fix only covered Today/Schedule,
-  not Plans/Reports; also fixed a note-wipe risk (`TaskNoteView.AnyEditInProgress`) and Schedule
-  re-snapping on refresh, plus ~10 smaller items (watcher-timer boilerplate, a11y names, VACUUM
-  on diary-prune, docx zip-bomb size check) (`c37a97a`). Round 3 fixed its own round-2 regressions
-  (VACUUM moved back off the UI thread; zip-bomb check switched from trusting the header size to
-  counting real decompressed bytes) plus gave notes a stronger fix (`TaskNoteView` now persists
-  open drafts across any rebuild, not just the day-change watcher's — let the watcher's note guard
-  be removed entirely), `VacuumAndCheckpoint()` now truncates the WAL too, and a few smaller items.
-  All 3 rounds verified: clean build + 86/86 tests.
+- **2026-07-23/24, condensed** (full detail in git log): full internal rename
+  `MentorOverseer`→`Planillium` (3 legacy-compat values deliberately untouched — see top of file);
+  Diary App/Page filter split; removed Reports' redundant "Exclusion Impact" panel (business
+  rule 12); all 26 `ContentDialog` sites unified onto one `DialogControls.Build` factory; tray
+  "Pause tracking" toggle added; `ActivityTracker`'s 819-line God-Object split **deferred** by
+  user call — see Open TODOs. Root-caused/fixed "have to switch pages to see the new day"
+  (`NavigationCacheMode="Enabled"` never recomputed "today" overnight) via `StartDayChangeWatcher`,
+  first on Today/Schedule then extended to Plans/Reports once a re-audit caught the gap; fixed a
+  note-wipe risk (`TaskNoteView.AnyEditInProgress`, later strengthened so drafts persist across
+  any rebuild, not just the watcher's); Schedule re-snap-on-refresh fix; Diary filter-row overflow
+  fix; VACUUM-on-diary-prune moved off the UI thread (then back off again after a regression);
+  docx zip-bomb check switched from trusting header size to counting real decompressed bytes;
+  `VacuumAndCheckpoint()` now truncates the WAL too. Four full 5-category audit rounds across the
+  two days (24+22+22+12 findings, 0 Critical, plus two re-audit passes) all fixed same-day each,
+  verified via clean build + 86/86 tests each time.
 
 **Pre-2026-07-18 arc, condensed** (full detail in git log / the linked artifacts): WinUI 3
 rebuild landed 07-07 as v1.0.0 (18 findings fixed at ship time, TickTick secret purged from
@@ -303,26 +308,19 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   showing ~118 bare "-" diary rows/day). Same week: `posting-plan`/`project-media` global skills
   bootstrapped; a Reddit launch post held by r/ClaudeAI's karma gate (not removed) was reformatted
   for the Megathread instead.
-- **2026-07-27**: App wouldn't start at all (instant `XamlParseException` on every launch,
-  before `OnLaunched`'s first log line). Git-bisected to `ece15f5`'s `SetDefaultDllDirectories`
-  call (07-24 finding #10, DLL-hijack hardening) breaking WinRT's native activation of the
-  bundled WinUI3 DLLs on this machine; the app hadn't actually been relaunched since 07-24, so
-  it sat broken-but-untested for 3 days (see Standing lessons). The finding's own text already
-  showed the app's real `DllImport`s are protected KnownDLLs regardless of search order, so
-  removing the call outright is a clean revert, not a tradeoff. Fixed in `App.xaml.cs`, committed
-  `4d0f161`, pushed.
-  Separately same day: Diary appeared to start whenever the PC was first touched that morning
-  instead of the configured 06:00, because the wake-from-sleep "welcome back" toast
-  (`IdleReturnDialog`/`ActivityTracker.HandleIdleReturn`) only ever logged the gap if a UI handler
-  was *not* wired (never true in the running app) — a missed/unclicked toast meant that stretch
+- **2026-07-27**: App wouldn't start at all (instant `XamlParseException` on every launch).
+  Git-bisected to `ece15f5`'s `SetDefaultDllDirectories` call (07-24 DLL-hijack hardening)
+  breaking WinRT's native activation of the bundled WinUI3 DLLs — sat broken-but-unrelaunched
+  for 3 days (see Standing lessons). The app's real `DllImport`s are protected KnownDLLs
+  regardless of search order, so removing the call was a clean revert. Fixed, `4d0f161`, pushed.
+  Separately: Diary appeared to start whenever the PC was first touched each morning instead of
+  the configured 06:00, because the wake-from-sleep "welcome back" toast only logged a gap if a
+  UI handler was *not* wired (never true in the running app) — a missed toast meant that stretch
   never entered the diary. First fix attempt (an evening-review gap sweep) was **rejected by the
-  user** — they wanted it logged immediately, matching the old Python modal dialog's guarantee
-  (always logged something on close, real answer or `"dismissed"`/`"unaccounted time"`). Correct
-  fix: `HandleIdleReturn` now always logs `"unaccounted time"` the instant a gap is detected,
-  and `LogIdleAnswer`/`LogIdleAnswers` gained `ClearIdlePlaceholder` to swap that placeholder for
-  a real answer without creating a duplicate/overlapping row. The specific already-missed stretch
-  that day wasn't backfilled (would need a direct `progress.db` write, not authorized). Verified:
-  clean build + 86/86 tests + relaunch, committed `d3373a5`, pushed.
+  user** — they wanted it logged immediately, matching the old Python app's guarantee. Fixed:
+  `HandleIdleReturn` now always logs `"unaccounted time"` the instant a gap is detected;
+  `ClearIdlePlaceholder` swaps it for a real answer later without creating a duplicate row.
+  Verified: clean build + 86/86 tests + relaunch, `d3373a5`, pushed.
 - **2026-07-28**: Diary's per-entry "Edit"/"Split" buttons were unreachable. Root cause (found
   after 4 dead-end attempts — narrow-window, scrollbar visibility, alignment all had zero effect):
   `ReportsPage.Styling.cs`'s shared `Card()` helper's non-zero `CornerRadius` corner-clips content
@@ -349,6 +347,88 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   click-through wasn't live-tested (would need completing a real idle-answer or hand-editing live
   `winui_state.json`, neither done without the user's go-ahead) — rests on matching
   `OnNotificationInvoked`'s already-proven dispatch path exactly.
+- **2026-07-28 (feature)**: User request: when Claude generates a plan, it should also list the
+  apps/tools/websites each task needs, and that list should feed into Planillium's existing
+  on-plan/off-plan "library" (Settings' ACTIVITY KEYWORDS section, backed by config.json's
+  `activity_rules.on_plan`/`off_plan` keyword lists — the same mechanism `ConfigService.
+  LearnActivityRule` already exposed for the Diary's manual "mark selected as on-plan" bulk
+  action). Implementation: `PlanTask` gained a `Tools` field (list of strings, additive content
+  like `mentor_note`/`detail` — a plan without it just has nothing to teach); all 3 prompt
+  templates (`PlanTemplates.cs`) now ask for a per-task `"tools"` array, with explicit guidance
+  to name things precisely (e.g. "Chrome - Coursera" not bare "Chrome") since these become
+  substring-matched keywords against real window titles (`ActivityTracker.Classify`) — an
+  over-broad name would misclassify unrelated activity as on-plan. `AddPlanDialog.TryImport`
+  deserializes the freshly-written plan and extracts `PlanStore.DistinctTools(plan)`
+  (case-insensitively deduped across every task, added to `PlanStore`); the actual teaching
+  (`ConfigService.LearnActivityRule` per tool, then `RestartTracker`) plus a one-button "Learned
+  new on-plan apps" notice naming what was taught (pointing back to Settings for edits/removal)
+  live in a new shared `Dialogs/TeachPlanTools.RunAsync`, called once the import dialog itself
+  has closed — since silently changing something that affects scoring/alerts felt wrong to do
+  with zero visibility. Only wired for a real, non-queued import at this point; a queued idea's
+  tools aren't taught until/unless it's later activated (`PlanStore.ActivateQueuedPlan` doesn't
+  currently repeat this step — see Open TODOs). `TaskDetailDialog` also gained a "TOOLS" section
+  so a task's list is visible/traceable from the task itself, not just discoverable via Settings.
+  Verified: clean build (0 warnings), 90/90 tests (4 new, covering `PlanStore.DistinctTools`'s
+  dedup/blank-filtering/empty-list behavior), and live UI Automation through the actual wizard
+  (generated a real prompt, confirmed the schema/instructions render correctly) — stopped short
+  of a full click-through import, since this app's two active plan slots were already full and a
+  real import would have written a live plan file.
+  **Same-day follow-up**: user asked whether tools could be added to plans already several days
+  active, or whether they'd need deleting first. Answer given: never delete —
+  `task_completions`/`task_overrides`/`task_notes`/`score_ledger` are keyed to plan_id + exact
+  task text, and a fresh import of the same id is blocked outright (`TryImport`'s "already
+  active" check) while a different id would sever all accumulated progress; `tools` is purely
+  additive, so an in-place edit is always safe. User chose "you do it all": (1) hand-edited both
+  live plan files (`plans/active/netherlands.json`, 76 tasks; `plans/active/
+  claude-code-10-level-mastery.json`, 23 tasks) to add a task-appropriate `tools` list per task,
+  leaving genuinely tool-agnostic tasks (in-person errands, waiting-on-a-process admin steps)
+  with an empty list rather than forcing a keyword onto everything; (2) added the "Teach on-plan
+  apps…" button described above so an already-active plan can pick up tools added after the
+  fact — closes the "already active" half of the queued/already-active gap noted above (queued-
+  plan activation still doesn't call it, see Open TODOs); (3) ran it once for both plans via the
+  real button. Before writing either plan file, cross-checked every existing
+  `task_completions`/`task_overrides`/`task_notes` row's `task_text` for both plan ids against
+  the new JSON — zero mismatches, so progress/notes stayed linked (this check, not JSON-schema
+  validity, is what actually mattered for safety here). Result: 12 genuinely new keywords taught
+  (`Claude Code`, `Terminal`, `VS Code`, `Meetup`, `Eventbrite`, `IND.nl`, `Airbnb`, `Bunq`,
+  `Zorgwijzer`, `Funda`, `Pararius`, `Kamernet`, `Power BI Desktop`) — several tasks named tools
+  already present in `activity_rules.on_plan` from before this feature (`LinkedIn`, `Excel`,
+  `Notion`, `Microsoft Learn`, `Power Apps`, `GitHub`), which `LearnActivityRule`'s existing dedup
+  handled with no duplicates. Verified: clean build, 90/90 tests, and the actual "Teach on-plan
+  apps" buttons clicked live (not just code-reviewed) — confirmed via the resulting confirmation
+  dialogs' exact keyword lists and a before/after read of `config.json`'s `activity_rules.on_plan`
+  array.
+- **2026-07-28 (same-day follow-up round)**: user gave three more requests plus two mid-turn
+  interjections, all landed in one pass. (1) Wired `TeachPlanTools.RunAsync` into
+  `PlanStore.ActivateQueuedPlan`'s two UI callers (`PlansPage`'s "Start now" and
+  `StartQueuedPlanDialog`) — closes the queued-plan gap noted above; a queued idea's tools are now
+  taught the moment it's activated, not just left for a later manual button click. (2) Diary's
+  Edit/Split dialogs' description field was a plain `TextBox`, forcing recurring descriptions
+  ("lunch", "dog walk") to be retyped by hand every time — added `Database.MostFrequentDescriptions()`
+  (top-N by count, excluding the placeholder `dismissed`/`unaccounted time` values) and switched
+  both dialogs to `AutoSuggestBox` filtering that list as you type. (3) User flagged that teaching
+  a bare app/browser name (e.g. "Chrome") as on-plan is too coarse — a browser hosts both on-plan
+  and off-plan content depending on the tab. `ConfigService.LearnActivityRule` now returns `bool`
+  and refuses any keyword exactly matching `AppNames.Browsers` (made `internal` for this), so
+  neither the Diary's bulk mark-selected action nor `TeachPlanTools` can teach a whole browser as
+  one category; Settings' own free-text ACTIVITY KEYWORDS boxes write `config.json` directly and
+  are deliberately left unguarded (a power-user manual-edit surface, not an automatic guess).
+  6 new unit tests. *Mid-turn interjection*: Reports page's content column was capped at a flat
+  880px regardless of window size, so the Diary section's "Split" button needed horizontal
+  scrolling even with empty space on both sides of a wide window — pulled the cap into shared
+  `ReportsPage.DiaryListWidth`/`DiaryCardWidth` constants and widened the page's own
+  `maxContentWidth` to match, without touching any other Reports section's layout. *Second
+  mid-turn interjection*: Diary's "Show more" link used to reveal every remaining hidden row (up
+  to `maxSearchResults = 300`) in one click; changed `DiaryList` to a self-re-adding
+  `AddShowMoreIfNeeded` local function revealing 50 at a time, relabeling/re-adding itself while
+  rows remain. Verified live: clicking it three times in one script (to avoid the diary's own
+  30-second live-refresh timer resetting the reveal count mid-test, a pre-existing behavior not
+  specific to this fix) grew the row count 40→90→140→190, exactly +50 each time, with the label
+  staying accurate. Verified overall: clean build (0 warnings), 96/96 tests (10 new total), and
+  live UI Automation for every piece — the two already-active plans' "Teach on-plan apps" buttons
+  (from the earlier entry above) plus this round's AutoSuggestBox popup (real past descriptions),
+  Reports button bounding rects (0/40 out of bounds), and the Show-more batching all confirmed via
+  real clicks/coordinates, not just code review.
 - **Standing lessons** (apply every session, not just the one that taught them):
   - **A dialog/UI surface that repeats another prompt's copy ("click to X") must also carry that
     prompt's action, not just its text** — text and action can silently drift apart the moment a

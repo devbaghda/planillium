@@ -123,6 +123,7 @@ public sealed partial class PlansPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { Spacing = 4 };
         left.Children.Add(new TextBlock
@@ -232,6 +233,23 @@ public sealed partial class PlansPage : Page
         Grid.SetColumn(archive, 4);
         grid.Children.Add(archive);
 
+        // Only shown when the plan file actually has a "tools" entry somewhere — covers a
+        // plan whose tools were added (or edited) some way other than a fresh "Add Plan"
+        // import, e.g. hand-editing the plan JSON for a plan that was already active before
+        // this feature existed (2026-07-28). A fresh import already teaches its tools
+        // automatically; this just lets that same step be re-run on demand.
+        var tools = PlanStore.DistinctTools(plan);
+        if (tools.Count > 0)
+        {
+            var teach = new Button { Content = "Teach on-plan apps…", VerticalAlignment = VerticalAlignment.Center };
+            ToolTipService.SetToolTip(teach,
+                "Add this plan's tools list to your on-plan activity keywords (Settings > ACTIVITY KEYWORDS)");
+            AutomationProperties.SetName(teach, $"Teach on-plan apps: {plan.Name}");
+            teach.Click += async (_, _) => await TeachPlanTools.RunAsync(XamlRoot, tools);
+            Grid.SetColumn(teach, 5);
+            grid.Children.Add(teach);
+        }
+
         return new Border
         {
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
@@ -296,7 +314,7 @@ public sealed partial class PlansPage : Page
         ToolTipService.SetToolTip(start, activeCount < AppInfo.MaxActivePlans
             ? "Move this idea to your active plans, starting today"
             : $"Archive an active plan first — max {AppInfo.MaxActivePlans} active.");
-        start.Click += (_, _) =>
+        start.Click += async (_, _) =>
         {
             try
             {
@@ -308,6 +326,11 @@ public sealed partial class PlansPage : Page
                 SaveErrorBar.IsOpen = true;
                 return;
             }
+            // Same as StartQueuedPlanDialog's own activation path — a queued idea's tools
+            // were never taught while it sat inactive, so teach them now that it's real.
+            var activated = PlanStore.LoadActivePlans().FirstOrDefault(p => p.Id == idea.Id);
+            if (activated != null)
+                await TeachPlanTools.RunAsync(XamlRoot, PlanStore.DistinctTools(activated));
             Render();
             (App.MainWindow as MainWindow)?.RefreshScore();
         };

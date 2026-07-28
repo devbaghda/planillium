@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Planillium.App.Models;
 using Planillium.App.Services;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -182,9 +183,10 @@ public static class AddPlanDialog
             defaultButton: ContentDialogButton.Primary);
 
         // Keep the dialog open on failed import: cancel the close, show the error.
+        var planTools = new List<string>();
         dialog.PrimaryButtonClick += (_, args) =>
         {
-            var problem = TryImport(reply.Text, queueOnly);
+            var problem = TryImport(reply.Text, queueOnly, out planTools);
             if (problem != null)
             {
                 Show(error, problem);
@@ -192,7 +194,9 @@ public static class AddPlanDialog
             }
         };
 
-        return await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
+        var imported = await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
+        if (imported) await TeachPlanTools.RunAsync(host.XamlRoot, planTools);
+        return imported;
     }
 
     /// <summary>The "Load from file" button's handler, pulled out of ShowAsync's field
@@ -305,9 +309,13 @@ public static class AddPlanDialog
     /// <paramref name="queueOnly"/> writes to plans/queued instead of plans/active and
     /// skips the start_date default — a queued idea hasn't started yet, and its
     /// start_date gets set for real by PlanStore.ActivateQueuedPlan whenever it's
-    /// actually picked to start (2026-07-22 request).</summary>
-    private static string? TryImport(string replyText, bool queueOnly = false)
+    /// actually picked to start (2026-07-22 request). <paramref name="planTools"/> comes
+    /// back as the plan's distinct "tools" entries for a real (non-queued) import — ShowAsync
+    /// is the one that actually teaches them (via TeachPlanTools), once the dialog itself has
+    /// closed; a queued idea's tools aren't taught until/unless it's later activated.</summary>
+    private static string? TryImport(string replyText, bool queueOnly, out List<string> planTools)
     {
+        planTools = new List<string>();
         if (replyText.Trim().Length == 0)
             return "Paste Claude's reply first.";
 
@@ -380,6 +388,32 @@ public static class AddPlanDialog
             {
                 Log.Error("AddPlanDialog.TryImport", ex);
                 return "Couldn't write the plan file — check the log for details and try again.";
+            }
+
+            // Extract (but don't yet teach — ShowAsync does that via TeachPlanTools, once
+            // this dialog itself has closed) the on-plan tools this plan actually names.
+            // Only for a real (non-queued) import: a queued idea isn't tracked against yet,
+            // and PlanStore.ActivateQueuedPlan doesn't currently repeat this step (queued
+            // ideas are rare and the same tools list is still sitting right there in the
+            // plan file whenever it's later activated — nothing is lost, just not yet
+            // taught). Best-effort: a parse hiccup here shouldn't turn an already-successful
+            // plan import into a reported failure.
+            if (!queueOnly)
+            {
+                try
+                {
+                    var plan = JsonSerializer.Deserialize<Plan>(json, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        ReadCommentHandling = JsonCommentHandling.Skip,
+                        AllowTrailingCommas = true,
+                    });
+                    if (plan is not null) planTools = PlanStore.DistinctTools(plan);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("AddPlanDialog.TryImport (extract tools)", ex);
+                }
             }
             return null;
         }

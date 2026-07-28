@@ -172,11 +172,19 @@ public static class ConfigService
     /// against these same lists). Removed from the other two categories
     /// first so one keyword never lives in two lists at once, which would
     /// make classification depend on list-check order instead of intent.
+    /// Returns false (and teaches nothing) for a blank/invalid category, or for a bare
+    /// browser name — that always hosts both on-plan and off-plan content depending on
+    /// the tab, so "Chrome" alone would silently reclassify every kind of browsing as
+    /// whatever category it happened to get taught as (2026-07-28 request: differentiate
+    /// "Chrome - LinkedIn" from "Chrome - Synology" rather than lumping bare "Chrome" into
+    /// one bucket). A compound keyword like "Chrome - LinkedIn" is unaffected — only an
+    /// exact match to the bare browser name itself is refused.
     /// </summary>
-    public static void LearnActivityRule(string keyword, string category)
+    public static bool LearnActivityRule(string keyword, string category)
     {
-        if (category is not (DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)) return;
-        if (string.IsNullOrWhiteSpace(keyword)) return;
+        if (category is not (DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)) return false;
+        if (string.IsNullOrWhiteSpace(keyword)) return false;
+        if (AppNames.Browsers.Contains(keyword.Trim())) return false;
 
         Mutate(node =>
         {
@@ -201,5 +209,6 @@ public static class ConfigService
             }
             ArrayFor(category).Add(keyword);
         });
+        return true;
     }
 }

@@ -175,6 +175,13 @@ public class PlanTask
     [JsonPropertyName("mentor_note")] public string? MentorNote { get; set; }
     [JsonPropertyName("category")] public string? Category { get; set; }
     [JsonPropertyName("duration_min")] public int? DurationMin { get; set; }
+    /// <summary>The specific apps/tools/websites this task actually needs (e.g. "VS Code",
+    /// "Anki", "Chrome - Coursera") — asked for by the plan-generation templates (PlanTemplates.cs)
+    /// so AddPlanDialog can teach them to config.json's activity_rules.on_plan list right after
+    /// import, the same "library" Settings' ACTIVITY KEYWORDS section edits by hand. Purely
+    /// additive content like mentor_note/detail: a plan imported without it just has nothing to
+    /// teach, not a bug.</summary>
+    [JsonPropertyName("tools")] public List<string> Tools { get; set; } = new();
 }
 
 /// <summary>A task as it appears in a day list: original day + assigned day after overrides.</summary>

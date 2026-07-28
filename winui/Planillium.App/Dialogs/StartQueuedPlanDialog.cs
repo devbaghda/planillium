@@ -50,6 +50,14 @@ public static class StartQueuedPlanDialog
             Log.Error("StartQueuedPlanDialog.Activate", ex);
             return false;
         }
+        // A queued idea's own "tools" (if it has any) were never taught while it sat
+        // inactive (2026-07-28 open TODO) — now that it's a real active plan, teach them
+        // the same way a fresh "Add Plan" import would have. Re-read from disk rather than
+        // reusing `chosen`, since ActivateQueuedPlan patches start_date on the file after
+        // that in-memory copy was loaded.
+        var activated = PlanStore.LoadActivePlans().FirstOrDefault(p => p.Id == chosen.Id);
+        if (activated != null)
+            await TeachPlanTools.RunAsync(host.XamlRoot, PlanStore.DistinctTools(activated));
         return true;
     }
 }

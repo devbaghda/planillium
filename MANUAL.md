@@ -38,7 +38,19 @@ Each plan can include:
 - phases,
 - daily tasks,
 - mentor notes,
-- and briefing context.
+- briefing context,
+- and, per task, the specific apps/tools/websites it actually needs.
+
+When you generate a plan through Claude (the "Add Plan" wizard's prompt templates), Claude is
+now asked to name the specific apps/tools/websites each task needs. Right after you import the
+plan, those get taught automatically to the same on-plan keyword list Settings' activity
+classification rules use — so time spent in them starts counting toward staying on-plan without
+you having to add each one by hand. A short message tells you what was learned; you can always
+edit or remove any of it afterward from Settings.
+
+A plan you were already partway through before this existed isn't left out: if its tasks carry a
+tools list (added by hand or by asking Claude to add one), its card on the Plans page shows a
+"Teach on-plan apps…" button — click it anytime to run that same teaching step retroactively.
 
 ### Today view
 
@@ -107,6 +119,11 @@ The "time by app" breakdown shows your three biggest time sinks by default, with
 
 The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained.
 
+The diary list itself only loads a batch of entries at a time (40 up front, 50 more each time you
+click "Show more") rather than the whole matching history at once, so a long search or a busy day
+still stays responsive. When editing or splitting a diary entry, the description field suggests
+your most commonly used past descriptions as you type, so recurring ones don't need retyping.
+
 ## Settings and configuration
 
 The app includes configurable settings for:
@@ -116,6 +133,15 @@ The app includes configurable settings for:
 - idle thresholds,
 - themes,
 - and activity classification rules.
+
+Activity classification rules (ACTIVITY KEYWORDS) match on a window title, so they can be as
+specific as you need — "Chrome - LinkedIn" and "Chrome - Synology" can be taught as different
+categories even though both are Chrome. Whenever the app teaches a keyword for you automatically
+(marking a diary entry on/off-plan, or importing a plan's tools list), it refuses a bare browser
+name by itself (just "Chrome", "Edge", etc.) — a browser hosts both on-plan and off-plan content
+depending on the tab, so treating the whole browser as one category would misclassify everything
+in it. Typing directly into the ACTIVITY KEYWORDS boxes here has no such restriction, since that's
+a deliberate manual edit rather than an automatic guess.
 
 A separate end-of-day nudge warns you once, a configurable number of hours before the day's review
 time (2 hours by default), if any of today's or overdue tasks are still open — a plain toast

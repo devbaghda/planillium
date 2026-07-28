@@ -186,6 +186,14 @@ public static class PlanStore
         JsonFileIO.WriteAllTextAtomic(path, node.ToJsonString(JsonFileIO.Indented));
     }
 
+    /// <summary>Every distinct "tools" entry across a plan's tasks, case-insensitively
+    /// deduplicated — what AddPlanDialog teaches to config.json's activity_rules.on_plan
+    /// list right after import (see PlanTask.Tools' own doc comment for why).</summary>
+    public static List<string> DistinctTools(Plan plan) =>
+        plan.Phases.SelectMany(p => p.Tasks).SelectMany(t => t.Tools)
+            .Select(t => t.Trim()).Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>
     /// Appends a manually-added step to a plan file's last phase — same
     /// surgical JsonNode patch as SetExcludedWeekdays, so hand-authored

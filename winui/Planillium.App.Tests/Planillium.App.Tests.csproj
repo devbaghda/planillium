@@ -62,6 +62,14 @@
          audit finding #2). -->
     <Compile Include="..\Planillium.App\Services\AppInfo.cs" Link="App\AppInfo.cs" />
     <Compile Include="..\Planillium.App\Services\AppPaths.cs" Link="App\AppPaths.cs" />
+    <!-- Needed by ConfigService.cs's LearnActivityRule, which reuses AppNames.Browsers to
+         refuse teaching a bare browser name as an on/off-plan keyword (2026-07-28). AppNames.cs
+         itself pulls in MessengerApps.cs and ActivityTracker.cs (Sub()/Group()'s messenger and
+         unread-badge handling) — both plain C#/P-Invoke with no WinUI dependency, so unlike
+         Planillium.App itself they link cleanly here too. -->
+    <Compile Include="..\Planillium.App\Services\AppNames.cs" Link="App\AppNames.cs" />
+    <Compile Include="..\Planillium.App\Services\MessengerApps.cs" Link="App\MessengerApps.cs" />
+    <Compile Include="..\Planillium.App\Services\ActivityTracker.cs" Link="App\ActivityTracker.cs" />
     <Compile Include="..\Planillium.App\Services\ConfigService.cs" Link="App\ConfigService.cs" />
     <Compile Include="..\Planillium.App\Services\Database.cs" Link="App\Database.cs" />
     <Compile Include="..\Planillium.App\Services\DateExtensions.cs" Link="App\DateExtensions.cs" />

@@ -305,6 +305,26 @@ public sealed class Database : IDisposable
         return result;
     }
 
+    /// <summary>Most common past diary descriptions across every category (not just idle,
+    /// unlike <see cref="MostFrequentIdleAnswers"/>) — feeds quick-pick chips on
+    /// Edit/Split diary entry, so retyping the same handful of descriptions by hand every
+    /// time isn't the only option (2026-07-28 request). Same placeholder exclusions as
+    /// the idle-only version, for the same reason: neither is a real description.</summary>
+    public List<string> MostFrequentDescriptions(int topN = 8)
+    {
+        var result = new List<string>();
+        using var cmd = CreateCommand();
+        cmd.CommandText =
+            "SELECT description FROM time_diary " +
+            "WHERE description IS NOT NULL AND description <> '' " +
+            "AND description NOT IN ('dismissed', 'unaccounted time') " +
+            "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
+        cmd.Parameters.AddWithValue("$n", topN);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) result.Add(r.GetString(0));
+        return result;
+    }
+
     /// <summary>End timestamp of the most recent time_diary row, if any — lets the
     /// tracker detect "the app itself wasn't running" gaps (closed and reopened,
     /// machine rebooted) the same way it detects sleep/idle within a running

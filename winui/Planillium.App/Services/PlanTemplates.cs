@@ -64,7 +64,8 @@ the plan, not just visible here in chat. Match this exact schema:
           "detail": "Concrete instructions: exactly what to do, for how long, and what 'done' looks like.",
           "mentor_note": "Why this matters right now, the mistake beginners make at this exact step, and what doing it right looks like.",
           "category": "theory | practice | project | review",
-          "duration_min": 60
+          "duration_min": 60,
+          "tools": ["The specific apps/tools/websites needed to actually do this task"]
         }
       ]
     }
@@ -79,6 +80,16 @@ for how long, what "done" looks like); put the mentor commentary — why it
 matters right now, the mistake beginners make at this exact step, what
 right looks like — in "mentor_note", so both are visible together for every
 task, not buried back in the briefing.
+
+For every task, list in "tools" the specific applications, tools, or websites I'll
+actually have open to do it — real names, e.g. "VS Code", "Anki", "Chrome - Coursera",
+"Excel", not generic categories like "a code editor" or "the internet". This list gets
+imported straight into my tracking app's on-plan activity list, so name things precisely
+enough that they won't also match unrelated apps I use for other reasons — "Chrome -
+Coursera" not bare "Chrome", "Spotify" only if focus-music is actually part of doing the
+task, never just "Browser" or "Terminal" alone if I use those constantly for other things
+too. Leave "tools" as an empty list for a task that's genuinely not tied to any
+particular app (e.g. a purely physical or offline exercise).
 """;
 
     public const string Goal = """
@@ -145,7 +156,8 @@ the plan, not just visible here in chat. Match this exact schema:
           "detail": "Concrete instructions: exactly what to do and what 'done' looks like.",
           "mentor_note": "Why this matters right now, the mistake most people make at this exact step, and what doing it right looks like.",
           "category": "research | decision | logistics | execution",
-          "duration_min": 60
+          "duration_min": 60,
+          "tools": ["The specific apps/tools/websites needed to actually do this task"]
         }
       ]
     }
@@ -159,6 +171,15 @@ choices/comparisons to lock in, "logistics" for paperwork/admin/coordination,
 put the mentor commentary — why it matters right now, the mistake most
 people make at this exact step, what right looks like — in "mentor_note", so
 both are visible together for every task.
+
+For every task, list in "tools" the specific applications, tools, or websites I'll
+actually have open to do it — real names, e.g. "Chrome - IND.nl", "Gmail", "DigiD app",
+"Excel", not generic categories like "a website" or "email". This list gets imported
+straight into my tracking app's on-plan activity list, so name things precisely enough
+that they won't also match unrelated apps I use for other reasons — "Chrome - IND.nl"
+not bare "Chrome", never just "Browser" or "Email" alone if I use those constantly for
+other things too. Leave "tools" as an empty list for a task that's genuinely not tied to
+any particular app (e.g. a phone call or an in-person errand).
 """;
 
     public const string Reformat = """
@@ -192,7 +213,8 @@ nothing else inside the fence, matching this exact schema:
           "task": "Short task title, using my own wording",
           "detail": "The concrete instructions, from what I wrote — expand only for clarity, don't invent new steps.",
           "category": "pick the closest fit: theory | practice | project | review | research | decision | logistics | execution — or omit the field if nothing fits",
-          "duration_min": 60
+          "duration_min": 60,
+          "tools": ["Specific apps/tools/websites, only if my own text actually names or clearly implies them"]
         }
       ]
     }
@@ -204,5 +226,13 @@ shape as those used elsewhere in this app: high_leverage, ignore_completely,
 common_time_wasters, realistic_timeline) if you genuinely have something
 useful to add beyond what I already wrote — don't pad either one out just to
 fill the field.
+
+Same restraint for "tools": only fill it in where my own text already names or
+obviously implies a specific app/tool/website for that task — don't invent a
+plausible-sounding toolset for a step I didn't specify one for. Where you do include
+one, use the real name precisely enough that it won't also match unrelated apps (e.g.
+"Chrome - LinkedIn" not bare "Chrome") — this list gets imported straight into my
+tracking app's on-plan activity list. Omit "tools" entirely for a task where nothing
+in my text points to a specific tool.
 """;
 }
