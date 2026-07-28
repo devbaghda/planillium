@@ -209,7 +209,19 @@ public sealed partial class ReportsPage
         var diaryScroller = new ScrollViewer
         {
             MaxHeight = 520,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            // Visible, not Auto (2026-07-28 user report: "can't split the unaccounted
+            // time") — the page's own content column caps at 880px (ReportsPage.xaml.cs'
+            // maxContentWidth) while a diary row's MinWidth above is 950px, so every row
+            // has always needed ~70px of horizontal scroll just to reach the Edit/Split
+            // buttons at its right edge (confirmed via UI Automation: both were
+            // IsOffscreen=True even in a 1920px-wide window — this was never a narrow-
+            // window edge case). Auto's overlay-style indicator only appears on hover and
+            // is easy to never notice at all, so the scrollable content silently looked
+            // complete without them. Visible keeps a permanent, unmissable scrollbar
+            // instead of resizing the deliberately-fixed column widths (see their own
+            // comment) or widening the page's shared max content column.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+            HorizontalScrollMode = ScrollMode.Enabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = diaryResults,
         };
@@ -342,7 +354,19 @@ public sealed partial class ReportsPage
             lastRows = filteredList;
             selectedIds.RemoveWhere(id => !filteredList.Any(e => e.Id == id));
             UpdateMarkToolbar();
-            diaryResults.Children.Add(Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange)));
+            // Card()'s Border has a non-zero CornerRadius (ReportsPage.Styling.cs), which makes
+            // WinUI corner-clip its content to the Border's OWN arranged bounds — MinWidth on
+            // diaryResults/the DiaryList StackPanel further down (see their own comments) only
+            // ever affected LAYOUT sizing, but couldn't stop this Border, defaulting to
+            // Stretch, from being arranged at whatever narrower width diaryResults handed it
+            // and then clipping away everything past that (2026-07-28: this is what was
+            // actually eating Edit/Split, invisibly — not a scroll/alignment issue at all).
+            // MinWidth here has to cover the diary list's own MinWidth (950) *plus* this
+            // Border's horizontal Padding (18+18), or the clip region is still too narrow for
+            // what's arranged inside it.
+            var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange));
+            diaryCard.MinWidth = 950 + 36;
+            diaryResults.Children.Add(diaryCard);
         }
         RenderDiaryResults();
 
@@ -646,12 +670,33 @@ public sealed partial class ReportsPage
         List<ReportData.DiaryEntry> diary,
         HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
     {
-        var list = new StackPanel { Spacing = 4 };
+        // MinWidth must be repeated here, not just on diaryResults two levels up (2026-07-28
+        // user report: "can't split the unaccounted time" — Edit/Split were being silently
+        // clipped, no scrollbar, no overhang). diaryResults' own MinWidth=950 only forces
+        // *that* StackPanel to claim 950px from the ScrollViewer; this StackPanel and the
+        // Card() Border between them both default to HorizontalAlignment.Stretch, which
+        // means each one gets arranged at whatever width its own parent hands it — and nothing
+        // upstream of diaryResults was actually offering 950px back down through that chain,
+        // so this level (and Card's Border) were both getting stretch-clipped to the visible
+        // ~880px viewport instead, quietly cutting off Edit/Split with no visual sign anything
+        // was missing. Confirmed via a live PrintWindow capture: no scrollbar, no overhang, the
+        // row just ends flush with the card edge.
+        var list = new StackPanel { Spacing = 4, MinWidth = 950 };
 
         Grid BuildRow(ReportData.DiaryEntry entry)
         {
             var (id, date, start, end, dur, cat, window, desc) = entry;
-            var row = new Grid { ColumnSpacing = 12 };
+            // Left, not the FrameworkElement default Stretch (2026-07-28 — the MinWidth
+            // changes above turned out not to be enough on their own): a Stretch-aligned
+            // Grid gets ARRANGED at whatever final size its ancestor chain hands it, and
+            // with no Star column to absorb a shortfall, WinUI was silently zeroing out the
+            // Auto-width Edit/Split columns entirely (BoundingRectangle: Empty, not just
+            // scrolled off) rather than preserving their measured size and letting the
+            // ScrollViewer's own horizontal scroll handle the overflow. Left tells the row
+            // to size itself to its true natural (Measure-time) width and never be
+            // compressed by Arrange, which is what actually lets the ScrollViewer scroll to
+            // it instead of clipping it out of existence.
+            var row = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Left };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });

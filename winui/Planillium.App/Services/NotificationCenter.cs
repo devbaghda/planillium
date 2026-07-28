@@ -21,7 +21,7 @@ public static class NotificationCenter
     // drop off first if this genuinely never gets checked for a long stretch.
     private const int MaxPending = 10;
 
-    public static void Record(string title, string message)
+    public static void Record(string title, string message, IReadOnlyDictionary<string, string>? args = null)
     {
         var s = StateService.Load();
         s.UnreadNotifications++;
@@ -30,6 +30,7 @@ public static class NotificationCenter
             Title = title,
             Message = message,
             AtIso = DateTime.Now.ToIsoTimestamp(),
+            Args = args is null ? new() : new Dictionary<string, string>(args),
         });
         if (s.PendingNotifications.Count > MaxPending)
             s.PendingNotifications.RemoveRange(0, s.PendingNotifications.Count - MaxPending);

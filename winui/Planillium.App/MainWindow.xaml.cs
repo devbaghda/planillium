@@ -255,7 +255,11 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private async Task HandleNotificationActivation(string action, IDictionary<string, string> args)
+    /// <summary>internal, not private: also called directly by <see cref="Dialogs.PendingNotificationsDialog"/>
+    /// so the "while you were away" recap can offer the same real action a toast's own click would
+    /// have — the toast's args round-trip into <see cref="Services.NotificationCenter"/> for exactly
+    /// this purpose (2026-07-28).</summary>
+    internal async Task HandleNotificationActivation(string action, IDictionary<string, string> args)
     {
         ShowFromTray();
         switch (action)

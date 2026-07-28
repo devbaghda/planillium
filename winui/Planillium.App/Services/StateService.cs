@@ -33,6 +33,11 @@ public class PendingNotification
     [JsonPropertyName("title")] public string Title { get; set; } = "";
     [JsonPropertyName("message")] public string Message { get; set; } = "";
     [JsonPropertyName("at")] public string AtIso { get; set; } = "";
+    // The same key/value pairs the toast itself carried (action + whatever that action needs,
+    // e.g. idle-return's mins/start) — round-tripped so the recap dialog can offer the real
+    // "click to log/see it" action the toast's own text promises, instead of just replaying
+    // that text as inert copy with nothing behind it (2026-07-28).
+    [JsonPropertyName("args")] public Dictionary<string, string> Args { get; set; } = new();
 }
 
 /// <summary>

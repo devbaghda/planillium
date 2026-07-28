@@ -45,14 +45,19 @@ public static class ToastNotifier
         try
         {
             var builder = new AppNotificationBuilder().AddText(title).AddText(message);
+            var argDict = new Dictionary<string, string>();
             foreach (var (key, value) in args)
+            {
                 builder.AddArgument(key, value);
+                argDict[key] = value;
+            }
             if (tag is { Length: > 0 }) builder.SetTag(tag);
             AppNotificationManager.Default.Show(builder.BuildNotification());
             // Centralized here rather than at each call site so every current and future
             // toast automatically participates in the unread tray dot (2026-07-20) and its
-            // recap dialog (2026-07-22).
-            NotificationCenter.Record(title, message);
+            // recap dialog (2026-07-22). The same args round-tripped to the recap dialog
+            // (2026-07-28) so a missed toast's "click to..." action is still clickable there.
+            NotificationCenter.Record(title, message, argDict);
         }
         catch (Exception ex)
         {

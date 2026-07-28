@@ -6,6 +6,19 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Fixes**
+- The "While you were away" recap you get when reopening the app (instead of clicking the
+  notification itself) told you to "click to log where you were" or "click to see today's plan"
+  — but there was nothing to actually click; it was just a read-out of what the notification had
+  said, with a single "Close" button. Missing a check-in notification and then opening the app
+  normally used to be a dead end. Recap items that came from a real prompt (welcome-back check-in,
+  morning kickoff, evening review) now carry a real button that opens that same prompt, exactly
+  as if you'd clicked the original notification.
+- The Diary's per-entry "Edit" and "Split" buttons were unreachable — not just hard to find,
+  genuinely impossible to reach no matter how you scrolled, because a rounded-corner container
+  a few layers up was silently clipping them out of existence instead of just visually hiding
+  them off to the side. Fixed the underlying layout so that container is actually wide enough
+  for what's inside it, and made the scrollbar next to the diary list stay visible instead of
+  only appearing on hover, so it's obvious there's more to scroll to.
 - The Diary could appear to start the day whenever you first touched the PC that morning
   instead of at the configured 06:00 start — if you woke the PC from sleep and the "welcome
   back, where were you?" check-in was missed or dismissed, that whole stretch used to vanish

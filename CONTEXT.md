@@ -239,64 +239,29 @@ on 2026-07-17 after the round-7 audit; ~680→~110 lines on 2026-07-22; ~630→~
 2026-07-23 morning; ~610→~180 lines later the same day; ~494→~130 lines that same evening after
 re-audit iteration 2 landed; ~486→~90 lines on 2026-07-24 after that day's own audit round;
 ~509→~65 lines later the same day after a second 07-24 audit round + fix; ~256→~220 lines that
-same evening after a third 07-24 audit round + fix)._
+same evening after a third 07-24 audit round + fix; ~570→~488 lines total on 2026-07-28 after
+two same-day fixes pushed the file back past the ~300-line threshold)._
 
 - **2026-07-23, full day**: full internal rename `MentorOverseer`→`Planillium` (3 legacy-compat
   values deliberately untouched); Diary App/Page filter split; removed Reports' redundant
-  "Exclusion Impact" panel (`Plan.DriftDays` now the only "days late" readout, business rule 12).
-  Full 5-category audit (24 findings) → fix-all: 18 auto-fixed (try/catch hardening, `AppInfo`/
-  `ConfigService`/`DateExtensions` helpers, loopback-listener DoS fix, plan-import size cap, a
-  daily diary-prune watcher, `THIRD-PARTY-NOTICES.md` regen); 4 needed the user's call (deleted 2
-  stale git branches with old personal data; tray "Pause tracking" toggle; all 26 `ContentDialog`
-  sites migrated onto one `DialogControls.Build` factory; `ActivityTracker`'s 819-line God-Object
-  split **deferred**, still open — see below). Same-day re-audit (5 passes) caught and closed 4
-  regressions (Pause tracking undone by `RestartTracker()`; a sibling missed the retention-days
-  consolidation; dangling git objects from the branch deletes; stale docs) plus 3 UX gaps, all
-  fixed same day. Verified: clean build + 86/86 tests throughout.
-- **2026-07-24, three same-day audit rounds** (22, then 22, then 12 findings; 0 Critical
-  throughout):
-  - **Round 1** (1 High): re-verified every 07-23 fix still held; one fresh regression (Diary's
-    App/Page filter row overflowing at min window width, fixed with a `ScrollViewer`); plus a
-    fire-and-forget try/catch gap, "Export all my data" busy-state, a silently-failing
-    spend/purchase now toasts, first-run disclosure mentions "Pause tracking," one more
-    duplicated date format, `SetDefaultDllDirectories` hardening, a raw `JsonException` reworded.
-    3 needed the user's call: removed installer's "install for all users" (privacy + save-failure
-    risk); code signing deferred (documented tradeoff); weekly dependency-scan Action added.
-    **Separately, a real user bug root-caused same day**: "have to switch pages to see the new
-    day" — `TodayPage`/`SchedulePage`'s `NavigationCacheMode="Enabled"` pages never recompute
-    "today" overnight. Fixed with `MainWindow.Startup.cs`'s `StartDayChangeWatcher` (`Render()`
-    made `internal`), committed `33b86ec`.
-  - **Round 2** (1 High) against that fix: **3 independent passes** caught the same gap — the fix
-    only covered Today/Schedule, missed `PlansPage`/`ReportsPage` (identical cached-page
-    staleness). Also found the forced `Render()` could wipe an unsaved task note (fixed:
-    `TaskNoteView.AnyEditInProgress` counter) and Schedule's auto-scroll re-snapping on every
-    refresh (fixed: `scrollToToday` param). Other fixes: 5 watcher timers' boilerplate extracted
-    into `StartWatcherTimer`/`DayAdvanced`; timers now `Dispose()`d; a missed `ToDisplayDateNumeric`
-    site; 2 more date formats consolidated; screen-reader names on the Details link + Plans
-    per-card buttons; daily diary-prune now `VACUUM`s; docx zip-bomb guard checks uncompressed
-    size; `MENTOR_ROOT` gated behind `#if DEBUG`; MANUAL.md/first-run disclosure updated.
-    Committed `c37a97a`, pushed.
-  - **Round 3** (1 High) — this round's own regressions and misses: the round-2 VACUUM fix moved
-    onto the UI thread via the shared watcher helper, would've frozen the app once a day (fixed:
-    back onto a background `Task.Run`, matching `RunStartupCatchUp`'s existing pattern). The
-    round-2 docx zip-bomb fix (`entry.Length` check) trusted a size the zip's own header declares,
-    not real decompressed bytes — fixed by reading with a running byte-count instead. Reports'
-    diary bulk-selection had the identical wipe-on-refresh risk notes had (fixed with a mirrored
-    `HasActiveDiarySelection` guard). **Notes got a stronger fix than a guard**: `TaskNoteView`
-    now persists an open, unsaved draft (`_openDrafts`, keyed by planId+taskText) across ANY
-    rebuild, not just the day-change watcher's — this let the watcher's note guard be removed
-    entirely, which incidentally un-stuck the sidebar score/drift readouts that guard had been
-    silently blocking. `ReportsPage.Diary.cs`'s two remaining `DispatcherQueueTimer`s (search
-    debounce, live refresh) migrated to `System.Threading.Timer`, closing the last instance of an
-    API already root-caused as unreliable elsewhere in this app. `VACUUM` now also runs `PRAGMA
-    wal_checkpoint(TRUNCATE)` (a plain checkpoint doesn't truncate the WAL side-file, so deleted
-    content could linger there) — factored into one `VacuumAndCheckpoint()` helper used by all 3
-    delete paths. Added a subtle Storyboard fade on `ContentFrame` so the day-change watcher's
-    refresh isn't invisible. `RefreshPlanDrift`'s card-building UI extracted to
-    `Views/PlanDriftCard.cs` (was inline in a watcher-coordination file). A parse-side `HH:mm`
-    sibling of the existing `ToIsoTimeOfDay` write helper added (`DateExtensions.
-    TryParseTimeOfDay`), used at all 6 hand-typed call sites across 3 files. Verified: clean build
-    (0 warnings) + 86/86 tests + `dotnet format --verify-no-changes` clean.
+  "Exclusion Impact" panel (business rule 12). Full 5-category audit, 24 findings, fixed same day
+  (18 auto; 4 by user call: 2 stale branches with personal data deleted, tray "Pause tracking"
+  toggle, all 26 `ContentDialog` sites onto one `DialogControls.Build` factory, `ActivityTracker`'s
+  819-line God-Object split **deferred** — see Open TODOs). Same-day 5-pass re-audit closed 4
+  regressions + 3 UX gaps. Verified: clean build + 86/86 tests.
+- **2026-07-24, three same-day audit rounds** (22/22/12 findings, 0 Critical): round 1 re-verified
+  07-23 held, fixed a fresh Diary filter-row overflow plus ~7 smaller findings, and separately
+  root-caused/fixed "have to switch pages to see the new day" (`TodayPage`/`SchedulePage`'s
+  `NavigationCacheMode="Enabled"` never recomputed "today" overnight) via `StartDayChangeWatcher`
+  (`33b86ec`). Round 2 (3 independent passes) caught the watcher fix only covered Today/Schedule,
+  not Plans/Reports; also fixed a note-wipe risk (`TaskNoteView.AnyEditInProgress`) and Schedule
+  re-snapping on refresh, plus ~10 smaller items (watcher-timer boilerplate, a11y names, VACUUM
+  on diary-prune, docx zip-bomb size check) (`c37a97a`). Round 3 fixed its own round-2 regressions
+  (VACUUM moved back off the UI thread; zip-bomb check switched from trusting the header size to
+  counting real decompressed bytes) plus gave notes a stronger fix (`TaskNoteView` now persists
+  open drafts across any rebuild, not just the day-change watcher's — let the watcher's note guard
+  be removed entirely), `VacuumAndCheckpoint()` now truncates the WAL too, and a few smaller items.
+  All 3 rounds verified: clean build + 86/86 tests.
 
 **Pre-2026-07-18 arc, condensed** (full detail in git log / the linked artifacts): WinUI 3
 rebuild landed 07-07 as v1.0.0 (18 findings fixed at ship time, TickTick secret purged from
@@ -338,49 +303,68 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   showing ~118 bare "-" diary rows/day). Same week: `posting-plan`/`project-media` global skills
   bootstrapped; a Reddit launch post held by r/ClaudeAI's karma gate (not removed) was reformatted
   for the Megathread instead.
-- **2026-07-27**: App reported "won't start" (crashed instantly at Windows startup and on every
-  manual launch, always the same `XamlParseException: Cannot locate resource from ms-appx:///
-  Microsoft.UI.Xaml/Themes/themeresources.xaml`, before `OnLaunched`'s first log line ever
-  fires). Root-caused by git-bisecting clean Release builds commit-by-commit: `ece15f5`'s
-  `SetDefaultDllDirectories` call (07-24 audit finding #10, DLL-hijack hardening) breaks WinRT's
-  native activation of the bundled Windows App SDK/WinUI3 DLLs on this machine — reproduces with
-  every flag combination tried (including adding back the `LOAD_LIBRARY_SEARCH_APPLICATION_DIR`
-  the original fix omitted), only clears when the call is removed outright. The app hadn't
-  actually been relaunched since 07-24, so this sat live-but-untested for 3 days — see Standing
-  lessons below, this is the exact "re-run the check to close the loop" failure mode again, this
-  time for a runtime behavior instead of a compiler warning. Reverted in `App.xaml.cs`; the
-  finding's own text already established the app's real `DllImport`s (user32/advapi32/wtsapi32)
-  are protected KnownDLLs regardless of search order, so there was no actual hijack hole this
-  call was closing — removing it is a straight revert, not a tradeoff. Fixed same session as an
-  unrelated in-flight change (Kickoff/Review dialogs + `ScoreService.AllPlansScoringExemptToday`
-  suppressing the two automatic day-start/evening-review prompts on a fully-off day). Committed
-  together (`4d0f161`) and pushed to `origin/master`.
-  Separately, same day: user noticed the Diary appearing to start whenever the PC was first
-  touched that morning (07:24) instead of the configured 06:00 diary start. Root cause: the
-  wake-from-sleep "welcome back, where were you?" toast (`IdleReturnDialog.Trigger`, fired from
-  `ActivityTracker.HandleIdleReturn`) is easy to miss while the app sits in the tray, and
-  `HandleIdleReturn` only ever logged anything if a UI handler was *not* wired up (true only in
-  a headless/no-window scenario that never actually happens in the running app) — in the normal
-  case it only ever invoked the toast/dialog and logged nothing itself, so a toast that's never
-  clicked meant that stretch simply never entered the diary at all. First attempt fixed this via
-  an evening-review gap sweep (`PendingLeadingGap`/`FirstDiaryStart`) — **rejected by the user**:
-  they didn't want it deferred to evening review at all. Correct fix, informed by the Python
-  app's original modal idle dialog (`bc2a0cf`, main.py): that dialog was blocking and always
-  logged something the instant it closed, either a real answer or the literal string
-  `"dismissed"` (renamed to `"unaccounted time"` later, see `Database.MostFrequentIdleAnswers`'s
-  own comment) — the WinUI toast, being non-blocking, quietly dropped that guarantee. Restored
-  it directly at the source: `HandleIdleReturn` now *always* logs the gap as `"unaccounted
-  time"` the instant it's detected, regardless of whether a handler is wired, and separately
-  still fires the toast/dialog so the user can optionally overwrite that placeholder with a
-  real answer. `LogIdleAnswer`/`LogIdleAnswers` gained `ClearIdlePlaceholder` (deletes any
-  `"unaccounted time"`/`"dismissed"` row overlapping the same window before inserting the real
-  answer) so answering never creates a second, overlapping row — the exact "duplicate/
-  overlapping time_diary rows" bug class already flagged once before (07-17/18 full-history
-  scan, 42 pairs found). Today's specific already-missed 06:00–07:24 stretch predates this fix
-  and won't be backfilled automatically (would need a direct progress.db write, which needs the
-  user's explicit go-ahead per the Direct database access rule); every gap from now on logs
-  immediately. Verified: clean build + 86/86 tests + relaunch confirmed clean before committing.
+- **2026-07-27**: App wouldn't start at all (instant `XamlParseException` on every launch,
+  before `OnLaunched`'s first log line). Git-bisected to `ece15f5`'s `SetDefaultDllDirectories`
+  call (07-24 finding #10, DLL-hijack hardening) breaking WinRT's native activation of the
+  bundled WinUI3 DLLs on this machine; the app hadn't actually been relaunched since 07-24, so
+  it sat broken-but-untested for 3 days (see Standing lessons). The finding's own text already
+  showed the app's real `DllImport`s are protected KnownDLLs regardless of search order, so
+  removing the call outright is a clean revert, not a tradeoff. Fixed in `App.xaml.cs`, committed
+  `4d0f161`, pushed.
+  Separately same day: Diary appeared to start whenever the PC was first touched that morning
+  instead of the configured 06:00, because the wake-from-sleep "welcome back" toast
+  (`IdleReturnDialog`/`ActivityTracker.HandleIdleReturn`) only ever logged the gap if a UI handler
+  was *not* wired (never true in the running app) — a missed/unclicked toast meant that stretch
+  never entered the diary. First fix attempt (an evening-review gap sweep) was **rejected by the
+  user** — they wanted it logged immediately, matching the old Python modal dialog's guarantee
+  (always logged something on close, real answer or `"dismissed"`/`"unaccounted time"`). Correct
+  fix: `HandleIdleReturn` now always logs `"unaccounted time"` the instant a gap is detected,
+  and `LogIdleAnswer`/`LogIdleAnswers` gained `ClearIdlePlaceholder` to swap that placeholder for
+  a real answer without creating a duplicate/overlapping row. The specific already-missed stretch
+  that day wasn't backfilled (would need a direct `progress.db` write, not authorized). Verified:
+  clean build + 86/86 tests + relaunch, committed `d3373a5`, pushed.
+- **2026-07-28**: Diary's per-entry "Edit"/"Split" buttons were unreachable. Root cause (found
+  after 4 dead-end attempts — narrow-window, scrollbar visibility, alignment all had zero effect):
+  `ReportsPage.Styling.cs`'s shared `Card()` helper's non-zero `CornerRadius` corner-clips content
+  to the Border's own *arranged* bounds regardless of child MinWidth/alignment (see Standing
+  lessons) — the Card wrapping the diary list was arranged at ~880px while rows had grown to
+  ~1000px+ since the 07-23 App/Page column split, silently clipping away Edit/Split for 5 days
+  with no scrollbar, overhang, or automation trace (`BoundingRectangle: Empty`). Fixed by giving
+  that `Card()` instance an explicit `MinWidth` (950 + its own padding). Verified two ways:
+  `ScrollItemPattern.ScrollIntoView()` now returns a real on-screen rect for the actual button,
+  and a post-scroll screenshot shows every row's Edit/Split rendering normally. Clean build +
+  86/86 tests + relaunch.
+  Separately same day: a missed idle-return toast read via the "While you were away" recap dialog
+  (app reopened some other way, not by clicking the toast) showed the toast's own "click to log
+  where you were" text with nothing behind it but "Close" — the general "recap replays a prompt's
+  copy without its action" bug class (applies to all 3 timed prompts, not just idle-return; see
+  Standing lessons). Root cause: `PendingNotification` only ever stored `Title`/`Message`/`AtIso`,
+  never the toast's `action`/`mins`/`start` args `OnNotificationInvoked` uses for a direct click.
+  Fixed by round-tripping those args end to end (`ToastNotifier.Show` → `NotificationCenter.Record`
+  → new `PendingNotification.Args` dict, JSON-persisted) and giving `PendingNotificationsDialog` a
+  real per-item action button (label keyed off the action) that calls
+  `MainWindow.HandleNotificationActivation` (made `internal`) after closing the recap — the same
+  dispatch a direct toast click already used. Items with no/unrecognized action still render as
+  plain text only. Verified: clean build + 86/86 tests + relaunch; the new button's actual
+  click-through wasn't live-tested (would need completing a real idle-answer or hand-editing live
+  `winui_state.json`, neither done without the user's go-ahead) — rests on matching
+  `OnNotificationInvoked`'s already-proven dispatch path exactly.
 - **Standing lessons** (apply every session, not just the one that taught them):
+  - **A dialog/UI surface that repeats another prompt's copy ("click to X") must also carry that
+    prompt's action, not just its text** — text and action can silently drift apart the moment a
+    prompt is ever shown through a second surface (a recap, a log, a history view) that wasn't
+    part of its original click path. When adding a second place that displays a prompt's message,
+    check whether the *action* needs to travel with it too, not just the words.
+  - **A `Border` with a non-zero `CornerRadius` corner-clips its content to its own *arranged*
+    bounds, independent of the child's MinWidth/DesiredSize/HorizontalAlignment** — none of the
+    normal layout-sizing levers (MinWidth on a descendant, explicit alignment) can compensate
+    for a too-narrow ancestor Border once it clips; the Border itself needs to be sized wide
+    enough. A clipped-away element's UI Automation `BoundingRectangle` reads as `Empty` (not a
+    valid off-screen rect), which looks identical to "this element was never given layout space
+    at all" — don't let that automation signature rule out clipping as the cause. If a
+    dynamically-built row/card that use to fit suddenly doesn't (after some sibling column grew
+    wider), check every rounded-corner `Border` between the overflowing content and its
+    ScrollViewer, not just the ScrollViewer's own settings or the content's own MinWidth.
   - **A hardening fix that touches process-wide native init (DLL search order, security
     mitigations, anything set once at startup) isn't actually verified until the app has been
     launched fresh after it, not just built clean + unit-tested.** The 07-27 `SetDefaultDll
