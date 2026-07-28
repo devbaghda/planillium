@@ -358,16 +358,28 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   Separately, same day: user noticed the Diary appearing to start whenever the PC was first
   touched that morning (07:24) instead of the configured 06:00 diary start. Root cause: the
   wake-from-sleep "welcome back, where were you?" toast (`IdleReturnDialog.Trigger`, fired from
-  `ActivityTracker.HandleIdleReturn`) is easy to miss while the app sits in the tray, and the
-  evening review's existing gap-sweep (`ActivityTracker.PendingDayGap`) only ever covered a
-  *trailing* gap (last activity → now) — a missed *morning* toast had no fallback at all, despite
-  `IdleReturnDialog.Trigger`'s own doc comment already claiming "nothing is lost." Added the
-  symmetric `ActivityTracker.PendingLeadingGap` + `Database.FirstDiaryStart`, wired into
-  `ReviewDialog.ReconcilePendingGap` alongside the existing trailing check — both morning and
-  evening gaps now get swept at evening review time. Today's actual missing 06:00–07:24 stretch
-  will be asked about at tonight's review (or a manually-opened one); not backfilled directly,
-  since only the user can say what that stretch actually was. Verified: clean build + 86/86
-  tests + relaunch confirmed clean before committing.
+  `ActivityTracker.HandleIdleReturn`) is easy to miss while the app sits in the tray, and
+  `HandleIdleReturn` only ever logged anything if a UI handler was *not* wired up (true only in
+  a headless/no-window scenario that never actually happens in the running app) — in the normal
+  case it only ever invoked the toast/dialog and logged nothing itself, so a toast that's never
+  clicked meant that stretch simply never entered the diary at all. First attempt fixed this via
+  an evening-review gap sweep (`PendingLeadingGap`/`FirstDiaryStart`) — **rejected by the user**:
+  they didn't want it deferred to evening review at all. Correct fix, informed by the Python
+  app's original modal idle dialog (`bc2a0cf`, main.py): that dialog was blocking and always
+  logged something the instant it closed, either a real answer or the literal string
+  `"dismissed"` (renamed to `"unaccounted time"` later, see `Database.MostFrequentIdleAnswers`'s
+  own comment) — the WinUI toast, being non-blocking, quietly dropped that guarantee. Restored
+  it directly at the source: `HandleIdleReturn` now *always* logs the gap as `"unaccounted
+  time"` the instant it's detected, regardless of whether a handler is wired, and separately
+  still fires the toast/dialog so the user can optionally overwrite that placeholder with a
+  real answer. `LogIdleAnswer`/`LogIdleAnswers` gained `ClearIdlePlaceholder` (deletes any
+  `"unaccounted time"`/`"dismissed"` row overlapping the same window before inserting the real
+  answer) so answering never creates a second, overlapping row — the exact "duplicate/
+  overlapping time_diary rows" bug class already flagged once before (07-17/18 full-history
+  scan, 42 pairs found). Today's specific already-missed 06:00–07:24 stretch predates this fix
+  and won't be backfilled automatically (would need a direct progress.db write, which needs the
+  user's explicit go-ahead per the Direct database access rule); every gap from now on logs
+  immediately. Verified: clean build + 86/86 tests + relaunch confirmed clean before committing.
 - **Standing lessons** (apply every session, not just the one that taught them):
   - **A hardening fix that touches process-wide native init (DLL search order, security
     mitigations, anything set once at startup) isn't actually verified until the app has been

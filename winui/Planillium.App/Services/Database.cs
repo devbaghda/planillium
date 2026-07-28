@@ -321,23 +321,6 @@ public sealed class Database : IDisposable
             DateTimeStyles.None, out var dt) ? dt : null;
     }
 
-    /// <summary>Start timestamp of the earliest time_diary row on <paramref name="date"/>, if
-    /// any — the leading-edge counterpart to <see cref="LastDiaryEnd"/>. Lets
-    /// ActivityTracker.PendingLeadingGap detect a morning idle/sleep stretch whose own
-    /// return-from-idle toast was missed, so it can still be swept up at evening review
-    /// instead of the diary silently appearing to start whenever the machine was first used.</summary>
-    public DateTime? FirstDiaryStart(DateOnly date)
-    {
-        using var cmd = CreateCommand();
-        cmd.CommandText = "SELECT start_time FROM time_diary WHERE date = $d ORDER BY start_time ASC LIMIT 1";
-        cmd.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd"));
-        using var r = cmd.ExecuteReader();
-        if (!r.Read()) return null;
-        var start = r.GetString(0);
-        return DateTime.TryParse($"{date:yyyy-MM-dd} {start}", CultureInfo.InvariantCulture,
-            DateTimeStyles.None, out var dt) ? dt : null;
-    }
-
     /// <summary>Inserts one time_diary row directly — used when splitting an existing
     /// entry into several (unlike ActivityTracker.LogIdleAnswer, this isn't idle-specific:
     /// category is whatever the caller decides, not auto-classified from description text).</summary>

@@ -28,12 +28,11 @@ public static class IdleReturnDialog
     /// so the prompt still reaches the user on PC activation after an
     /// absence even while the app sits in the tray — this fires from
     /// ActivityTracker's background poll, so most of the time nobody is
-    /// looking at the (hidden) main window. If the toast is never clicked,
-    /// nothing is lost: the evening review's gap sweep (ActivityTracker.
-    /// PendingDayGap for a stretch after today's last activity, PendingLeadingGap
-    /// for a stretch before today's first — added 2026-07-27 after PendingDayGap
-    /// alone was found not to cover a missed *morning* toast, see its own doc
-    /// comment) picks up the same unaccounted stretch later.
+    /// looking at the (hidden) main window. If the toast is never clicked or
+    /// answered, nothing is lost: HandleIdleReturn already logged the gap as
+    /// "unaccounted time" the moment it was detected (2026-07-27 — see its own
+    /// comment), and answering here just replaces that placeholder with the
+    /// real description instead of leaving the stretch unlabelled.
     /// </summary>
     public static Task Trigger(MainWindow window, int idleMinutes, DateTime idleStart)
     {

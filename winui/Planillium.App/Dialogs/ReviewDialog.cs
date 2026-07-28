@@ -175,12 +175,10 @@ public static class ReviewDialog
     }
 
     /// <summary>
-    /// Before reviewing, reconcile any stretch that was never asked about — a
-    /// morning idle/sleep gap whose own return-from-idle toast was missed (2026-07-27:
-    /// PendingLeadingGap, see its doc comment) as well as the pre-existing trailing case
-    /// where the user finished and stepped away before the day's end. Both get asked about
-    /// here, in chronological order, so time isn't vanishing into an unlabelled idle gap at
-    /// either end of the day.
+    /// Before reviewing, reconcile any stretch where the user finished and
+    /// stepped away before the day's end but was never asked about it —
+    /// ask "where have you been?" once here so that time is accounted for
+    /// instead of vanishing into an unlabelled idle gap.
     /// </summary>
     private static async Task ReconcilePendingGap(MainWindow window)
     {
@@ -188,13 +186,6 @@ public static class ReviewDialog
         try
         {
             using var gapDb = new Database();
-            if (tracker.PendingLeadingGap(gapDb) is { } leading)
-            {
-                await IdleReturnDialog.ShowAsync(window, leading.Minutes, leading.Start,
-                    leadIn: "Looks like today's tracking picked up later than the day's start — " +
-                            "mind filling in the gap?");
-                tracker.MarkAccountedThrough(leading.Start.AddMinutes(leading.Minutes));
-            }
             if (tracker.PendingDayGap(gapDb) is { } gap)
             {
                 await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start,

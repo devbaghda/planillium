@@ -362,12 +362,35 @@ public sealed class ActivityTracker : IDisposable
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Deletes any not-yet-answered idle placeholder ("unaccounted time", or the
+    /// older "dismissed") overlapping [start, end) on that date — HandleIdleReturn logs one
+    /// of these immediately when a gap is first detected (2026-07-27), so answering it here
+    /// must replace that row rather than insert a second, overlapping one. Never touches a
+    /// real activity row or an already-answered idle row (different window/description),
+    /// only ever a placeholder still waiting for its real answer.</summary>
+    private static void ClearIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end,
+        SqliteTransaction? tx = null)
+    {
+        using var cmd = conn.CreateCommand();
+        if (tx is not null) cmd.Transaction = tx;
+        cmd.CommandText =
+            "DELETE FROM time_diary WHERE date = $d AND window = $w " +
+            "AND description IN ('unaccounted time', 'dismissed') " +
+            "AND NOT (end_time <= $s OR start_time >= $e)";
+        cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
+        cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
+        cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Port of log_idle_answer — called by the idle-return dialog.</summary>
     public void LogIdleAnswer(DateTime idleStart, int idleMinutes, string description)
     {
         var end = idleStart.AddMinutes(idleMinutes);
         var category = ClassifyIdleText(description);
         using var conn = AppPaths.OpenConnection();
+        ClearIdlePlaceholder(conn, idleStart, end);
         // DiaryCategory.Idle doubles as the "window" placeholder here — no real app was
         // in the foreground, so the diary row's window field is the same sentinel value
         // ReportData.cs checks for when deciding whether to show the description instead.
@@ -393,6 +416,10 @@ public sealed class ActivityTracker : IDisposable
             {
                 var end = start.AddMinutes(minutes);
                 var category = ClassifyIdleText(description);
+                // Same placeholder-replacement reasoning as LogIdleAnswer above — the split
+                // dialog's segments collectively cover the same original placeholder range,
+                // so this clears whatever's left of it as each segment is written.
+                ClearIdlePlaceholder(conn, start, end, tx);
                 LogDiarySession(conn, start, end, category, DiaryCategory.Idle, description, tx);
             }
             tx.Commit();
@@ -474,38 +501,6 @@ public sealed class ActivityTracker : IDisposable
             }
             return _fullyOffToday;
         }
-    }
-
-    /// <summary>
-    /// The leading-edge counterpart to <see cref="PendingDayGap"/>: if today's first
-    /// logged activity started well after the configured diary start (06:00 by default),
-    /// that morning stretch was idle/asleep and its own return-from-idle toast (fired from
-    /// the poll loop's HandleIdleReturn) either went unclicked or was raised while the app
-    /// was in the middle of the 2026-07-24/27 startup-crash incident and never got answered.
-    /// PendingDayGap alone can't catch this — it only anchors from the last diary row
-    /// forward, so a missed *morning* toast used to mean that stretch was gone for good
-    /// (the evening review's gap sweep never looked further back than the day's last
-    /// activity), contradicting its own doc comment's promise that a missed toast is never
-    /// actually lost (2026-07-27 user report: the diary appeared to start whenever the PC
-    /// was first used that day, not at 06:00 as configured). Null when the day is already
-    /// accounted for, today had no activity yet, or on a rest day.
-    /// </summary>
-    public (int Minutes, DateTime Start)? PendingLeadingGap(Database db)
-    {
-        if (IsRestDayToday()) return null;
-        var now = DateTime.Now;
-        var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
-        if (db.FirstDiaryStart(DateOnly.FromDateTime(now.Date)) is not DateTime firstStart) return null;
-        if (firstStart <= diaryStartToday) return null;
-
-        lock (_dayStateLock)
-        {
-            if (_accountedUntil is DateTime acc && diaryStartToday < acc) diaryStartToday = acc;
-        }
-        if (diaryStartToday >= firstStart) return null;
-
-        var mins = (int)(firstStart - diaryStartToday).TotalMinutes;
-        return mins >= _idleThresholdMin ? (mins, diaryStartToday) : null;
     }
 
     /// <summary>
@@ -756,15 +751,25 @@ public sealed class ActivityTracker : IDisposable
         if (idleStart < idleEnd)
         {
             var actualMin = Math.Max(1, (int)(idleEnd - idleStart).TotalMinutes);
+            // Always log a placeholder immediately, regardless of whether a UI handler is
+            // wired up — matches the pre-toast Python dialog's guarantee that a missed or
+            // unanswered check-in still ends up in the diary as "dismissed" (now
+            // "unaccounted time"), rather than silently vanishing if the toast is never
+            // clicked (2026-07-27: a missed morning return-from-sleep toast was leaving
+            // that whole stretch out of the diary entirely, with no reconciliation short of
+            // waiting for the evening review — rejected as a fix; the user wants the old
+            // "always logs something" guarantee back). LogIdleAnswer/LogIdleAnswers replace
+            // this same placeholder row in place if the user does go on to answer, instead
+            // of inserting a second, overlapping one — see their own comments.
+            if (idleStart < diaryEndToday)
+                LogDiarySession(conn, idleStart, idleEnd, DiaryCategory.Idle, DiaryCategory.Idle,
+                    "unaccounted time");
             // Ask on return from idle at ANY hour, not only during diary
             // hours — someone who finishes and steps away in the evening
             // should still be asked where they were. idleStart/idleEnd are
             // already clamped to the diary window just above, so a purely
             // night-time gap collapses to nothing and never reaches here.
-            if (OnIdleReturn != null)
-                OnIdleReturn.Invoke(actualMin, idleStart);
-            else if (idleStart < diaryEndToday)
-                LogDiarySession(conn, idleStart, idleEnd, DiaryCategory.Idle, DiaryCategory.Idle);
+            OnIdleReturn?.Invoke(actualMin, idleStart);
         }
         _idleNotified = false;
         _idleSince = null;
