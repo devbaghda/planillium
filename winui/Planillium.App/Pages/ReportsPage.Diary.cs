@@ -35,6 +35,25 @@ public sealed partial class ReportsPage
     // treatment as the other diary state.
     private static bool _diaryAllTime;
 
+    // How many rows the "Show more" batching (DiaryList) currently has revealed, and which
+    // exact scope it was revealed for (see RenderDiaryResults) — added 2026-07-28 same-day
+    // follow-up to a same-day bug: while viewing "today" or "All time" with no search text,
+    // _diaryLiveRefresh calls RenderDiaryResults() every 30 seconds, which used to rebuild
+    // DiaryList() from scratch every time, silently resetting anyone's "Show more" progress
+    // back to the default 40 with no warning. Persisting the count here (like _diaryDate/
+    // _diarySearch already survive their own kind of rebuild) lets a same-scope refresh
+    // rebuild the list at the size the user left it; only an actual scope change (a
+    // different day/search/filter/all-time state) resets it back to the default.
+    private static int _diaryRowsShown = DefaultDiaryRowsShown;
+    private static string _diaryRowsShownScopeKey = "";
+
+    // The three filter ComboBoxes' "no filter" placeholder items — shared between
+    // BuildDiaryFilterRow (which seeds them) and RenderDiaryResults (which rebuilds the
+    // app/page lists on every call) so the two can't drift apart from each other.
+    private const string AllCategories = "All categories";
+    private const string AllApps = "All apps";
+    private const string AllPages = "All pages";
+
     // The debounce timer itself is created once and reused across renders
     // (NavigationCacheMode="Enabled" reuses this page instance, and
     // BuildDiarySection runs on every Render — page nav, period switch, diary
@@ -81,9 +100,15 @@ public sealed partial class ReportsPage
     /// Diary search/list section — one day by default; searching widens to
     /// everything still retained (ConfigService.DiaryRetentionDays(),
     /// user-configurable — see Settings) instead of just the day on screen.
-    /// Kept as one method (not further split) since
-    /// its closures share a lot of local state (selection, search text,
-    /// the toolbar) that's specific to this one widget.
+    /// Each UI sub-area (search box, filter row, mark-selected toolbar, the
+    /// scrollable list shell) is built by its own method below — those pieces
+    /// share no mutable state with each other, so pulling them out was a safe,
+    /// mechanical split (2026-07-28 code-quality audit finding — this method
+    /// was 389 lines). RenderDiaryResults/UpdateMarkToolbar and the rest of
+    /// the event wiring stay here: they share selectedIds/lastRows/
+    /// syncingFilters/syncingSelectAll with each other in ways that don't
+    /// split apart as cleanly, and moving them would risk exactly the kind of
+    /// closure-capture bug this project has been bitten by before.
     /// </summary>
     private void BuildDiarySection(DateOnly today, ScoreService score)
     {
@@ -97,69 +122,8 @@ public sealed partial class ReportsPage
         if (_diarySearch.Trim().Length == 0 && score.LoadReflection(_diaryDate) is { Length: > 0 } reflection)
             Body.Children.Add(ReflectionCallout(reflection));
 
-        var searchBox = new TextBox
-        {
-            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary (app or description)…",
-            Text = _diarySearch,
-            Margin = new Thickness(0, 0, 0, 8),
-        };
-        // Placeholder text alone isn't exposed to screen readers as an accessible
-        // name — a static name here (audit finding #16) since the placeholder text
-        // itself already varies with the retention setting.
-        AutomationProperties.SetName(searchBox, "Search the time diary");
-        Body.Children.Add(searchBox);
-
-        // Category/app/page filters (2026-07-22, app/page split 2026-07-23) — independent of
-        // the search box above, apply whether or not a search is active. Guards
-        // SelectionChanged from firing when RenderDiaryResults below re-syncs these boxes'
-        // SelectedItem to the persisted filter state (e.g. after the app/page lists are
-        // rebuilt), same pattern as syncingSelectAll further down for the same reason.
-        var syncingFilters = false;
-        const string AllCategories = "All categories";
-        const string AllApps = "All apps";
-        const string AllPages = "All pages";
-
-        var categoryBox = new ComboBox { PlaceholderText = "Category", MinWidth = 140 };
-        categoryBox.Items.Add(AllCategories);
-        foreach (var (label, _) in DiaryCategory.EditableOptions) categoryBox.Items.Add(label);
-        AutomationProperties.SetName(categoryBox, "Filter diary by category");
-
-        var appBox = new ComboBox { PlaceholderText = "App", MinWidth = 150 };
-        AutomationProperties.SetName(appBox, "Filter diary by app");
-
-        var pageBox = new ComboBox { PlaceholderText = "Page", MinWidth = 180 };
-        AutomationProperties.SetName(pageBox, "Filter diary by page");
-
-        var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
-        AutomationProperties.SetName(allTimeBox,
-            $"Apply filters across the last {ConfigService.DiaryRetentionDays()} days instead of just this day");
-        allTimeBox.IsChecked = _diaryAllTime;
-
-        var clearFiltersBtn = new Button { Content = "Clear filters", Padding = new Thickness(8, 4, 8, 4) };
-
-        var filterRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-        };
-        filterRow.Children.Add(categoryBox);
-        filterRow.Children.Add(appBox);
-        filterRow.Children.Add(pageBox);
-        filterRow.Children.Add(allTimeBox);
-        filterRow.Children.Add(clearFiltersBtn);
-        // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
-        // can exceed the actual content width at the app's enforced 900px window floor once the
-        // NavigationView pane and page padding are subtracted — without this, "Clear filters"
-        // and the "All time" checkbox can be clipped off-screen with no way to reach them
-        // (2026-07-24 audit finding #1, a regression from the App/Page column split). Same
-        // HorizontalScrollBarVisibility="Auto" treatment as diaryScroller below, just for one row.
-        Body.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Margin = new Thickness(0, 0, 0, 8),
-            Content = filterRow,
-        });
+        var searchBox = BuildDiarySearchBox();
+        var (categoryBox, appBox, pageBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
 
         // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
         // below, right along with the list itself.
@@ -172,60 +136,16 @@ public sealed partial class ReportsPage
         // just flips enabled/label state as the selection changes.
         var selectedIds = new HashSet<long>();
         var lastRows = new List<ReportData.DiaryEntry>();
+        var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn) = BuildDiaryMarkToolbar();
 
-        var markToolbar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
-        // IsThreeState so it can show "some but not all selected" as a
-        // dash rather than lying with a plain checked/unchecked state.
-        var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
-        var selectedLabel = new TextBlock
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 12,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        };
-        var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
-        var markOffBtn = new Button { Content = "Mark off-plan", IsEnabled = false };
-        var markNeutralBtn = new Button { Content = "Mark neutral", IsEnabled = false };
-        markToolbar.Children.Add(selectAllBox);
-        markToolbar.Children.Add(selectedLabel);
-        markToolbar.Children.Add(markOnBtn);
-        markToolbar.Children.Add(markOffBtn);
-        markToolbar.Children.Add(markNeutralBtn);
-        Body.Children.Add(markToolbar);
-
-        // Own scroll box, both directions: a long day (or a search hitting the
-        // full retention window) used to keep growing the whole Reports page
-        // and could push row content wider than the page, which then either
-        // clipped off-screen or shifted the page's own measured width from
-        // one day to the next. Bounding it here keeps the page's width and
-        // the diary's own scrolling independent of how much/how wide the
-        // content for a given day happens to be.
-        // MinWidth pins the row grids to a sane layout width even though the
-        // scroller offers them unconstrained width in the scrollable
-        // direction — without it, a Grid measured with infinite width can
-        // collapse its Star column instead of sizing sensibly.
-        // Widened from 820 (2026-07-23) — the App/Page column split added ~130px of row width.
-        var diaryResults = new StackPanel { Spacing = 0, MinWidth = DiaryListWidth };
-        var diaryScroller = new ScrollViewer
-        {
-            MaxHeight = 520,
-            // Visible, not Auto (2026-07-28 user report: "can't split the unaccounted
-            // time") — Auto's overlay-style indicator only appears on hover and is easy to
-            // never notice at all, so scrollable content used to silently look complete
-            // without it. The page's own content column (ReportsPage.xaml.cs'
-            // maxContentWidth) is now widened to fit a diary row's own MinWidth
-            // (DiaryCardWidth) on a wide-enough window, so this scroller/scrollbar mostly
-            // matters on a narrower one now — kept regardless as a belt-and-suspenders
-            // layer, since the row's fixed pixel columns can still exceed whatever width
-            // the window actually has to give.
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
-            HorizontalScrollMode = ScrollMode.Enabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = diaryResults,
-        };
-        Body.Children.Add(diaryScroller);
+        var diaryResults = BuildDiaryResultsArea();
 
         const int maxSearchResults = 300;
+
+        // Guards SelectionChanged from firing when RenderDiaryResults below re-syncs these boxes'
+        // SelectedItem to the persisted filter state (e.g. after the app/page lists are
+        // rebuilt), same pattern as syncingSelectAll further down for the same reason.
+        var syncingFilters = false;
 
         // Guards Checked/Unchecked below from firing when UpdateMarkToolbar
         // sets IsChecked itself to reflect the current selection — without
@@ -352,6 +272,16 @@ public sealed partial class ReportsPage
             lastRows = filteredList;
             selectedIds.RemoveWhere(id => !filteredList.Any(e => e.Id == id));
             UpdateMarkToolbar();
+            // A genuine scope change (different day/search/filters/all-time) starts the reveal
+            // count fresh; the periodic live-refresh timer re-running this same method with an
+            // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
+            var scopeKey = string.Join('|', _diaryDate, q, _diaryCategoryFilter, _diaryAppFilter,
+                _diaryPageFilter, _diaryAllTime);
+            if (scopeKey != _diaryRowsShownScopeKey)
+            {
+                _diaryRowsShown = DefaultDiaryRowsShown;
+                _diaryRowsShownScopeKey = scopeKey;
+            }
             // Card()'s Border has a non-zero CornerRadius (ReportsPage.Styling.cs), which makes
             // WinUI corner-clip its content to the Border's OWN arranged bounds — MinWidth on
             // diaryResults/the DiaryList StackPanel further down (see their own comments) only
@@ -473,6 +403,154 @@ public sealed partial class ReportsPage
         _diaryLiveRefreshAction = RenderDiaryResults;
         EnsureDiaryLiveRefreshTimer();
         SyncLiveRefresh();
+    }
+
+    /// <summary>The diary's free-text search box — split out of BuildDiarySection
+    /// (2026-07-28 code-quality audit finding: that method was 389 lines) since this
+    /// piece is pure "build one control, add it to Body," with no shared mutable state.</summary>
+    private TextBox BuildDiarySearchBox()
+    {
+        var searchBox = new TextBox
+        {
+            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary (app or description)…",
+            Text = _diarySearch,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        // Placeholder text alone isn't exposed to screen readers as an accessible
+        // name — a static name here (audit finding #16) since the placeholder text
+        // itself already varies with the retention setting.
+        AutomationProperties.SetName(searchBox, "Search the time diary");
+        Body.Children.Add(searchBox);
+        return searchBox;
+    }
+
+    /// <summary>The category/app/page filter row plus "All time" checkbox and "Clear
+    /// filters" button, in their own horizontally-scrollable row — split out of
+    /// BuildDiarySection for the same reason as BuildDiarySearchBox above.
+    /// RenderDiaryResults (which stays in BuildDiarySection, since it also touches
+    /// diaryResults/subtotalText/lastRows) re-syncs these boxes' items/selection on every
+    /// call; this method only constructs them, seeded with whatever filter state already
+    /// persisted from before.</summary>
+    private (ComboBox CategoryBox, ComboBox AppBox, ComboBox PageBox, CheckBox AllTimeBox, Button ClearFiltersBtn)
+        BuildDiaryFilterRow()
+    {
+        var categoryBox = new ComboBox { PlaceholderText = "Category", MinWidth = 140 };
+        categoryBox.Items.Add(AllCategories);
+        foreach (var (label, _) in DiaryCategory.EditableOptions) categoryBox.Items.Add(label);
+        AutomationProperties.SetName(categoryBox, "Filter diary by category");
+
+        var appBox = new ComboBox { PlaceholderText = "App", MinWidth = 150 };
+        AutomationProperties.SetName(appBox, "Filter diary by app");
+
+        var pageBox = new ComboBox { PlaceholderText = "Page", MinWidth = 180 };
+        AutomationProperties.SetName(pageBox, "Filter diary by page");
+
+        var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
+        AutomationProperties.SetName(allTimeBox,
+            $"Apply filters across the last {ConfigService.DiaryRetentionDays()} days instead of just this day");
+        allTimeBox.IsChecked = _diaryAllTime;
+
+        var clearFiltersBtn = new Button { Content = "Clear filters", Padding = new Thickness(8, 4, 8, 4) };
+
+        var filterRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+        };
+        filterRow.Children.Add(categoryBox);
+        filterRow.Children.Add(appBox);
+        filterRow.Children.Add(pageBox);
+        filterRow.Children.Add(allTimeBox);
+        filterRow.Children.Add(clearFiltersBtn);
+        // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
+        // can exceed the actual content width at the app's enforced 900px window floor once the
+        // NavigationView pane and page padding are subtracted — without this, "Clear filters"
+        // and the "All time" checkbox can be clipped off-screen with no way to reach them
+        // (2026-07-24 audit finding #1, a regression from the App/Page column split). Same
+        // HorizontalScrollBarVisibility="Auto" treatment as diaryScroller below, just for one row.
+        Body.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = filterRow,
+        });
+
+        return (categoryBox, appBox, pageBox, allTimeBox, clearFiltersBtn);
+    }
+
+    /// <summary>The "select all / mark on-plan / off-plan / neutral" bulk-action toolbar —
+    /// split out of BuildDiarySection for the same reason as the two methods above.
+    /// UpdateMarkToolbar (which stays in BuildDiarySection, since it also touches
+    /// selectedIds/lastRows) flips these controls' enabled/label state as the selection
+    /// changes; this method only constructs them, starting disabled/empty.</summary>
+    private (CheckBox SelectAllBox, TextBlock SelectedLabel, Button MarkOnBtn, Button MarkOffBtn, Button MarkNeutralBtn)
+        BuildDiaryMarkToolbar()
+    {
+        var markToolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8),
+        };
+        // IsThreeState so it can show "some but not all selected" as a
+        // dash rather than lying with a plain checked/unchecked state.
+        var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
+        var selectedLabel = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
+        var markOffBtn = new Button { Content = "Mark off-plan", IsEnabled = false };
+        var markNeutralBtn = new Button { Content = "Mark neutral", IsEnabled = false };
+        markToolbar.Children.Add(selectAllBox);
+        markToolbar.Children.Add(selectedLabel);
+        markToolbar.Children.Add(markOnBtn);
+        markToolbar.Children.Add(markOffBtn);
+        markToolbar.Children.Add(markNeutralBtn);
+        Body.Children.Add(markToolbar);
+
+        return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn);
+    }
+
+    /// <summary>The diary list's own scrollable area — split out of BuildDiarySection for
+    /// the same reason as the methods above. RenderDiaryResults (which stays in
+    /// BuildDiarySection) fills the returned StackPanel's Children on every call; this
+    /// method only builds the empty scroll shell around it.</summary>
+    private StackPanel BuildDiaryResultsArea()
+    {
+        // Own scroll box, both directions: a long day (or a search hitting the
+        // full retention window) used to keep growing the whole Reports page
+        // and could push row content wider than the page, which then either
+        // clipped off-screen or shifted the page's own measured width from
+        // one day to the next. Bounding it here keeps the page's width and
+        // the diary's own scrolling independent of how much/how wide the
+        // content for a given day happens to be.
+        // MinWidth pins the row grids to a sane layout width even though the
+        // scroller offers them unconstrained width in the scrollable
+        // direction — without it, a Grid measured with infinite width can
+        // collapse its Star column instead of sizing sensibly.
+        // Widened from 820 (2026-07-23) — the App/Page column split added ~130px of row width.
+        var diaryResults = new StackPanel { Spacing = 0, MinWidth = DiaryListWidth };
+        var diaryScroller = new ScrollViewer
+        {
+            MaxHeight = 520,
+            // Visible, not Auto (2026-07-28 user report: "can't split the unaccounted
+            // time") — Auto's overlay-style indicator only appears on hover and is easy to
+            // never notice at all, so scrollable content used to silently look complete
+            // without it. The page's own content column (ReportsPage.xaml.cs'
+            // maxContentWidth) is now widened to fit a diary row's own MinWidth
+            // (DiaryCardWidth) on a wide-enough window, so this scroller/scrollbar mostly
+            // matters on a narrower one now — kept regardless as a belt-and-suspenders
+            // layer, since the row's fixed pixel columns can still exceed whatever width
+            // the window actually has to give.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = diaryResults,
+        };
+        Body.Children.Add(diaryScroller);
+        return diaryResults;
     }
 
     /// <summary>Lazily creates the search-input debounce timer once, reused across renders
@@ -817,7 +895,13 @@ public sealed partial class ReportsPage
             return row;
         }
 
-        var shown = Math.Min(DefaultDiaryRowsShown, diary.Count);
+        // Starts from _diaryRowsShown, not always the default — so a same-scope rebuild
+        // (the periodic live-refresh timer while viewing "today"/"All time") redraws the
+        // list at whatever size the user had already revealed via "Show more," instead of
+        // silently collapsing back to the default every time it fires (see that field's own
+        // comment). RenderDiaryResults already resets it to the default on an actual scope
+        // change before this method is ever called.
+        var shown = Math.Min(_diaryRowsShown, diary.Count);
         for (var i = 0; i < shown; i++)
             list.Children.Add(BuildRow(diary[i]));
 
@@ -844,6 +928,7 @@ public sealed partial class ReportsPage
                 for (var i = shown; i < next; i++)
                     list.Children.Add(BuildRow(diary[i]));
                 shown = next;
+                _diaryRowsShown = next;
                 AddShowMoreIfNeeded();
             };
             list.Children.Add(moreBtn);

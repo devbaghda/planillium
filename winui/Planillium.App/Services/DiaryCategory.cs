@@ -32,4 +32,18 @@ public static class DiaryCategory
     {
         ("On-plan", OnPlan), ("Off-plan", OffPlan), ("Paid", Paid), ("Neutral", Neutral), ("Idle", Idle),
     };
+
+    /// <summary>The diary description text written for a not-yet-answered "where were you"
+    /// idle/away gap (ActivityTracker.HandleIdleReturn logs this immediately so nothing goes
+    /// unrecorded; LogIdleAnswer/LogIdleAnswers replace it in place with the user's real
+    /// answer if/when they respond). Was "Dismissed" before a 2026-07-27 rename —
+    /// <see cref="LegacyIdlePlaceholder"/> still needs excluding wherever placeholder rows
+    /// are matched/filtered, so rows written under the old text don't show up disguised as a
+    /// real answer. Centralized here (2026-07-28) after this exact pair of literals turned
+    /// up hand-typed in four separate places (ActivityTracker, IdleReturnDialog, and two
+    /// Database.cs queries) with no shared source — the same "fix one sibling, miss the
+    /// other" drift risk this project has hit before, since the pair was already renamed
+    /// once and not every copy was found at the time.</summary>
+    public const string IdlePlaceholder = "unaccounted time";
+    public const string LegacyIdlePlaceholder = "dismissed";
 }

@@ -375,10 +375,12 @@ public sealed class ActivityTracker : IDisposable
         if (tx is not null) cmd.Transaction = tx;
         cmd.CommandText =
             "DELETE FROM time_diary WHERE date = $d AND window = $w " +
-            "AND description IN ('unaccounted time', 'dismissed') " +
+            "AND description IN ($ph, $legacyPh) " +
             "AND NOT (end_time <= $s OR start_time >= $e)";
         cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
         cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
         cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
         cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
         cmd.ExecuteNonQuery();
@@ -763,7 +765,7 @@ public sealed class ActivityTracker : IDisposable
             // of inserting a second, overlapping one — see their own comments.
             if (idleStart < diaryEndToday)
                 LogDiarySession(conn, idleStart, idleEnd, DiaryCategory.Idle, DiaryCategory.Idle,
-                    "unaccounted time");
+                    DiaryCategory.IdlePlaceholder);
             // Ask on return from idle at ANY hour, not only during diary
             // hours — someone who finishes and steps away in the evening
             // should still be asked where they were. idleStart/idleEnd are

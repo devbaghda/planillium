@@ -216,7 +216,7 @@ public static class IdleReturnDialog
         {
             if (chosen is null && result != ContentDialogResult.Primary)
             {
-                tracker.LogIdleAnswer(idleStart, idleMinutes, "unaccounted time");
+                tracker.LogIdleAnswer(idleStart, idleMinutes, DiaryCategory.IdlePlaceholder);
                 return;
             }
 
@@ -227,7 +227,7 @@ public static class IdleReturnDialog
             }
 
             var text = chosen ?? input.Text.Trim();
-            tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : "unaccounted time");
+            tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : DiaryCategory.IdlePlaceholder);
         }
         catch (Exception ex)
         {

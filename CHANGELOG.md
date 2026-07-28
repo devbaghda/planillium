@@ -36,6 +36,11 @@ going forward; the original Python/Tkinter version is retired.
 - The Diary's "Show more" link used to reveal every remaining hidden row in one click — on a
   busy day or a wide search that could mean hundreds of rows appearing at once. It now reveals
   50 at a time, re-showing the link (with an updated count) if more are still hidden.
+- Fixed a same-day regression in the fix above: while viewing "today" or "All time" with no
+  search text, the Diary quietly redraws itself every 30 seconds to pick up newly-tracked
+  activity — that redraw was forgetting how far you'd clicked "Show more" and silently snapping
+  back to the first 40 rows. It now remembers where you left it and only resets to the default
+  when you actually change what you're looking at (a different day, search, or filter).
 - The "While you were away" recap you get when reopening the app (instead of clicking the
   notification itself) told you to "click to log where you were" or "click to see today's plan"
   — but there was nothing to actually click; it was just a read-out of what the notification had

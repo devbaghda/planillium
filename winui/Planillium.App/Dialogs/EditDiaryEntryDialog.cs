@@ -57,19 +57,8 @@ public static class EditDiaryEntryDialog
         {
             Header = "Description",
             Text = description ?? "",
-            ItemsSource = frequent,
         };
-        descBox.TextChanged += (sender, args) =>
-        {
-            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
-            sender.ItemsSource = sender.Text.Length == 0
-                ? frequent
-                : frequent.Where(d => d.Contains(sender.Text, StringComparison.OrdinalIgnoreCase)).ToList();
-        };
-        descBox.GotFocus += (_, _) =>
-        {
-            if (descBox.Text.Length == 0 && frequent.Count > 0) descBox.IsSuggestionListOpen = true;
-        };
+        DialogControls.WireFrequentSuggestions(descBox, frequent);
         panel.Children.Add(descBox);
 
         var error = new TextBlock

@@ -71,4 +71,25 @@ internal static class DialogControls
         AutomationProperties.SetName(box, "Minutes");
         return box;
     }
+
+    /// <summary>Wires an AutoSuggestBox to filter and offer <paramref name="frequent"/> as
+    /// the user types, and to open the suggestion list immediately on focus if the box is
+    /// still empty — the "show my most commonly-used past entries" behavior added to
+    /// EditDiaryEntryDialog and SplitDiaryEntryDialog's description fields (2026-07-28
+    /// request), previously hand-typed identically in both instead of shared once here.</summary>
+    public static void WireFrequentSuggestions(AutoSuggestBox box, List<string> frequent)
+    {
+        box.ItemsSource = frequent;
+        box.TextChanged += (sender, args) =>
+        {
+            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+            sender.ItemsSource = sender.Text.Length == 0
+                ? frequent
+                : frequent.Where(d => d.Contains(sender.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+        };
+        box.GotFocus += (_, _) =>
+        {
+            if (box.Text.Length == 0 && frequent.Count > 0) box.IsSuggestionListOpen = true;
+        };
+    }
 }

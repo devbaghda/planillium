@@ -297,8 +297,10 @@ public sealed class Database : IDisposable
         cmd.CommandText =
             "SELECT description FROM time_diary " +
             "WHERE window='idle' AND description IS NOT NULL AND description <> '' " +
-            "AND description NOT IN ('dismissed', 'unaccounted time') " +
+            "AND description NOT IN ($ph, $legacyPh) " +
             "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
+        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
         cmd.Parameters.AddWithValue("$n", topN);
         using var r = cmd.ExecuteReader();
         while (r.Read()) result.Add(r.GetString(0));
@@ -317,8 +319,10 @@ public sealed class Database : IDisposable
         cmd.CommandText =
             "SELECT description FROM time_diary " +
             "WHERE description IS NOT NULL AND description <> '' " +
-            "AND description NOT IN ('dismissed', 'unaccounted time') " +
+            "AND description NOT IN ($ph, $legacyPh) " +
             "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
+        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
         cmd.Parameters.AddWithValue("$n", topN);
         using var r = cmd.ExecuteReader();
         while (r.Read()) result.Add(r.GetString(0));

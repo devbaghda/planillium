@@ -393,11 +393,11 @@ public static class AddPlanDialog
             // Extract (but don't yet teach — ShowAsync does that via TeachPlanTools, once
             // this dialog itself has closed) the on-plan tools this plan actually names.
             // Only for a real (non-queued) import: a queued idea isn't tracked against yet,
-            // and PlanStore.ActivateQueuedPlan doesn't currently repeat this step (queued
-            // ideas are rare and the same tools list is still sitting right there in the
-            // plan file whenever it's later activated — nothing is lost, just not yet
-            // taught). Best-effort: a parse hiccup here shouldn't turn an already-successful
-            // plan import into a reported failure.
+            // and gets the same TeachPlanTools treatment later, once it's actually activated
+            // (StartQueuedPlanDialog / PlansPage's "Start now," both re-reading the tools list
+            // straight from the plan file at that point — nothing needs extracting here for
+            // it). Best-effort: a parse hiccup here shouldn't turn an already-successful plan
+            // import into a reported failure.
             if (!queueOnly)
             {
                 try

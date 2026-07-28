@@ -316,21 +316,11 @@ public sealed partial class PlansPage : Page
             : $"Archive an active plan first — max {AppInfo.MaxActivePlans} active.");
         start.Click += async (_, _) =>
         {
-            try
+            if (!await TeachPlanTools.ActivateQueuedPlanAsync(XamlRoot, idea.Id, "PlansPage.StartQueuedIdea"))
             {
-                PlanStore.ActivateQueuedPlan(idea.Id);
-            }
-            catch (Exception ex)
-            {
-                Log.Error("PlansPage.StartQueuedIdea", ex);
                 SaveErrorBar.IsOpen = true;
                 return;
             }
-            // Same as StartQueuedPlanDialog's own activation path — a queued idea's tools
-            // were never taught while it sat inactive, so teach them now that it's real.
-            var activated = PlanStore.LoadActivePlans().FirstOrDefault(p => p.Id == idea.Id);
-            if (activated != null)
-                await TeachPlanTools.RunAsync(XamlRoot, PlanStore.DistinctTools(activated));
             Render();
             (App.MainWindow as MainWindow)?.RefreshScore();
         };

@@ -250,7 +250,13 @@ same evening after a third 07-24 audit round + fix; ~570→~488 lines total on 2
 two same-day fixes pushed the file back past the ~300-line threshold; ~578→~566 lines later the
 same day after a third same-day round (condensed the 07-23/24 and 07-27 entries into tighter
 prose; left this same-day round's own entries less compressed since they're the freshest and
-most likely to matter next session — revisit at the next compaction pass)._
+most likely to matter next session — revisit at the next compaction pass); ~628 lines after a
+fourth same-day round (a full audit + remediation pass) — the older 07-18-through-07-22 and
+07-27 paragraphs were re-checked and are already near their practical compression floor (further
+squeezing risks dropping the still-open "keyboard/dark-mode/timing" TODO or other facts), so this
+pass added its own entry without re-compacting old ones; a genuine re-compaction is still owed
+next time this section is touched, once today's four entries are no longer the freshest thing in
+it)._
 
 - **2026-07-23/24, condensed** (full detail in git log): full internal rename
   `MentorOverseer`→`Planillium` (3 legacy-compat values deliberately untouched — see top of file);
@@ -429,6 +435,65 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
   (from the earlier entry above) plus this round's AutoSuggestBox popup (real past descriptions),
   Reports button bounding rects (0/40 out of bounds), and the Show-more batching all confirmed via
   real clicks/coordinates, not just code review.
+- **2026-07-28 (full 5-category audit + remediation)**: ran all five `windows-app-auditor`
+  passes directly (parallel sub-agents were offered, user declined; ran sequentially with own
+  Read/Grep/Bash instead) against the whole app, weighted toward today's least-scrutinized new
+  code. Security came back clean (0 Critical/High/Medium) — SQL fully parameterized, table names
+  always from a fixed internal list, plan-id path traversal already guarded, docx zip-bomb check
+  already correct (real byte-count, not header size), `app.manifest` already `asInvoker` +
+  PerMonitorV2, no telemetry beyond TickTick's own API. 7 real findings, all fixed except one
+  accepted-as-is:
+  1. **(Medium, fixed)** Diary's new batched "Show more" silently lost its progress every 30
+     seconds while viewing "today"/"All time" with no search — `RenderDiaryResults()`'s periodic
+     live-refresh call rebuilt `DiaryList()` from scratch, and the revealed-row count was a local
+     variable with no persistence. Fixed via two new static fields (`_diaryRowsShown`,
+     `_diaryRowsShownScopeKey`) — `RenderDiaryResults` computes a scope signature (day/search/
+     filters/all-time) and only resets the count on an actual scope change, not a same-scope
+     refresh tick. Verified live: revealed 90 rows, waited 35+ real seconds (past the 30s
+     interval), still showed 90; toggling "All time" off (a genuine scope change) correctly
+     dropped back to 40.
+  2. **(Medium, fixed)** The idle-answer placeholder pair `"unaccounted time"`/`"dismissed"` was
+     hand-typed in 4 places across 3 files (`ActivityTracker.cs` ×2, `IdleReturnDialog.cs` ×2,
+     `Database.cs` ×2 queries, one of them added this same session) with no shared constant —
+     exactly the kind of duplicated-literal drift this project has hit before (this pair was
+     already renamed once, from "dismissed"). Centralized as `DiaryCategory.IdlePlaceholder`/
+     `LegacyIdlePlaceholder`; all 6 call sites now reference it (2 of Database's now parameterize
+     the SQL `IN (...)` instead of inlining the literals, matching the file's existing style).
+  3. **(Medium, fixed — user confirmed via AskUserQuestion, since a structural change is a
+     decision not a mechanical fix)** `ReportsPage.Diary.cs`'s `BuildDiarySection` was 389 lines,
+     mixing search/filter UI, the mark-toolbar, the list area, and two timers' setup in one
+     method — now the single largest file in the app, surpassing the already-known
+     `ActivityTracker.cs` God Object. Split the 4 pieces that build UI with **zero shared mutable
+     state** into their own methods (`BuildDiarySearchBox`/`BuildDiaryFilterRow`/
+     `BuildDiaryMarkToolbar`/`BuildDiaryResultsArea`), using tuple-deconstruction return values
+     (`var (categoryBox, appBox, ...) = BuildDiaryFilterRow();`) so every downstream reference in
+     `RenderDiaryResults`/event-wiring needed **zero changes** — same identifiers, same closures.
+     `RenderDiaryResults` itself (~130 lines) deliberately stayed inline: it's the one piece that
+     genuinely shares mutable state (`selectedIds`/`lastRows`/`syncingFilters`) with the rest, and
+     forcing it apart would risk the exact closure-capture bug class this file's own old doc
+     comment was warning about. Net: 389 → 294 lines (real reduction, not "now under 80" —
+     said so plainly rather than overclaiming). Verified live post-split: all 3 filter combo
+     boxes, the mark-toolbar buttons, and the Show-more batching (40→90 again) all still render
+     and behave identically.
+  4. **(Low, fixed)** A comment in `AddPlanDialog.cs` (written earlier this same session) said a
+     queued plan's tools "aren't taught until/unless activated" and that `ActivateQueuedPlan`
+     "doesn't currently repeat this step" — but fix #1 of the earlier same-day round already
+     closed that exact gap. Updated the comment to describe current behavior.
+  5. **(Low, fixed)** `StartQueuedPlanDialog.ShowAsync` and `PlansPage`'s `QueuedRow` "Start now"
+     handler independently re-implemented the identical "activate → reload from disk → teach
+     tools" sequence. Extracted `TeachPlanTools.ActivateQueuedPlanAsync(xamlRoot, planId,
+     logContext)`; both call sites now share it.
+  6. **(Low, fixed)** `EditDiaryEntryDialog.cs`/`SplitDiaryEntryDialog.cs` each hand-typed the
+     identical ~10-line AutoSuggestBox filter-as-you-type wiring added earlier this session.
+     Extracted `DialogControls.WireFrequentSuggestions(box, frequent)`; both now call it.
+  7. **(Low, accepted/not fixed)** `PlanStore.ActivateQueuedPlan` writes the new active-plan file
+     then deletes the queued one as two separate non-atomic steps — a crash in between would
+     briefly duplicate the plan in both folders. Narrow window, self-healing (re-activating just
+     repeats both steps), not worth a cross-file transaction for this. Left as-is, documented here
+     rather than silently dropped.
+  Verified overall: clean build (0 warnings) + 96/96 tests + live relaunch after every batch, per
+  the `remediation-loop.md` discipline. Not committed/pushed — awaiting explicit go-ahead per this
+  project's own pattern.
 - **Standing lessons** (apply every session, not just the one that taught them):
   - **A dialog/UI surface that repeats another prompt's copy ("click to X") must also carry that
     prompt's action, not just its text** — text and action can silently drift apart the moment a

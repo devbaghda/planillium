@@ -83,19 +83,8 @@ public static class SplitDiaryEntryDialog
                 PlaceholderText = "description",
                 Text = prefillDesc ?? "",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                ItemsSource = frequent,
             };
-            descBox.TextChanged += (sender, args) =>
-            {
-                if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
-                sender.ItemsSource = sender.Text.Length == 0
-                    ? frequent
-                    : frequent.Where(d => d.Contains(sender.Text, StringComparison.OrdinalIgnoreCase)).ToList();
-            };
-            descBox.GotFocus += (_, _) =>
-            {
-                if (descBox.Text.Length == 0 && frequent.Count > 0) descBox.IsSuggestionListOpen = true;
-            };
+            DialogControls.WireFrequentSuggestions(descBox, frequent);
             AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
             AutomationProperties.SetName(removeBtn, "Remove this activity");

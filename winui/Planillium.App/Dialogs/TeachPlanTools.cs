@@ -43,4 +43,29 @@ internal static class TeachPlanTools
         var notice = DialogControls.Build(xamlRoot, "Learned new on-plan apps", msg, closeButtonText: "Got it");
         await DialogGate.ShowAsync(notice);
     }
+
+    /// <summary>Activates a queued plan idea and teaches its tools — the exact "activate,
+    /// then re-read the now-active plan from disk, then teach" sequence StartQueuedPlanDialog
+    /// and PlansPage's "Start now" button both need, previously hand-typed identically in
+    /// each (2026-07-28 audit finding). Re-reads from disk rather than trusting an
+    /// already-loaded copy, since ActivateQueuedPlan patches start_date on the file after
+    /// any in-memory copy of it was loaded. Returns false (and logs under
+    /// <paramref name="logContext"/>) only if activation itself failed; the caller decides
+    /// what a failure looks like on screen.</summary>
+    public static async Task<bool> ActivateQueuedPlanAsync(XamlRoot xamlRoot, string planId, string logContext)
+    {
+        try
+        {
+            PlanStore.ActivateQueuedPlan(planId);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(logContext, ex);
+            return false;
+        }
+        var activated = PlanStore.LoadActivePlans().FirstOrDefault(p => p.Id == planId);
+        if (activated != null)
+            await RunAsync(xamlRoot, PlanStore.DistinctTools(activated));
+        return true;
+    }
 }
