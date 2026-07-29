@@ -22,6 +22,17 @@ going forward; the original Python/Tkinter version is retired.
   in by hand every time.
 
 **Fixes**
+- Diary rows for idle time (or anything else with no detected app page) now show what you typed
+  when answering "what were you doing" in the Page column instead of a bare "—", instead of
+  burying your answer in quotes next to the duration. Also removed the parentheses that used to
+  wrap every entry's duration ("(12m)" → "12m"). Entries that already have a real detected page
+  (like a Chrome tab's site) are unaffected — a manually added note there still shows alongside
+  the duration as before.
+- The Diary's Category, App, and Page filters (plus the search box) now narrow each other
+  instead of acting independently — e.g. picking a Category of "Off-plan" now shrinks the App
+  dropdown down to only the apps that actually have off-plan entries, instead of still listing
+  every app that appeared that day regardless of category. The list of matching entries itself
+  was already correct; only the dropdowns' own option lists were failing to narrow.
 - The "Split diary entry" dialog's "+ Add activity" button did nothing when clicked — it had
   looked clickable but was never actually wired up to add a row, so a split was stuck at exactly
   the two starting rows no matter how many times you pressed it. It now adds a new row each time,

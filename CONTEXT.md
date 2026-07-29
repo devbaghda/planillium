@@ -602,6 +602,46 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
     predicted confusion happening for real, a year of code-comments later. If a fix for this
     class of thing is ever revisited, put the clarification where the user actually looks (the
     UI itself), not only in a doc comment only a future session will read.
+- **2026-07-29**: user reported the Diary's Category/App/Page filters and search box weren't
+  interconnected — picking Category = Off-plan still left Chrome/LinkedIn selectable in the App/
+  Page dropdowns as if the category filter weren't applied. Root cause: `appsInView`/`pagesInView`
+  (the lists that populate the App/Page dropdown options) were computed straight from the full
+  unfiltered `rows` for the day, while the actual results list applied all four filters — so the
+  dropdown *options* never narrowed even though the *results* were already filtering correctly.
+  Fixed by extracting the four filter checks (`MatchesCategory`/`MatchesApp`/`MatchesPage`/
+  `MatchesSearch`) into local predicate functions, then building each dropdown's option list from
+  rows matching every *other* active filter (standard faceted-search shape) and building the
+  results list from all four ANDed together — same predicates, so dropdown options and results
+  can never disagree. Separately verified via a **read-only** query against the real
+  `data/progress.db` (loaded the app's own compiled SQLite DLLs into PowerShell,
+  `Mode=ReadOnly`) that some real Chrome/LinkedIn diary rows genuinely are `off_plan` — specific
+  named-contact LinkedIn messaging sessions the user had manually recategorized via the Diary's
+  bulk "mark selected as off-plan" action — so LinkedIn legitimately can still appear as a Page
+  option under Category=Off-plan; that's correct behavior, not a bug. Live-verified the App
+  dropdown narrowing from 26 options to 4 after applying Category=Off-plan via UI Automation;
+  Page-dropdown narrowing and search-box interconnection were verified by code inspection only
+  (all four dropdowns/results share the same predicate functions, so the mechanism is identical)
+  rather than further live clicking. Clean build, 96/96 tests. Not yet committed/pushed as of this
+  entry — awaiting explicit instruction per this repo's commit convention.
+- **2026-07-29 (same-day follow-up)**: user reported two Diary display issues from a screenshot —
+  idle rows showing what they'd typed answering "what were you doing" (e.g. "airbnb") only in the
+  details column next to the duration, with the Page column still showing a bare "—"; and every
+  entry's duration wrapped in parens ("(12m)"). Root cause of the first: `AppNames.Sub(window)`
+  returns null for idle (and anything else with no app-detected sub-item), so the Page column
+  always fell back to "—" regardless of whether the user had actually answered — the answer
+  itself only ever reached the separate `desc` field shown in the details column. Fixed in
+  `DiaryList`/`BuildRow` (`ReportsPage.Diary.cs`): when there's no detected page AND a
+  description exists, the description now displays in the Page column instead of "—" (italicized,
+  same visual cue the details column used to use, to mark it as user-typed rather than
+  app-detected), and is no longer duplicated in the details column for that row. Entries that
+  already have a real detected page (e.g. a Chrome tab's actual site) are untouched — a
+  description there still shows in the details column as a supplementary note, since it doesn't
+  replace real page info. Second fix: dropped the wrapping parens from the details column's
+  duration text unconditionally (`"(12m)"` → `"12m"`; `"“desc” (12m)"` → `"“desc” 12m"`). Both are
+  pure-display changes — no filter/query/DB logic touched, so the interconnected-filters fix
+  earlier this session is unaffected. Clean build, 96/96 tests; not live-UI-verified this round
+  (a live UI Automation check was attempted and rejected earlier this session — relying on build +
+  test + code review for this batch). Not committed/pushed yet.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **`ActivityTracker`'s Win32-interop code (819 lines) still needs splitting out of its
     God-Object shape** — flagged by the 2026-07-23 audit (finding #8), user deliberately

@@ -194,8 +194,33 @@ public sealed partial class ReportsPage
             // matches AppNames.Group (e.g. "Chrome", "Telegram"); Page matches AppNames.Sub
             // (e.g. "GitHub", "Liza Ponomarenko") — the same two values the row's own App/Page
             // columns show, split out 2026-07-23 so each is independently filterable.
+            //
+            // The four filters (category/app/page/search) are combined with AND on the actual
+            // results below, but the App/Page dropdowns' own OPTION LISTS used to be built from
+            // every row in view regardless of any filter already active — so picking Category =
+            // Off-plan still offered every app that had ANY entry that day, including ones whose
+            // entries were entirely on-plan, and picking App also didn't narrow Page's options
+            // (2026-07-29 user report: filters "should be interconnected"). Each dropdown's
+            // options are now built from rows matching every OTHER active filter — the standard
+            // faceted-search shape — so a filter only ever offers choices that can actually
+            // produce a result under the filters already applied.
+            bool MatchesCategory(ReportData.DiaryEntry e) =>
+                _diaryCategoryFilter is not { } cat || e.Cat == cat;
+            bool MatchesApp(ReportData.DiaryEntry e) =>
+                _diaryAppFilter is not { } app ||
+                string.Equals(AppNames.Group(e.Window), app, StringComparison.OrdinalIgnoreCase);
+            bool MatchesPage(ReportData.DiaryEntry e) =>
+                _diaryPageFilter is not { } page ||
+                string.Equals(AppNames.Sub(e.Window) ?? "", page, StringComparison.OrdinalIgnoreCase);
+            bool MatchesSearch(ReportData.DiaryEntry e) =>
+                !searching ||
+                AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase);
+
             syncingFilters = true;
-            var appsInView = rows.Select(e => AppNames.Group(e.Window))
+            var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesSearch(e))
+                .Select(e => AppNames.Group(e.Window))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
             appBox.Items.Clear();
@@ -207,7 +232,8 @@ public sealed partial class ReportsPage
             appBox.SelectedItem = matchedApp ?? AllApps;
             _diaryAppFilter = matchedApp; // drops a filter whose app no longer appears in view
 
-            var pagesInView = rows.Select(e => AppNames.Sub(e.Window))
+            var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesSearch(e))
+                .Select(e => AppNames.Sub(e.Window))
                 .Where(p => p is { Length: > 0 })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
@@ -226,21 +252,11 @@ public sealed partial class ReportsPage
             allTimeBox.IsChecked = _diaryAllTime;
             syncingFilters = false;
 
-            var filtered = rows.AsEnumerable();
-            if (_diaryCategoryFilter is { } catFilter)
-                filtered = filtered.Where(e => e.Cat == catFilter);
-            if (_diaryAppFilter is { } appFilter)
-                filtered = filtered.Where(e =>
-                    string.Equals(AppNames.Group(e.Window), appFilter, StringComparison.OrdinalIgnoreCase));
-            if (_diaryPageFilter is { } pageFilter)
-                filtered = filtered.Where(e =>
-                    string.Equals(AppNames.Sub(e.Window) ?? "", pageFilter, StringComparison.OrdinalIgnoreCase));
-            if (searching)
-                filtered = filtered.Where(e =>
-                    AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                    (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
-                    e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase));
-            var filteredList = filtered.ToList();
+            // Same four predicates decide what actually shows in the results list — the
+            // dropdown-option narrowing above and the results below can never disagree with
+            // each other, since both read from the same single definition of each filter.
+            var filteredList = rows.Where(e =>
+                MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesSearch(e)).ToList();
             var filtersActive = _diaryCategoryFilter != null || _diaryAppFilter != null || _diaryPageFilter != null;
 
             var totalMin = filteredList.Sum(e => e.Dur);
@@ -822,7 +838,17 @@ public sealed partial class ReportsPage
             // (kept below for accessible names/tooltips) and for the app/page filters.
             var windowLabel = AppNames.Label(window);
             var appGroup = AppNames.Group(window);
-            var pageSub = AppNames.Sub(window) ?? "—";
+            var rawPageSub = AppNames.Sub(window);
+            // idle/dismissed entries (and anything else with no app-detected sub-item) have
+            // nothing else to show in the Page column — but once the user's answered "what
+            // were you doing" for one, that free-text description IS the activity, so show it
+            // there instead of a bare "—" (2026-07-29 report: it was landing only in the
+            // details column, buried next to the duration, while Page kept showing "—" as if
+            // nothing had been recorded). Left untouched whenever there's a real detected page
+            // (e.g. Chrome's actual site) — a manually-added note on top of a real page is a
+            // supplementary detail, not a replacement for it, so it stays in the details column.
+            var descInPage = rawPageSub is null && desc is { Length: > 0 };
+            var pageSub = descInPage ? desc! : rawPageSub ?? "—";
             var appText = new TextBlock
             {
                 Text = appGroup,
@@ -833,15 +859,19 @@ public sealed partial class ReportsPage
             var pageText = new TextBlock
             {
                 Text = pageSub,
+                FontStyle = descInPage ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             ToolTipService.SetToolTip(pageText, pageSub);
-            var detailsText = desc is { Length: > 0 } ? $"“{desc}” ({dur}m)" : $"({dur}m)";
+            // No parens around the duration (2026-07-29 report) — just "12m", or
+            // "“desc” 12m" when there's a description that didn't already move to the Page
+            // column above.
+            var detailsText = !descInPage && desc is { Length: > 0 } ? $"“{desc}” {dur}m" : $"{dur}m";
             var details = new TextBlock
             {
                 Text = detailsText,
-                FontStyle = desc is { Length: > 0 }
+                FontStyle = !descInPage && desc is { Length: > 0 }
                     ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
