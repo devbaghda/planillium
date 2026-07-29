@@ -22,6 +22,10 @@ going forward; the original Python/Tkinter version is retired.
   in by hand every time.
 
 **Fixes**
+- The "Split diary entry" dialog's "+ Add activity" button did nothing when clicked — it had
+  looked clickable but was never actually wired up to add a row, so a split was stuck at exactly
+  the two starting rows no matter how many times you pressed it. It now adds a new row each time,
+  the same way the equivalent button in the "welcome back" idle-return dialog already did.
 - Teaching an on-plan/off-plan keyword automatically (marking a diary entry, or importing a
   plan's tools list) now refuses a bare browser name by itself (just "Chrome", "Edge", etc.) —
   a browser hosts both on-plan and off-plan content depending on the tab, so teaching the whole

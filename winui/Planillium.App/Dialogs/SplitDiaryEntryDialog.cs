@@ -124,6 +124,13 @@ public static class SplitDiaryEntryDialog
         AddRow(durationMin, category, description);
         AddRow(null, category, null);
 
+        // Was never wired at all — the button existed and looked clickable, but had no
+        // Click handler, so nothing happened no matter how many times it was pressed
+        // (2026-07-29 user report: "not possible to add more than 2 lines"). Same
+        // defaults as the second seed row above: empty duration for the user to fill in,
+        // the original entry's category, no prefilled description.
+        addRowBtn.Click += (_, _) => AddRow(null, category, null);
+
         var result = await DialogGate.ShowAsync(dialog);
         if (result != ContentDialogResult.Primary) return null;
 

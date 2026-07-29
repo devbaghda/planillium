@@ -492,9 +492,18 @@ day-off scoring feature (business rule 10: `AllPlansScoringExempt`, `Recalculate
      repeats both steps), not worth a cross-file transaction for this. Left as-is, documented here
      rather than silently dropped.
   Verified overall: clean build (0 warnings) + 96/96 tests + live relaunch after every batch, per
-  the `remediation-loop.md` discipline. Not committed/pushed — awaiting explicit go-ahead per this
-  project's own pattern.
-- **Standing lessons** (apply every session, not just the one that taught them):
+  the `remediation-loop.md` discipline. Committed `56cbdb7`, pushed.
+- **2026-07-29**: user reported `SplitDiaryEntryDialog`'s "+ Add activity" button did nothing —
+  stuck at exactly the two starting rows. Root cause: the button was created and added to its
+  toolbar, but `addRowBtn.Click` was never actually wired to call `AddRow` — confirmed pre-existing
+  via `git show` on a commit from before this whole session started, so not a regression from any
+  of today's/yesterday's work. `IdleReturnDialog`'s own near-identical split-mode "+ Add activity"
+  button (same `AddRow` pattern this dialog was clearly modeled on) already wired its `Click`
+  correctly, so this wasn't a "fix one sibling, miss the other" case — just a wiring line dropped
+  when this dialog was first written. Fixed by adding `addRowBtn.Click += (_, _) => AddRow(null,
+  category, null);` (same defaults as the second seed row). Verified live: clicking it twice grew
+  the row count 2→3→4 via real `InvokePattern.Invoke()` calls against the actual dialog, cancelled
+  before closing (no live data mutated). Clean build + 96/96 tests.
   - **A dialog/UI surface that repeats another prompt's copy ("click to X") must also carry that
     prompt's action, not just its text** — text and action can silently drift apart the moment a
     prompt is ever shown through a second surface (a recap, a log, a history view) that wasn't
