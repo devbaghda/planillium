@@ -89,12 +89,22 @@ classifier enforces it and will reject a vague "yes, go ahead."
 
 ## Keeping docs current
 The global rules on doc currency and `CONTEXT.md` compaction apply. Project specifics:
+- **Two documents, different jobs** (split 2026-08-04): `CONTEXT.md` is the read-through handoff —
+  what the app is, the schema, and the session log. `DECISIONS.md` is the lookup register — the 13
+  numbered business rules with their rationale, and the standing lessons. Read `CONTEXT.md` at
+  session start; consult `DECISIONS.md` before changing anything in the areas it covers. Keep them
+  separate: a new business rule or a lesson learned the hard way goes in `DECISIONS.md`, a shipped
+  change goes in `CONTEXT.md`'s session log.
 - Docs to update in the same pass as a shipped fix or feature: `CONTEXT.md`'s Session handoff
   notes (append tersely — it's an index, not an archive), plus `CHANGELOG.md` (Unreleased) and
   `MANUAL.md` if the change is user-visible.
-- Compaction triggers here: after a significant milestone, or once the handoff notes push the file
-  past ~300 lines, or when an entry is re-explaining something better left to git log. Precedent:
-  852→224 lines, then compressed again.
+- **`CONTEXT.md`'s compaction threshold is 400 lines**, declared in its own header where the Stop
+  hook reads it. Count with `wc -l`, not PowerShell's `Measure-Object -Line` (it skips blank lines
+  and under-reported this file by ~60). Over threshold means compact **in the same pass**. Also
+  compact after a significant milestone, or when an entry re-explains something git log covers
+  better. Precedent: 852→224, later 771→476, and 535→347 by splitting `DECISIONS.md` out —
+  **when prose won't compress further, the answer is moving reference material to its own file,
+  not deleting facts.**
 - Skills this repo has sharpened and should keep sharpening: `windows-app-auditor`,
   `windows-app-tester` — WinUI layout quirks, UIA verification technique, the
   shift-vs-completion-keying bug class.
