@@ -97,6 +97,11 @@ public static class ConfigService
         Root.TryGetProperty("scoring", out var s) &&
         s.TryGetProperty(key, out var v) && v.TryGetInt32(out var n) ? n : fallback;
 
+    /// <summary>Same lookup, with the default taken from <see cref="ScoringRules"/> instead of
+    /// retyped at the call site — the reason that table exists (see its doc comment). Prefer
+    /// this overload; the one above stays only for a caller with a genuinely local default.</summary>
+    public static int ScoringRate(string key) => ScoringRate(key, ScoringRules.DefaultFor(key));
+
     /// <summary>Spend rates from config["score"] — same defaults as main.py _score_rates().</summary>
     public static (double PtsPerMin, double PtsPerUnit, string Symbol) SpendRates()
     {
@@ -132,6 +137,24 @@ public static class ConfigService
             wh.TryGetProperty("end", out var v) && v.GetString() is { Length: > 0 } s) end = s;
         return TimeSpan.TryParse(end, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(20, 0, 0);
     }
+
+    /// <summary>The window the time diary actually logs activity in — which is simply the
+    /// working day (<see cref="WorkStartTime"/>/<see cref="WorkEndTime"/>).
+    ///
+    /// Kept as a named pair rather than having callers read the work hours directly, so the
+    /// rule lives in one place and the display strings that quote the window read the same
+    /// thing the tracker does. It used to be two hardcoded 06:00/20:00 constants inside
+    /// ActivityTracker with no relation to working hours and no way to reach them, so moving
+    /// the working day to 08:00 still left every morning from 06:00 logged as "unaccounted
+    /// time" (the 2026-08-04 report). It was briefly its own `diary_hours` config block with
+    /// its own Settings pair; the user's call the same day was to merge the two — one pair of
+    /// hours is the whole idea, and a second pair is just another thing to keep in sync. A
+    /// stray `diary_hours` block left in an existing config.json is inert, deliberately: it is
+    /// no longer read at all, rather than quietly overriding the working hours.</summary>
+    public static TimeSpan DiaryStartTime() => WorkStartTime();
+
+    /// <inheritdoc cref="DiaryStartTime"/>
+    public static TimeSpan DiaryEndTime() => WorkEndTime();
 
     /// <summary>Minutes of off-plan grace before the first reminder alert
     /// ("reminder_grace_minutes"), default 15 — was previously re-derived independently

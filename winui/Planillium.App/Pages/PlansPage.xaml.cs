@@ -82,8 +82,14 @@ public sealed partial class PlansPage : Page
 
                 var originalEndDate = plan.DateForPlanDay(plan.TotalDaysComputed);
                 var driftDays = plan.DriftDays(tasks);
+                // Passed in rather than read off `plan` inside PlanCard, since it needs the
+                // task list — and this card must show the same "Day X of Y" as Today and
+                // Schedule, not a second differently-derived number for the same plan
+                // (2026-08-04; this repo has already had one report of exactly that shape).
+                var progressDay = plan.ProgressDay(tasks, plan.TotalDaysComputed);
 
-                ActiveList.Children.Add(PlanCard(plan, done, tasks.Count, complete, originalEndDate, driftDays));
+                ActiveList.Children.Add(PlanCard(plan, done, tasks.Count, complete, originalEndDate,
+                    driftDays, progressDay));
             }
             if (plans.Count == 0)
                 ActiveList.Children.Add(new TextBlock
@@ -115,7 +121,7 @@ public sealed partial class PlansPage : Page
     }
 
     private Border PlanCard(Plan plan, int done, int total, bool complete,
-        DateOnly originalEndDate, int driftDays)
+        DateOnly originalEndDate, int driftDays, int progressDay)
     {
         var grid = new Grid { Padding = new Thickness(18, 14, 18, 14), ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -131,7 +137,7 @@ public sealed partial class PlansPage : Page
             Text = plan.Name,
             Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
         });
-        var metaLine = $"Day {plan.PlanDay} of {plan.TotalDaysComputed} · {done}/{total} tasks done";
+        var metaLine = $"Day {progressDay} of {plan.TotalDaysComputed} · {done}/{total} tasks done";
         if (plan.ExcludedWeekdays.Count > 0)
         {
             var names = plan.ExcludedWeekdays

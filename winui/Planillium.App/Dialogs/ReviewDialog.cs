@@ -230,7 +230,7 @@ public static class ReviewDialog
         // exemption filter the real save applies, and could show a different
         // number than what got recorded).
         var overdueCapped = score.OverdueAccrualCount(today);
-        var accrual = overdueCapped * ConfigService.ScoringRate("task_overdue_penalty", -5);
+        var accrual = overdueCapped * ConfigService.ScoringRate("task_overdue_penalty");
 
         // Only ever non-zero on a Monday, when last week (now fully closed)
         // recovered from the week before it closing negative.

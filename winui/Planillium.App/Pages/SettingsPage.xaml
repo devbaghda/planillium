@@ -56,6 +56,11 @@
                 <TextBox x:Name="WorkEnd" Header="Work end" MinWidth="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
                 <TextBox x:Name="EodTimeBox" Header="Day review at" MinWidth="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
             </StackPanel>
+            <!-- No separate diary-window pair here on purpose (2026-08-04): the diary logs
+                 exactly the working hours above. Two pairs of hours was one pair too many. -->
+            <TextBlock Text="Your activity is recorded only between these hours. Outside them nothing is tracked, and time away isn't counted against you."
+                       TextWrapping="Wrap" FontSize="12" Margin="2,-4,0,0"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <NumberBox x:Name="GraceMin" Header="Grace before alert (min)" MinWidth="170" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
                 <NumberBox x:Name="RepeatMin" Header="Repeat every (min)" MinWidth="150" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
@@ -74,6 +79,18 @@
                 <NumberBox x:Name="RetentionDays" Header="Keep detailed diary (days)" MinWidth="190" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
                 <NumberBox x:Name="LateDayReminderHours" Header="Warn if tasks open, before day ends (hrs)" MinWidth="260" Minimum="0.25" Maximum="12" SmallChange="0.25" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
             </StackPanel>
+
+            <TextBlock Text="SCORING  ·  points added or subtracted by each rule" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>
+            <!-- Populated in code from ScoringRules.All rather than hand-listed here: the table
+                 already holds every key, default and range, and a second hand-typed copy in XAML
+                 is precisely the drift this project keeps getting bitten by. Two columns, not
+                 three — a NumberBox header doesn't wrap and silently clips, and these labels are
+                 long (2026-07-21's clipped RetentionDays/LateDayReminderHours row, above). -->
+            <Grid x:Name="ScoringGrid" ColumnSpacing="12" RowSpacing="10"/>
+            <TextBlock Text="Changing these affects days scored from now on. Days already closed keep the score they were credited with — they're only recalculated if you edit that day's diary."
+                       TextWrapping="Wrap" FontSize="12" Margin="2,-2,0,0"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
             <TextBlock Text="ACTIVITY KEYWORDS  ·  one per line, matched inside window titles" FontSize="11" FontWeight="SemiBold" CharacterSpacing="60"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="2,10,0,-6"/>

@@ -63,6 +63,15 @@ It shows:
 - overdue work,
 - and opportunities to start tomorrow’s work early.
 
+**"Day X of Y" counts progress, not calendar days.** The counter stops at the earliest day
+that still has unfinished work on it: miss day 10's task and tomorrow still reads "Day 10",
+because you haven't actually finished day 10 yet. Working ahead doesn't move it either — only
+closing the day behind it does. To deliberately skip a day's task, reschedule it (Reschedule,
+or "Replan all overdue"); that moves the task to its new day and the counter carries on. This
+is also why a 28-day plan you're running late on reads "Day 27 of 28" rather than an
+impossible "Day 30 of 28". How late you are is reported separately, as the overdue list and
+the "Xd late from plan" figure. Today, Plans and Schedule all show this same number.
+
 Getting a head start on tomorrow's work doesn't cost anything from today —
 a task finished early stays credited to the day it was actually done on,
 and finishing more than one task in a day earns a small bonus on top of the
@@ -115,9 +124,14 @@ Reporting summarizes progress and highlights where effort was spent. This helps 
 
 Reports cover the current calendar period: the weekly view runs from this Monday through Sunday, the monthly view spans this calendar month, and the yearly view spans this year — not a rolling look-back over the last several days.
 
+The week/month/year summary table ends with a Total row under the on-plan and off-plan columns
+(and, for month and year, the combined total), so the period's totals are readable without adding
+the rows up by hand. Days where every plan is off contribute nothing to those totals, matching how
+they're already excluded from the rest of Reports.
+
 The "time by app" breakdown shows your three biggest time sinks by default, with a "Show more" link to reveal the full list.
 
-The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained.
+The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained. If you leave the page open on today's diary across midnight, it rolls onto the new day by itself; if you'd navigated to a specific past day, it stays there.
 
 The diary list itself only loads a batch of entries at a time (40 up front, 50 more each time you
 click "Show more") rather than the whole matching history at once, so a long search or a busy day
@@ -131,8 +145,23 @@ The app includes configurable settings for:
 - working hours,
 - reminder behavior,
 - idle thresholds,
+- scoring rules,
 - themes,
 - and activity classification rules.
+
+**Working hours do two jobs.** They're when the app expects you to be on-plan, so that's when
+the off-plan reminder can nag you — and they're also the window in which your activity is
+recorded at all. Outside them nothing is tracked, and time away isn't counted against you or
+back-filled as unaccounted time. So if you want early mornings or evenings on the record, widen
+your working hours; if you only want your working day logged, leave them as they are.
+
+**Scoring.** Every rule in the score formula is editable: what a completed task is worth, the
+bonus for extra tasks the same day, what a missed task costs, points per hour on-plan and
+off-plan, the streak and weekly-comeback bonuses, the worst a single day can score, how many
+days an overdue task keeps costing you, the flat fee for replanning all overdue work, where a
+"great day" starts, and the comeback window. Changes apply to days scored from then on — days
+already closed keep the score they were credited with, and are only recalculated if you edit
+that day's diary.
 
 Activity classification rules (ACTIVITY KEYWORDS) match on a window title, so they can be as
 specific as you need — "Chrome - LinkedIn" and "Chrome - Synology" can be taught as different

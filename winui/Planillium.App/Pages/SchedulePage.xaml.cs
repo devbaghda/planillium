@@ -127,7 +127,10 @@ public sealed partial class SchedulePage : Page
 
         Sections.Children.Add(new TextBlock
         {
-            Text = $"{plan.Name} — day {planDay} of {lastDay}",
+            // Progress day, matching Today/Plans — planDay (the calendar day) still drives
+            // everything below it: which card is highlighted as today, what counts as
+            // overdue, where the view scrolls to (2026-08-04, Plan.ProgressDay).
+            Text = $"{plan.Name} — day {plan.ProgressDay(tasks, lastDay)} of {lastDay}",
             Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
             Margin = new Thickness(0, 8, 0, 4),
         });

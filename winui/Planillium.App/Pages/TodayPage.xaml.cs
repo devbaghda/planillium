@@ -211,7 +211,13 @@ public sealed partial class TodayPage : Page
 
     private static PlanTodayView BuildPlanView(Plan plan, List<AssignedTask> tasks, int planDay)
     {
-        var header = $"{plan.Name}  ·  Day {planDay} of {plan.TotalDaysComputed}";
+        // ProgressDay, not planDay: the header states how far through the plan the user
+        // actually is, which stalls on an unfinished day instead of advancing with the
+        // calendar (2026-08-04 request — see Plan.ProgressDay). Everything below still keys
+        // off planDay, since what's due/overdue today is a calendar question, not a
+        // progress one.
+        var header = $"{plan.Name}  ·  Day {plan.ProgressDay(tasks, plan.TotalDaysComputed)} " +
+                     $"of {plan.TotalDaysComputed}";
         if (planDay <= 0)
             return new PlanTodayView(header,
                 $"Starts {plan.StartDateParsed.ToDisplayDateNumeric()} — {1 - planDay} day(s) to go.",

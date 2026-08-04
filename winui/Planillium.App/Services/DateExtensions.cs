@@ -30,6 +30,10 @@ internal static class DateExtensions
     /// only thing that makes a future retyping unable to drop it.</summary>
     public static string ToIsoTimeOfDay(this DateTime d) => d.ToString("HH:mm", CultureInfo.InvariantCulture);
     public static string ToIsoTimeOfDay(this TimeOnly t) => t.ToString("HH:mm", CultureInfo.InvariantCulture);
+    /// <summary>Same shape again for the TimeSpan-typed clock times ConfigService hands back
+    /// (WorkStartTime/DiaryStartTime and friends) — Settings and Reports both display those,
+    /// and each was hand-typing its own copy of the format string for it (2026-08-04).</summary>
+    public static string ToIsoTimeOfDay(this TimeSpan t) => t.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
 
     /// <summary>Parses the same "HH:mm" shape back — the write side above already had a
     /// shared helper, but the read side (parsing a user-typed time back into a TimeOnly)

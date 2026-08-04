@@ -56,7 +56,57 @@ public sealed partial class ReportsPage
                 grid.Children.Add(tb);
             }
         }
+
+        // Totals under the on-plan/off-plan columns (2026-08-04 request). Sums the values as
+        // displayed, which keeps it consistent with business rule 10 for free: a day where
+        // every plan is off already contributes 0/0 to those two cells, so it can't inflate
+        // the total here while being excluded everywhere else in Reports. Skipped for the
+        // single-row Day period, where a "total" of one row is just noise.
+        // Tasks and Score are deliberately left blank: a summed "12/14" reads as a ratio it
+        // isn't, and a summed Score would sit one column away from the running balance on the
+        // card above while meaning something different (points earned this period, not points
+        // held) — the exact two-similar-numbers confusion this page has been bitten by before.
+        if (rows.Count > 1)
+            AddTotalsRow(grid, 5,
+                (ReportData.FmtMins(rows.Sum(s => s.OnMin)), 2),
+                (ReportData.FmtMins(rows.Sum(s => s.OffMin)), 3));
         return grid;
+    }
+
+    /// <summary>Shared footer for both summary tables: a hairline separator, then a bold
+    /// "Total" label and whichever column totals the caller supplies (by column index — the
+    /// two tables have different column layouts, and only some columns are summable at all).
+    /// One implementation so the two can't drift apart in weight, spacing or label.</summary>
+    private static void AddTotalsRow(Grid grid, int columnCount, params (string Text, int Column)[] cells)
+    {
+        var sepRow = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition());
+        var separator = new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 4, 0, 0),
+            Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+        };
+        Grid.SetRow(separator, sepRow);
+        Grid.SetColumn(separator, 0);
+        Grid.SetColumnSpan(separator, columnCount);
+        grid.Children.Add(separator);
+
+        var totalRow = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition());
+        void Cell(string text, int column)
+        {
+            var tb = new TextBlock
+            {
+                Text = text,
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.NoWrap,
+            };
+            Grid.SetColumn(tb, column); Grid.SetRow(tb, totalRow);
+            grid.Children.Add(tb);
+        }
+        Cell("Total", 0);
+        foreach (var (text, column) in cells) Cell(text, column);
     }
 
     private static Grid BucketTable(List<ReportData.BucketStat> buckets)
@@ -87,6 +137,16 @@ public sealed partial class ReportsPage
                 grid.Children.Add(tb);
             }
         }
+
+        // Same totals footer as DayTable — here the Total column can be summed too, since
+        // it's already just on+off per row. No row-count guard: Month/Year always render
+        // several buckets, and a zero-bucket table never reaches this method at all (Render
+        // substitutes a "No activity logged yet" message instead).
+        if (buckets.Count > 0)
+            AddTotalsRow(grid, 4,
+                (ReportData.FmtMins(buckets.Sum(b => b.OnMin)), 1),
+                (ReportData.FmtMins(buckets.Sum(b => b.OffMin)), 2),
+                (ReportData.FmtMins(buckets.Sum(b => b.OnMin + b.OffMin)), 3));
         return grid;
     }
 

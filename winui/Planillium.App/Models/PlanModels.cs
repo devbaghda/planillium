@@ -116,6 +116,42 @@ public class Plan
 
     public int PlanDay => PlanDayForDate(DateOnly.FromDateTime(DateTime.Today));
 
+    /// <summary>
+    /// The "Day X of Y" figure shown on Today/Plans/Schedule — <b>display only</b>. Every
+    /// scheduling, overdue and scoring decision still uses <see cref="PlanDay"/>, the pure
+    /// calendar count; this is how far the user has actually got, which is not the same thing
+    /// once anything is left unfinished (2026-08-04 request).
+    ///
+    /// The rule: the counter stops at the earliest plan day that still holds unfinished work,
+    /// and never runs ahead of the calendar day or past <paramref name="lastDay"/>. Miss day
+    /// 10's task and tomorrow still reads day 10 — the counter only moves when nothing is left
+    /// behind it. That is safe from getting stuck on a task the user has decided to skip
+    /// precisely because skipping one here means rescheduling it (Reschedule / Replan overdue),
+    /// which moves its <see cref="AssignedTask.AssignedDay"/> forward and so releases the
+    /// counter; a task nobody reschedules and nobody finishes is exactly the case that should
+    /// hold it. The <paramref name="lastDay"/> clamp is what stops a 28-day plan reading
+    /// "Day 30 of 28" once it overruns.
+    /// </summary>
+    /// <param name="tasks">This plan's tasks with override-adjusted assigned days
+    /// (PlanStore.TasksFor) — the same list the caller already renders from.</param>
+    /// <param name="lastDay">Upper bound to clamp to: the plan length as displayed after the
+    /// "of".</param>
+    /// <param name="asOf">Test seam; defaults to today. Same optional-anchor shape as
+    /// ScoreService.CurrentStreak, and for the same reason — anchoring hard on
+    /// DateTime.Today made a whole class of behaviour untestable.</param>
+    public int ProgressDay(List<AssignedTask> tasks, int lastDay, DateOnly? asOf = null)
+    {
+        var calendarDay = PlanDayForDate(asOf ?? DateOnly.FromDateTime(DateTime.Today));
+        // Not started yet — the caller shows a "Starts <date>" message off this same value,
+        // so leave the zero/negative countdown exactly as PlanDay reports it.
+        if (calendarDay <= 0) return calendarDay;
+
+        var day = calendarDay;
+        foreach (var t in tasks)
+            if (!t.Completed && t.AssignedDay < day) day = t.AssignedDay;
+        return lastDay > 0 && day > lastDay ? lastDay : day;
+    }
+
     public int TotalDaysComputed
     {
         get

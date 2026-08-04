@@ -25,15 +25,32 @@ public sealed record DayScoreBreakdown(
 
 public sealed class ScoreService : IDisposable
 {
-    public const int DailyFloor = -10;
-    public const int OverdueAccrualCapDays = 3;
-    public const int ReplanFlatFee = -10;
+    // The five rules below used to be compile-time consts — the only scoring numbers in the
+    // app that weren't editable, while every rate sitting right next to them in the formula
+    // (task_completed, on_plan_hour, streak_bonus_per_day…) already came from config.json's
+    // "scoring" block. Now they read from that same block, keeping these values as their
+    // defaults, so an absent key behaves exactly as before (2026-08-04 request). Properties,
+    // not consts: config.json is editable while the app runs, and ConfigService caches/
+    // invalidates on its own.
+
+    /// <summary>Floor under a single day's score — a bad day is a setback, not a spiral.</summary>
+    public static int DailyFloor => ConfigService.ScoringRate("daily_floor");
+
+    /// <summary>How many days an overdue task keeps accruing its penalty before going
+    /// stale. Clamped at 0: a negative would make the accrual window run backwards.</summary>
+    public static int OverdueAccrualCapDays =>
+        Math.Max(0, ConfigService.ScoringRate("overdue_accrual_cap_days"));
+
+    /// <summary>"Replan all overdue" — one flat fee instead of per-task bleeding.</summary>
+    public static int ReplanFlatFee => ConfigService.ScoringRate("replan_flat_fee");
 
     /// <summary>The "one week" window CurrentStreak, EnsureScoreCaughtUp, and
     /// ComputeWeeklyComeback each used to hardcode as a bare 7/-7 literal — named once
     /// so a future retune can't update three of the four call sites and miss the fourth
-    /// (audit finding #21).</summary>
-    private const int LookbackDays = 7;
+    /// (audit finding #21). Clamped to at least 1: a 0 or negative window would make the
+    /// catch-up loop below cover no days at all, silently stopping daily scoring.</summary>
+    private static int LookbackDays =>
+        Math.Max(1, ConfigService.ScoringRate("comeback_lookback_days"));
 
     /// <summary>SQLite's "UNIQUE/PRIMARY KEY constraint violated" error code —
     /// what a ledger insert throws when another connection already wrote
@@ -44,7 +61,7 @@ public sealed class ScoreService : IDisposable
     /// <summary>The "strong day" bar Reports/ReviewDialog/ReportExport all
     /// use to color/celebrate a score — named once so the three copies can't
     /// silently drift out of agreement if it's ever tuned.</summary>
-    public const int GreatDayThreshold = 20;
+    public static int GreatDayThreshold => ConfigService.ScoringRate("great_day_threshold");
 
     private readonly List<Plan> _plans;
     private readonly Database _db;
@@ -213,12 +230,12 @@ public sealed class ScoreService : IDisposable
     public DayScoreBreakdown ComputeDayScore(int done, int total, int onMin, int offMin, int streak = 0,
         bool isExemptDay = false) =>
         new(
-            TaskPoints: done * ConfigService.ScoringRate("task_completed", 10),
-            MultiTaskBonus: Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task", 3),
-            OnPlanPoints: isExemptDay ? 0 : (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour", 3)),
-            OffPlanPoints: isExemptDay ? 0 : (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour", -2)),
-            MissedPoints: isExemptDay ? 0 : Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty", -5),
-            StreakBonus: isExemptDay ? 0 : streak * ConfigService.ScoringRate("streak_bonus_per_day", 5));
+            TaskPoints: done * ConfigService.ScoringRate("task_completed"),
+            MultiTaskBonus: Math.Max(0, done - 1) * ConfigService.ScoringRate("multi_task_bonus_per_extra_task"),
+            OnPlanPoints: isExemptDay ? 0 : (int)(onMin / 60.0 * ConfigService.ScoringRate("on_plan_hour")),
+            OffPlanPoints: isExemptDay ? 0 : (int)(offMin / 60.0 * ConfigService.ScoringRate("off_plan_hour")),
+            MissedPoints: isExemptDay ? 0 : Math.Max(0, total - done) * ConfigService.ScoringRate("task_overdue_penalty"),
+            StreakBonus: isExemptDay ? 0 : streak * ConfigService.ScoringRate("streak_bonus_per_day"));
 
     /// <summary>Consecutive fully-completed days immediately before <paramref name="asOf"/>
     /// (defaults to today) — how long the streak was *as of that date*, not necessarily the
@@ -231,7 +248,9 @@ public sealed class ScoreService : IDisposable
     {
         var anchor = asOf ?? DateOnly.FromDateTime(DateTime.Today);
         var streak = 0;
-        for (var i = 1; i <= LookbackDays; i++)
+        // Read once, not per iteration: LookbackDays is a config lookup now, not a const.
+        var lookback = LookbackDays;
+        for (var i = 1; i <= lookback; i++)
         {
             var d = anchor.AddDays(-i);
             // A day only doesn't break a streak when EVERY plan is off — matching
@@ -387,7 +406,7 @@ public sealed class ScoreService : IDisposable
         if (LedgerHas(ScoreReason.OverdueAccrual, d)) return null;
         var count = OverdueAccrualCount(d);
         if (count == 0) return 0;
-        var delta = count * ConfigService.ScoringRate("task_overdue_penalty", -5);
+        var delta = count * ConfigService.ScoringRate("task_overdue_penalty");
         try
         {
             AddLedger(delta, ScoreReason.OverdueAccrual, $"{count} task(s) still overdue (3-day cap)", d);
@@ -409,9 +428,11 @@ public sealed class ScoreService : IDisposable
     public void EnsureScoreCaughtUp()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
+        // Read once, not per iteration — see CurrentStreak.
+        var lookback = LookbackDays;
         _db.RunInTransaction(() =>
         {
-            for (var i = LookbackDays; i >= 1; i--)
+            for (var i = lookback; i >= 1; i--)
             {
                 var d = today.AddDays(-i);
                 CreditDayScoreIfMissing(d);
@@ -442,14 +463,18 @@ public sealed class ScoreService : IDisposable
     public int ComputeWeeklyComeback(DateOnly d)
     {
         if (d.DayOfWeek != DayOfWeek.Monday) return 0;
-        var lastWeekStart = d.AddDays(-LookbackDays);
+        // One read for all four offsets — a config value could otherwise be re-read
+        // mid-method and, if edited at exactly the wrong moment, describe two different
+        // week lengths inside one comparison.
+        var lookback = LookbackDays;
+        var lastWeekStart = d.AddDays(-lookback);
         var lastWeekEnd = d.AddDays(-1);
-        var prevWeekStart = d.AddDays(-2 * LookbackDays);
-        var prevWeekEnd = d.AddDays(-(LookbackDays + 1));
+        var prevWeekStart = d.AddDays(-2 * lookback);
+        var prevWeekEnd = d.AddDays(-(lookback + 1));
         if (SumLedgerRange(prevWeekStart, prevWeekEnd) >= 0) return 0;
         if (SumLedgerRange(lastWeekStart, lastWeekEnd) < 0) return 0;
         if (LedgerHas(ScoreReason.WeeklyComebackBonus, lastWeekStart)) return 0;
-        return ConfigService.ScoringRate(ScoreReason.WeeklyComebackBonus, 20);
+        return ConfigService.ScoringRate(ScoreReason.WeeklyComebackBonus);
     }
 
     public int? CreditWeeklyComebackIfMissing(DateOnly d)

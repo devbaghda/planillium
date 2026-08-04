@@ -6,6 +6,20 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **New**
+- Your working hours are now also the diary's tracking window. Activity is recorded between
+  "Work start" and "Work end" and nowhere else. Previously the diary ran on a fixed 06:00–20:00
+  built into the app, unrelated to your working hours and impossible to change — so moving your
+  working day to 08:00 left every morning from 06:00 still being logged, and counted against you
+  as unaccounted time. One pair of hours now controls both.
+- The week/month/year summary table on Reports now ends with a Total row under the on-plan and
+  off-plan columns — plus the combined total on the month and year views, which have that column.
+- Every scoring rule is now editable, in a new SCORING section in Settings: points per task
+  completed, per extra task the same day, per task missed, per hour on-plan and off-plan, the
+  streak and weekly-comeback bonuses, the worst a single day can score, how many days an overdue
+  task keeps costing you, the flat fee for replanning all overdue work, where a "great day"
+  starts, and the comeback window. Five of these were previously fixed in the app with no way to
+  change them; the rest were editable only by hand-editing `config.json`. All keep their existing
+  values, so nothing scores differently until you change something.
 - When you use the "Add Plan" wizard's Claude prompt, it now also asks Claude to list the
   specific apps/tools/websites each day's task actually needs (e.g. "VS Code", "Anki", "Chrome -
   Coursera") — right after you import the plan, those get taught to the same on-plan activity
@@ -21,7 +35,18 @@ going forward; the original Python/Tkinter version is retired.
   you type, instead of requiring you to type the same recurring ones (like "lunch" or "dog walk")
   in by hand every time.
 
+**Changed**
+- "Day X of Y" on Today, Plans and Schedule now counts how far you've actually got rather than
+  how many days have passed. It stops at the earliest day still holding unfinished work — miss
+  day 10's task and tomorrow still reads "Day 10" — and only moves once nothing is left behind
+  it. Reschedule a task you've decided to skip and the counter carries on as normal. A 28-day
+  plan you're running late on now reads "Day 27 of 28" instead of an impossible "Day 30 of 28";
+  how late you are is still reported by the overdue list and the "Xd late from plan" figure.
+
 **Fixes**
+- Leaving the app open on the Reports page overnight left the diary section pinned to yesterday's
+  date while the rest of the page had moved on to today. It now rolls onto the new day by itself
+  — unless you'd deliberately navigated to a past day, which still stays put.
 - Diary rows for idle time (or anything else with no detected app page) now show what you typed
   when answering "what were you doing" in the Page column instead of a bare "—", instead of
   burying your answer in quotes next to the duration. Also removed the parentheses that used to

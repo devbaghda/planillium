@@ -8,9 +8,15 @@ public sealed partial class SettingsPage : Page
 {
     private bool _initialising = true;
 
+    /// <summary>The SCORING section's inputs, keyed by their config.json key — built once in
+    /// <see cref="BuildScoringSection"/> from <see cref="ScoringRules.All"/> so load and save
+    /// both iterate the same table the score formula itself reads from.</summary>
+    private readonly Dictionary<string, NumberBox> _scoringBoxes = new(StringComparer.Ordinal);
+
     public SettingsPage()
     {
         InitializeComponent();
+        BuildScoringSection();
         Loaded += (_, _) =>
         {
             var theme = StateService.Load().Theme;
@@ -49,12 +55,50 @@ public sealed partial class SettingsPage : Page
     {
         var win = App.MainWindow as MainWindow;
         TrackerInfo.Text = win?.Tracker is { Running: true }
-            ? "This app is tracking your activity (60s polls, diary 06:00–20:00)."
+            // Both figures were hardcoded into this sentence and would have started lying the
+            // moment the diary window became configurable (2026-08-04).
+            ? $"This app is tracking your activity ({ActivityTracker.PollSeconds}s polls, " +
+              $"diary {ConfigService.DiaryStartTime().ToIsoTimeOfDay()}–{ConfigService.DiaryEndTime().ToIsoTimeOfDay()})."
             // Running can be false either because it's paused from the tray (a normal,
             // deliberate state, 2026-07-23 "Pause tracking") or because startup genuinely
             // failed — phrased so it doesn't accuse a deliberate pause of being a bug.
             : "Tracking isn't running — resume it from the tray icon, or check " +
               "data/mentor-winui.log if you didn't pause it yourself.";
+    }
+
+    /// <summary>Lays the SCORING inputs out two per row from <see cref="ScoringRules.All"/>.
+    /// Runs from the constructor, not Loaded: LoadRules() (which fills the values) runs on
+    /// Loaded and needs the boxes to already exist.</summary>
+    private void BuildScoringSection()
+    {
+        const int columns = 2;
+        for (var c = 0; c < columns; c++)
+            ScoringGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        for (var i = 0; i < ScoringRules.All.Count; i++)
+        {
+            var rule = ScoringRules.All[i];
+            var row = i / columns;
+            if (i % columns == 0) ScoringGrid.RowDefinitions.Add(new RowDefinition());
+
+            var box = new NumberBox
+            {
+                Header = rule.Label,
+                Value = rule.Default,
+                Minimum = rule.Min,
+                Maximum = rule.Max,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+            };
+            // Same autosave-on-change contract as every other field in this group — see
+            // Rules_Changed's doc comment for why nothing here has a Save button.
+            box.ValueChanged += Rules_ValueChanged;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, rule.Label);
+            Grid.SetColumn(box, i % columns);
+            Grid.SetRow(box, row);
+            ScoringGrid.Children.Add(box);
+            _scoringBoxes[rule.Key] = box;
+        }
     }
 
     // ── rules & timing (writes the shared config.json) ───────────────────
@@ -76,8 +120,8 @@ public sealed partial class SettingsPage : Page
         // methods rather than a second, independently-hardcoded copy of the same
         // fallbacks ActivityTracker also reads — previously these could silently
         // drift apart if one copy's default was ever changed without the other.
-        WorkStart.Text = ConfigService.WorkStartTime().ToString(@"hh\:mm");
-        WorkEnd.Text = ConfigService.WorkEndTime().ToString(@"hh\:mm");
+        WorkStart.Text = ConfigService.WorkStartTime().ToIsoTimeOfDay();
+        WorkEnd.Text = ConfigService.WorkEndTime().ToIsoTimeOfDay();
         EodTimeBox.Text = cfg.TryGetProperty("end_of_day_summary_time", out var eod)
             ? eod.GetString() ?? "20:00" : "20:00";
         GraceMin.Value = ConfigService.ReminderGraceMinutes();
@@ -85,6 +129,10 @@ public sealed partial class SettingsPage : Page
         IdleMin.Value = ConfigService.IdleThresholdMinutes();
         RetentionDays.Value = ConfigService.DiaryRetentionDays();
         LateDayReminderHours.Value = NumD(cfg, "late_day_task_reminder_hours", 2.0);
+        // Reads through ConfigService rather than off `cfg` directly, so a missing key shows
+        // the same default the score formula would actually have used for it.
+        foreach (var rule in ScoringRules.All)
+            _scoringBoxes[rule.Key].Value = ConfigService.ScoringRate(rule.Key);
         RulesOn.Text = Words(cfg, "activity_rules", DiaryCategory.OnPlan);
         RulesOff.Text = Words(cfg, "activity_rules", DiaryCategory.OffPlan);
         RulesNeutral.Text = Words(cfg, "activity_rules", DiaryCategory.Neutral);
@@ -125,6 +173,30 @@ public sealed partial class SettingsPage : Page
             }
         }
 
+        // Work start must precede work end. This was only worth enforcing once the diary window
+        // became these same hours (2026-08-04): inverted, it isn't a short working day, it's no
+        // tracking at all — nothing logged, all day, with the app otherwise looking healthy.
+        if (DateExtensions.TryParseTimeOfDay(WorkStart.Text.Trim(), out var workStart) &&
+            DateExtensions.TryParseTimeOfDay(WorkEnd.Text.Trim(), out var workEnd) &&
+            workStart >= workEnd)
+        {
+            SaveStatus.Text = "\"Work start\" must be earlier than \"Work end\" — " +
+                              "otherwise nothing gets tracked at all.";
+            return;
+        }
+
+        // A NumberBox emptied by the user reports Value = NaN, and (int)NaN is a garbage number
+        // (int.MinValue), not a zero — writing that into the score formula would be silent and
+        // spectacular. Bail out the same way an unparseable time does, rather than saving it.
+        foreach (var rule in ScoringRules.All)
+        {
+            if (double.IsNaN(_scoringBoxes[rule.Key].Value))
+            {
+                SaveStatus.Text = $"\"{rule.Label}\" needs a number (default: {rule.Default}).";
+                return;
+            }
+        }
+
         static System.Text.Json.Nodes.JsonArray Lines(TextBox box) =>
             new(box.Text.Split('\n', '\r')
                 .Select(l => l.Trim()).Where(l => l.Length > 0)
@@ -139,6 +211,10 @@ public sealed partial class SettingsPage : Page
                     ["start"] = WorkStart.Text.Trim(),
                     ["end"] = WorkEnd.Text.Trim(),
                 };
+                // No "diary_hours" written: the diary window is working_hours (2026-08-04).
+                // A stray block from the few hours that setting existed is removed rather than
+                // left behind, so nobody later finds it in config.json and assumes it's live.
+                cfg.Remove("diary_hours");
                 cfg["end_of_day_summary_time"] = EodTimeBox.Text.Trim();
                 cfg["reminder_grace_minutes"] = (int)GraceMin.Value;
                 cfg["reminder_interval_minutes"] = (int)RepeatMin.Value;
@@ -148,6 +224,13 @@ public sealed partial class SettingsPage : Page
                 // default, read via ConfigService.DiaryRetentionDays().
                 cfg["diary_retention_days"] = (int)RetentionDays.Value;
                 cfg["late_day_task_reminder_hours"] = LateDayReminderHours.Value;
+                // Merged into whatever "scoring" already holds, rather than replaced wholesale
+                // like the keyword blocks below — those are fully represented on this page, this
+                // one might not be if a future rule lands in config.json before it lands here.
+                if (cfg["scoring"] is not System.Text.Json.Nodes.JsonObject scoring)
+                    cfg["scoring"] = scoring = new System.Text.Json.Nodes.JsonObject();
+                foreach (var rule in ScoringRules.All)
+                    scoring[rule.Key] = (int)_scoringBoxes[rule.Key].Value;
                 cfg["activity_rules"] = new System.Text.Json.Nodes.JsonObject
                 {
                     [DiaryCategory.OnPlan] = Lines(RulesOn),

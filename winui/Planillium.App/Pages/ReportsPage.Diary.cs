@@ -17,6 +17,17 @@ public sealed partial class ReportsPage
     // come back, it's still there. Resets to today only via the "Today" button.
     private static DateOnly _diaryDate = DateOnly.FromDateTime(DateTime.Today);
 
+    // Whether _diaryDate means "today" rather than one specific date the user went looking
+    // for. Without this, _diaryDate is a static seeded once at class load: leave the app open
+    // on Reports across midnight and the diary stays pinned to yesterday even though every
+    // other section of the page has moved on, and even though MainWindow's day-change watcher
+    // does call Render() (2026-07-24 fix, 2026-08-04 re-report — the watcher was only ever
+    // half the fix, since re-rendering can't help a date that was never recomputed).
+    // Deliberately not "always snap to today on Render": navigating to a past day and coming
+    // back from another page must still land where you left it, which is the whole point of
+    // _diaryDate being static in the first place.
+    private static bool _diaryFollowsToday = true;
+
     // Diary search text, same survives-navigation treatment.
     private static string _diarySearch = "";
 
@@ -112,6 +123,10 @@ public sealed partial class ReportsPage
     /// </summary>
     private void BuildDiarySection(DateOnly today, ScoreService score)
     {
+        // Ahead of everything below that reads _diaryDate — this is the one place the
+        // calendar date rolling over gets applied to the diary (see _diaryFollowsToday).
+        if (_diaryFollowsToday) _diaryDate = today;
+
         Body.Children.Add(DiaryHeader());
 
         // Reflections (the evening review's one-line answers) were
@@ -271,7 +286,12 @@ public sealed partial class ReportsPage
                     : filtersActive
                         ? "No entries match the selected filter(s) on this day."
                         : (_diaryDate == today
-                            ? "No diary entries yet today. Tracking runs 06:00–20:00."
+                            // The window is configurable (Settings ▸ Hours), so this sentence
+                            // has to read it rather than restate the old hardcoded 06:00–20:00
+                            // constants it used to quote (2026-08-04).
+                            ? "No diary entries yet today. Tracking runs " +
+                              $"{ConfigService.DiaryStartTime().ToIsoTimeOfDay()}–" +
+                              $"{ConfigService.DiaryEndTime().ToIsoTimeOfDay()}."
                             : "No diary entries on this day.")));
                 lastRows.Clear();
                 selectedIds.Clear();
@@ -693,12 +713,22 @@ public sealed partial class ReportsPage
             return btn;
         }
 
+        // Every date move goes through here so _diaryFollowsToday can't be updated at three
+        // of the four navigation sites and missed at the fourth — landing back on today by
+        // any route (the button, or stepping forward with the arrow) re-arms the follow.
+        void GoTo(DateOnly target)
+        {
+            _diaryDate = target;
+            _diaryFollowsToday = target == today;
+            Render();
+        }
+
         // Today is now the jump-shortcut on the left, next to the caption —
         // it used to sit between the prev/next arrows, which read as a state
         // indicator rather than the button it actually is. The current date
         // now lives on the right, between the arrows that move it.
         var todayBtn = NavBtn("Today", "Jump to today",
-            () => { _diaryDate = today; Render(); }, enabled: !wideMode && _diaryDate != today);
+            () => GoTo(today), enabled: !wideMode && _diaryDate != today);
         var captionText = Section(caption);
         captionText.Margin = new Thickness(0);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
@@ -710,7 +740,7 @@ public sealed partial class ReportsPage
         var prevGlyph = new FontIcon { Glyph = "", FontSize = 12 };
         var nextGlyph = new FontIcon { Glyph = "", FontSize = 12 };
         var prev = NavBtn(prevGlyph, "Previous day",
-            () => { _diaryDate = _diaryDate.AddDays(-1); Render(); }, enabled: !wideMode);
+            () => GoTo(_diaryDate.AddDays(-1)), enabled: !wideMode);
         // A calendar picker, not just a label — jumping more than a few days
         // used to mean clicking prev/next repeatedly. DateFormat is spelled
         // out numerically (no month/weekday names) for the same reason the
@@ -733,14 +763,11 @@ public sealed partial class ReportsPage
         datePicker.DateChanged += (_, e) =>
         {
             if (e.NewDate is { } picked && DateOnly.FromDateTime(picked.DateTime) != _diaryDate)
-            {
-                _diaryDate = DateOnly.FromDateTime(picked.DateTime);
-                Render();
-            }
+                GoTo(DateOnly.FromDateTime(picked.DateTime));
         };
 
         var next = NavBtn(nextGlyph, "Next day",
-            () => { _diaryDate = _diaryDate.AddDays(1); Render(); }, enabled: !wideMode && _diaryDate < today);
+            () => GoTo(_diaryDate.AddDays(1)), enabled: !wideMode && _diaryDate < today);
 
         Grid.SetColumn(prev, 1); Grid.SetColumn(datePicker, 2); Grid.SetColumn(next, 3);
         grid.Children.Add(prev);
