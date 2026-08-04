@@ -31,6 +31,8 @@ public sealed partial class SettingsPage : Page
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
             LoadRules();
+            // After LoadRules, not before: the keyword counts are read off the boxes it fills.
+            RefreshSummaries();
             _initialising = false;
 
             RefreshTrackerInfo();
@@ -46,6 +48,64 @@ public sealed partial class SettingsPage : Page
             if (App.MainWindow is MainWindow win) win.TrackingStateChanged -= RefreshTrackerInfo;
         };
     }
+
+    /// <summary>
+    /// Fills each collapsed section header with a one-line summary of what's inside it, so the
+    /// page reads as a settings overview rather than seven closed doors (2026-08-04). Every
+    /// figure here is read back from the same source the section's own controls load from —
+    /// never from the controls' current text — so a header can't show a value that failed
+    /// validation and was never actually saved.
+    ///
+    /// Called after load and after every successful save/toggle. Cheap: config reads are cached
+    /// by ConfigService, and nothing here touches the database.
+    /// </summary>
+    private void RefreshSummaries()
+    {
+        var name = ConfigService.UserName;
+        var theme = StateService.Load().Theme switch
+        {
+            "light" => "Light",
+            "dark" => "Dark",
+            _ => "Follow Windows",
+        };
+        // Kept deliberately terse. A header summary shares its row with the section title, so
+        // the space it gets shrinks as the title grows — and TextTrimming means an overlong one
+        // doesn't wrap or complain, it just quietly loses its tail. Measured against the
+        // narrowest column (Hours &, at ~277px) rather than the roomiest.
+        SumGeneral.Text = string.Join(" · ", new[]
+        {
+            name.Length > 0 ? name : "No name set",
+            theme,
+            $"{(int)StateService.Load().Opacity}%",
+            StartupService.IsEnabled ? "autostart on" : "autostart off",
+        });
+
+        SumHours.Text = $"{ConfigService.WorkStartTime().ToIsoTimeOfDay()}–" +
+                        $"{ConfigService.WorkEndTime().ToIsoTimeOfDay()} · " +
+                        $"review {EodTime()} · idle {ConfigService.IdleThresholdMinutes()}m";
+
+        // The two rules that describe the shape of the economy best — the full set is one click
+        // away, and a 12-value summary would be unreadable at this size.
+        SumScoring.Text = $"{ConfigService.ScoringRate("task_completed"):+#;-#;0} per task done · " +
+                          $"{ConfigService.ScoringRate("task_overdue_penalty"):+#;-#;0} per task missed";
+
+        SumKeywords.Text = $"{KeywordCount(RulesOn)} on-plan · {KeywordCount(RulesOff)} off-plan · " +
+                           $"{KeywordCount(RulesNeutral)} neutral";
+        SumIdle.Text = $"{KeywordCount(IdleOn)} on-plan · {KeywordCount(IdleOff)} off-plan · " +
+                       $"{KeywordCount(IdleNeutral)} neutral";
+        // SumTickTick is deliberately not set here — RefreshTickTickStatus owns every piece of
+        // TickTick display state and is already called from all three places it can change.
+    }
+
+    /// <summary>Non-blank lines in one of the keyword boxes — the same "one per line" rule
+    /// SaveRules' own Lines() helper applies, so the count can't disagree with what gets
+    /// saved.</summary>
+    private static int KeywordCount(TextBox box) =>
+        box.Text.Split('\n', '\r').Count(l => l.Trim().Length > 0);
+
+    private static string EodTime() =>
+        ConfigService.Root.TryGetProperty("end_of_day_summary_time", out var v) &&
+        v.GetString() is { Length: > 0 } s ? s : "20:00";
 
     /// <summary>Re-reads the tracker's actual running state — called on load AND whenever
     /// the tray's Pause/Resume toggle fires, so this paragraph can't disagree with the tray
@@ -248,6 +308,10 @@ public sealed partial class SettingsPage : Page
             // keyword/threshold changes apply now, not at the next app start.
             (App.MainWindow as MainWindow)?.RestartTracker();
             SaveStatus.Text = "Saved — tracker restarted with the new rules.";
+            // Only on the success path: a header must never advertise a value that a validation
+            // failure above stopped from being written.
+            RefreshSummaries();
+            RefreshTrackerInfo();
         }
         catch (Exception ex)
         {
@@ -268,12 +332,14 @@ public sealed partial class SettingsPage : Page
         // there's nothing left for it to do (2026-07-18 audit finding R10-02).
         TickTickDisconnectBtn.Visibility = TickTickService.IsAuthorized
             ? Visibility.Visible : Visibility.Collapsed;
+        SumTickTick.Text = TickTickService.IsAuthorized ? "Connected" : "Not connected";
     }
 
     private void Startup_Toggled(object sender, RoutedEventArgs e)
     {
         if (_initialising) return;
         StartupService.SetEnabled(StartupToggle.IsOn);
+        RefreshSummaries();
     }
 
     /// <summary>Autosaves like Theme/Opacity/"start with Windows" above it — previously
@@ -291,6 +357,7 @@ public sealed partial class SettingsPage : Page
             // didn't, so typing a name and tabbing away gave no sign it actually saved
             // (2026-07-18 audit finding R11-09).
             SaveStatus.Text = "Saved.";
+            RefreshSummaries();
         }
         catch (Exception ex)
         {
@@ -309,6 +376,7 @@ public sealed partial class SettingsPage : Page
         var state = StateService.Load();
         state.Opacity = value;
         StateService.Save(state);
+        RefreshSummaries();
     }
 
     private async void TickTickConnect_Click(object sender, RoutedEventArgs e)
@@ -661,5 +729,6 @@ public sealed partial class SettingsPage : Page
             // propagate through the dispatcher.
             ThemeSync.Apply(root.ActualTheme);
         }
+        RefreshSummaries();
     }
 }

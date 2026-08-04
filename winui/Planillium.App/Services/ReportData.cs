@@ -179,6 +179,93 @@ public static class ReportData
                      .ToList();
     }
 
+    /// <summary>Everything the score card and the insights panel need, aggregated over the
+    /// selected period instead of over today/this-week (2026-08-04 request: the whole page above
+    /// the diary should follow the Day/Week/Month/Year selector). Score is the sum of each day's
+    /// own score — <b>points earned in the period</b>, which is a different figure from the
+    /// sidebar's running balance, since that also nets off entertainment purchases.</summary>
+    public sealed record PeriodTotals(int Score, int Done, int Total, int OnMin, int OffMin);
+
+    /// <summary>
+    /// Per-date on/off-plan minutes across [from, today], from both sources: raw `time_diary`,
+    /// plus `diary_daily_rollup` for dates whose per-entry detail has already aged out of the
+    /// retention window. The two never overlap (a date only gets a rollup row once its raw rows
+    /// are pruned), so summing both is safe — the same reasoning YearBuckets documents.
+    ///
+    /// Two queries for the whole period rather than one per day: ScoreService.DayDiaryMinutes
+    /// would be 365 round-trips on the Year view, and Reports has a slow-load report in its
+    /// history already (2026-07-21).
+    /// </summary>
+    private static Dictionary<DateOnly, (int On, int Off)> DailyMinutes(SqliteConnection conn, DateOnly from)
+    {
+        var byDate = new Dictionary<DateOnly, (int On, int Off)>();
+        void Add(DateOnly d, int on, int off)
+        {
+            byDate.TryGetValue(d, out var cur);
+            byDate[d] = (cur.On + on, cur.Off + off);
+        }
+
+        var fromStr = from.ToIsoDate();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT date, category, SUM(duration_min) FROM time_diary " +
+            "WHERE date >= $from GROUP BY date, category";
+        cmd.Parameters.AddWithValue("$from", fromStr);
+        using (var r = cmd.ExecuteReader())
+            while (r.Read())
+            {
+                if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
+                var cat = r.GetString(1);
+                if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
+                var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                Add(d, cat == DiaryCategory.OnPlan ? mins : 0, cat == DiaryCategory.OffPlan ? mins : 0);
+            }
+
+        using var rollupCmd = conn.CreateCommand();
+        rollupCmd.CommandText =
+            "SELECT date, on_min, off_min FROM diary_daily_rollup WHERE date >= $from";
+        rollupCmd.Parameters.AddWithValue("$from", fromStr);
+        using (var r = rollupCmd.ExecuteReader())
+            while (r.Read())
+            {
+                if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
+                Add(d, r.IsDBNull(1) ? 0 : r.GetInt32(1), r.IsDBNull(2) ? 0 : r.GetInt32(2));
+            }
+        return byDate;
+    }
+
+    /// <summary>
+    /// Task counts, on/off-plan minutes and score summed over the selected period. Day-off dates
+    /// contribute no minutes (same rule as every other Reports total, 2026-07-17) but their score
+    /// is still included, because a task genuinely completed on a day off still earns its credit.
+    ///
+    /// Scores are recomputed per day rather than read back from `score_ledger` deliberately: the
+    /// ledger only holds days the app was running to credit, so a stretch where it wasn't open
+    /// would silently read as zero rather than as the score those days actually earned. Task
+    /// counts and streaks are in-memory lookups, so the per-day loop stays cheap even over a year.
+    /// </summary>
+    public static PeriodTotals PeriodStats(ReportPeriod period, SqliteConnection conn, ScoreService score)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var start = PeriodStart(period, today);
+        var minutes = DailyMinutes(conn, start);
+
+        int scoreSum = 0, done = 0, total = 0, onSum = 0, offSum = 0;
+        for (var d = start; d <= today; d = d.AddDays(1))
+        {
+            var (dayTotal, dayDone) = score.DayTaskCounts(d);
+            minutes.TryGetValue(d, out var m);
+            var isExempt = score.AllPlansScoringExempt(d);
+            // Same call shape as WeekStats: the real minutes go in, and DayScore itself zeroes
+            // the passive terms when the day is exempt.
+            scoreSum += score.DayScore(dayDone, dayTotal, m.On, m.Off, score.CurrentStreak(d), isExempt);
+            total += dayTotal;
+            done += dayDone;
+            if (!isExempt) { onSum += m.On; offSum += m.Off; }
+        }
+        return new PeriodTotals(scoreSum, done, total, onSum, offSum);
+    }
+
     private static string MonthLabel(string yyyyMm) =>
         DateTime.TryParseExact(yyyyMm, "yyyy-MM", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out var d)

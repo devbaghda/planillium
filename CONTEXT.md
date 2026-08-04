@@ -329,6 +329,11 @@ compaction. General versions of several now also live in the global `windows-app
   signature must not rule clipping out. When a dynamically-built row that used to fit stops
   fitting after a sibling column grew, check every rounded-corner Border between the content and
   its ScrollViewer.
+- **`Expander` needs `HorizontalContentAlignment="Stretch"` or its content is arranged at its
+  own minimum width**, no matter how wide the Expander itself is. A three-column grid inside one
+  collapses to the width of its text instead of filling the row — the same silent under-sizing
+  class as the rounded-`Border` clip above, with the same absence of any error. Set it on every
+  Expander, and verify with UIA rects rather than by eye (2026-08-04).
 - `CopyFromScreen`/GDI `BitBlt` doesn't capture WinUI3 Mica/DirectComposition content — use
   `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons, UIA
   `BoundingRectangle` beats pixel-diffing.
@@ -482,6 +487,35 @@ scratch-root instance (see Standing lessons for the technique) — all three scr
 28"/"Day 1 of 160" at calendar day 8 with "7 day(s) late — from day 1" beside them; Reports totals
 aligned to their columns with real bounding rects (no repeat of the 07-28 clipping); all four
 diary date controls stepped correctly and a past day stayed pinned across four page switches.
+
+**2026-08-04 (evening)**: two UI requests. (1) *Settings* — asked for either a menu or collapsible
+sections, with the choice left to whichever is better. Chose **collapsible `Expander`s** (seven:
+General / Hours & reminders / Scoring / Activity keywords / Idle-answer library / TickTick / Data).
+The deciding argument was not aesthetics: this page **saves as one group** — `SaveRules` writes
+working_hours, reminders, retention, both keyword blocks and scoring in a single `Mutate` — so a
+menu would scatter those across destinations while the save still wrote all of them, persisting
+fields the user never navigated to. Seven groups is also below the size where a nav level earns a
+permanent slot, and a menu shows one group at a time so finding a setting requires already knowing
+its category. WinUI's own guidance names Expander for settings groups (manual visibility toggling
+is its documented anti-pattern). Each header carries a **live summary** (`RefreshSummaries`, read
+from config not from the controls, so a header can never advertise a value that failed validation)
+— the collapsed page is an at-a-glance overview rather than seven closed doors. Tracker status and
+`SaveStatus` deliberately sit outside every section: status isn't a setting, and a save triggered
+from one section must stay visible after you collapse it. (2) *Reports* — everything above the
+diary now follows the period selector. The summary table, distractions and time-by-app already
+did; the **score card always showed today** and the **insights were always computed from this
+week** regardless. New `ReportData.PeriodStats` aggregates score/tasks/minutes over the selected
+period via one `DailyMinutes` pass (raw `time_diary` + `diary_daily_rollup`, two queries not 365)
+plus in-memory per-day scoring. Scores are recomputed rather than read from `score_ledger`
+deliberately: the ledger only holds days the app was running to credit, so a stretch where it
+wasn't open would read as zero rather than as what those days earned. Card relabelled "SCORE
+EARNED — <period>" to keep it distinct from the sidebar's BALANCE (all-time, and net of
+purchases). Verified live: all four periods relabel and re-scope every block, and the Year card's
+minutes (56h10m / 21h40m) **match the summary table's own Total row exactly** — two independently
+computed paths agreeing, which is the check that matters here given this page's history of two
+similar numbers disagreeing. Settings verified via UIA rects: keyword boxes 221px × 3 across the
+full width, all 12 scoring boxes in two 337px columns, nothing clipped. 124/124 tests (4 new,
+covering PeriodStats' boundaries and nesting invariants).
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other

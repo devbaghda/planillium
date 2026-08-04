@@ -129,10 +129,14 @@ public sealed partial class ReportsPage : Page
             using var score = new ScoreService(plans, db);
             var periodName = ReportData.PeriodName(_period);
             var weekStats = ReportData.WeekStats(score);
-            var todayStat = weekStats[^1];
             var today = DateOnly.FromDateTime(DateTime.Today);
+            // Everything on this page above the diary now follows the period selector
+            // (2026-08-04 request). The score card and the insights panel were the two that
+            // didn't: the card always showed today, and the insights were always computed from
+            // this week regardless of what the selector said.
+            var totals = ReportData.PeriodStats(_period, db.Conn, score);
 
-            Body.Children.Add(Card(ScoreCard(todayStat)));
+            Body.Children.Add(Card(ScoreCard(totals, periodName)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -177,8 +181,8 @@ public sealed partial class ReportsPage : Page
                 Body.Children.Add(Card(AppBreakdownPanel(breakdown)));
             }
 
-            Body.Children.Add(Section("INSIGHTS"));
-            Body.Children.Add(Card(InsightsPanel(weekStats, db.Conn, score)));
+            Body.Children.Add(Section($"INSIGHTS — {periodName}"));
+            Body.Children.Add(Card(InsightsPanel(totals, db.Conn, score)));
 
             BuildDiarySection(today, score);
         }
@@ -193,30 +197,37 @@ public sealed partial class ReportsPage : Page
         }
     }
 
-    /// <summary>Today's score, always today regardless of the selected period.</summary>
-    private static StackPanel ScoreCard(ReportData.DayStat todayStat)
+    /// <summary>Points earned over the selected period. "EARNED" is in the caption on purpose:
+    /// this is what the period's activity added up to, which is not the sidebar's BALANCE — that
+    /// is a running total across all time and also nets off entertainment purchases. Two similar
+    /// numbers a glance apart is exactly the confusion this page has already had reported once
+    /// (the 2026-07-23 drift-days report).</summary>
+    private static StackPanel ScoreCard(ReportData.PeriodTotals totals, string periodName)
     {
         var card = new StackPanel { Spacing = 2 };
-        card.Children.Add(Caption("TODAY'S SCORE"));
+        card.Children.Add(Caption($"SCORE EARNED — {periodName}"));
         card.Children.Add(new TextBlock
         {
-            Text = todayStat.Score.ToString(),
+            Text = totals.Score.ToString(),
             FontSize = 44,
             FontWeight = FontWeights.Bold,
-            Foreground = ScoreBrush(todayStat.Score),
+            Foreground = ScoreBrush(totals.Score),
         });
-        card.Children.Add(Dim($"{todayStat.Done}/{todayStat.Total} tasks · " +
-                              $"{todayStat.OnMin}m on-plan · {todayStat.OffMin}m off-plan"));
+        card.Children.Add(Dim($"{totals.Done}/{totals.Total} tasks · " +
+                              $"{ReportData.FmtMins(totals.OnMin)} on-plan · " +
+                              $"{ReportData.FmtMins(totals.OffMin)} off-plan"));
         return card;
     }
 
-    /// <summary>Week-based rule-of-thumb suggestions, same period as the score card.</summary>
-    private static StackPanel InsightsPanel(List<ReportData.DayStat> weekStats, SqliteConnection conn,
+    /// <summary>Rule-of-thumb suggestions, over the same period as everything else above the
+    /// diary. Was hardcoded to this week no matter what the selector said, so switching to Year
+    /// left advice underneath it that was still describing the last few days.</summary>
+    private static StackPanel InsightsPanel(ReportData.PeriodTotals totals, SqliteConnection conn,
         ScoreService score)
     {
         var hints = ReportExport.Suggestions(
-            weekStats.Sum(s => s.OnMin), weekStats.Sum(s => s.OffMin),
-            ReportData.TopDistractions(ReportPeriod.Week, conn, score));
+            totals.OnMin, totals.OffMin,
+            ReportData.TopDistractions(_period, conn, score));
         var hintPanel = new StackPanel { Spacing = 6 };
         foreach (var hint in hints)
         {

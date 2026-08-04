@@ -124,6 +124,13 @@ Reporting summarizes progress and highlights where effort was spent. This helps 
 
 Reports cover the current calendar period: the weekly view runs from this Monday through Sunday, the monthly view spans this calendar month, and the yearly view spans this year — not a rolling look-back over the last several days.
 
+The Day/Week/Month/Year selector governs everything above the diary: the score card, the summary
+table, top distractions, time by app, and the insights. The score card reads "SCORE EARNED —
+THIS WEEK" (or whichever period you've picked) and shows the points that period's activity
+added up to — which is not the same as the BALANCE in the sidebar, since that is a running total
+across all time and also subtracts anything you've spent on entertainment time. The diary section
+at the bottom is separate and always works one day at a time.
+
 The week/month/year summary table ends with a Total row under the on-plan and off-plan columns
 (and, for month and year, the combined total), so the period's totals are readable without adding
 the rows up by hand. Days where every plan is off contribute nothing to those totals, matching how
@@ -139,6 +146,14 @@ still stays responsive. When editing or splitting a diary entry, the description
 your most commonly used past descriptions as you type, so recurring ones don't need retyping.
 
 ## Settings and configuration
+
+Settings is organised as seven collapsible sections — General, Hours & reminders, Scoring,
+Activity keywords, Idle-answer library, TickTick, and Data. Each heading shows a summary of what
+that section currently holds, so you can read your whole configuration without opening anything,
+and only expand the part you actually want to change. Whether tracking is currently running, and
+the confirmation (or error) from your last change, stay visible outside the sections at all times.
+
+Everything saves as you go — there is no Save button.
 
 The app includes configurable settings for:
 

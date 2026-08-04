@@ -36,6 +36,17 @@ going forward; the original Python/Tkinter version is retired.
   in by hand every time.
 
 **Changed**
+- Settings is now seven collapsible sections (General, Hours & reminders, Scoring, Activity
+  keywords, Idle-answer library, TickTick, Data) instead of one long scroll. Each heading shows a
+  summary of what's inside it — your hours, how many keywords are in each list, whether TickTick
+  is connected — so the closed page works as an overview and you only open what you're changing.
+  Whether tracking is running, and the result of your last save, stay visible outside the
+  sections.
+- On Reports, everything above the diary now follows the Day/Week/Month/Year selector. The score
+  card was always showing today no matter what you'd picked, and the insights underneath were
+  always calculated from this week. The card now reads "SCORE EARNED — THIS MONTH" (and so on)
+  with that period's tasks and hours, and the insights describe the same period as the rest of
+  the page. The diary section below is unchanged — it still works one day at a time.
 - "Day X of Y" on Today, Plans and Schedule now counts how far you've actually got rather than
   how many days have passed. It stops at the earliest day still holding unfinished work — miss
   day 10's task and tomorrow still reads "Day 10" — and only moves once nothing is left behind

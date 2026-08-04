@@ -88,6 +88,9 @@
     <Compile Include="..\Planillium.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\Planillium.App\Services\NotificationCenter.cs" Link="App\NotificationCenter.cs" />
     <Compile Include="..\Planillium.App\Services\PlanStore.cs" Link="App\PlanStore.cs" />
+    <!-- Linked for ReportData.PeriodStats, the period aggregation behind Reports' score card
+         and insights (2026-08-04). Pulls in AppNames/CategoryStyle-free plain C# only. -->
+    <Compile Include="..\Planillium.App\Services\ReportData.cs" Link="App\ReportData.cs" />
     <Compile Include="..\Planillium.App\Services\StateService.cs" Link="App\StateService.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreReason.cs" Link="App\ScoreReason.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />
