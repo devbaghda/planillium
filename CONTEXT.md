@@ -1,5 +1,20 @@
 # Planillium — Project Context
 
+> **Compaction threshold: 400 lines** — count with `wc -l`, don't estimate (PowerShell's
+> `Measure-Object -Line` silently skips blank lines and under-reports by ~60 here). Declared
+> explicitly so the Stop hook reads it from this file rather than applying its generic 300.
+>
+> **This file is currently ~520 lines and cannot reach 400 by compressing prose** — that was tried
+> on 2026-08-04 (1,104-era history aside: 771→476, then 547→520) and what remains is not narrative.
+> Roughly 235 lines are *specification* (architecture, plan JSON, DB schema, the 13 business rules
+> with their rationale) and 106 are Standing lessons; the actual handoff notes — the thing this
+> project's `CLAUDE.md` rule is about — are only ~139 lines and well inside any threshold.
+> **The way down is structural, not editorial**: split the business rules and Standing lessons into
+> a `DECISIONS.md` lookup register and leave this file a read-through, exactly as the DigiFlow
+> project did (1,104 → 400 + a 278-line register). Not done unprompted because it changes how this
+> project's documentation is organised. Until then the hook will keep flagging this file, which is
+> correct — there is real work outstanding, it just isn't "delete some sentences".
+
 **Display name is "Planillium"** (renamed 2026-07-08; the app was originally internally
 called Mentor-Overseer). The repo folder, GitHub repo, and C# namespace were all still
 `MentorOverseer` for a while after the display-name rename — kept that way deliberately at
@@ -410,113 +425,86 @@ are both empty (was producing ~118 bare "-" rows/day). Same week: `posting-plan`
 skills bootstrapped; a Reddit launch post held by r/ClaudeAI's karma gate was reformatted for
 the Megathread.
 
-**2026-07-23/24**: full internal rename `MentorOverseer`→`Planillium` (3 legacy-compat values
-deliberately untouched — see top of file); Diary App/Page filter split; Reports' redundant
-"Exclusion Impact" panel removed (business rule 12); all 26 `ContentDialog` sites unified onto
-`DialogControls.Build`; tray "Pause tracking". Root-caused "have to switch pages to see the new
-day" (`NavigationCacheMode="Enabled"` never recomputed "today") via `StartDayChangeWatcher`,
-extended to Plans/Reports after a re-audit caught the gap; note-wipe risk fixed
-(`TaskNoteView.AnyEditInProgress`, later strengthened to persist drafts across any rebuild);
-Schedule re-snap-on-refresh; Diary filter-row overflow; VACUUM moved off the UI thread; docx
-zip-bomb check switched to counting real decompressed bytes; `VacuumAndCheckpoint()` truncates
-the WAL. Four 5-category audit rounds (24+22+22+12 findings, 0 Critical) plus two re-audits, all
-fixed same-day, 86/86 tests each time.
+**2026-07-23 → 07-29** (four dated rounds, condensed): internal rename `MentorOverseer`→`Planillium`
+(3 legacy-compat values deliberately untouched — see top of file); Diary App/Page filter split;
+Reports' redundant "Exclusion Impact" panel removed (business rule 12); 26 `ContentDialog` sites
+unified onto `DialogControls.Build`; tray "Pause tracking"; `StartDayChangeWatcher` for "have to
+switch pages to see the new day" (`NavigationCacheMode="Enabled"` never recomputed today), extended
+to Plans/Reports after a re-audit caught the gap; note-wipe risk (`TaskNoteView.AnyEditInProgress`,
+later strengthened to persist drafts across any rebuild); Schedule re-snap; Diary filter-row
+overflow; VACUUM off the UI thread; docx zip-bomb check counts real decompressed bytes;
+`VacuumAndCheckpoint()` truncates the WAL. Four 5-category audits (24+22+22+12 findings, 0 Critical)
+plus two re-audits, all fixed same-day, 86/86 tests.
+**07-27**: app wouldn't start at all — bisected to 07-24's `SetDefaultDllDirectories` breaking WinRT
+activation of the bundled WinUI3 DLLs; the real `DllImport`s are protected KnownDLLs regardless of
+search order, so removal was a clean revert (`4d0f161`). Same day: the diary appeared to start
+whenever the PC was first touched, because the wake-from-sleep toast only logged a gap when no UI
+handler was wired (never true in the running app); a first fix (evening-review sweep) was
+**rejected** — the user wants it logged immediately, matching the old Python guarantee, so
+`HandleIdleReturn` now always logs "unaccounted time" the instant a gap is detected (`d3373a5`).
+**07-28**: Diary Edit/Split unreachable via `Card()`'s rounded-`CornerRadius` clip (Standing
+lessons), found after 4 dead ends; missed-notification recap replayed a prompt's text with no action
+— `PendingNotification` now round-trips the toast's args. *Feature*: plan tasks gained a `tools`
+list taught into `activity_rules.on_plan` via `TeachPlanTools`; both live plan files were hand-edited
+after cross-checking every `task_completions`/`task_overrides`/`task_notes` row's task text against
+the new JSON (zero mismatches — **that** check, not schema validity, was what mattered); 12 keywords
+taught; later wired into queued-plan activation. Also: diary-description AutoSuggestBox;
+`LearnActivityRule` refuses a bare browser name; Diary "Show more" batched at 50. Then a full
+5-category audit — security clean, 7 findings, including `BuildDiarySection` split 389→294 lines
+(only the pieces with no shared mutable state; `RenderDiaryResults` deliberately left inline). One
+accepted as-is: `PlanStore.ActivateQueuedPlan` writes then deletes non-atomically — narrow,
+self-healing, **settled, not an action item**. `56cbdb7`.
+**07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never had its `Click` wired (pre-existing per
+`git show`; the near-identical `IdleReturnDialog` button was correct, so not sibling drift). Diary
+Category/App/Page/search filters didn't narrow each other — dropdown *options* were built from
+unfiltered rows while results applied all four; fixed by extracting four predicates and building
+each dropdown from rows matching every *other* active filter, so options and results share one
+definition. A read-only query against the real DB confirmed some Chrome/LinkedIn rows genuinely are
+`off_plan` (manually recategorized), so LinkedIn legitimately appears under Category=Off-plan —
+correct, not a bug. Idle rows now show the typed answer in the Page column instead of "—".
 
-**2026-07-27**: app wouldn't start at all — bisected to the 07-24 DLL-hardening
-`SetDefaultDllDirectories` call breaking WinRT activation of the bundled WinUI3 DLLs; the real
-`DllImport`s are protected KnownDLLs regardless of search order, so removal was a clean revert
-(`4d0f161`). Separately: the diary appeared to start whenever the PC was first touched rather
-than at the configured hour, because the wake-from-sleep toast only logged a gap when no UI
-handler was wired (never true in the running app). A first fix (an evening-review sweep) was
-**rejected** — the user wants it logged immediately, matching the old Python guarantee.
-`HandleIdleReturn` now always logs "unaccounted time" the instant a gap is detected
-(`d3373a5`).
-
-**2026-07-28**: Diary Edit/Split buttons unreachable — root cause was `Card()`'s rounded
-`CornerRadius` corner-clipping (see Standing lessons), found after 4 dead ends; fixed with an
-explicit `MinWidth`. Missed-notification recap replayed a prompt's text with no action behind
-it — `PendingNotification` now round-trips the toast's own args. **Feature**: plan tasks gained
-a `tools` list, taught into `activity_rules.on_plan` via `TeachPlanTools` (with a confirmation
-naming what was learned); both live plan files were hand-edited to add tools, after
-cross-checking every existing `task_completions`/`task_overrides`/`task_notes` row's task text
-against the new JSON (zero mismatches — that check, not schema validity, was what mattered); 12
-new keywords taught. Then: `TeachPlanTools` wired into queued-plan activation; diary description
-AutoSuggestBox; `LearnActivityRule` refuses a bare browser name; Reports width cap pulled into
-shared constants; Diary "Show more" batched at 50. Then a **full 5-category audit**: security
-clean, 7 findings — Show-more progress lost to the 30s refresh; the idle placeholder literal
-centralized as `DiaryCategory.IdlePlaceholder`; `BuildDiarySection` split 389→294 lines (the
-pieces with no shared mutable state only — `RenderDiaryResults` deliberately left inline); three
-dedups. One accepted as-is: `PlanStore.ActivateQueuedPlan` writes then deletes non-atomically —
-narrow, self-healing, **settled, not an action item**. `56cbdb7`.
-
-**2026-07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never had its `Click` wired (confirmed
-pre-existing via `git show`; the near-identical `IdleReturnDialog` button was correct, so not a
-sibling-drift case). Then: the Diary's Category/App/Page/search filters didn't narrow each
-other — the dropdown *option* lists were built from unfiltered rows while the results applied
-all four. Fixed by extracting four predicates and building each dropdown from rows matching every
-*other* active filter (faceted-search shape), so options and results share one definition. A
-read-only query against the real DB confirmed some Chrome/LinkedIn rows genuinely are `off_plan`
-(manually recategorized), so LinkedIn legitimately still appears under Category=Off-plan — correct,
-not a bug. Also: idle rows now show the typed answer in the Page column instead of "—", and
-durations lost their parentheses.
-
-**2026-08-04**: four user requests, then four follow-ups. (1) *Diary window*: was hardcoded
-06:00–20:00 inside `ActivityTracker`, unrelated to working hours, so moving the working day to
-08:00 still logged and back-filled every morning from 06:00. Briefly given its own `diary_hours`
-config block and Settings pair; the user's call the same day was to **merge it into working
-hours** — one pair of hours, `InDiaryHours` collapsed into `InWorkingHours`, Settings boxes
-removed, a stray `diary_hours` block now inert and stripped on next save. `SaveRules` now rejects
-work start ≥ end (inverted, that's not a short day, it's no tracking at all). Two display strings
-that hardcoded "06:00–20:00" now read the live values. (2) *Reports not rolling over overnight*:
-not the day-change watcher (it did re-render) but `_diaryDate`, a static seeded once at class
-load — added `_diaryFollowsToday`, set via a single `GoTo` all four date controls route through.
-(3) *"Day X of Y"* → `Plan.ProgressDay`, business rule 13; the user resolved the "hole further
-back" ambiguity themselves ("if I want to skip day 10 I do replanning"), which is what makes
-stall-on-first-unfinished-day safe. (4) *Reports totals*: shared `AddTotalsRow` under both summary
-tables; Tasks/Score columns deliberately blank. Follow-ups: **every** scoring rule became editable
-via a new SCORING section in Settings, built from a new `ScoringRules` table that also feeds the
-formula and the config lookup (see Standing lessons); and **`ActivityTracker`'s God-Object split
-finally landed** (deferred since 07-23) — 855→597 lines, with `NativeInput` (Win32 P/Invoke),
-`WindowTitleResolver` (title decoration + pid cache), `ActivityClassifier` (keyword matching) and
-`DiaryWriter` (the two `time_diary` statements) extracted. Only pieces owning state nothing else
-touched were moved; the poll loop's interlocking session/idle/alert state stayed put, and
-`EffectiveClass` stayed with it because it reads `PaidUntil`. Public surface unchanged
-(Classify/ClassifyIdleText/StripUnreadBadge remain as forwarders). Verified: clean build
-(0 warnings) + 120/120 tests, Release rebuilt and relaunched, plus live UI Automation against a
-scratch-root instance (see Standing lessons for the technique) — all three screens read "Day 1 of
-28"/"Day 1 of 160" at calendar day 8 with "7 day(s) late — from day 1" beside them; Reports totals
-aligned to their columns with real bounding rects (no repeat of the 07-28 clipping); all four
-diary date controls stepped correctly and a past day stayed pinned across four page switches.
-
-**2026-08-04 (evening)**: two UI requests. (1) *Settings* — asked for either a menu or collapsible
-sections, with the choice left to whichever is better. Chose **collapsible `Expander`s** (seven:
-General / Hours & reminders / Scoring / Activity keywords / Idle-answer library / TickTick / Data).
-The deciding argument was not aesthetics: this page **saves as one group** — `SaveRules` writes
-working_hours, reminders, retention, both keyword blocks and scoring in a single `Mutate` — so a
-menu would scatter those across destinations while the save still wrote all of them, persisting
-fields the user never navigated to. Seven groups is also below the size where a nav level earns a
-permanent slot, and a menu shows one group at a time so finding a setting requires already knowing
-its category. WinUI's own guidance names Expander for settings groups (manual visibility toggling
-is its documented anti-pattern). Each header carries a **live summary** (`RefreshSummaries`, read
-from config not from the controls, so a header can never advertise a value that failed validation)
-— the collapsed page is an at-a-glance overview rather than seven closed doors. Tracker status and
-`SaveStatus` deliberately sit outside every section: status isn't a setting, and a save triggered
-from one section must stay visible after you collapse it. (2) *Reports* — everything above the
-diary now follows the period selector. The summary table, distractions and time-by-app already
-did; the **score card always showed today** and the **insights were always computed from this
-week** regardless. New `ReportData.PeriodStats` aggregates score/tasks/minutes over the selected
-period via one `DailyMinutes` pass (raw `time_diary` + `diary_daily_rollup`, two queries not 365)
-plus in-memory per-day scoring. Scores are recomputed rather than read from `score_ledger`
-deliberately: the ledger only holds days the app was running to credit, so a stretch where it
-wasn't open would read as zero rather than as what those days earned. Card relabelled "SCORE
-EARNED — <period>" to keep it distinct from the sidebar's BALANCE (all-time, and net of
-purchases). Verified live: all four periods relabel and re-scope every block, and the Year card's
-minutes (56h10m / 21h40m) **match the summary table's own Total row exactly** — two independently
-computed paths agreeing, which is the check that matters here given this page's history of two
-similar numbers disagreeing. Settings verified via UIA rects: keyword boxes 221px × 3 across the
-full width, all 12 scoring boxes in two 337px columns, nothing clipped. 124/124 tests (4 new,
-covering PeriodStats' boundaries and nesting invariants).
-
+**2026-08-04** (one session, three rounds — all shipped, verified and pushed; commits `e4c4f11`,
+`ee981c0`, `488424f`, `0ffdde4`). *Reported issues*: (1) the diary window was hardcoded 06:00–20:00
+inside `ActivityTracker`, unrelated to working hours, so moving the working day to 08:00 still
+logged and back-filled every morning from 06:00 — briefly given its own `diary_hours` config block
+and Settings pair, then **merged into working hours** on the user's call (one pair of hours,
+`InDiaryHours` collapsed into `InWorkingHours`, a stray `diary_hours` block now inert and stripped
+on next save; `SaveRules` rejects work start ≥ end, since inverted that is no tracking at all).
+Two display strings that hardcoded "06:00–20:00" now read live values. (2) Reports never rolled
+over at midnight — not the day-change watcher (it did re-render) but `_diaryDate`, a static seeded
+once at class load; fixed with `_diaryFollowsToday`, set through a single `GoTo` all four date
+controls route through. (3) "Day X of Y" → `Plan.ProgressDay`, business rule 13; the user resolved
+the "hole further back" ambiguity themselves ("if I want to skip day 10 I do replanning"), which is
+what makes stall-on-first-unfinished-day safe. (4) Reports gained a shared `AddTotalsRow` under
+both summary tables (Tasks/Score columns deliberately blank).
+*Then*: every scoring rule became editable via a new SCORING section in Settings, driven by a new
+`ScoringRules` table that also feeds the formula and the config lookup (see Standing lessons);
+**`ActivityTracker`'s God-Object split finally landed** (deferred since 07-23) — 855→597 lines,
+extracting `NativeInput` (Win32 P/Invoke), `WindowTitleResolver` (title decoration + pid cache),
+`ActivityClassifier` (keyword matching) and `DiaryWriter` (the two `time_diary` statements). Only
+pieces owning state nothing else touched were moved; the poll loop's interlocking session/idle/alert
+state stayed put, and `EffectiveClass` with it because it reads `PaidUntil`. Public surface
+unchanged (Classify/ClassifyIdleText/StripUnreadBadge remain as forwarders).
+*Then*: Settings restructured into **seven collapsible `Expander`s** (chosen over a menu because
+this page **saves as one group** — a menu would scatter fields across destinations while `SaveRules`
+still wrote all of them; also below the size where a nav level earns a permanent slot, and WinUI
+names Expander for settings groups). Each header carries a live summary read from config, never from
+the controls, so it cannot advertise a value that failed validation; tracker status and `SaveStatus`
+sit outside every section because status is not a setting and a save must stay visible after its
+section collapses. And **everything above the diary on Reports now follows the period selector** —
+the score card had always shown today and the insights had always been computed from this week. New
+`ReportData.PeriodStats` aggregates over the period from one `DailyMinutes` pass (raw `time_diary` +
+`diary_daily_rollup`, two queries not 365) plus in-memory per-day scoring; scores are recomputed
+rather than read from `score_ledger` **deliberately**, since the ledger only holds days the app was
+running to credit and a stretch where it wasn't open would read as zero. Card relabelled "SCORE
+EARNED — <period>" to stay distinct from the sidebar's BALANCE (all-time, net of purchases).
+*Verified*: clean build (0 warnings), 124/124 tests (24 new), Release rebuilt and relaunched after
+each round, plus live UI Automation against a **scratch-root second instance** (see Standing
+lessons) — all three screens read "Day 1 of 28"/"Day 1 of 160" at calendar day 8 with "7 day(s)
+late" beside them; the Year score card's minutes (56h10m / 21h40m) **match the summary table's own
+Total row exactly**, two independently computed paths agreeing; Settings inputs fill their rows
+(3 keyword boxes at 221px, 12 scoring boxes in two 337px columns), nothing clipped; all four diary
+date controls step correctly and a past day stays pinned across page switches.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight
