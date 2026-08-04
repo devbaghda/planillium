@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Data.Sqlite;
 
 namespace Planillium.App.Services;
@@ -9,40 +6,38 @@ namespace Planillium.App.Services;
 /// Polls the foreground window, classifies it on_plan/off_plan/neutral,
 /// and writes time_diary rows accordingly, with idle/sleep detection and
 /// focus-alert escalation.
+///
+/// What remains here after the 2026-08-04 split (2026-07-23 audit finding #8) is the part that
+/// couldn't safely leave: the poll loop and the state machine it drives. Everything below the
+/// fields is one interlocking set — an open session, whether we're idle and since when, whether
+/// an alert is escalating, how far the evening review has already accounted for — mutated from
+/// the poll thread and read from the UI thread under the locks documented on each field. That
+/// interlock is exactly why this file has been behind most of this app's real bugs, and exactly
+/// why splitting it further along different lines would be risky rather than tidy.
+///
+/// What did leave, each because it owned state nothing else here touched (or no state at all):
+///   <see cref="NativeInput"/>          — the Win32 P/Invoke (foreground window, idle time)
+///   <see cref="WindowTitleResolver"/>  — title decoration + the pid→app cache
+///   <see cref="ActivityClassifier"/>   — the config keyword lists and matching
+///   <see cref="DiaryWriter"/>          — the two time_diary SQL statements
+/// The public surface is unchanged; Classify/ClassifyIdleText/StripUnreadBadge stay here as
+/// forwarders so no caller had to move with them.
 /// </summary>
 public sealed class ActivityTracker : IDisposable
 {
     public const int PollSeconds = 60;
 
-    // ── Win32 ────────────────────────────────────────────────────────────
-    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr hWnd);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
-    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO lii);
-    [StructLayout(LayoutKind.Sequential)]
-    private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+    private readonly ActivityClassifier _classifier;
+    private readonly WindowTitleResolver _titles = new();
 
-    // Shared with AppNames.Messengers via MessengerApps.ByExeName — see its doc comment
-    // (round-5 audit finding #20; centralized round-7 to stop the two lists needing to
-    // be kept in sync by hand).
-    private static readonly IReadOnlyDictionary<string, string> ExeAppNames = MessengerApps.ByExeName;
-
-    private readonly Dictionary<uint, string> _pidAppCache = new();
-    private bool _pidLookupErrorLogged;
-    private bool _titleDecorationErrorLogged;
-
-    // config-derived rules (same keys as the Python app)
-    private readonly List<string> _onPlan;
-    private readonly List<string> _offPlan;
-    private readonly List<string> _idleOnPlan;
-    private readonly List<string> _idleOffPlan;
-    private readonly List<string> _idleNeutral;
+    // The working day — and, since 2026-08-04, the diary logging window too: the same hours by
+    // definition, not two settings that happen to match. The diary window used to be a pair of
+    // hardcoded 06:00/20:00 statics with no relation to working hours and no way to reach them,
+    // so moving the working day to 08:00 still left 06:00-08:00 logged and back-filled as
+    // "unaccounted time" every morning (the 2026-08-04 report). It was briefly given its own
+    // config block and Settings pair; the user's call the same day was that one pair of hours is
+    // the whole idea, and a second pair is just another thing that can fall out of sync.
     private readonly TimeOnly _workStart, _workEnd;
-    private static readonly TimeOnly DiaryStart = new(6, 0);
-    private static readonly TimeOnly DiaryEnd = new(20, 0);
     private readonly int _graceMin, _repeatMin, _idleThresholdMin;
 
     // state (poll thread only — PaidUntil and the rest-day/accounted-until
@@ -123,20 +118,7 @@ public sealed class ActivityTracker : IDisposable
 
     public ActivityTracker(System.Text.Json.JsonElement config)
     {
-        static List<string> Words(System.Text.Json.JsonElement cfg, string section, string key)
-        {
-            var list = new List<string>();
-            if (cfg.TryGetProperty(section, out var s) && s.TryGetProperty(key, out var arr))
-                foreach (var v in arr.EnumerateArray())
-                    if (v.GetString() is { Length: > 0 } str) list.Add(str.ToLowerInvariant());
-            return list;
-        }
-
-        _onPlan = Words(config, "activity_rules", DiaryCategory.OnPlan);
-        _offPlan = Words(config, "activity_rules", DiaryCategory.OffPlan);
-        _idleOnPlan = Words(config, "idle_activity_rules", DiaryCategory.OnPlan);
-        _idleOffPlan = Words(config, "idle_activity_rules", DiaryCategory.OffPlan);
-        _idleNeutral = Words(config, "idle_activity_rules", DiaryCategory.Neutral);
+        _classifier = new ActivityClassifier(config);
         // Scalar timing/threshold defaults now come from ConfigService's shared methods
         // rather than a second, independently-hardcoded copy of the same fallbacks —
         // this constructor is always called with ConfigService.Root itself (see
@@ -189,214 +171,40 @@ public sealed class ActivityTracker : IDisposable
 
     public void Dispose() => Stop();
 
-    // ── classification (port of classify / classify_idle_text) ──────────
+    // ── classification (delegated to ActivityClassifier) ─────────────────
 
-    public string Classify(string title)
-    {
-        var t = title.ToLowerInvariant();
-        foreach (var kw in _onPlan) if (t.Contains(kw)) return DiaryCategory.OnPlan;
-        foreach (var kw in _offPlan) if (t.Contains(kw)) return DiaryCategory.OffPlan;
-        return DiaryCategory.Neutral;
-    }
+    public string Classify(string title) => _classifier.Classify(title);
 
-    public string ClassifyIdleText(string? description)
-    {
-        if (string.IsNullOrWhiteSpace(description)) return DiaryCategory.Idle;
-        var t = description.ToLowerInvariant();
-        foreach (var kw in _idleOnPlan) if (t.Contains(kw)) return DiaryCategory.OnPlan;
-        foreach (var kw in _idleOffPlan) if (t.Contains(kw)) return DiaryCategory.OffPlan;
-        foreach (var kw in _idleNeutral) if (t.Contains(kw)) return DiaryCategory.Neutral;
-        return DiaryCategory.Idle;
-    }
+    public string ClassifyIdleText(string? description) => _classifier.ClassifyIdleText(description);
 
+    /// <summary>Deliberately still here rather than in <see cref="ActivityClassifier"/>: it
+    /// reads PaidUntil, live tracker state written from the UI thread when entertainment time
+    /// is bought. Moving it would have dragged a lock and a mutable field into what is
+    /// otherwise a pure function of config.</summary>
     private string EffectiveClass(string cls) =>
         cls == DiaryCategory.OffPlan && PaidUntil is DateTime p && DateTime.Now < p ? DiaryCategory.Paid : cls;
 
-    // ── window title (port of _active_window_title incl. messenger fixups) ──
+    // -- window title (delegated to WindowTitleResolver / NativeInput) ----
 
-    private static bool IsBadgeNumber(string s)
-    {
-        var cleaned = new string(s.Where(c => c != ',' && c != '.' && c != ' '
-                                           && c != ' ' && c != ' ' && c != '\'').ToArray());
-        return cleaned.Length > 0 && cleaned.All(char.IsDigit);
-    }
+    /// <summary>Forwarder kept for <see cref="AppNames"/>, which splits a stored diary title
+    /// back into app/page and so needs the same badge rule the title was written with.</summary>
+    internal static string StripUnreadBadge(string title) => WindowTitleResolver.StripUnreadBadge(title);
 
-    internal static string StripUnreadBadge(string title)
-    {
-        var t = title.Trim();
-        var changed = true;
-        while (changed)
-        {
-            changed = false;
-            if (t.EndsWith(')'))
-            {
-                var open = t.LastIndexOf('(');
-                if (open != -1 && IsBadgeNumber(t[(open + 1)..^1]))
-                {
-                    t = t[..open].TrimEnd(' ', '–', '—', '-').Trim();
-                    changed = true;
-                    continue;
-                }
-            }
-            if (t.StartsWith('(') && t.Contains(')'))
-            {
-                var inner = t[1..t.IndexOf(')')];
-                if (IsBadgeNumber(inner))
-                {
-                    t = t[(t.IndexOf(')') + 1)..].TrimStart(' ', '–', '—', '-').Trim();
-                    changed = true;
-                }
-            }
-        }
-        return t;
-    }
+    private string ActiveWindowTitle() => _titles.ActiveWindowTitle();
 
-    private string ActiveWindowTitle()
-    {
-        var hwnd = GetForegroundWindow();
-        var len = GetWindowTextLength(hwnd);
-        var sb = new StringBuilder(len + 1);
-        if (len > 0) GetWindowText(hwnd, sb, len + 1);
-        var title = sb.ToString();
-
-        try
-        {
-            GetWindowThreadProcessId(hwnd, out var pid);
-            string app = "";
-            string processName = "";
-            try
-            {
-                using var proc = Process.GetProcessById((int)pid);
-                processName = proc.ProcessName;
-                var exe = (processName + ".exe").ToLowerInvariant();
-                ExeAppNames.TryGetValue(exe, out app!);
-                app ??= "";
-            }
-            catch (Exception ex)
-            {
-                // Expected to happen occasionally (process exits between
-                // GetForegroundWindow and GetProcessById) — deliberately not
-                // logged every time to avoid spamming the log on this
-                // per-minute poll. But a *persistent* failure here would
-                // otherwise be invisible forever, so log once per run
-                // (2026-07-09 audit finding #26).
-                if (!_pidLookupErrorLogged)
-                {
-                    _pidLookupErrorLogged = true;
-                    Log.Warn("ActivityTracker.ActiveWindowTitle.PidLookup",
-                        $"first occurrence (further ones this run are suppressed): {ex.Message}");
-                }
-            }
-
-            if (app.Length > 0)
-            {
-                // PIDs get reused constantly on a machine that's up for
-                // weeks — an unbounded cache would grow for the life of the
-                // process. A full clear past a generous cap is simplest;
-                // a cache miss just re-resolves via OpenProcess next poll,
-                // the same fallback path a cold cache already takes.
-                if (_pidAppCache.Count > 500) _pidAppCache.Clear();
-                _pidAppCache[pid] = app;
-            }
-            else _pidAppCache.TryGetValue(pid, out app!);
-            app ??= "";
-
-            if (app.Length > 0)
-            {
-                var clean = StripUnreadBadge(
-                    title.Replace("‎", "").Replace("‏", "").Trim());
-                title = !clean.Equals(app, StringComparison.OrdinalIgnoreCase)
-                    ? (clean.Length > 0 ? $"{clean} – {app}" : app)
-                    : app;
-            }
-            // A window with a genuinely empty title bar (most commonly the desktop
-            // itself, briefly focused between switching apps) and no ExeAppNames
-            // entry used to fall through to an empty string here — recorded and
-            // shown as a bare "-" with no way to tell what it actually was
-            // (2026-07-20 request). The process name is real information already
-            // in hand at this point; use it instead of leaving the diary blank.
-            else if (title.Length == 0 && processName.Length > 0)
-                title = processName;
-        }
-        catch (Exception ex)
-        {
-            // Same reasoning as the PID-lookup catch above — log once per
-            // run, not every poll (2026-07-09 audit finding #26).
-            if (!_titleDecorationErrorLogged)
-            {
-                _titleDecorationErrorLogged = true;
-                Log.Warn("ActivityTracker.ActiveWindowTitle.Decoration",
-                    $"first occurrence (further ones this run are suppressed): {ex.Message}");
-            }
-        }
-
-        return title;
-    }
-
-    private static double IdleSeconds()
-    {
-        var lii = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
-        GetLastInputInfo(ref lii);
-        return (Environment.TickCount - (int)lii.dwTime) / 1000.0;
-    }
-
-    // ── database (same rows as the Python tracker) ───────────────────────
-
-    private static void LogDiarySession(SqliteConnection conn, DateTime start, DateTime end,
-        string category, string window, string? description = null, SqliteTransaction? tx = null)
-    {
-        var duration = Math.Max(1, (int)(end - start).TotalMinutes);
-        using var cmd = conn.CreateCommand();
-        if (tx is not null) cmd.Transaction = tx;
-        cmd.CommandText =
-            "INSERT INTO time_diary " +
-            "(date, start_time, end_time, duration_min, category, window, description) " +
-            "VALUES ($d, $s, $e, $m, $c, $w, $x)";
-        cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
-        cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
-        cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
-        cmd.Parameters.AddWithValue("$m", duration);
-        cmd.Parameters.AddWithValue("$c", category);
-        cmd.Parameters.AddWithValue("$w", window.Length > 240 ? window[..240] : window);
-        cmd.Parameters.AddWithValue("$x", (object?)description ?? DBNull.Value);
-        cmd.ExecuteNonQuery();
-    }
-
-    /// <summary>Deletes any not-yet-answered idle placeholder ("unaccounted time", or the
-    /// older "dismissed") overlapping [start, end) on that date — HandleIdleReturn logs one
-    /// of these immediately when a gap is first detected (2026-07-27), so answering it here
-    /// must replace that row rather than insert a second, overlapping one. Never touches a
-    /// real activity row or an already-answered idle row (different window/description),
-    /// only ever a placeholder still waiting for its real answer.</summary>
-    private static void ClearIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end,
-        SqliteTransaction? tx = null)
-    {
-        using var cmd = conn.CreateCommand();
-        if (tx is not null) cmd.Transaction = tx;
-        cmd.CommandText =
-            "DELETE FROM time_diary WHERE date = $d AND window = $w " +
-            "AND description IN ($ph, $legacyPh) " +
-            "AND NOT (end_time <= $s OR start_time >= $e)";
-        cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
-        cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
-        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
-        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
-        cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
-        cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
-        cmd.ExecuteNonQuery();
-    }
-
+    private static double IdleSeconds() => NativeInput.IdleSeconds();
+    // -- database (delegated to DiaryWriter) -----------------------------
     /// <summary>Port of log_idle_answer — called by the idle-return dialog.</summary>
     public void LogIdleAnswer(DateTime idleStart, int idleMinutes, string description)
     {
         var end = idleStart.AddMinutes(idleMinutes);
         var category = ClassifyIdleText(description);
         using var conn = AppPaths.OpenConnection();
-        ClearIdlePlaceholder(conn, idleStart, end);
+        DiaryWriter.ClearIdlePlaceholder(conn, idleStart, end);
         // DiaryCategory.Idle doubles as the "window" placeholder here — no real app was
         // in the foreground, so the diary row's window field is the same sentinel value
         // ReportData.cs checks for when deciding whether to show the description instead.
-        LogDiarySession(conn, idleStart, end, category, DiaryCategory.Idle, description);
+        DiaryWriter.LogSession(conn, idleStart, end, category, DiaryCategory.Idle, description);
     }
 
     /// <summary>
@@ -421,8 +229,8 @@ public sealed class ActivityTracker : IDisposable
                 // Same placeholder-replacement reasoning as LogIdleAnswer above — the split
                 // dialog's segments collectively cover the same original placeholder range,
                 // so this clears whatever's left of it as each segment is written.
-                ClearIdlePlaceholder(conn, start, end, tx);
-                LogDiarySession(conn, start, end, category, DiaryCategory.Idle, description, tx);
+                DiaryWriter.ClearIdlePlaceholder(conn, start, end, tx);
+                DiaryWriter.LogSession(conn, start, end, category, DiaryCategory.Idle, description, tx);
             }
             tx.Commit();
         }
@@ -435,16 +243,15 @@ public sealed class ActivityTracker : IDisposable
 
     // ── alert escalation (port of _check_alert) ──────────────────────────
 
+    /// <summary>Inside the configured working day. This gates two things that used to be
+    /// separate windows: whether the off-plan nag may fire, and whether activity is written to
+    /// the diary at all. They were merged on 2026-08-04 (see the _workStart field comment) —
+    /// one method rather than two identical ones, so they cannot drift into disagreeing about
+    /// what "the working day" means.</summary>
     private bool InWorkingHours()
     {
         var now = TimeOnly.FromDateTime(DateTime.Now);
         return _workStart <= now && now <= _workEnd;
-    }
-
-    private static bool InDiaryHours()
-    {
-        var now = TimeOnly.FromDateTime(DateTime.Now);
-        return DiaryStart <= now && now <= DiaryEnd;
     }
 
     /// <summary>
@@ -518,8 +325,8 @@ public sealed class ActivityTracker : IDisposable
     {
         if (IsRestDayToday()) return null;
         var now = DateTime.Now;
-        var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
-        var diaryEndToday = now.Date + DiaryEnd.ToTimeSpan();
+        var diaryStartToday = now.Date + _workStart.ToTimeSpan();
+        var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
         var gapEnd = now < diaryEndToday ? now : diaryEndToday;
         if (gapEnd <= diaryStartToday) return null;
 
@@ -628,7 +435,7 @@ public sealed class ActivityTracker : IDisposable
         var title = ActiveWindowTitle();
         var idleS = IdleSeconds();
         var cls = EffectiveClass(Classify(title));
-        var diaryEndToday = now.Date + DiaryEnd.ToTimeSpan();
+        var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
         var idleThresholdSec = _idleThresholdMin * 60;
 
         using var conn = AppPaths.OpenConnection();
@@ -663,7 +470,7 @@ public sealed class ActivityTracker : IDisposable
 
         if (_idleNotified && idleS < idleThresholdSec)
             HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS);
-        else if (InDiaryHours())
+        else if (InWorkingHours())
             HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec);
         else if (_sessionStart is DateTime open && _sessionApp != null)
             HandleOutsideDiaryHours(conn, now, diaryEndToday, open);
@@ -680,7 +487,7 @@ public sealed class ActivityTracker : IDisposable
             _lockPending = false;
             if (_sessionStart is DateTime lockedSs && _sessionApp != null)
             {
-                LogDiarySession(conn, lockedSs, now, _sessionClass!, _sessionApp);
+                DiaryWriter.LogSession(conn, lockedSs, now, _sessionClass!, _sessionApp);
                 _sessionStart = null; _sessionApp = null; _sessionClass = null;
             }
             _idleSince = now;
@@ -721,7 +528,7 @@ public sealed class ActivityTracker : IDisposable
 
         if (_sessionStart is DateTime ss && _sessionApp != null)
         {
-            LogDiarySession(conn, ss, last, _sessionClass!, _sessionApp);
+            DiaryWriter.LogSession(conn, ss, last, _sessionClass!, _sessionApp);
             _sessionStart = null; _sessionApp = null; _sessionClass = null;
         }
         _idleSince = last;
@@ -735,7 +542,7 @@ public sealed class ActivityTracker : IDisposable
     {
         var idleEnd = now < diaryEndToday ? now : diaryEndToday;
         var idleStart = _idleSince ?? now.AddSeconds(-idleS);
-        var diaryStartToday = now.Date + DiaryStart.ToTimeSpan();
+        var diaryStartToday = now.Date + _workStart.ToTimeSpan();
         if (idleStart < diaryStartToday) idleStart = diaryStartToday;
         // Don't re-cover time the evening-review gap sweep already logged.
         DateTime? accountedUntil;
@@ -764,7 +571,7 @@ public sealed class ActivityTracker : IDisposable
             // this same placeholder row in place if the user does go on to answer, instead
             // of inserting a second, overlapping one — see their own comments.
             if (idleStart < diaryEndToday)
-                LogDiarySession(conn, idleStart, idleEnd, DiaryCategory.Idle, DiaryCategory.Idle,
+                DiaryWriter.LogSession(conn, idleStart, idleEnd, DiaryCategory.Idle, DiaryCategory.Idle,
                     DiaryCategory.IdlePlaceholder);
             // Ask on return from idle at ANY hour, not only during diary
             // hours — someone who finishes and steps away in the evening
@@ -775,7 +582,7 @@ public sealed class ActivityTracker : IDisposable
         }
         _idleNotified = false;
         _idleSince = null;
-        if (InDiaryHours())
+        if (InWorkingHours())
         {
             _sessionStart = now; _sessionApp = title; _sessionClass = cls;
         }
@@ -805,7 +612,7 @@ public sealed class ActivityTracker : IDisposable
             var idleStartPoint = now.AddSeconds(-idleS);
             if (_sessionStart is DateTime ss && _sessionApp != null)
             {
-                LogDiarySession(conn, ss, idleStartPoint, _sessionClass!, _sessionApp);
+                DiaryWriter.LogSession(conn, ss, idleStartPoint, _sessionClass!, _sessionApp);
                 _sessionStart = null; _sessionApp = null; _sessionClass = null;
             }
             _idleSince = idleStartPoint;
@@ -828,20 +635,20 @@ public sealed class ActivityTracker : IDisposable
         }
         else if (title != _sessionApp)
         {
-            LogDiarySession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!);
+            DiaryWriter.LogSession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!);
             _sessionStart = now; _sessionApp = title; _sessionClass = cls;
         }
     }
 
-    /// <summary>Outside diary hours with a session still open (crossed the
-    /// end-of-diary boundary mid-session): close it out at the boundary, not
-    /// at "now" — nothing gets logged past <see cref="DiaryEnd"/>.</summary>
+    /// <summary>Outside working hours with a session still open (crossed the end-of-day
+    /// boundary mid-session): close it out at the boundary, not at "now" — nothing gets logged
+    /// past the configured work end (<see cref="ConfigService.WorkEndTime"/>).</summary>
     private void HandleOutsideDiaryHours(SqliteConnection conn, DateTime now, DateTime diaryEndToday,
         DateTime open)
     {
         var end = now < diaryEndToday ? now : diaryEndToday;
         if (end > open)
-            LogDiarySession(conn, open, end, _sessionClass!, _sessionApp!);
+            DiaryWriter.LogSession(conn, open, end, _sessionClass!, _sessionApp!);
         _sessionStart = null; _sessionApp = null; _sessionClass = null;
     }
 }

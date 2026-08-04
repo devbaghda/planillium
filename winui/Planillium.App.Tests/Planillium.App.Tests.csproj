@@ -70,6 +70,14 @@
     <Compile Include="..\Planillium.App\Services\AppNames.cs" Link="App\AppNames.cs" />
     <Compile Include="..\Planillium.App\Services\MessengerApps.cs" Link="App\MessengerApps.cs" />
     <Compile Include="..\Planillium.App\Services\ActivityTracker.cs" Link="App\ActivityTracker.cs" />
+    <!-- The four collaborators ActivityTracker's God-Object split produced (2026-08-04,
+         2026-07-23 audit finding #8). All plain C#/P-Invoke like the tracker itself, so they
+         link here on the same terms — the P/Invoke declarations compile fine on this project's
+         plain net8.0 TFM because nothing in these tests actually calls them. -->
+    <Compile Include="..\Planillium.App\Services\ActivityClassifier.cs" Link="App\ActivityClassifier.cs" />
+    <Compile Include="..\Planillium.App\Services\WindowTitleResolver.cs" Link="App\WindowTitleResolver.cs" />
+    <Compile Include="..\Planillium.App\Services\NativeInput.cs" Link="App\NativeInput.cs" />
+    <Compile Include="..\Planillium.App\Services\DiaryWriter.cs" Link="App\DiaryWriter.cs" />
     <Compile Include="..\Planillium.App\Services\ConfigService.cs" Link="App\ConfigService.cs" />
     <Compile Include="..\Planillium.App\Services\Database.cs" Link="App\Database.cs" />
     <Compile Include="..\Planillium.App\Services\DateExtensions.cs" Link="App\DateExtensions.cs" />
@@ -83,6 +91,9 @@
     <Compile Include="..\Planillium.App\Services\StateService.cs" Link="App\StateService.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreReason.cs" Link="App\ScoreReason.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />
+    <!-- The one table of scoring keys/defaults/ranges that ScoreService, ConfigService and
+         Settings all read from (2026-08-04). -->
+    <Compile Include="..\Planillium.App\Services\ScoringRules.cs" Link="App\ScoringRules.cs" />
   </ItemGroup>
 
   <ItemGroup>
