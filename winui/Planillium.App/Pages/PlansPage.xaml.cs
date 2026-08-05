@@ -12,10 +12,16 @@ namespace Planillium.App.Pages;
 
 public sealed partial class PlansPage : Page
 {
+    private const double MaxContentWidth = 880;
+
     public PlansPage()
     {
         InitializeComponent();
     }
+
+    // See PageLayout's own doc comment.
+    private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        PageLayout.CenterContent(RootScroller, ContentColumn, MaxContentWidth, e.NewSize);
 
     // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
     // menu switches instead of reconstructing the page + reopening the DB

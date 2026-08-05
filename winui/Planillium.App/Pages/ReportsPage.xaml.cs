@@ -44,24 +44,18 @@ public sealed partial class ReportsPage : Page
     internal const double DiaryListWidth = 950;
     internal const double DiaryCardWidth = DiaryListWidth + 36;
 
-    // Centers ContentColumn explicitly instead of relying on
-    // HorizontalAlignment/MaxWidth: RootScroller's own ActualWidth is set
-    // top-down by the window/nav pane, so it's unaffected by how tall this
-    // page's own scrollable content is on any given day — see the XAML
-    // comment for why the alignment-based approaches didn't hold still.
-    private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        // Was a flat 880 — comfortably fit every OTHER section (they all stretch/wrap fine at
-        // any width up to this), but narrower than Diary's own required width, so Diary alone
-        // still needed horizontal scrolling to reach Edit/Split even on a wide window with
-        // plenty of unused space either side (2026-07-28 request). Widened to fit Diary too,
-        // with a little breathing room past what it strictly needs.
-        const double maxContentWidth = DiaryCardWidth + 20;
-        var available = e.NewSize.Width - RootScroller.Padding.Left - RootScroller.Padding.Right;
-        var width = Math.Min(maxContentWidth, Math.Max(0, available));
-        ContentColumn.Width = width;
-        ContentColumn.Margin = new Thickness(Math.Max(0, (available - width) / 2), 0, 0, 0);
-    }
+    // Was a flat 880 — comfortably fit every OTHER section (they all stretch/wrap fine at
+    // any width up to this), but narrower than Diary's own required width, so Diary alone
+    // still needed horizontal scrolling to reach Edit/Split even on a wide window with
+    // plenty of unused space either side (2026-07-28 request). Widened to fit Diary too,
+    // with a little breathing room past what it strictly needs.
+    private const double MaxContentWidth = DiaryCardWidth + 20;
+
+    // See PageLayout's own doc comment for why this can't be HorizontalAlignment/MaxWidth on
+    // ContentColumn directly — this page originated that fix (2026-07-28); every other page now
+    // shares the same one implementation instead of its own copy of this math.
+    private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        PageLayout.CenterContent(RootScroller, ContentColumn, MaxContentWidth, e.NewSize);
 
     // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
     // menu switches instead of reconstructing the page + reopening the DB

@@ -334,33 +334,41 @@ collapsed into one `DailyMinutes`, fixing two latent bugs found in the collapse:
 never read `diary_daily_rollup` at all, and the rollup's neutral/paid/idle columns had never been
 read back despite being stored correctly. HTML/CSV exports match.
 *Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours`, `"5,5 h"`, everywhere except the
-diary (kept as h/m — a clock event, not a quantity); `Suggestions` had its own hand-formatted
-string, now fixed too. Month/Year gained Tasks and Score columns and totals (a prior round's
+diary (kept as h/m — a clock event, not a quantity); `Suggestions`' own hand-formatted string fixed
+too. Month/Year gained Tasks and Score columns and totals (a prior round's
 explicit "leave blank" decision, overridden). Required day-off dates to contribute score while
 contributing no minutes — `DailyRows` is now the one walk behind the week table, both bucket
 tables and the score card, so a table's score total equals the card by construction; test asserts
 it. Found by measuring at 900dip minimum: the Score column was **clipped off entirely** by the
 card, a rounded `Border` clipping in silence — tables now sit in a horizontal `ScrollViewer`
 (`Scrollable()`), confirmed reachable via `ScrollItemPattern.ScrollIntoView`. 132/132 tests.
-*Then*: **"the app asks me about my absence twice and makes two identical recordings"** — a real
-bug in `ActivityTracker.PendingDayGap` (the evening review's "where have you been?" sweep), two
-compounding causes. (1) It judged only by `db.LastDiaryEnd()`, with no idea a session was
-currently open — someone continuously active in one app right through review time read as having
-been away for that whole stretch; answering it logged an idle row, then the still-open session
-flushed a few polls later and logged the SAME span again as a real on/off-plan row. (2) It never
-remembered what it had already asked about — Today's manual "Evening review" preview button calls
-`ReviewDialog.ShowAsync` directly, bypassing the automatic once-a-day guard, so a second click
-re-asked about and re-logged whatever the first had already covered. Fixed with two clamps inside
-`PendingDayGap` itself: a new lock-protected `_openSessionStart` (mirroring `_sessionStart`,
-written only by a new `SetSession` — replaced eight independently-typed assignment triples, one
-per branch, which is exactly the shape that would have let a mirror added by hand miss a site)
-caps how far the gap can extend; the existing `_accountedUntil` (already used by the poll-thread
-path) now also caps how far back it can start. *Verified*: two new tests reproduce both bugs
-directly against a real throwaway diary table (`ActivityTrackerPendingGapTests`) and fail without
-the fix; 136/136 total. Root-caused via git archaeology, not guessing: traced through the
-2026-07-27→07-28 history of `PendingLeadingGap`/`PendingDayGap` to find the one check that was
-never added. Release rebuilt and relaunched (EOD checked first — 17:34 against a 20:00 review).
+*Then*: **"the app asks me about my absence twice and makes two identical recordings"** — real bug
+in `ActivityTracker.PendingDayGap` (evening review's gap sweep), two compounding causes. (1) It
+judged only by `db.LastDiaryEnd()`, blind to a currently-open session — continuous activity right
+through review time read as absence; answering logged an idle row, then the session flushed a few
+polls later and logged the same span again. (2) It never remembered what it had already asked —
+Today's manual "Evening review" button bypasses the automatic once-a-day guard, so a second click
+re-asked/re-logged whatever the first covered. Fixed with two clamps in `PendingDayGap`: a new
+lock-protected `_openSessionStart` (written by a new `SetSession`, replacing eight independently-
+typed assignment triples — exactly the shape a hand-added mirror would miss one of) caps how far
+the gap extends; the existing `_accountedUntil` now also caps how far back it starts. *Verified*:
+two new tests reproduce both bugs and fail without the fix; 136/136. Root-caused via git
+archaeology (the 07-27→07-28 `PendingLeadingGap`/`PendingDayGap` history) rather than guessing.
+*Then*: **"fix width on all of the pages, Schedule for example is not fixed"** — Today, Schedule,
+Plans all still used the *pre*-2026-07-28 `StackPanel MaxWidth Center` pattern, the exact bug
+already root-caused and fixed once for Reports (a StackPanel's natural width is its content's, so
+MaxWidth caps it but doesn't force it — the column visibly shifts as content changes). New
+`Pages/PageLayout.cs`, `CenterContent()`, is Reports' own `SizeChanged` math shared; Settings
+untouched (different, already-fixed layout). *Also this round*: re-read a screenshot correctly on
+the second look — the "Day off" text on every Schedule row is the **toggle button**, not a status
+chip; `plan_days_off` (read-only) confirmed none of the flagged days were marked off. The two
+empty weekdays trace to `task_overrides`: originals moved to days 40/41 individually while others
+moved in from 4/5 — real reschedule history, not a bug; user hasn't yet said if that's expected.
+*Verified*: UIA at 1400/950/750dip — column matches across pages at a given width. 136/136 tests.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - Whether the two now-empty weekdays on the mastery plan's Schedule (days 22/23, tasks moved
+    to 40/41 via individual reschedules) are expected or should be tidied — asked, not yet
+    answered.
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight
     with the app sitting on Reports. If the diary still shows yesterday some morning, the

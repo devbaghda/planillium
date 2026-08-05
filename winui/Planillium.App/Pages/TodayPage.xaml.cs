@@ -12,10 +12,17 @@ namespace Planillium.App.Pages;
 
 public sealed partial class TodayPage : Page
 {
+    private const double MaxContentWidth = 880;
+
     public TodayPage()
     {
         InitializeComponent();
     }
+
+    // See PageLayout's own doc comment — every page but Settings (which uses a different,
+    // already-fixed layout) shares this one implementation now instead of its own copy.
+    private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        PageLayout.CenterContent(RootScroller, ContentColumn, MaxContentWidth, e.NewSize);
 
     // NavigationCacheMode="Enabled" (see XAML) keeps this instance alive
     // across menu switches instead of reconstructing the whole page — and

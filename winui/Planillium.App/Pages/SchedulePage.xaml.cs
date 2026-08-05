@@ -17,10 +17,16 @@ namespace Planillium.App.Pages;
 /// </summary>
 public sealed partial class SchedulePage : Page
 {
+    private const double MaxContentWidth = 860;
+
     public SchedulePage()
     {
         InitializeComponent();
     }
+
+    // See PageLayout's own doc comment.
+    private void Scroller_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        PageLayout.CenterContent(Scroller, ContentColumn, MaxContentWidth, e.NewSize);
 
     // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
     // menu switches instead of reconstructing the page + reopening the DB

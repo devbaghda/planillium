@@ -20,6 +20,11 @@ going forward; the original Python/Tkinter version is retired.
   neither productive nor a distraction, sleep included) is usually the biggest share of a day, and
   it was simply not shown anywhere in this table until now. The on-plan and off-plan columns are
   unchanged, as is your score.
+- Today, Schedule and Plans now hold a fixed content width, the same way Reports already did.
+  Previously each centered its content with a plain max-width, which doesn't actually fix the
+  width — it only caps it, so the column's real width tracked whatever happened to be on screen
+  and visibly shifted left/right as content changed. All four pages (plus Settings, on its own
+  different layout) now hold still.
 - Fixed a bug where the evening review could ask "where have you been?" for a stretch you were
   actually at your computer for the whole time, if you'd been continuously active in one app
   right up to review time. Answering it (or letting it default to "unaccounted time") then got

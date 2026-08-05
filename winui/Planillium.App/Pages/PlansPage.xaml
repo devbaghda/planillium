@@ -4,8 +4,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     NavigationCacheMode="Enabled">
 
-    <ScrollViewer Padding="28,8,28,28">
-        <StackPanel MaxWidth="880" HorizontalAlignment="Center" Spacing="0">
+    <!-- See PageLayout's own doc comment — HorizontalAlignment="Left" + a Width computed in
+         code, not Center+MaxWidth, which doesn't hold this column at one stable width as plan
+         cards are added/archived (2026-08-05 request, "fix width on all of the pages"). -->
+    <ScrollViewer x:Name="RootScroller" Padding="28,8,28,28" SizeChanged="RootScroller_SizeChanged">
+        <StackPanel x:Name="ContentColumn" HorizontalAlignment="Left" Spacing="0">
             <Grid Margin="0,8,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
