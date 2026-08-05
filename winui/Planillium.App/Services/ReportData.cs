@@ -14,8 +14,44 @@ public enum ReportPeriod { Day, Week, Month, Year }
 /// </summary>
 public static class ReportData
 {
-    public sealed record DayStat(DateOnly Date, int Done, int Total, int OnMin, int OffMin, int Score, bool IsDayOff);
-    public sealed record BucketStat(string Label, int OnMin, int OffMin);
+    /// <summary>One date's (or bucket's) minutes split across all five diary categories.
+    /// <see cref="TotalMin"/> is every category summed — all the tracked time — which is a
+    /// deliberately larger figure than the on-plan + off-plan pair the summary tables used to
+    /// total (2026-08-05 request, "add all the categories and summary for the rows as well").</summary>
+    public sealed record CategoryMinutes(int On, int Off, int Neutral, int Paid, int Idle)
+    {
+        public static readonly CategoryMinutes Zero = new(0, 0, 0, 0, 0);
+        public int TotalMin => On + Off + Neutral + Paid + Idle;
+
+        public CategoryMinutes Plus(CategoryMinutes o) =>
+            new(On + o.On, Off + o.Off, Neutral + o.Neutral, Paid + o.Paid, Idle + o.Idle);
+
+        /// <summary>The minutes for one category name, or 0 for anything that isn't one of the
+        /// five — so an unrecognised `time_diary.category` can never be silently folded into a
+        /// total under a category it doesn't belong to.</summary>
+        public int Of(string category) => category switch
+        {
+            DiaryCategory.OnPlan => On,
+            DiaryCategory.OffPlan => Off,
+            DiaryCategory.Neutral => Neutral,
+            DiaryCategory.Paid => Paid,
+            DiaryCategory.Idle => Idle,
+            _ => 0,
+        };
+    }
+
+    public sealed record DayStat(DateOnly Date, int Done, int Total, CategoryMinutes Minutes,
+        int Score, bool IsDayOff)
+    {
+        public int OnMin => Minutes.On;
+        public int OffMin => Minutes.Off;
+    }
+
+    public sealed record BucketStat(string Label, CategoryMinutes Minutes)
+    {
+        public int OnMin => Minutes.On;
+        public int OffMin => Minutes.Off;
+    }
 
     public sealed class AppUsage
     {
@@ -54,25 +90,32 @@ public static class ReportData
     /// omitted (they'd be empty rows); the last element is always today, so
     /// callers that want "today" can take <c>[^1]</c>.
     /// </summary>
-    public static List<DayStat> WeekStats(ScoreService score)
+    public static List<DayStat> WeekStats(SqliteConnection conn, ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var rows = new List<DayStat>();
+        // Takes the connection (2026-08-05) so every category is available, not just the
+        // on/off pair ScoreService.DayDiaryMinutes returns for scoring. One pair of queries for
+        // the whole week rather than per-day round trips, same as PeriodStats.
+        var minutes = DailyMinutes(conn, MondayOf(today));
         for (var d = MondayOf(today); d <= today; d = d.AddDays(1))
         {
             var (total, done) = score.DayTaskCounts(d);
-            var (on, off) = score.DayDiaryMinutes(d);
+            var m = minutes.TryGetValue(d, out var found) ? found : CategoryMinutes.Zero;
+            var (on, off) = (m.On, m.Off);
             var isExempt = score.AllPlansScoringExempt(d);
             // Each day's own streak-as-of-that-date, not just today's — same fix as
             // ScoreService.RecomputeDayScoreCore (2026-07-18 audit finding R8-01); this
             // table used to show every non-today row with a hardcoded 0 streak bonus,
             // understating a past day's score if it really was mid-streak.
             var s = score.DayScore(done, total, on, off, score.CurrentStreak(d), isExempt);
-            // A day off is still tracked in the raw Diary list, but its on/off-plan
-            // minutes don't count toward this summary table any more than they count
-            // toward the score (2026-07-17 request).
-            if (isExempt) { on = 0; off = 0; }
-            rows.Add(new DayStat(d, done, total, on, off, s, isExempt));
+            // A day off is still tracked in the raw Diary list, but its minutes don't count
+            // toward this summary table any more than they count toward the score (2026-07-17
+            // request). Zeroes every category, not just the on/off pair it used to: the table
+            // now shows all five, and a day off that reported 0m on-plan beside 6h of neutral
+            // would read as a tracking bug rather than as an excluded day.
+            if (isExempt) m = CategoryMinutes.Zero;
+            rows.Add(new DayStat(d, done, total, m, s, isExempt));
         }
         return rows;
     }
@@ -87,38 +130,27 @@ public static class ReportData
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var start = PeriodStart(ReportPeriod.Month, today);
-        // Ordered week buckets keyed by the Monday of each week.
-        var weeks = new SortedDictionary<string, (DateOnly WeekStart, int On, int Off)>();
+        var minutes = DailyMinutes(conn, start);
+
+        // Ordered week buckets keyed by the Monday of each week. Seeded for every week in the
+        // month so a week with no activity still gets a row rather than vanishing.
+        var weeks = new SortedDictionary<string, (DateOnly WeekStart, CategoryMinutes Mins)>();
         for (var d = start; d <= today; d = d.AddDays(1))
+            weeks.TryAdd(MondayOf(d).ToIsoDate(), (MondayOf(d), CategoryMinutes.Zero));
+
+        foreach (var (d, m) in minutes)
         {
-            var ws = MondayOf(d);
-            weeks.TryAdd(ws.ToIsoDate(), (ws, 0, 0));
-        }
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "SELECT date, category, SUM(duration_min) FROM time_diary " +
-            "WHERE date >= $from GROUP BY date, category";
-        cmd.Parameters.AddWithValue("$from", start.ToIsoDate());
-        using var r = cmd.ExecuteReader();
-        while (r.Read())
-        {
-            if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
             // Tracked (still visible in the raw Diary list) but doesn't count toward this
             // bucket, same as the score and the weekly summary table (2026-07-17 request).
             if (score.AllPlansScoringExempt(d)) continue;
-            var cat = r.GetString(1);
-            if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
-            var ws = MondayOf(d);
-            var key = ws.ToIsoDate();
+            var key = MondayOf(d).ToIsoDate();
             if (!weeks.TryGetValue(key, out var w)) continue;
-            var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-            weeks[key] = cat == DiaryCategory.OnPlan ? (w.WeekStart, w.On + mins, w.Off)
-                                          : (w.WeekStart, w.On, w.Off + mins);
+            weeks[key] = (w.WeekStart, w.Mins.Plus(m));
         }
         return weeks.Values.Select(w => new BucketStat(
             $"{w.WeekStart.ToString("dd MMM", CultureInfo.InvariantCulture)} – " +
             $"{w.WeekStart.AddDays(6).ToString("dd MMM", CultureInfo.InvariantCulture)}",
-            w.On, w.Off)).ToList();
+            w.Mins)).ToList();
     }
 
     /// <summary>Calendar-month buckets for this year, January through the current
@@ -132,51 +164,18 @@ public static class ReportData
     public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var fromStr = PeriodStart(ReportPeriod.Year, today).ToIsoDate();
-        var months = new SortedDictionary<string, (int On, int Off)>();
+        var minutes = DailyMinutes(conn, PeriodStart(ReportPeriod.Year, today));
+        var months = new SortedDictionary<string, CategoryMinutes>();
 
-        // Per-date (not per-month) so a day-off date can be excluded before it's folded
-        // into its month — same rule as the score and the other bucket views
-        // (2026-07-17 request). Both sources (raw time_diary and the older rollup rows)
-        // go through this one local function so neither can drift from the other.
-        void AddToMonth(DateOnly d, int onMins, int offMins)
+        // Per-date (not per-month) so a day-off date can be excluded before it's folded into
+        // its month — same rule as the score and the other bucket views (2026-07-17 request).
+        foreach (var (d, m) in minutes)
         {
-            if (score.AllPlansScoringExempt(d)) return;
+            if (score.AllPlansScoringExempt(d)) continue;
             var mo = d.ToString("yyyy-MM", CultureInfo.InvariantCulture);
-            months.TryGetValue(mo, out var m);
-            months[mo] = (m.On + onMins, m.Off + offMins);
+            months[mo] = (months.TryGetValue(mo, out var cur) ? cur : CategoryMinutes.Zero).Plus(m);
         }
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "SELECT date, category, SUM(duration_min) FROM time_diary " +
-            "WHERE date >= $from GROUP BY date, category";
-        cmd.Parameters.AddWithValue("$from", fromStr);
-        using (var r = cmd.ExecuteReader())
-            while (r.Read())
-            {
-                if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
-                var cat = r.GetString(1);
-                if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
-                var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-                AddToMonth(d, cat == DiaryCategory.OnPlan ? mins : 0, cat == DiaryCategory.OffPlan ? mins : 0);
-            }
-
-        using var rollupCmd = conn.CreateCommand();
-        rollupCmd.CommandText =
-            "SELECT date, on_min, off_min FROM diary_daily_rollup WHERE date >= $from";
-        rollupCmd.Parameters.AddWithValue("$from", fromStr);
-        using (var r = rollupCmd.ExecuteReader())
-            while (r.Read())
-            {
-                if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
-                var on = r.IsDBNull(1) ? 0 : r.GetInt32(1);
-                var off = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-                AddToMonth(d, on, off);
-            }
-
-        return months.Select(kv => new BucketStat(MonthLabel(kv.Key), kv.Value.On, kv.Value.Off))
-                     .ToList();
+        return months.Select(kv => new BucketStat(MonthLabel(kv.Key), kv.Value)).ToList();
     }
 
     /// <summary>Everything the score card and the insights panel need, aggregated over the
@@ -196,14 +195,11 @@ public static class ReportData
     /// would be 365 round-trips on the Year view, and Reports has a slow-load report in its
     /// history already (2026-07-21).
     /// </summary>
-    private static Dictionary<DateOnly, (int On, int Off)> DailyMinutes(SqliteConnection conn, DateOnly from)
+    private static Dictionary<DateOnly, CategoryMinutes> DailyMinutes(SqliteConnection conn, DateOnly from)
     {
-        var byDate = new Dictionary<DateOnly, (int On, int Off)>();
-        void Add(DateOnly d, int on, int off)
-        {
-            byDate.TryGetValue(d, out var cur);
-            byDate[d] = (cur.On + on, cur.Off + off);
-        }
+        var byDate = new Dictionary<DateOnly, CategoryMinutes>();
+        void Add(DateOnly d, CategoryMinutes m) =>
+            byDate[d] = (byDate.TryGetValue(d, out var cur) ? cur : CategoryMinutes.Zero).Plus(m);
 
         var fromStr = from.ToIsoDate();
         using var cmd = conn.CreateCommand();
@@ -215,21 +211,34 @@ public static class ReportData
             while (r.Read())
             {
                 if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
-                var cat = r.GetString(1);
-                if (cat != DiaryCategory.OnPlan && cat != DiaryCategory.OffPlan) continue;
                 var mins = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-                Add(d, cat == DiaryCategory.OnPlan ? mins : 0, cat == DiaryCategory.OffPlan ? mins : 0);
+                // Explicitly per known category, so a category string that isn't one of the
+                // five is dropped rather than landing in some total by accident.
+                Add(d, r.GetString(1) switch
+                {
+                    DiaryCategory.OnPlan => new CategoryMinutes(mins, 0, 0, 0, 0),
+                    DiaryCategory.OffPlan => new CategoryMinutes(0, mins, 0, 0, 0),
+                    DiaryCategory.Neutral => new CategoryMinutes(0, 0, mins, 0, 0),
+                    DiaryCategory.Paid => new CategoryMinutes(0, 0, 0, mins, 0),
+                    DiaryCategory.Idle => new CategoryMinutes(0, 0, 0, 0, mins),
+                    _ => CategoryMinutes.Zero,
+                });
             }
 
         using var rollupCmd = conn.CreateCommand();
         rollupCmd.CommandText =
-            "SELECT date, on_min, off_min FROM diary_daily_rollup WHERE date >= $from";
+            "SELECT date, on_min, off_min, neutral_min, paid_min, idle_min " +
+            "FROM diary_daily_rollup WHERE date >= $from";
         rollupCmd.Parameters.AddWithValue("$from", fromStr);
         using (var r = rollupCmd.ExecuteReader())
             while (r.Read())
             {
                 if (!r.GetString(0).TryParseIsoDate(out var d)) continue;
-                Add(d, r.IsDBNull(1) ? 0 : r.GetInt32(1), r.IsDBNull(2) ? 0 : r.GetInt32(2));
+                int Col(int i) => r.IsDBNull(i) ? 0 : r.GetInt32(i);
+                // The rollup has carried all five columns since it was created — only on/off
+                // were ever read back, so an aged-out month silently lost its neutral/paid/idle
+                // detail in the Year view even though the numbers were sitting right there.
+                Add(d, new CategoryMinutes(Col(1), Col(2), Col(3), Col(4), Col(5)));
             }
         return byDate;
     }
@@ -254,7 +263,7 @@ public static class ReportData
         for (var d = start; d <= today; d = d.AddDays(1))
         {
             var (dayTotal, dayDone) = score.DayTaskCounts(d);
-            minutes.TryGetValue(d, out var m);
+            var m = minutes.TryGetValue(d, out var found) ? found : CategoryMinutes.Zero;
             var isExempt = score.AllPlansScoringExempt(d);
             // Same call shape as WeekStats: the real minutes go in, and DayScore itself zeroes
             // the passive terms when the day is exempt.

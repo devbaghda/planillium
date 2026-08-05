@@ -192,12 +192,21 @@ public sealed partial class ReportsPage
     /// sync only by a comment promising they matched, not by sharing a source
     /// (2026-07-18 audit finding R8-13).</summary>
     private static readonly (string Category, string Label, Func<ReportData.AppUsage, int> Minutes)[] StackedCategories =
+        [.. DiaryCategory.ReportOrder.Select(o => (o.Value, o.Label, Minutes(o.Value)))];
+
+    /// <summary>Which field of an AppUsage a category's minutes live in. Throws on an unknown
+    /// category rather than returning a zero accessor: a sixth category added to
+    /// <see cref="DiaryCategory.ReportOrder"/> and forgotten here would otherwise draw a bar
+    /// segment of zero width — a silently missing slice of every bar on the page.</summary>
+    private static Func<ReportData.AppUsage, int> Minutes(string category) => category switch
     {
-        (DiaryCategory.OnPlan, "On-plan", u => u.On),
-        (DiaryCategory.OffPlan, "Off-plan", u => u.Off),
-        (DiaryCategory.Neutral, "Neutral", u => u.Neutral),
-        (DiaryCategory.Paid, "Paid", u => u.Paid),
-        (DiaryCategory.Idle, "Idle", u => u.Idle),
+        DiaryCategory.OnPlan => u => u.On,
+        DiaryCategory.OffPlan => u => u.Off,
+        DiaryCategory.Neutral => u => u.Neutral,
+        DiaryCategory.Paid => u => u.Paid,
+        DiaryCategory.Idle => u => u.Idle,
+        _ => throw new ArgumentOutOfRangeException(nameof(category), category,
+            "No AppUsage field for this diary category."),
     };
 
     /// <summary>Color key for AppUsageRow's stacked bars — reads from

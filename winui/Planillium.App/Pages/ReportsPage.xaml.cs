@@ -128,7 +128,7 @@ public sealed partial class ReportsPage : Page
             using var db = new Database();
             using var score = new ScoreService(plans, db);
             var periodName = ReportData.PeriodName(_period);
-            var weekStats = ReportData.WeekStats(score);
+            var weekStats = ReportData.WeekStats(db.Conn, score);
             var today = DateOnly.FromDateTime(DateTime.Today);
             // Everything on this page above the diary now follows the period selector
             // (2026-08-04 request). The score card and the insights panel were the two that

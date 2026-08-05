@@ -33,6 +33,19 @@ public static class DiaryCategory
         ("On-plan", OnPlan), ("Off-plan", OffPlan), ("Paid", Paid), ("Neutral", Neutral), ("Idle", Idle),
     };
 
+    /// <summary>The same five categories in the order every *report* shows them — the Time-by-app
+    /// legend and its stacked bars, both summary tables' columns, and the HTML/CSV exports
+    /// (2026-08-05). Deliberately its own list rather than a reuse of <see cref="EditableOptions"/>:
+    /// that one is ordered for a dropdown you pick from, this one for columns read left to right,
+    /// and the two orders genuinely differ (Paid is third there, fourth here). What must never
+    /// differ is the membership — DiaryCategoryTests asserts both hold the same five values, so
+    /// adding a sixth category to one and not the other fails a test instead of quietly dropping
+    /// a column from every report.</summary>
+    public static readonly (string Label, string Value)[] ReportOrder =
+    {
+        ("On-plan", OnPlan), ("Off-plan", OffPlan), ("Neutral", Neutral), ("Paid", Paid), ("Idle", Idle),
+    };
+
     /// <summary>The diary description text written for a not-yet-answered "where were you"
     /// idle/away gap (ActivityTracker.HandleIdleReturn logs this immediately so nothing goes
     /// unrecorded; LogIdleAnswer/LogIdleAnswers replace it in place with the user's real

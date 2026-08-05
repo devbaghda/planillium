@@ -350,6 +350,23 @@ scratch instance holding a **copy** of the real DB: every label column ends at 5
 figure starts at 586, on Week and Year, parent and sub-row. **Copying a SQLite DB is not one
 file** — the first attempt looked empty because the previous instance's stale `-wal`/`-shm` were
 replayed over the copy; delete the sidecars, then copy.
+*Then*: **"add here all the categories and summary for the rows as well"** — the summary tables
+carried only on-plan/off-plan. Now all five (`DiaryCategory.ReportOrder`, a new shared ordered list
+— deliberately separate from `EditableOptions`, whose order is a dropdown's, with a test asserting
+the two hold the same five values), plus a per-row Total. **The Total column changed meaning**:
+all tracked time, not on+off — the user's Year total moves 80h10m → 294h34m, since neutral was
+never shown. New `ReportData.CategoryMinutes` record; `DayStat`/`BucketStat` now carry it, and
+`WeekStats` takes the connection so it can. Three near-identical query blocks (`DailyMinutes`,
+`MonthBuckets`, `YearBuckets`) collapsed into one `DailyMinutes` reading all five from both
+sources — which fixed two latent bugs: `MonthBuckets` never read `diary_daily_rollup` at all (a
+short retention setting would have silently dropped early weeks of the month), and the rollup's
+`neutral_min`/`paid_min`/`idle_min` columns had **never** been read back, so an aged-out month lost
+that detail although it was stored. HTML/CSV exports carry the same columns in the same order.
+*Verified*: 129/129 tests (5 new), clean build, and live UIA on all three views — figures
+cross-check in both directions (each row's Total equals its own categories; the Total row equals
+each column) and the Week table's 34h06m total equals August's row in the Year view, two
+independent paths agreeing. Alignment from the previous round held: label column still ends 574,
+first figure still 586, widest table (Week, 9 columns) ends at 1010 inside a 1285 card.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight

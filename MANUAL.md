@@ -131,10 +131,14 @@ added up to — which is not the same as the BALANCE in the sidebar, since that 
 across all time and also subtracts anything you've spent on entertainment time. The diary section
 at the bottom is separate and always works one day at a time.
 
-The week/month/year summary table ends with a Total row under the on-plan and off-plan columns
-(and, for month and year, the combined total), so the period's totals are readable without adding
-the rows up by hand. Days where every plan is off contribute nothing to those totals, matching how
-they're already excluded from the rest of Reports.
+The summary table carries a column for each of the five categories your time is sorted into —
+on-plan, off-plan, neutral, paid and idle — followed by that row's own Total, which is all five
+added together. That Total is therefore all the time tracked in that day or period, not just the
+productive-versus-distracted pair; neutral time (anything that is neither) is usually the largest
+share of it. The table then ends with a Total row summing every column, so both directions read
+without adding anything up by hand. Days where every plan is off contribute nothing to any of it,
+matching how they're already excluded from the rest of Reports. The exported HTML and CSV reports
+carry the same columns in the same order.
 
 The "time by app" breakdown shows your three biggest time sinks by default, with a "Show more" link to reveal the full list.
 

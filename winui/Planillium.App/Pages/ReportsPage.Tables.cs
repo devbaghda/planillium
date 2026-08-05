@@ -21,11 +21,16 @@ public sealed partial class ReportsPage
         // figure lands on the same x as the bars in the two sections below it. Wider than this
         // column strictly needs for a date — that is the trade the shared axis asks for, and the
         // bar rows make the same one with labels as short as "shower".
+        //
+        // Columns: Day, Tasks, then one per category (2026-08-05 request), then the row's own
+        // Total and Score. Score stays last, where it has always been.
+        var columns = 4 + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
-        for (var c = 0; c < 5; c++)
+        for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
             { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
-        AddHeaderRow(grid, "Day", "Tasks", "On-plan", "Off-plan", "Score");
+        AddHeaderRow(grid, ["Day", "Tasks",
+            .. CategoryColumns.Select(c => c.Label), "Total", "Score"]);
 
         foreach (var s in rows)
         {
@@ -37,13 +42,14 @@ public sealed partial class ReportsPage
             // failure or a genuinely idle day everywhere else in the app labels a day off
             // explicitly (2026-07-18 audit finding R8-07) — so this table needs its own
             // label since it's the one place that didn't have one.
-            var cells = new[]
-            {
+            string[] cells =
+            [
                 s.Date.ToDisplayDate() + (s.IsDayOff ? "\nDay off" : ""),
                 $"{s.Done}/{s.Total}",
-                ReportData.FmtMins(s.OnMin), ReportData.FmtMins(s.OffMin),
+                .. CategoryColumns.Select(c => ReportData.FmtMins(s.Minutes.Of(c.Category))),
+                ReportData.FmtMins(s.Minutes.TotalMin),
                 s.Score.ToString(),
-            };
+            ];
             for (var c = 0; c < cells.Length; c++)
             {
                 var tb = new TextBlock
@@ -52,7 +58,7 @@ public sealed partial class ReportsPage
                     FontWeight = isToday ? FontWeights.SemiBold : FontWeights.Normal,
                     TextWrapping = c == 0 ? TextWrapping.Wrap : TextWrapping.NoWrap,
                 };
-                if (c == 4)
+                if (c == cells.Length - 1)
                     tb.Foreground = ScoreBrush(s.Score);
                 else if (!isToday)
                     tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
@@ -61,7 +67,8 @@ public sealed partial class ReportsPage
             }
         }
 
-        // Totals under the on-plan/off-plan columns (2026-08-04 request). Sums the values as
+        // Totals under every category column and under the row-total column (2026-08-04 request,
+        // extended to all five categories 2026-08-05). Sums the values as
         // displayed, which keeps it consistent with business rule 10 for free: a day where
         // every plan is off already contributes 0/0 to those two cells, so it can't inflate
         // the total here while being excluded everywhere else in Reports. Skipped for the
@@ -71,11 +78,19 @@ public sealed partial class ReportsPage
         // card above while meaning something different (points earned this period, not points
         // held) — the exact two-similar-numbers confusion this page has been bitten by before.
         if (rows.Count > 1)
-            AddTotalsRow(grid, 5,
-                (ReportData.FmtMins(rows.Sum(s => s.OnMin)), 2),
-                (ReportData.FmtMins(rows.Sum(s => s.OffMin)), 3));
+            AddTotalsRow(grid, columns,
+                [.. CategoryColumns.Select((c, i) =>
+                     (ReportData.FmtMins(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2)),
+                 (ReportData.FmtMins(rows.Sum(s => s.Minutes.TotalMin)), columns - 2)]);
         return grid;
     }
+
+    /// <summary>The category columns both summary tables carry — the shared
+    /// <see cref="DiaryCategory.ReportOrder"/> the bars, the legend and the exports also read, so
+    /// no two parts of a report can disagree about which categories exist, what they're called or
+    /// what order they come in (2026-08-05 request, "add all the categories").</summary>
+    private static readonly (string Category, string Label)[] CategoryColumns =
+        [.. DiaryCategory.ReportOrder.Select(o => (o.Value, o.Label))];
 
     /// <summary>Shared footer for both summary tables: a hairline separator, then a bold
     /// "Total" label and whichever column totals the caller supplies (by column index — the
@@ -118,21 +133,23 @@ public sealed partial class ReportsPage
         // Same shared alignment grid as DayTable above — which also means switching Week↔Month
         // no longer shifts the figures sideways, since the two tables' first columns were 110
         // and 170 before.
+        var columns = 2 + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
-        for (var c = 0; c < 4; c++)
+        for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
             { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
-        AddHeaderRow(grid, "Period", "On-plan", "Off-plan", "Total");
+        AddHeaderRow(grid, ["Period", .. CategoryColumns.Select(c => c.Label), "Total"]);
 
         foreach (var b in buckets)
         {
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition());
-            var cells = new[]
-            {
-                b.Label, ReportData.FmtMins(b.OnMin), ReportData.FmtMins(b.OffMin),
-                ReportData.FmtMins(b.OnMin + b.OffMin),
-            };
+            string[] cells =
+            [
+                b.Label,
+                .. CategoryColumns.Select(c => ReportData.FmtMins(b.Minutes.Of(c.Category))),
+                ReportData.FmtMins(b.Minutes.TotalMin),
+            ];
             for (var c = 0; c < cells.Length; c++)
             {
                 var tb = new TextBlock
@@ -145,15 +162,15 @@ public sealed partial class ReportsPage
             }
         }
 
-        // Same totals footer as DayTable — here the Total column can be summed too, since
-        // it's already just on+off per row. No row-count guard: Month/Year always render
+        // Same totals footer as DayTable — here the Total column can be summed too, since it's
+        // already this row's own categories added up. No row-count guard: Month/Year always render
         // several buckets, and a zero-bucket table never reaches this method at all (Render
         // substitutes a "No activity logged yet" message instead).
         if (buckets.Count > 0)
-            AddTotalsRow(grid, 4,
-                (ReportData.FmtMins(buckets.Sum(b => b.OnMin)), 1),
-                (ReportData.FmtMins(buckets.Sum(b => b.OffMin)), 2),
-                (ReportData.FmtMins(buckets.Sum(b => b.OnMin + b.OffMin)), 3));
+            AddTotalsRow(grid, columns,
+                [.. CategoryColumns.Select((c, i) =>
+                     (ReportData.FmtMins(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 1)),
+                 (ReportData.FmtMins(buckets.Sum(b => b.Minutes.TotalMin)), columns - 1)]);
         return grid;
     }
 

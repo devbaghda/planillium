@@ -23,9 +23,18 @@ public static class ReportExport
         List<(string App, ReportData.AppUsage Usage)> Breakdown,
         List<string> Hints);
 
+    /// <summary>The category columns the exports carry, from the same shared order the screen
+    /// uses (<see cref="DiaryCategory.ReportOrder"/>) — an export that lists them in a different
+    /// order, or lists a different set, is a report that disagrees with the app it came from.</summary>
+    private static IEnumerable<string> CategoryCsvHeaders() =>
+        DiaryCategory.ReportOrder.Select(o => $"{o.Label} (min)");
+
+    private static IEnumerable<string> CategoryCsvCells(ReportData.CategoryMinutes m) =>
+        DiaryCategory.ReportOrder.Select(o => m.Of(o.Value).ToString(CultureInfo.InvariantCulture));
+
     private static WeekReportData GatherWeekReportData(Database db, ScoreService score)
     {
-        var stats = ReportData.WeekStats(score);
+        var stats = ReportData.WeekStats(db.Conn, score);
         var weekOn = stats.Sum(s => s.OnMin);
         var weekOff = stats.Sum(s => s.OffMin);
         var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn, score);
@@ -55,9 +64,14 @@ public static class ReportExport
             // color intent is ever retuned, update both (round-4 audit
             // finding: these two had no cross-reference before).
             var col = s.Score >= ScoreService.GreatDayThreshold ? "#30d158" : s.Score < 0 ? "#ff453a" : "#ff9f0a";
+            // Every category, matching the on-screen summary table (2026-08-05) — an exported
+            // report that shows two of the five would quietly contradict the app it came from.
             dayRows.Append(
                 $"<tr><td>{s.Date.ToDisplayDate()}</td>" +
-                $"<td>{s.Done}/{s.Total}</td><td>{s.OnMin}m</td><td>{s.OffMin}m</td>" +
+                $"<td>{s.Done}/{s.Total}</td>" +
+                string.Join("", DiaryCategory.ReportOrder
+                    .Select(o => $"<td>{ReportData.FmtMins(s.Minutes.Of(o.Value))}</td>")) +
+                $"<td>{ReportData.FmtMins(s.Minutes.TotalMin)}</td>" +
                 $"<td style='color:{col};font-weight:bold'>{s.Score}</td></tr>");
         }
 
@@ -82,6 +96,8 @@ public static class ReportExport
         }
 
         var hintItems = string.Join("", hints.Select(h => $"<li>{WebUtility.HtmlEncode(h)}</li>"));
+        var CategoryHeaderCells = string.Join("",
+            DiaryCategory.ReportOrder.Select(o => $"<th>{o.Label}</th>"));
 
         var html = $$"""
             <!DOCTYPE html><html><head><meta charset="utf-8">
@@ -104,7 +120,7 @@ public static class ReportExport
             <h1>Planillium</h1>
             <div class="sub">Weekly Report · generated {{DateTime.Now.ToDisplayDateTimeStamp()}}</div>
             <h2>The week</h2>
-            <table><tr><th>Day</th><th>Tasks</th><th>On-plan</th><th>Off-plan</th><th>Score</th></tr>{{dayRows}}</table>
+            <table><tr><th>Day</th><th>Tasks</th>{{CategoryHeaderCells}}<th>Total</th><th>Score</th></tr>{{dayRows}}</table>
             <h2>Top distractions (this week)</h2>
             <table>{{distRows}}</table>
             <h2>Time by app (this week)</h2>
@@ -139,29 +155,27 @@ public static class ReportExport
 
         if (period is ReportPeriod.Day or ReportPeriod.Week)
         {
-            var stats = ReportData.WeekStats(score);
+            var stats = ReportData.WeekStats(db.Conn, score);
             if (period == ReportPeriod.Day) stats = stats.TakeLast(1).ToList();
-            sb.AppendLine(Csv("Date", "Tasks done", "Tasks total",
-                "On-plan (min)", "Off-plan (min)", "Score"));
+            sb.AppendLine(Csv(["Date", "Tasks done", "Tasks total",
+                .. CategoryCsvHeaders(), "Total (min)", "Score"]));
             foreach (var s in stats)
-                sb.AppendLine(Csv(
+                sb.AppendLine(Csv([
                     s.Date.ToIsoDate(),
                     s.Done.ToString(CultureInfo.InvariantCulture),
                     s.Total.ToString(CultureInfo.InvariantCulture),
-                    s.OnMin.ToString(CultureInfo.InvariantCulture),
-                    s.OffMin.ToString(CultureInfo.InvariantCulture),
-                    s.Score.ToString(CultureInfo.InvariantCulture)));
+                    .. CategoryCsvCells(s.Minutes),
+                    s.Minutes.TotalMin.ToString(CultureInfo.InvariantCulture),
+                    s.Score.ToString(CultureInfo.InvariantCulture)]));
         }
         else
         {
-            sb.AppendLine(Csv("Period", "On-plan (min)", "Off-plan (min)", "Total (min)"));
+            sb.AppendLine(Csv(["Period", .. CategoryCsvHeaders(), "Total (min)"]));
             var buckets = period == ReportPeriod.Month
                 ? ReportData.MonthBuckets(db.Conn, score) : ReportData.YearBuckets(db.Conn, score);
             foreach (var b in buckets)
-                sb.AppendLine(Csv(b.Label,
-                    b.OnMin.ToString(CultureInfo.InvariantCulture),
-                    b.OffMin.ToString(CultureInfo.InvariantCulture),
-                    (b.OnMin + b.OffMin).ToString(CultureInfo.InvariantCulture)));
+                sb.AppendLine(Csv([b.Label, .. CategoryCsvCells(b.Minutes),
+                    b.Minutes.TotalMin.ToString(CultureInfo.InvariantCulture)]));
         }
 
         sb.AppendLine();

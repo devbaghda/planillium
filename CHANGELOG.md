@@ -11,8 +11,20 @@ going forward; the original Python/Tkinter version is retired.
   built into the app, unrelated to your working hours and impossible to change — so moving your
   working day to 08:00 left every morning from 06:00 still being logged, and counted against you
   as unaccounted time. One pair of hours now controls both.
-- The week/month/year summary table on Reports now ends with a Total row under the on-plan and
-  off-plan columns — plus the combined total on the month and year views, which have that column.
+- The summary table on Reports now has a column for every category your time is sorted into —
+  on-plan, off-plan, neutral, paid and idle — on all four period views, and each row ends with its
+  own total across all five. It also ends with a Total row summing every column, so the table
+  reads both ways without adding anything up by hand.
+  **Read the Total column with fresh eyes: it now means all the time tracked, not on-plan plus
+  off-plan.** It will be a much larger number than before — neutral time (everything that is
+  neither productive nor a distraction, sleep included) is usually the biggest share of a day, and
+  it was simply not shown anywhere in this table until now. The on-plan and off-plan columns are
+  unchanged, as is your score.
+- Neutral, paid and idle time was also missing from the Month and Year views for a second reason:
+  those two only ever read on-plan and off-plan out of the stored daily summaries, even though all
+  five have been recorded there since that table existed. Older months now show their full
+  breakdown too, not just the two categories.
+- The exported HTML and CSV reports gained the same columns, in the same order as the screen.
 - Every scoring rule is now editable, in a new SCORING section in Settings: points per task
   completed, per extra task the same day, per task missed, per hour on-plan and off-plan, the
   streak and weekly-comeback bonuses, the worst a single day can score, how many days an overdue

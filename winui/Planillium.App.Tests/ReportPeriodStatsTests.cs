@@ -79,7 +79,7 @@ public sealed class ReportPeriodStatsTests
         using var score = new ScoreService(new List<Plan> { plan }, db);
 
         var totals = ReportData.PeriodStats(ReportPeriod.Week, db.Conn, score);
-        var weekStats = ReportData.WeekStats(score);
+        var weekStats = ReportData.WeekStats(db.Conn, score);
 
         Assert.Equal(weekStats.Sum(s => s.Score), totals.Score);
         Assert.Equal(weekStats.Sum(s => s.Done), totals.Done);
