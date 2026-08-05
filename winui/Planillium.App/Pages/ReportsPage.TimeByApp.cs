@@ -19,11 +19,10 @@ public sealed partial class ReportsPage
         var list = new StackPanel { Spacing = 8 };
         foreach (var (label, minutes) in distractions)
         {
-            var row = new Grid { ColumnSpacing = 12 };
-            // 230, not some other width: matches AppUsageRow's bold-row label
-            // column in Time by App, so the two lists' bars start at the same
-            // x instead of only their row/card edges lining up.
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+            var row = new Grid { ColumnSpacing = ColumnGap };
+            // The page-wide alignment grid, shared with Time by App's rows and both summary
+            // tables — so every bar and every first figure on this page starts at one x.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelColumnWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var name = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -102,7 +101,7 @@ public sealed partial class ReportsPage
             var subPanel = new StackPanel
             {
                 Spacing = 4,
-                Margin = new Thickness(28, 4, 0, 8),
+                Margin = new Thickness(SubRowIndent, 4, 0, 8),
                 Visibility = Visibility.Collapsed,
             };
             foreach (var (sub, su) in subs)
@@ -235,8 +234,12 @@ public sealed partial class ReportsPage
     private static Grid AppUsageRow(string name, ReportData.AppUsage u, int maxTotal, bool bold,
         bool expandable = false)
     {
-        var row = new Grid { ColumnSpacing = 12 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(bold ? 230 : 220) });
+        var row = new Grid { ColumnSpacing = ColumnGap };
+        // A sub-row is indented by SubRowIndent, so its label column gives that back — otherwise
+        // the indent pushes its bar off the shared axis, which is what used to happen (sub-rows
+        // started their bars 18px right of their own parent's, measured 2026-08-05).
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        { Width = new GridLength(bold ? LabelColumnWidth : LabelColumnWidth - SubRowIndent) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (expandable)

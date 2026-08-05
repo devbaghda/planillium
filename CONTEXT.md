@@ -338,6 +338,18 @@ accessible name** (a `ListViewItem` whose content is a panel derives none — fi
 ambiguous between clipped and below-the-fold — resolved by `ScrollIntoView` on the last one, after
 which boxes 6–12 all measured 300px wide with the earlier ones going Empty in turn. 124/124 tests,
 clean build.
+*Then* (same day, on a screenshot with a red line drawn down the page): **"align all the reports"**.
+Reports had three left edges for the same kind of column — bars at 586 (230+12), the summary
+tables' first figure at 532 (170+18), expanded sub-rows under Time by App at 604 (their 28px indent
+was never given back). Now one grid: `LabelColumnWidth`/`ColumnGap`/`SubRowIndent` in
+`ReportsPage.Styling.cs`, read by both tables, the distraction list and `AppUsageRow`; a sub-row's
+label column is `LabelColumnWidth - SubRowIndent` so the indent moves the label without moving the
+bar. Week↔Month no longer shifts figures sideways either (110 vs 170 before). Diary rows left
+alone — a time range and five action columns, no shared value axis to join. *Verified* by UIA on a
+scratch instance holding a **copy** of the real DB: every label column ends at 574 and every first
+figure starts at 586, on Week and Year, parent and sub-row. **Copying a SQLite DB is not one
+file** — the first attempt looked empty because the previous instance's stale `-wal`/`-shm` were
+replayed over the copy; delete the sidecars, then copy.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight

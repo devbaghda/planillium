@@ -44,6 +44,12 @@ going forward; the original Python/Tkinter version is retired.
   switching swaps the contents without anything else moving or resizing, and Settings reopens on
   the section you used last. Whether tracking is running, and the result of your last save, stay
   visible on every section.
+- Everything on the Reports page above the diary now lines up on one vertical axis. The summary
+  table's figures used to start ~54px to the left of the bars in the two sections below it, and
+  the indented rows you get by expanding an app under "Time by app" were off by a further 18px —
+  so the page had three different left edges for what is the same kind of column. They now share
+  one, and switching between Week and Month no longer shifts the figures sideways either (those
+  two tables had different label widths).
 - Two settings were renamed to fit: "Warn if tasks open, before day ends (hrs)" is now "Warn
   before day ends (hrs)", and the idle-answer columns are headed "On-plan"/"Off-plan"/"Neutral"
   rather than "Counts as on-plan" and so on. Same settings, same values — only the labels are

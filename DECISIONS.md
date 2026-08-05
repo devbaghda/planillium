@@ -151,7 +151,14 @@ compaction. General versions of several now also live in the global `windows-app
 - **To exercise the UI without touching real data, run a second Debug instance against a scratch
   `MENTOR_ROOT`** (copy config.json + plan files, empty DB) with `MENTOR_INSTANCE_SUFFIX=verify`
   — the DEBUG-only mutex suffix exists for exactly this. Back-dating the scratch plans' start
-  date stages date-dependent behaviour that is otherwise very hard to reach (2026-08-04).
+  date stages date-dependent behaviour that is otherwise very hard to reach (2026-08-04). Where
+  realistic *content* is needed (Reports layout, bar widths), copy the real `progress.db` into the
+  scratch root — reading real data is fine, and every write then lands on the copy.
+- **Copying a SQLite database is not copying one file.** `progress.db-wal` and `-shm` hold recent
+  writes; copying only the `.db` into a root that already has an older instance's sidecars makes
+  SQLite replay *those* over your copy, and the app opens what looks like an empty database with
+  no error anywhere. Delete `progress.db*` in the destination first, then copy. Cost 20 minutes
+  and one wrong conclusion ("the copy failed") on 2026-08-05.
 - **`git filter-repo` must never run in-place in a repo with other live worktrees attached** —
   it refuses unless the repo looks freshly cloned, and forcing it risks corrupting them via the
   shared object store. Rewrite in an isolated scratch clone (`git init` + `git fetch <path>

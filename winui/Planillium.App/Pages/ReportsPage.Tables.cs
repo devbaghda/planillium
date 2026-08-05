@@ -17,10 +17,14 @@ public sealed partial class ReportsPage
             ? weekStats.Where(s => s.Date == today).ToList()
             : weekStats;
 
-        var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
+        // Label column and gap come from the page-wide alignment grid, so this table's first
+        // figure lands on the same x as the bars in the two sections below it. Wider than this
+        // column strictly needs for a date — that is the trade the shared axis asks for, and the
+        // bar rows make the same one with labels as short as "shower".
+        var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < 5; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
-            { Width = c == 0 ? new GridLength(110) : GridLength.Auto });
+            { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
         AddHeaderRow(grid, "Day", "Tasks", "On-plan", "Off-plan", "Score");
 
         foreach (var s in rows)
@@ -111,10 +115,13 @@ public sealed partial class ReportsPage
 
     private static Grid BucketTable(List<ReportData.BucketStat> buckets)
     {
-        var grid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
+        // Same shared alignment grid as DayTable above — which also means switching Week↔Month
+        // no longer shifts the figures sideways, since the two tables' first columns were 110
+        // and 170 before.
+        var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < 4; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
-            { Width = c == 0 ? new GridLength(170) : GridLength.Auto });
+            { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
         AddHeaderRow(grid, "Period", "On-plan", "Off-plan", "Total");
 
         foreach (var b in buckets)
