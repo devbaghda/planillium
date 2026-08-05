@@ -288,68 +288,49 @@ controls route through. (3) "Day X of Y" → `Plan.ProgressDay`, business rule 1
 the "hole further back" ambiguity themselves ("if I want to skip day 10 I do replanning"), which is
 what makes stall-on-first-unfinished-day safe. (4) Reports gained a shared `AddTotalsRow` under
 both summary tables (Tasks/Score columns deliberately blank).
-*Then*: every scoring rule became editable via a new SCORING section in Settings, driven by a new
-`ScoringRules` table that also feeds the formula and the config lookup (see Standing lessons);
-**`ActivityTracker`'s God-Object split finally landed** (deferred since 07-23) — 855→597 lines,
-extracting `NativeInput` (Win32 P/Invoke), `WindowTitleResolver` (title decoration + pid cache),
-`ActivityClassifier` (keyword matching) and `DiaryWriter` (the two `time_diary` statements). Only
-pieces owning state nothing else touched were moved; the poll loop's interlocking session/idle/alert
-state stayed put, and `EffectiveClass` with it because it reads `PaidUntil`. Public surface
-unchanged (Classify/ClassifyIdleText/StripUnreadBadge remain as forwarders).
-*Then*: Settings restructured into **seven collapsible `Expander`s** (chosen over a menu because
-this page **saves as one group** — a menu would scatter fields across destinations while `SaveRules`
-still wrote all of them; also below the size where a nav level earns a permanent slot, and WinUI
-names Expander for settings groups). Each header carries a live summary read from config, never from
-the controls, so it cannot advertise a value that failed validation; tracker status and `SaveStatus`
-sit outside every section because status is not a setting and a save must stay visible after its
-section collapses. And **everything above the diary on Reports now follows the period selector** —
-the score card had always shown today and the insights had always been computed from this week. New
-`ReportData.PeriodStats` aggregates over the period from one `DailyMinutes` pass (raw `time_diary` +
-`diary_daily_rollup`, two queries not 365) plus in-memory per-day scoring; scores are recomputed
-rather than read from `score_ledger` **deliberately**, since the ledger only holds days the app was
-running to credit and a stretch where it wasn't open would read as zero. Card relabelled "SCORE
+*Then*: all 12 scoring rules became editable (new SCORING section in Settings, built from a new
+`ScoringRules` table that also feeds the formula and the config lookup — see `DECISIONS.md`).
+**`ActivityTracker`'s God-Object split landed** (deferred since 07-23): 855→597 lines, extracting
+`NativeInput` (Win32 P/Invoke), `WindowTitleResolver` (title decoration + pid cache),
+`ActivityClassifier` (keywords), `DiaryWriter` (the two `time_diary` statements). Only pieces owning
+state nothing else touched moved; the poll loop's interlocking session/idle/alert state stayed, and
+`EffectiveClass` with it (reads `PaidUntil`). Public surface unchanged via forwarders.
+*Then*: Settings became seven `Expander`s — **superseded next day, see below**. And **everything
+above the diary on Reports now follows the period selector** (the card always showed today, the
+insights always this week). `ReportData.PeriodStats` aggregates from one `DailyMinutes` pass (raw
+`time_diary` + `diary_daily_rollup`, two queries not 365) plus in-memory per-day scoring; scores are
+recomputed rather than read from `score_ledger` **deliberately** — the ledger only holds days the
+app ran to credit, so a stretch where it wasn't open would read as zero. Card relabelled "SCORE
 EARNED — <period>" to stay distinct from the sidebar's BALANCE (all-time, net of purchases).
-*Verified*: clean build (0 warnings), 124/124 tests (24 new), Release rebuilt and relaunched after
-each round, plus live UI Automation against a **scratch-root second instance** (see Standing
-lessons) — all three screens read "Day 1 of 28"/"Day 1 of 160" at calendar day 8 with "7 day(s)
-late" beside them; the Year score card's minutes (56h10m / 21h40m) **match the summary table's own
-Total row exactly**, two independently computed paths agreeing; Settings inputs fill their rows
-(3 keyword boxes at 221px, 12 scoring boxes in two 337px columns), nothing clipped; all four diary
-date controls step correctly and a past day stays pinned across page switches.
-**2026-08-05** (same session, fourth round). The Expander Settings shipped the day before was
-**rejected on sight** — "put an additional sub-menu on the right side, the settings pages should be
-of the same size with no bouncing" — and replaced by a right-hand `ListView` of the seven sections
-with one panel visible at a time. The no-bouncing property is structural: row 1 of the page grid is
-`*` so the content rectangle is a function of the window and never of the selection; all seven
-panels share one grid cell (collapsed siblings aren't measured); the status strip is a fixed-height
-row, since left to size itself it grows a line whenever a save message appears. The one-group-save
-objection that had argued for Expanders turns out not to apply — every panel stays loaded, so
-`SaveRules` writes the same values whatever is on screen. Header summaries moved onto the menu
-entries, so the overview property survived the change. Sized for the **minimum** window (900dip
-leaves ~388 for content): the hours rows became star-column grids, the Data buttons went 2×2, three
-NumberBox/TextBox headers were shortened, and `LayoutScoringGrid` reflows the 12 scoring inputs
-between one and two columns off the measured width. Column-level `MaxWidth` (not control-level)
-caps them on wide windows — a `MaxWidth` on the control centres it in its column and the rows stop
-lining up. *Verified* live via UIA at both 900 and 1500dip: pane/menu/status rectangles **byte-
-identical across all seven sections** at each width, nothing overflowing, scoring at 1 column then
-2. Two defects the sweep caught that looking would not have: every menu item announced a **blank
-accessible name** (a `ListViewItem` whose content is a panel derives none — fixed with
-`AutomationProperties.Name`), and six scoring boxes reported `BoundingRectangle.Empty`, which is
-ambiguous between clipped and below-the-fold — resolved by `ScrollIntoView` on the last one, after
-which boxes 6–12 all measured 300px wide with the earlier ones going Empty in turn. 124/124 tests,
-clean build.
-*Then* (same day, on a screenshot with a red line drawn down the page): **"align all the reports"**.
-Reports had three left edges for the same kind of column — bars at 586 (230+12), the summary
-tables' first figure at 532 (170+18), expanded sub-rows under Time by App at 604 (their 28px indent
-was never given back). Now one grid: `LabelColumnWidth`/`ColumnGap`/`SubRowIndent` in
-`ReportsPage.Styling.cs`, read by both tables, the distraction list and `AppUsageRow`; a sub-row's
-label column is `LabelColumnWidth - SubRowIndent` so the indent moves the label without moving the
-bar. Week↔Month no longer shifts figures sideways either (110 vs 170 before). Diary rows left
-alone — a time range and five action columns, no shared value axis to join. *Verified* by UIA on a
-scratch instance holding a **copy** of the real DB: every label column ends at 574 and every first
-figure starts at 586, on Week and Year, parent and sub-row. **Copying a SQLite DB is not one
-file** — the first attempt looked empty because the previous instance's stale `-wal`/`-shm` were
-replayed over the copy; delete the sidecars, then copy.
+*Verified*: 124/124, Release rebuilt/relaunched each round, live UIA on a scratch-root instance —
+"Day 1 of 28"/"Day 1 of 160" at calendar day 8 with "7 day(s) late"; Year card minutes matched the
+summary table's Total row exactly, two independent paths agreeing; nothing clipped; diary date
+controls stepped correctly and a past day stayed pinned across page switches.
+**2026-08-05** (same session, four further rounds). The Expander Settings was **rejected on sight**
+("put an additional sub-menu on the right side, the settings pages should be of the same size with
+no bouncing") and replaced by a right-hand `ListView`, one panel visible at a time. No-bouncing is
+structural: page-grid row 1 is `*` (content rect follows the window, never the selection); all seven
+panels share one grid cell (collapsed siblings aren't measured); the status strip is fixed-height,
+since sizing to its text grows a line whenever a save message appears. The one-group-save objection
+that had argued for Expanders doesn't apply — every panel stays loaded, so `SaveRules` writes the
+same values whatever is shown. Summaries moved to the menu entries, keeping the overview property.
+Sized for the **900dip minimum** (~388 for content): hours rows became star-column grids, Data
+buttons 2×2, three headers shortened, `LayoutScoringGrid` reflows the 12 scoring inputs 1↔2 columns
+off measured width; caps are column-level `MaxWidth` (control-level centres the control and rows
+stop sharing a left edge). *Verified* UIA at 900 and 1500dip: pane/menu/status rects identical
+across all seven sections at each width. Two defects looking would not have caught — every menu item
+announced a **blank accessible name** (a `ListViewItem` with panel content derives none), and six
+scoring boxes read `BoundingRectangle.Empty`, ambiguous between clipped and below-the-fold, resolved
+via `ScrollIntoView`. 124/124.
+*Then* (screenshot with a red line down the page): **"align all the reports"**. Three left edges for
+the same kind of column — bars 586 (230+12), tables' first figure 532 (170+18), Time-by-app sub-rows
+604 (their 28px indent never given back). Now one grid: `LabelColumnWidth`/`ColumnGap`/
+`SubRowIndent` in `ReportsPage.Styling.cs`, read by both tables, the distraction list and
+`AppUsageRow`; a sub-row's label column is `LabelColumnWidth - SubRowIndent`, so the indent moves
+the label and not the bar. Week↔Month stopped shifting figures sideways too (110 vs 170). Diary rows
+left alone — a time range and five action columns, no value axis to join. *Verified* by UIA against
+a **copy** of the real DB: every label column ends 574, every first figure starts 586, Week and
+Year, parent and sub-row. **Copying a SQLite DB is not one file** — see `DECISIONS.md`.
 *Then*: **"add here all the categories and summary for the rows as well"** — the summary tables
 carried only on-plan/off-plan. Now all five (`DiaryCategory.ReportOrder`, a new shared ordered list
 — deliberately separate from `EditableOptions`, whose order is a dropdown's, with a test asserting
