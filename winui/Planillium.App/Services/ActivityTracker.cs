@@ -55,6 +55,16 @@ public sealed class ActivityTracker : IDisposable
     private DateTime? _idleSince;
     private DateTime? _lastPollAt;
 
+    // Lock-protected mirror of _sessionStart, safe to read from the UI thread — PendingDayGap
+    // (called from ReviewDialog on the dispatcher, not the poll thread) needs to know whether a
+    // session is CURRENTLY open, so it doesn't mistake genuinely-in-progress, not-yet-flushed
+    // activity for an unaccounted gap. Written only by SetSession, alongside every place
+    // _sessionStart itself changes, so the two can never disagree — _sessionStart stays
+    // poll-thread-only and unlocked exactly as documented above; this is a read-only shadow of
+    // it for the one caller that isn't the poll thread.
+    private readonly object _openSessionLock = new();
+    private DateTime? _openSessionStart;
+
     // Rest-day status and the evening-review gap-sweep high-water mark are
     // no longer poll-thread-only: ReviewDialog reads/writes both directly
     // from the UI thread (PendingDayGap/MarkAccountedThrough), concurrently
@@ -336,11 +346,39 @@ public sealed class ActivityTracker : IDisposable
         if (db.LastDiaryEnd() is not DateTime lastEnd || lastEnd.Date != now.Date) return null;
 
         var gapStart = lastEnd > diaryStartToday ? lastEnd : diaryStartToday;
+
+        // A session that's still open hasn't been flushed to the diary yet, but it isn't a
+        // gap either — everything from its own start onward is being tracked live and will be
+        // written once it closes. Without this, this method judges only by what's already in
+        // the database, so someone who has been working continuously in one app for hours right
+        // through review time reads as having been "away" for that whole stretch (2026-08-05
+        // report: "asks about my absence twice and makes two identical recordings"). Clamping
+        // gapEnd here means the eventual real session write and this method's own placeholder
+        // can no longer land on the same span.
+        lock (_openSessionLock)
+            if (_openSessionStart is DateTime openStart && openStart < gapEnd) gapEnd = openStart;
+
+        // And never re-flag a stretch this method (or the poll loop's own idle-return handling)
+        // already accounted for. Unlike ReviewDialog's automatic once-a-day trigger, the manual
+        // "Evening review" button on Today calls ShowAsync directly with no such guard, so this
+        // method can run more than once in an evening — without this clamp, a second call
+        // re-asked about, and re-logged, whatever the first call had already covered (the other
+        // half of the same 2026-08-05 report).
+        DateTime? accountedUntil;
+        lock (_dayStateLock) { accountedUntil = _accountedUntil; }
+        if (accountedUntil is DateTime acc && gapStart < acc) gapStart = acc;
+
         if (gapStart >= gapEnd) return null;
 
         var mins = (int)(gapEnd - gapStart).TotalMinutes;
         return mins >= _idleThresholdMin ? (mins, gapStart) : null;
     }
+
+    /// <summary>Test-only hook: opens a session the same way HandleActiveSession would, without
+    /// needing a live poll — PollOnce depends on real Win32 calls (foreground window, idle time)
+    /// that a test can't control. Exists so ActivityTrackerPendingGapTests can exercise
+    /// PendingDayGap's open-session clamp deterministically.</summary>
+    internal void SimulateOpenSession(DateTime start, string app, string cls) => SetSession(start, app, cls);
 
     /// <summary>
     /// Records that the diary is now filled through <paramref name="end"/> by
@@ -353,6 +391,18 @@ public sealed class ActivityTracker : IDisposable
         {
             if (_accountedUntil is not DateTime cur || end > cur) _accountedUntil = end;
         }
+    }
+
+    /// <summary>The one place _sessionStart/_sessionApp/_sessionClass are ever assigned — was
+    /// eight separately-typed triples across this file, which is exactly the shape that let the
+    /// lock-protected mirror below silently miss a site if it had been added by hand at each one
+    /// instead of centralized here (2026-08-05).</summary>
+    private void SetSession(DateTime? start, string? app, string? cls)
+    {
+        _sessionStart = start;
+        _sessionApp = app;
+        _sessionClass = cls;
+        lock (_openSessionLock) _openSessionStart = start;
     }
 
     private void CheckAlert(string cls, SqliteConnection conn)
@@ -423,7 +473,7 @@ public sealed class ActivityTracker : IDisposable
         // diary, so days off stay blank instead of full of idle rows.
         if (IsRestDayToday())
         {
-            _sessionStart = null; _sessionApp = null; _sessionClass = null;
+            SetSession(null, null, null);
             _offSince = null; _lastAlert = null;
             _idleNotified = false; _idleSince = null;
             _lastPollAt = now;
@@ -488,7 +538,7 @@ public sealed class ActivityTracker : IDisposable
             if (_sessionStart is DateTime lockedSs && _sessionApp != null)
             {
                 DiaryWriter.LogSession(conn, lockedSs, now, _sessionClass!, _sessionApp);
-                _sessionStart = null; _sessionApp = null; _sessionClass = null;
+                SetSession(null, null, null);
             }
             _idleSince = now;
             _idleNotified = true;
@@ -529,7 +579,7 @@ public sealed class ActivityTracker : IDisposable
         if (_sessionStart is DateTime ss && _sessionApp != null)
         {
             DiaryWriter.LogSession(conn, ss, last, _sessionClass!, _sessionApp);
-            _sessionStart = null; _sessionApp = null; _sessionClass = null;
+            SetSession(null, null, null);
         }
         _idleSince = last;
         _idleNotified = true;
@@ -583,9 +633,7 @@ public sealed class ActivityTracker : IDisposable
         _idleNotified = false;
         _idleSince = null;
         if (InWorkingHours())
-        {
-            _sessionStart = now; _sessionApp = title; _sessionClass = cls;
-        }
+            SetSession(now, title, cls);
     }
 
     /// <summary>Normal in-hours bookkeeping: notice fresh idling, start the
@@ -613,7 +661,7 @@ public sealed class ActivityTracker : IDisposable
             if (_sessionStart is DateTime ss && _sessionApp != null)
             {
                 DiaryWriter.LogSession(conn, ss, idleStartPoint, _sessionClass!, _sessionApp);
-                _sessionStart = null; _sessionApp = null; _sessionClass = null;
+                SetSession(null, null, null);
             }
             _idleSince = idleStartPoint;
             _idleNotified = true;
@@ -631,12 +679,12 @@ public sealed class ActivityTracker : IDisposable
         }
         else if (_sessionStart is null)
         {
-            _sessionStart = now; _sessionApp = title; _sessionClass = cls;
+            SetSession(now, title, cls);
         }
         else if (title != _sessionApp)
         {
             DiaryWriter.LogSession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!);
-            _sessionStart = now; _sessionApp = title; _sessionClass = cls;
+            SetSession(now, title, cls);
         }
     }
 
@@ -649,6 +697,6 @@ public sealed class ActivityTracker : IDisposable
         var end = now < diaryEndToday ? now : diaryEndToday;
         if (end > open)
             DiaryWriter.LogSession(conn, open, end, _sessionClass!, _sessionApp!);
-        _sessionStart = null; _sessionApp = null; _sessionClass = null;
+        SetSession(null, null, null);
     }
 }

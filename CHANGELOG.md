@@ -20,6 +20,14 @@ going forward; the original Python/Tkinter version is retired.
   neither productive nor a distraction, sleep included) is usually the biggest share of a day, and
   it was simply not shown anywhere in this table until now. The on-plan and off-plan columns are
   unchanged, as is your score.
+- Fixed a bug where the evening review could ask "where have you been?" for a stretch you were
+  actually at your computer for the whole time, if you'd been continuously active in one app
+  right up to review time. Answering it (or letting it default to "unaccounted time") then got
+  duplicated a few minutes later when that ongoing activity finally got written to the diary
+  normally — the same stretch recorded twice. A second cause of the same symptom: opening the
+  "Evening review" preview button on Today more than once in an evening could re-ask about, and
+  re-log, a gap the first click had already covered. Both are fixed at the source, in the same
+  check that decides whether there's anything to ask about.
 - The Month and Year summary tables now also show Tasks and Score per row, which only the Day and
   Week views had. The Total row sums both as well, so the table's score total is the same figure as
   the score card above it — the two are now computed from one shared pass over the period rather

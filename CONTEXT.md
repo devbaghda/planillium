@@ -322,49 +322,44 @@ across all seven sections at each width. Two defects looking would not have caug
 announced a **blank accessible name** (a `ListViewItem` with panel content derives none), and six
 scoring boxes read `BoundingRectangle.Empty`, ambiguous between clipped and below-the-fold, resolved
 via `ScrollIntoView`. 124/124.
-*Then* (screenshot with a red line down the page): **"align all the reports"**. Three left edges for
-the same kind of column — bars 586 (230+12), tables' first figure 532 (170+18), Time-by-app sub-rows
-604 (their 28px indent never given back). Now one grid: `LabelColumnWidth`/`ColumnGap`/
-`SubRowIndent` in `ReportsPage.Styling.cs`, read by both tables, the distraction list and
-`AppUsageRow`; a sub-row's label column is `LabelColumnWidth - SubRowIndent`, so the indent moves
-the label and not the bar. Week↔Month stopped shifting figures sideways too (110 vs 170). Diary rows
-left alone — a time range and five action columns, no value axis to join. *Verified* by UIA against
-a **copy** of the real DB: every label column ends 574, every first figure starts 586, Week and
-Year, parent and sub-row. **Copying a SQLite DB is not one file** — see `DECISIONS.md`.
-*Then*: **"add here all the categories and summary for the rows as well"** — the summary tables
-carried only on-plan/off-plan. Now all five (`DiaryCategory.ReportOrder`, a new shared ordered list
-— deliberately separate from `EditableOptions`, whose order is a dropdown's, with a test asserting
-the two hold the same five values), plus a per-row Total. **The Total column changed meaning**:
-all tracked time, not on+off — the user's Year total moves 80h10m → 294h34m, since neutral was
-never shown. New `ReportData.CategoryMinutes` record; `DayStat`/`BucketStat` now carry it, and
-`WeekStats` takes the connection so it can. Three near-identical query blocks (`DailyMinutes`,
-`MonthBuckets`, `YearBuckets`) collapsed into one `DailyMinutes` reading all five from both
-sources — which fixed two latent bugs: `MonthBuckets` never read `diary_daily_rollup` at all (a
-short retention setting would have silently dropped early weeks of the month), and the rollup's
-`neutral_min`/`paid_min`/`idle_min` columns had **never** been read back, so an aged-out month lost
-that detail although it was stored. HTML/CSV exports carry the same columns in the same order.
-*Verified*: 129/129 tests (5 new), clean build, and live UIA on all three views — figures
-cross-check in both directions (each row's Total equals its own categories; the Total row equals
-each column) and the Week table's 34h06m total equals August's row in the Year view, two
-independent paths agreeing. Alignment from the previous round held: label column still ends 574,
-first figure still 586, widest table (Week, 9 columns) ends at 1010 inside a 1285 card.
-*Then*: **decimal hours + Score in every table.** (1) `FmtMins`→`FmtHours`: `"5,5 h"`, one decimal,
-`CurrentCulture` separator, everywhere on Reports; the diary keeps its own `FormatDuration` (h/m)
-deliberately — a diary entry is a clock event, a table column is a quantity. `Suggestions` was
-formatting its own `{n/60}h {n%60}m` and kept saying "23h 56m" under a table in hours — grepped for
-siblings, that was the only one. Rounding is per figure, so rows can differ from their total by
-0,1; the total is the exact one. (2) Month/Year gained **Tasks and Score** columns and the totals
-row gained both (previously blank by an explicit decision the user overrode). Score in a bucket
-required day-off dates to contribute their score while contributing no minutes — the buckets used
-to skip those dates entirely. Now `DailyRows` is the one walk (week table, both bucket tables,
-score card) with both day-off rules stated once, and `Bucket()` is one fold behind both bucket
-tables; test asserts each table's score total equals `PeriodStats` for the same period, which is
-what made the card and table agree by construction rather than by luck. **(3) A real clipping bug
-found by measuring at the 900dip minimum**: at ten columns the table needed ~617px of a ~541px
-card, and the Score column — the thing just asked for — was absent, the card being a rounded
-`Border` that clips in silence. Tables now sit in a horizontal `ScrollViewer` inside the card
-(`Scrollable()`), like the diary list; verified reachable via `ScrollItemPattern.ScrollIntoView`
-(EMPTY→854,384), and unchanged at 1300dip. 132/132 tests.
+*Then* ("align all the reports"): three left edges for one column unified into
+`LabelColumnWidth`/`ColumnGap`/`SubRowIndent` (`ReportsPage.Styling.cs`), read by both tables, the
+distraction list and `AppUsageRow`. *Verified* against a **copy** of the real DB (deleting stale
+`-wal`/`-shm` sidecars first — see `DECISIONS.md`): label columns end 574, first figures start 586.
+*Then* ("add all the categories and summary for the rows"): tables carried only on/off-plan; now
+all five via `DiaryCategory.ReportOrder` (deliberately separate order from `EditableOptions`, test
+asserts same five values) plus a per-row Total — **which changed meaning**, all tracked time not
+on+off (Year total 80h10m→294h34m). New `ReportData.CategoryMinutes`; three near-duplicate queries
+collapsed into one `DailyMinutes`, fixing two latent bugs found in the collapse: `MonthBuckets`
+never read `diary_daily_rollup` at all, and the rollup's neutral/paid/idle columns had never been
+read back despite being stored correctly. HTML/CSV exports match.
+*Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours`, `"5,5 h"`, everywhere except the
+diary (kept as h/m — a clock event, not a quantity); `Suggestions` had its own hand-formatted
+string, now fixed too. Month/Year gained Tasks and Score columns and totals (a prior round's
+explicit "leave blank" decision, overridden). Required day-off dates to contribute score while
+contributing no minutes — `DailyRows` is now the one walk behind the week table, both bucket
+tables and the score card, so a table's score total equals the card by construction; test asserts
+it. Found by measuring at 900dip minimum: the Score column was **clipped off entirely** by the
+card, a rounded `Border` clipping in silence — tables now sit in a horizontal `ScrollViewer`
+(`Scrollable()`), confirmed reachable via `ScrollItemPattern.ScrollIntoView`. 132/132 tests.
+*Then*: **"the app asks me about my absence twice and makes two identical recordings"** — a real
+bug in `ActivityTracker.PendingDayGap` (the evening review's "where have you been?" sweep), two
+compounding causes. (1) It judged only by `db.LastDiaryEnd()`, with no idea a session was
+currently open — someone continuously active in one app right through review time read as having
+been away for that whole stretch; answering it logged an idle row, then the still-open session
+flushed a few polls later and logged the SAME span again as a real on/off-plan row. (2) It never
+remembered what it had already asked about — Today's manual "Evening review" preview button calls
+`ReviewDialog.ShowAsync` directly, bypassing the automatic once-a-day guard, so a second click
+re-asked about and re-logged whatever the first had already covered. Fixed with two clamps inside
+`PendingDayGap` itself: a new lock-protected `_openSessionStart` (mirroring `_sessionStart`,
+written only by a new `SetSession` — replaced eight independently-typed assignment triples, one
+per branch, which is exactly the shape that would have let a mirror added by hand miss a site)
+caps how far the gap can extend; the existing `_accountedUntil` (already used by the poll-thread
+path) now also caps how far back it can start. *Verified*: two new tests reproduce both bugs
+directly against a real throwaway diary table (`ActivityTrackerPendingGapTests`) and fail without
+the fix; 136/136 total. Root-caused via git archaeology, not guessing: traced through the
+2026-07-27→07-28 history of `PendingLeadingGap`/`PendingDayGap` to find the one check that was
+never added. Release rebuilt and relaunched (EOD checked first — 17:34 against a 20:00 review).
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight
