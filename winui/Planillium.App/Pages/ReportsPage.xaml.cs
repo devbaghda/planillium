@@ -140,8 +140,11 @@ public sealed partial class ReportsPage : Page
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
+            // Scrollable(): these tables are the widest thing on the page (ten columns since
+            // 2026-08-05) and the card would otherwise clip the last of them off in silence on a
+            // narrow window — see Scrollable's own comment for the measurement.
             if (_period is ReportPeriod.Day or ReportPeriod.Week)
-                Body.Children.Add(Card(DayTable(weekStats)));
+                Body.Children.Add(Card(Scrollable(DayTable(weekStats))));
             else
             {
                 var buckets = _period == ReportPeriod.Month
@@ -153,7 +156,7 @@ public sealed partial class ReportsPage : Page
                 // which reads as broken rather than simply empty.
                 Body.Children.Add(buckets.Count == 0
                     ? Dim("No activity logged yet.")
-                    : Card(BucketTable(buckets)));
+                    : Card(Scrollable(BucketTable(buckets))));
             }
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────
@@ -214,8 +217,8 @@ public sealed partial class ReportsPage : Page
             Foreground = ScoreBrush(totals.Score),
         });
         card.Children.Add(Dim($"{totals.Done}/{totals.Total} tasks · " +
-                              $"{ReportData.FmtMins(totals.OnMin)} on-plan · " +
-                              $"{ReportData.FmtMins(totals.OffMin)} off-plan"));
+                              $"{ReportData.FmtHours(totals.OnMin)} on-plan · " +
+                              $"{ReportData.FmtHours(totals.OffMin)} off-plan"));
         return card;
     }
 

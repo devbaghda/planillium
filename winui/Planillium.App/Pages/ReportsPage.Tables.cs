@@ -46,8 +46,8 @@ public sealed partial class ReportsPage
             [
                 s.Date.ToDisplayDate() + (s.IsDayOff ? "\nDay off" : ""),
                 $"{s.Done}/{s.Total}",
-                .. CategoryColumns.Select(c => ReportData.FmtMins(s.Minutes.Of(c.Category))),
-                ReportData.FmtMins(s.Minutes.TotalMin),
+                .. CategoryColumns.Select(c => ReportData.FmtHours(s.Minutes.Of(c.Category))),
+                ReportData.FmtHours(s.Minutes.TotalMin),
                 s.Score.ToString(),
             ];
             for (var c = 0; c < cells.Length; c++)
@@ -73,15 +73,19 @@ public sealed partial class ReportsPage
         // every plan is off already contributes 0/0 to those two cells, so it can't inflate
         // the total here while being excluded everywhere else in Reports. Skipped for the
         // single-row Day period, where a "total" of one row is just noise.
-        // Tasks and Score are deliberately left blank: a summed "12/14" reads as a ratio it
-        // isn't, and a summed Score would sit one column away from the running balance on the
-        // card above while meaning something different (points earned this period, not points
-        // held) — the exact two-similar-numbers confusion this page has been bitten by before.
+        // Tasks and Score are summed too (2026-08-05 request: "per row summary should contain
+        // score summary"). Both were deliberately blank before, on the reasoning that a summed
+        // "12/14" reads as a ratio it isn't and that a period score sitting one column from the
+        // sidebar's running balance invites confusing the two. The user overrode that, and the
+        // score total is the more useful figure — it's the same number the card above shows,
+        // which is now guaranteed rather than hoped for: both fold ReportData.DailyRows.
         if (rows.Count > 1)
             AddTotalsRow(grid, columns,
-                [.. CategoryColumns.Select((c, i) =>
-                     (ReportData.FmtMins(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2)),
-                 (ReportData.FmtMins(rows.Sum(s => s.Minutes.TotalMin)), columns - 2)]);
+                [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1),
+                 .. CategoryColumns.Select((c, i) =>
+                     (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2)),
+                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), columns - 2),
+                 (rows.Sum(s => s.Score).ToString(), columns - 1)]);
         return grid;
     }
 
@@ -133,12 +137,16 @@ public sealed partial class ReportsPage
         // Same shared alignment grid as DayTable above — which also means switching Week↔Month
         // no longer shifts the figures sideways, since the two tables' first columns were 110
         // and 170 before.
-        var columns = 2 + CategoryColumns.Length;
+        // Tasks and Score columns as well as the categories (2026-08-05 request) — the Day/Week
+        // table has carried both all along, and a Month or Year row that can't tell you what it
+        // scored is the summary missing the one figure the whole app is built around.
+        var columns = 4 + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
             { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
-        AddHeaderRow(grid, ["Period", .. CategoryColumns.Select(c => c.Label), "Total"]);
+        AddHeaderRow(grid, ["Period", "Tasks",
+            .. CategoryColumns.Select(c => c.Label), "Total", "Score"]);
 
         foreach (var b in buckets)
         {
@@ -147,15 +155,21 @@ public sealed partial class ReportsPage
             string[] cells =
             [
                 b.Label,
-                .. CategoryColumns.Select(c => ReportData.FmtMins(b.Minutes.Of(c.Category))),
-                ReportData.FmtMins(b.Minutes.TotalMin),
+                $"{b.Done}/{b.Total}",
+                .. CategoryColumns.Select(c => ReportData.FmtHours(b.Minutes.Of(c.Category))),
+                ReportData.FmtHours(b.Minutes.TotalMin),
+                b.Score.ToString(),
             ];
             for (var c = 0; c < cells.Length; c++)
             {
                 var tb = new TextBlock
                 {
                     Text = cells[c],
-                    Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                    // Score keeps the same green/amber/red reading it has in the Day/Week table,
+                    // so the one figure people actually look for is found the same way in both.
+                    Foreground = c == cells.Length - 1
+                        ? ScoreBrush(b.Score)
+                        : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 };
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
                 grid.Children.Add(tb);
@@ -168,9 +182,11 @@ public sealed partial class ReportsPage
         // substitutes a "No activity logged yet" message instead).
         if (buckets.Count > 0)
             AddTotalsRow(grid, columns,
-                [.. CategoryColumns.Select((c, i) =>
-                     (ReportData.FmtMins(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 1)),
-                 (ReportData.FmtMins(buckets.Sum(b => b.Minutes.TotalMin)), columns - 1)]);
+                [($"{buckets.Sum(b => b.Done)}/{buckets.Sum(b => b.Total)}", 1),
+                 .. CategoryColumns.Select((c, i) =>
+                     (ReportData.FmtHours(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 2)),
+                 (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), columns - 2),
+                 (buckets.Sum(b => b.Score).ToString(), columns - 1)]);
         return grid;
     }
 

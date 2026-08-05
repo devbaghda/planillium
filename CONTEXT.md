@@ -367,6 +367,23 @@ cross-check in both directions (each row's Total equals its own categories; the 
 each column) and the Week table's 34h06m total equals August's row in the Year view, two
 independent paths agreeing. Alignment from the previous round held: label column still ends 574,
 first figure still 586, widest table (Week, 9 columns) ends at 1010 inside a 1285 card.
+*Then*: **decimal hours + Score in every table.** (1) `FmtMins`→`FmtHours`: `"5,5 h"`, one decimal,
+`CurrentCulture` separator, everywhere on Reports; the diary keeps its own `FormatDuration` (h/m)
+deliberately — a diary entry is a clock event, a table column is a quantity. `Suggestions` was
+formatting its own `{n/60}h {n%60}m` and kept saying "23h 56m" under a table in hours — grepped for
+siblings, that was the only one. Rounding is per figure, so rows can differ from their total by
+0,1; the total is the exact one. (2) Month/Year gained **Tasks and Score** columns and the totals
+row gained both (previously blank by an explicit decision the user overrode). Score in a bucket
+required day-off dates to contribute their score while contributing no minutes — the buckets used
+to skip those dates entirely. Now `DailyRows` is the one walk (week table, both bucket tables,
+score card) with both day-off rules stated once, and `Bucket()` is one fold behind both bucket
+tables; test asserts each table's score total equals `PeriodStats` for the same period, which is
+what made the card and table agree by construction rather than by luck. **(3) A real clipping bug
+found by measuring at the 900dip minimum**: at ten columns the table needed ~617px of a ~541px
+card, and the Score column — the thing just asked for — was absent, the card being a rounded
+`Border` that clips in silence. Tables now sit in a horizontal `ScrollViewer` inside the card
+(`Scrollable()`), like the diary list; verified reachable via `ScrollItemPattern.ScrollIntoView`
+(EMPTY→854,384), and unchanged at 1300dip. 132/132 tests.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight

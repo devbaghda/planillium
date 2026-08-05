@@ -124,6 +124,62 @@ public sealed class ReportCategoryColumnTests
         Assert.Equal(105, after.TotalMin - before.TotalMin);
     }
 
+    /// <summary>The Score column added to the bucket tables must total to exactly what the score
+    /// card above them shows for the same period (2026-08-05). Two figures for the same thing a
+    /// few pixels apart, disagreeing, is this project's most-repeated complaint shape — and the
+    /// two paths differ in a way that makes it easy: the buckets used to skip day-off dates
+    /// outright, while the card counts their score.</summary>
+    [Fact]
+    public void BucketScoresTotalToTheScoreCardForTheSamePeriod()
+    {
+        var planId = "cat-score-" + Guid.NewGuid();
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { MakePlan(planId) }, db);
+        AddDiaryRow(db, DateOnly.FromDateTime(DateTime.Today), DiaryCategory.OnPlan, 90);
+
+        Assert.Equal(
+            ReportData.PeriodStats(ReportPeriod.Year, db.Conn, score).Score,
+            ReportData.YearBuckets(db.Conn, score).Sum(b => b.Score));
+        Assert.Equal(
+            ReportData.PeriodStats(ReportPeriod.Month, db.Conn, score).Score,
+            ReportData.MonthBuckets(db.Conn, score).Sum(b => b.Score));
+        // And the day table's own score column, which the card has always had to match.
+        Assert.Equal(
+            ReportData.PeriodStats(ReportPeriod.Week, db.Conn, score).Score,
+            ReportData.WeekStats(db.Conn, score).Sum(s => s.Score));
+    }
+
+    /// <summary>Task counts follow the same rule as the score — the bucket tables gained the
+    /// column at the same time and from the same walk.</summary>
+    [Fact]
+    public void BucketTaskCountsTotalToTheScoreCardForTheSamePeriod()
+    {
+        var planId = "cat-tasks-" + Guid.NewGuid();
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { MakePlan(planId) }, db);
+
+        var year = ReportData.PeriodStats(ReportPeriod.Year, db.Conn, score);
+        var buckets = ReportData.YearBuckets(db.Conn, score);
+        Assert.Equal(year.Done, buckets.Sum(b => b.Done));
+        Assert.Equal(year.Total, buckets.Sum(b => b.Total));
+    }
+
+    /// <summary>Durations read as decimal hours everywhere on Reports except the diary
+    /// (2026-08-05 request: "instead of 5 h30 min show 5,5 hours").</summary>
+    [Fact]
+    public void DurationsFormatAsDecimalHours()
+    {
+        var sep = System.Globalization.CultureInfo.CurrentCulture.NumberFormat
+            .NumberDecimalSeparator;
+        Assert.Equal($"5{sep}5 h", ReportData.FmtHours(330));
+        // A whole number of hours carries no decimal at all, and neither does zero.
+        Assert.Equal("4 h", ReportData.FmtHours(240));
+        Assert.Equal("0 h", ReportData.FmtHours(0));
+        // Minutes never appear, however small the figure.
+        Assert.DoesNotContain("m", ReportData.FmtHours(12));
+        Assert.Equal($"0{sep}2 h", ReportData.FmtHours(12));
+    }
+
     /// <summary>An unrecognised category string must not land in any column or in the row total.
     /// The DB column is free text, and a value written by a future version (or a hand-edit)
     /// silently inflating "Total" would be very hard to trace back.</summary>

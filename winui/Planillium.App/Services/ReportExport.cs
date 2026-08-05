@@ -70,8 +70,8 @@ public static class ReportExport
                 $"<tr><td>{s.Date.ToDisplayDate()}</td>" +
                 $"<td>{s.Done}/{s.Total}</td>" +
                 string.Join("", DiaryCategory.ReportOrder
-                    .Select(o => $"<td>{ReportData.FmtMins(s.Minutes.Of(o.Value))}</td>")) +
-                $"<td>{ReportData.FmtMins(s.Minutes.TotalMin)}</td>" +
+                    .Select(o => $"<td>{ReportData.FmtHours(s.Minutes.Of(o.Value))}</td>")) +
+                $"<td>{ReportData.FmtHours(s.Minutes.TotalMin)}</td>" +
                 $"<td style='color:{col};font-weight:bold'>{s.Score}</td></tr>");
         }
 
@@ -86,13 +86,13 @@ public static class ReportExport
             appRows.Append(
                 $"<tr><td><b>{WebUtility.HtmlEncode(app)}</b></td>" +
                 $"<td>{usage.On}m</td><td>{usage.Off}m</td>" +
-                $"<td>{ReportData.FmtMins(usage.Total)}</td></tr>");
+                $"<td>{ReportData.FmtHours(usage.Total)}</td></tr>");
             if (usage.Subs is null) continue;
             foreach (var (sub, su) in usage.Subs.OrderByDescending(kv => kv.Value.Total).Take(10))
                 appRows.Append(
                     $"<tr><td style='padding-left:28px'>{WebUtility.HtmlEncode(sub)}</td>" +
                     $"<td>{su.On}m</td><td>{su.Off}m</td>" +
-                    $"<td>{ReportData.FmtMins(su.Total)}</td></tr>");
+                    $"<td>{ReportData.FmtHours(su.Total)}</td></tr>");
         }
 
         var hintItems = string.Join("", hints.Select(h => $"<li>{WebUtility.HtmlEncode(h)}</li>"));
@@ -170,12 +170,17 @@ public static class ReportExport
         }
         else
         {
-            sb.AppendLine(Csv(["Period", .. CategoryCsvHeaders(), "Total (min)"]));
+            sb.AppendLine(Csv(["Period", "Tasks done", "Tasks total",
+                .. CategoryCsvHeaders(), "Total (min)", "Score"]));
             var buckets = period == ReportPeriod.Month
                 ? ReportData.MonthBuckets(db.Conn, score) : ReportData.YearBuckets(db.Conn, score);
             foreach (var b in buckets)
-                sb.AppendLine(Csv([b.Label, .. CategoryCsvCells(b.Minutes),
-                    b.Minutes.TotalMin.ToString(CultureInfo.InvariantCulture)]));
+                sb.AppendLine(Csv([b.Label,
+                    b.Done.ToString(CultureInfo.InvariantCulture),
+                    b.Total.ToString(CultureInfo.InvariantCulture),
+                    .. CategoryCsvCells(b.Minutes),
+                    b.Minutes.TotalMin.ToString(CultureInfo.InvariantCulture),
+                    b.Score.ToString(CultureInfo.InvariantCulture)]));
         }
 
         sb.AppendLine();
@@ -229,8 +234,11 @@ public static class ReportExport
         List<(string Label, int Minutes)> distractions)
     {
         var hints = new List<string>();
+        // Durations through ReportData.FmtHours like everything else on Reports (2026-08-05) —
+        // these two sentences formatted their own, so the insights kept saying "23h 56m" and
+        // "1436 min" while the table above them had moved to decimal hours.
         if (weekOff > 120)
-            hints.Add($"You spent {weekOff / 60}h {weekOff % 60}m off-plan this week. " +
+            hints.Add($"You spent {ReportData.FmtHours(weekOff)} off-plan this week. " +
                       "Try blocking distracting apps during working hours.");
         if (weekOn > 0 && (double)weekOff / Math.Max(weekOn, 1) > 0.4)
             hints.Add("Off-plan time is over 40% of your productive time. " +
@@ -239,7 +247,7 @@ public static class ReportExport
         {
             var top = distractions[0];
             hints.Add($"'{top.Label}' is your biggest distraction — " +
-                      $"{top.Minutes} min off-plan this week.");
+                      $"{ReportData.FmtHours(top.Minutes)} off-plan this week.");
         }
         if (hints.Count == 0)
             hints.Add("Great week — no major distraction patterns detected. Keep going!");

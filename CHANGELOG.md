@@ -20,6 +20,17 @@ going forward; the original Python/Tkinter version is retired.
   neither productive nor a distraction, sleep included) is usually the biggest share of a day, and
   it was simply not shown anywhere in this table until now. The on-plan and off-plan columns are
   unchanged, as is your score.
+- The Month and Year summary tables now also show Tasks and Score per row, which only the Day and
+  Week views had. The Total row sums both as well, so the table's score total is the same figure as
+  the score card above it — the two are now computed from one shared pass over the period rather
+  than two that happened to agree.
+- Times on Reports read as decimal hours: "5,5 h" instead of "5h 30m", everywhere on the page
+  except the diary at the bottom, which keeps hours and minutes because a diary entry is a clock
+  event rather than a quantity you add up. Each figure rounds to one decimal on its own, so a
+  column of rows can differ from its total by 0,1 — the total is the exact one.
+- On a narrow window the summary table now scrolls sideways inside its card. Before this it simply
+  lost its right-hand columns — with the table at ten columns, the Score column was invisible at
+  the smallest window size the app allows, with nothing to indicate it existed.
 - Neutral, paid and idle time was also missing from the Month and Year views for a second reason:
   those two only ever read on-plan and off-plan out of the stored daily summaries, even though all
   five have been recorded there since that table existed. Older months now show their full

@@ -131,14 +131,23 @@ added up to — which is not the same as the BALANCE in the sidebar, since that 
 across all time and also subtracts anything you've spent on entertainment time. The diary section
 at the bottom is separate and always works one day at a time.
 
-The summary table carries a column for each of the five categories your time is sorted into —
-on-plan, off-plan, neutral, paid and idle — followed by that row's own Total, which is all five
-added together. That Total is therefore all the time tracked in that day or period, not just the
-productive-versus-distracted pair; neutral time (anything that is neither) is usually the largest
-share of it. The table then ends with a Total row summing every column, so both directions read
-without adding anything up by hand. Days where every plan is off contribute nothing to any of it,
-matching how they're already excluded from the rest of Reports. The exported HTML and CSV reports
-carry the same columns in the same order.
+The summary table carries the same columns on every period view: tasks done, one column for each
+of the five categories your time is sorted into (on-plan, off-plan, neutral, paid and idle), that
+row's own Total, and its Score. The Total is all five categories added together — so it is all the
+time tracked in that day or period, not just the productive-versus-distracted pair; neutral time
+(anything that is neither) is usually the largest share of it. The table then ends with a Total row
+summing every column, including the score, so it reads in both directions without adding anything
+up by hand. That score total is the same figure as the score card above the table, by construction.
+Days where every plan is off contribute no time to any of it, matching how they're already excluded
+from the rest of Reports, but a task you did complete on a day off still earns its score.
+
+Durations on Reports are shown in decimal hours — "5,5 h", not "5h 30m" — everywhere except the
+diary at the bottom, which stays in hours and minutes because a diary entry is a clock event rather
+than a quantity you add up. Each figure is rounded to one decimal on its own, so a column of rows
+can differ from its total by 0,1: the total is the exact one.
+
+On a narrow window the table scrolls sideways inside its card rather than losing its last columns.
+The exported HTML and CSV reports carry the same columns in the same order as the screen.
 
 The "time by app" breakdown shows your three biggest time sinks by default, with a "Show more" link to reveal the full list.
 

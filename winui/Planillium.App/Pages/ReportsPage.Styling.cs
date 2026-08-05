@@ -73,6 +73,29 @@ public sealed partial class ReportsPage
         Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
     };
 
+    /// <summary>
+    /// Wraps a summary table so a narrow window scrolls it sideways instead of silently losing
+    /// its last columns (2026-08-05). Measured at the app's minimum window (900dip): the ten-column
+    /// week table needs ~617px of a ~541px card, and the Score column — the one the user had just
+    /// asked for — was simply absent, along with half the "Total" header. The card is a
+    /// rounded-corner Border, so it corner-clips its content to its own arranged bounds with no
+    /// scrollbar, no overhang and no error: it reads as "that column doesn't exist".
+    ///
+    /// The alternative was shrinking the label column at narrow widths, which would have traded
+    /// this away against the page-wide alignment grid the previous round established. Scrolling
+    /// keeps both. The diary list below already solves the same problem the same way.
+    /// </summary>
+    private static ScrollViewer Scrollable(UIElement child) => new()
+    {
+        Content = child,
+        HorizontalScrollMode = ScrollMode.Enabled,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        // Vertical stays off: the page itself scrolls, and a nested vertical scroller would
+        // swallow wheel events over the table.
+        VerticalScrollMode = ScrollMode.Disabled,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+    };
+
     private static Border Card(UIElement child) => new()
     {
         Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],

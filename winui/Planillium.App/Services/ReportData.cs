@@ -47,7 +47,7 @@ public static class ReportData
         public int OffMin => Minutes.Off;
     }
 
-    public sealed record BucketStat(string Label, CategoryMinutes Minutes)
+    public sealed record BucketStat(string Label, CategoryMinutes Minutes, int Score, int Done, int Total)
     {
         public int OnMin => Minutes.On;
         public int OffMin => Minutes.Off;
@@ -90,34 +90,42 @@ public static class ReportData
     /// omitted (they'd be empty rows); the last element is always today, so
     /// callers that want "today" can take <c>[^1]</c>.
     /// </summary>
-    public static List<DayStat> WeekStats(SqliteConnection conn, ScoreService score)
+    public static List<DayStat> WeekStats(SqliteConnection conn, ScoreService score) =>
+        [.. DailyRows(conn, score, MondayOf(DateOnly.FromDateTime(DateTime.Today)))
+             .Select(r => new DayStat(r.Date, r.Done, r.Total, r.Minutes, r.Score, r.IsExempt))];
+
+    /// <summary>
+    /// Every date from <paramref name="from"/> through today, once, with that date's minutes,
+    /// task counts and score. The single place any Reports figure comes from: the week table,
+    /// the month/year buckets and the score card all fold this same sequence, so the score in a
+    /// table can't disagree with the score on the card a few pixels above it — which is this
+    /// project's most-repeated complaint shape (consolidated 2026-08-05; before that, four
+    /// separate walks each re-derived their own numbers).
+    ///
+    /// Two rules are baked in here rather than repeated at each caller, because they used to be:
+    ///   * A day off contributes NO minutes — tracked, still in the raw diary, but excluded from
+    ///     every Reports total the same way it's excluded from scoring (2026-07-17 request).
+    ///   * A day off DOES contribute its score: a task genuinely completed on a day off still
+    ///     earns its credit. The bucket tables previously skipped exempt dates outright, so once
+    ///     they gained a score column they would have quietly disagreed with the card.
+    /// The streak is each day's own as-of-that-date value, not today's — the week table used to
+    /// pass a hardcoded 0, understating a past day mid-streak (2026-07-18 audit finding R8-01).
+    /// </summary>
+    private static IEnumerable<(DateOnly Date, CategoryMinutes Minutes, int Score, int Done,
+        int Total, bool IsExempt)> DailyRows(SqliteConnection conn, ScoreService score, DateOnly from)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var rows = new List<DayStat>();
-        // Takes the connection (2026-08-05) so every category is available, not just the
-        // on/off pair ScoreService.DayDiaryMinutes returns for scoring. One pair of queries for
-        // the whole week rather than per-day round trips, same as PeriodStats.
-        var minutes = DailyMinutes(conn, MondayOf(today));
-        for (var d = MondayOf(today); d <= today; d = d.AddDays(1))
+        // One pair of queries for the whole range rather than per-day round trips: on the Year
+        // view that would be 365 of them, and Reports has a slow-load report in its history.
+        var minutes = DailyMinutes(conn, from);
+        for (var d = from; d <= today; d = d.AddDays(1))
         {
             var (total, done) = score.DayTaskCounts(d);
             var m = minutes.TryGetValue(d, out var found) ? found : CategoryMinutes.Zero;
-            var (on, off) = (m.On, m.Off);
             var isExempt = score.AllPlansScoringExempt(d);
-            // Each day's own streak-as-of-that-date, not just today's — same fix as
-            // ScoreService.RecomputeDayScoreCore (2026-07-18 audit finding R8-01); this
-            // table used to show every non-today row with a hardcoded 0 streak bonus,
-            // understating a past day's score if it really was mid-streak.
-            var s = score.DayScore(done, total, on, off, score.CurrentStreak(d), isExempt);
-            // A day off is still tracked in the raw Diary list, but its minutes don't count
-            // toward this summary table any more than they count toward the score (2026-07-17
-            // request). Zeroes every category, not just the on/off pair it used to: the table
-            // now shows all five, and a day off that reported 0m on-plan beside 6h of neutral
-            // would read as a tracking bug rather than as an excluded day.
-            if (isExempt) m = CategoryMinutes.Zero;
-            rows.Add(new DayStat(d, done, total, m, s, isExempt));
+            var s = score.DayScore(done, total, m.On, m.Off, score.CurrentStreak(d), isExempt);
+            yield return (d, isExempt ? CategoryMinutes.Zero : m, s, done, total, isExempt);
         }
-        return rows;
     }
 
     /// <summary>Week buckets within the current calendar month — only ever called for
@@ -130,27 +138,43 @@ public static class ReportData
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var start = PeriodStart(ReportPeriod.Month, today);
-        var minutes = DailyMinutes(conn, start);
+        return Bucket(conn, score, start,
+            d => MondayOf(d).ToIsoDate(),
+            key => {
+                var ws = DateOnly.ParseExact(key, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                return $"{ws.ToString("dd MMM", CultureInfo.InvariantCulture)} – " +
+                       $"{ws.AddDays(6).ToString("dd MMM", CultureInfo.InvariantCulture)}";
+            },
+            // Every week of the month gets a row, even one with no activity, so the month's
+            // shape stays visible.
+            keepEmpty: true);
+    }
 
-        // Ordered week buckets keyed by the Monday of each week. Seeded for every week in the
-        // month so a week with no activity still gets a row rather than vanishing.
-        var weeks = new SortedDictionary<string, (DateOnly WeekStart, CategoryMinutes Mins)>();
-        for (var d = start; d <= today; d = d.AddDays(1))
-            weeks.TryAdd(MondayOf(d).ToIsoDate(), (MondayOf(d), CategoryMinutes.Zero));
-
-        foreach (var (d, m) in minutes)
+    /// <summary>Folds <see cref="DailyRows"/> into labelled buckets — the one implementation
+    /// behind both bucket tables, which were near-identical apart from how a date maps to a
+    /// bucket and how that bucket is labelled.</summary>
+    private static List<BucketStat> Bucket(SqliteConnection conn, ScoreService score, DateOnly from,
+        Func<DateOnly, string> keyOf, Func<string, string> labelOf, bool keepEmpty)
+    {
+        var buckets = new SortedDictionary<string, BucketStat>();
+        foreach (var r in DailyRows(conn, score, from))
         {
-            // Tracked (still visible in the raw Diary list) but doesn't count toward this
-            // bucket, same as the score and the weekly summary table (2026-07-17 request).
-            if (score.AllPlansScoringExempt(d)) continue;
-            var key = MondayOf(d).ToIsoDate();
-            if (!weeks.TryGetValue(key, out var w)) continue;
-            weeks[key] = (w.WeekStart, w.Mins.Plus(m));
+            var key = keyOf(r.Date);
+            var b = buckets.TryGetValue(key, out var cur)
+                ? cur : new BucketStat(labelOf(key), CategoryMinutes.Zero, 0, 0, 0);
+            buckets[key] = b with
+            {
+                Minutes = b.Minutes.Plus(r.Minutes),
+                Score = b.Score + r.Score,
+                Done = b.Done + r.Done,
+                Total = b.Total + r.Total,
+            };
         }
-        return weeks.Values.Select(w => new BucketStat(
-            $"{w.WeekStart.ToString("dd MMM", CultureInfo.InvariantCulture)} – " +
-            $"{w.WeekStart.AddDays(6).ToString("dd MMM", CultureInfo.InvariantCulture)}",
-            w.Mins)).ToList();
+        // The Year view drops months with nothing in them at all: a fresh install would
+        // otherwise render eleven empty rows, which reads as broken rather than as simply
+        // empty. The Month view keeps its empty weeks, so the month's shape stays visible.
+        return [.. buckets.Values.Where(b => keepEmpty ||
+            b.Minutes.TotalMin > 0 || b.Score != 0 || b.Total > 0)];
     }
 
     /// <summary>Calendar-month buckets for this year, January through the current
@@ -164,18 +188,12 @@ public static class ReportData
     public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var minutes = DailyMinutes(conn, PeriodStart(ReportPeriod.Year, today));
-        var months = new SortedDictionary<string, CategoryMinutes>();
-
-        // Per-date (not per-month) so a day-off date can be excluded before it's folded into
-        // its month — same rule as the score and the other bucket views (2026-07-17 request).
-        foreach (var (d, m) in minutes)
-        {
-            if (score.AllPlansScoringExempt(d)) continue;
-            var mo = d.ToString("yyyy-MM", CultureInfo.InvariantCulture);
-            months[mo] = (months.TryGetValue(mo, out var cur) ? cur : CategoryMinutes.Zero).Plus(m);
-        }
-        return months.Select(kv => new BucketStat(MonthLabel(kv.Key), kv.Value)).ToList();
+        // Per-date (not per-month) so a day-off date is handled before it's folded into its
+        // month — same rule as the score and the other views (2026-07-17 request), now applied
+        // once inside DailyRows rather than repeated here.
+        return Bucket(conn, score, PeriodStart(ReportPeriod.Year, today),
+            d => d.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+            MonthLabel, keepEmpty: false);
     }
 
     /// <summary>Everything the score card and the insights panel need, aggregated over the
@@ -256,21 +274,16 @@ public static class ReportData
     public static PeriodTotals PeriodStats(ReportPeriod period, SqliteConnection conn, ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var start = PeriodStart(period, today);
-        var minutes = DailyMinutes(conn, start);
-
         int scoreSum = 0, done = 0, total = 0, onSum = 0, offSum = 0;
-        for (var d = start; d <= today; d = d.AddDays(1))
+        // The same sequence the tables below the card fold — see DailyRows for the two day-off
+        // rules that used to be restated at each of these call sites.
+        foreach (var r in DailyRows(conn, score, PeriodStart(period, today)))
         {
-            var (dayTotal, dayDone) = score.DayTaskCounts(d);
-            var m = minutes.TryGetValue(d, out var found) ? found : CategoryMinutes.Zero;
-            var isExempt = score.AllPlansScoringExempt(d);
-            // Same call shape as WeekStats: the real minutes go in, and DayScore itself zeroes
-            // the passive terms when the day is exempt.
-            scoreSum += score.DayScore(dayDone, dayTotal, m.On, m.Off, score.CurrentStreak(d), isExempt);
-            total += dayTotal;
-            done += dayDone;
-            if (!isExempt) { onSum += m.On; offSum += m.Off; }
+            scoreSum += r.Score;
+            total += r.Total;
+            done += r.Done;
+            onSum += r.Minutes.On;
+            offSum += r.Minutes.Off;
         }
         return new PeriodTotals(scoreSum, done, total, onSum, offSum);
     }
@@ -391,8 +404,20 @@ public static class ReportData
         return result;
     }
 
-    public static string FmtMins(int mins) =>
-        mins >= 60 ? $"{mins / 60}h {mins % 60:00}m" : $"{mins}m";
+    /// <summary>
+    /// Minutes as decimal hours — "5,5 h", not "5h 30m" (2026-08-05 request). Everything on
+    /// Reports above the diary reads through here; the diary keeps its own hours-and-minutes
+    /// formatter deliberately, since a single entry is a clock event ("14:05–14:20, 15m") where a
+    /// column of durations is a quantity you compare and add up.
+    ///
+    /// One decimal, and the separator is the user's own (CurrentCulture) — the request was
+    /// written as "5,5". Rounding is per figure, so a column of rounded rows can differ from its
+    /// rounded total by 0.1: the underlying minutes are summed first and only the result is
+    /// rounded, which is the honest way round — the total is exact and the rows are what's
+    /// approximate, rather than a total that visibly disagrees with the arithmetic behind it.
+    /// </summary>
+    public static string FmtHours(int mins) =>
+        (mins / 60.0).ToString("0.#", CultureInfo.CurrentCulture) + " h";
 
     /// <summary>Monday of the week containing <paramref name="d"/>.</summary>
     internal static DateOnly MondayOf(DateOnly d) => d.AddDays(-(((int)d.DayOfWeek + 6) % 7));

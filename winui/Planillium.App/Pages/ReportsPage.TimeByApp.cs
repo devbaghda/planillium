@@ -44,7 +44,7 @@ public sealed partial class ReportsPage
             var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
             overlay.Children.Add(track);
             overlay.Children.Add(fill);
-            var mins = Dim(ReportData.FmtMins(minutes));
+            var mins = Dim(ReportData.FmtHours(minutes));
             Grid.SetColumn(overlay, 1);
             Grid.SetColumn(mins, 2);
             row.Children.Add(name);
@@ -298,7 +298,7 @@ public sealed partial class ReportsPage
         Grid.SetColumn(overlay, 1);
         row.Children.Add(overlay);
 
-        var total = Dim(ReportData.FmtMins(u.Total));
+        var total = Dim(ReportData.FmtHours(u.Total));
         total.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(total, 2);
         row.Children.Add(total);
