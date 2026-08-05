@@ -333,42 +333,45 @@ on+off (Year total 80h10m→294h34m). New `ReportData.CategoryMinutes`; three ne
 collapsed into one `DailyMinutes`, fixing two latent bugs found in the collapse: `MonthBuckets`
 never read `diary_daily_rollup` at all, and the rollup's neutral/paid/idle columns had never been
 read back despite being stored correctly. HTML/CSV exports match.
-*Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours`, `"5,5 h"`, everywhere except the
-diary (kept as h/m — a clock event, not a quantity); `Suggestions`' own hand-formatted string fixed
-too. Month/Year gained Tasks and Score columns and totals (a prior round's
-explicit "leave blank" decision, overridden). Required day-off dates to contribute score while
-contributing no minutes — `DailyRows` is now the one walk behind the week table, both bucket
-tables and the score card, so a table's score total equals the card by construction; test asserts
-it. Found by measuring at 900dip minimum: the Score column was **clipped off entirely** by the
-card, a rounded `Border` clipping in silence — tables now sit in a horizontal `ScrollViewer`
-(`Scrollable()`), confirmed reachable via `ScrollItemPattern.ScrollIntoView`. 132/132 tests.
-*Then*: **"the app asks me about my absence twice and makes two identical recordings"** — real bug
-in `ActivityTracker.PendingDayGap` (evening review's gap sweep), two compounding causes. (1) It
-judged only by `db.LastDiaryEnd()`, blind to a currently-open session — continuous activity right
-through review time read as absence; answering logged an idle row, then the session flushed a few
-polls later and logged the same span again. (2) It never remembered what it had already asked —
-Today's manual "Evening review" button bypasses the automatic once-a-day guard, so a second click
-re-asked/re-logged whatever the first covered. Fixed with two clamps in `PendingDayGap`: a new
-lock-protected `_openSessionStart` (written by a new `SetSession`, replacing eight independently-
-typed assignment triples — exactly the shape a hand-added mirror would miss one of) caps how far
-the gap extends; the existing `_accountedUntil` now also caps how far back it starts. *Verified*:
-two new tests reproduce both bugs and fail without the fix; 136/136. Root-caused via git
-archaeology (the 07-27→07-28 `PendingLeadingGap`/`PendingDayGap` history) rather than guessing.
+*Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours`, `"5,5 h"` everywhere but the diary
+(kept h/m — a clock event, not a quantity). Month/Year gained Tasks/Score columns+totals; day-off
+dates now contribute score with no minutes via one shared `DailyRows` walk, so a table's score total
+equals the card by construction (test asserts it). Found by measuring at 900dip: Score was clipped
+off entirely by the card — tables now sit in `Scrollable()`, a horizontal `ScrollViewer`. 132/132.
+*Then*: **"the app asks me about my absence twice"** — real bug in `ActivityTracker.PendingDayGap`,
+two compounding causes: (1) judged only by `db.LastDiaryEnd()`, blind to a currently-open session,
+so continuous activity through review time read as absence, logged, then logged again when the
+session flushed; (2) never remembered what it had already asked, so a second manual "Evening
+review" click re-asked/re-logged. Fixed with two clamps: lock-protected `_openSessionStart` (new
+`SetSession`, replacing eight independently-typed triples) caps how far the gap extends;
+`_accountedUntil` caps how far back it starts. Two new tests reproduce both bugs and fail without
+the fix; root-caused via git archaeology, not guessing. 136/136.
 *Then*: **"fix width on all of the pages, Schedule for example is not fixed"** — Today, Schedule,
-Plans all still used the *pre*-2026-07-28 `StackPanel MaxWidth Center` pattern, the exact bug
-already root-caused and fixed once for Reports (a StackPanel's natural width is its content's, so
-MaxWidth caps it but doesn't force it — the column visibly shifts as content changes). New
-`Pages/PageLayout.cs`, `CenterContent()`, is Reports' own `SizeChanged` math shared; Settings
-untouched (different, already-fixed layout). *Also this round*: re-read a screenshot correctly on
-the second look — the "Day off" text on every Schedule row is the **toggle button**, not a status
-chip; `plan_days_off` (read-only) confirmed none of the flagged days were marked off. The two
-empty weekdays trace to `task_overrides`: originals moved to days 40/41 individually while others
-moved in from 4/5 — real reschedule history, not a bug; user hasn't yet said if that's expected.
-*Verified*: UIA at 1400/950/750dip — column matches across pages at a given width. 136/136 tests.
+Plans still used the *pre*-2026-07-28 `StackPanel MaxWidth Center` bug already fixed once for
+Reports (MaxWidth caps a StackPanel's width, doesn't force it). New `Pages/PageLayout.cs`,
+`CenterContent()`, shares Reports' own `SizeChanged` math; Settings untouched (different, already
+fixed). *Verified*: UIA at 1400/950/750dip. *Same round*, re-read a screenshot correctly on the
+second look: the "Day off" text on every Schedule row is the **toggle button**, not a status chip
+(`plan_days_off` confirmed none flagged were off); the two empty weekdays traced to
+`task_overrides` — real reschedule history that exposed a real gap in `RescheduleTask`, fixed next.
+136/136.
+*Then*: **"if I moved a task and the day remains empty, fill the gap with the following day's
+task"** — reverses the 2026-07-09 "Reschedule never closes gaps" call (business rule 7 in
+`DECISIONS.md`, updated; re-confirmed with the user, not assumed). `RescheduleTask` now runs one
+combined formula per task — compact back to close the vacated day, *then* push forward to avoid
+doubling up at the target day — instead of two independent shift loops, which would overwrite each
+other for any task caught between the old and new day (worked by hand on paper first; both
+directions checked). **Future-only guard**: a vacated day compacts only if it's today or later,
+since `ReplanOverdueDialog` reuses this method on days that are by definition already past —
+compacting there would pull a future task backward across today and silently make it overdue.
+`RescheduleTaskDialog`'s disclosure text updated to match. *Tests*: 1 new
+(`RescheduleTask_ClosesGapWhenVacatedDayIsInTheFuture`), 2 updated to the new (hand- and
+test-verified) arithmetic — `RescheduleTask_SkipsOverDayMarkedOff`'s expected days changed since
+its scenario's vacated day is today, not the past. 137/137.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - Whether the two now-empty weekdays on the mastery plan's Schedule (days 22/23, tasks moved
-    to 40/41 via individual reschedules) are expected or should be tidied — asked, not yet
-    answered.
+  - The *existing* days-22/23 gap on the mastery plan (previous entry) is old data from before this
+    fix — asked the user whether to also close it retroactively; not yet answered. Per this
+    project's own rule, no write to real data without an explicit, specifically-named confirmation.
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight
     with the app sitting on Reports. If the diary still shows yesterday some morning, the
@@ -382,19 +385,16 @@ moved in from 4/5 — real reschedule history, not a bug; user hasn't yet said i
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").
-  - **Settled, not action items** (recorded so they don't get re-opened): the 42 overlapping
-    `time_diary` pairs from 06-29→07-16 — only 2 match the known `HandleActiveSession` signature,
-    the rest are 1-2 minute boundary artifacts with no confirmed cause, and the user's call
-    (2026-07-18) was to leave the data untouched, revisiting only if a mechanism turns up on its
-    own; and `PlanStore.ActivateQueuedPlan`'s non-atomic write-then-delete (2026-07-28).
-  - **Resolved-and-closed, kept as one-line pointers for date reference** (prose in git log):
-    internal `MentorOverseer`→`Planillium` rename, 2026-07-23; diary-tracking-gap bug, 2026-07-21
-    (`PollOnce` call order); LinkedIn/Reddit autonomous publishing for `posting-plan`, dropped
-    2026-07-22 (APIs gated/unsuitable — a dormant Reddit OAuth2 tool is kept at
-    `~/Desktop/CLAUDE/skills/posting-plan/tools/reddit-publish/`); `PlanDayForDate` closed form,
-    2026-07-18; TickTick client secret rotated 2026-07-09 and **reconnected in the app 2026-08-04**
-    (the stale-credential follow-up is closed); personal-data git-history scrub, 2026-07-18;
-    v1.1.0 + GitHub Release + repo flipped Public, 2026-07-21; stray duplicate
-    `devbaghda/planillium` repo deleted 2026-07-21; tray icon vanishing after a click — user
-    confirmed fine 2026-08-04; the 2026-07-17 "keyboard/dark-mode/timing" live-check item — user
-    closed it 2026-08-04.
+  - **Settled, not action items**: the 42 overlapping `time_diary` pairs from 06-29→07-16 (only 2
+    match `HandleActiveSession`; rest unconfirmed boundary artifacts; user's call 2026-07-18 — leave
+    untouched unless a mechanism turns up); `PlanStore.ActivateQueuedPlan`'s non-atomic
+    write-then-delete (2026-07-28).
+  - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium`
+    rename 2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit
+    autonomous publishing for `posting-plan` dropped 2026-07-22 (APIs gated/unsuitable; dormant
+    Reddit OAuth2 tool at `~/Desktop/CLAUDE/skills/posting-plan/tools/reddit-publish/`);
+    `PlanDayForDate` closed form 2026-07-18; TickTick secret rotated 2026-07-09, reconnected
+    2026-08-04 (follow-up closed); personal-data git-history scrub 2026-07-18; v1.1.0 + GitHub
+    Release + repo flipped Public 2026-07-21; duplicate `devbaghda/planillium` repo deleted
+    2026-07-21; tray icon vanishing — user confirmed fine 2026-08-04; 2026-07-17
+    keyboard/dark-mode/timing item — closed 2026-08-04.

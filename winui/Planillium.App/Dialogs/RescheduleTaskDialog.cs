@@ -49,8 +49,13 @@ public static class RescheduleTaskDialog
         // (2026-07-18 audit finding R8-14).
         panel.Children.Add(new TextBlock
         {
+            // Second sentence added 2026-08-05 (user report: two upcoming days sat
+            // empty after individual reschedules moved their tasks elsewhere) —
+            // RescheduleTask now closes the day this task leaves behind, the same
+            // way "Move to today" already does, not just the doubling-up push below.
             Text = "Whatever's already on the day you pick — and everything after it — " +
-                   "shifts forward by one, so this task gets its own day instead of doubling up.",
+                   "shifts forward by one, so this task gets its own day instead of doubling up. " +
+                   "The day this task is leaving gets filled in turn by pulling every later day back by one.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],

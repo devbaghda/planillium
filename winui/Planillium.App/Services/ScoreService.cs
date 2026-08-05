@@ -583,19 +583,20 @@ public sealed class ScoreService : IDisposable
     /// accrued for the days it was late stands; this only stops it from
     /// accruing further.
     ///
-    /// Deliberately NOT the same shift-avoidance rule MoveTaskToToday uses
-    /// (confirmed with the user 2026-07-09, after an audit flagged the
-    /// difference as a possible inconsistency): the two actions represent
-    /// different intents. MoveTaskToToday means "I got ahead of schedule" —
-    /// pulling work earlier should compress the remaining plan, so it closes
-    /// the gap it leaves instead of pushing other days later. RescheduleTask
-    /// means "place this specific task on this specific day" — the user's
-    /// stated preference is a strict one-task-per-day steady state (a day
-    /// holding two tasks should only ever be a transient "I did extra today"
-    /// fact, not a permanent state a manual reschedule creates), so this
-    /// still needs to push the target day's existing task later rather than
-    /// double up on it. Don't "fix" this to match MoveTaskToToday without
-    /// re-confirming intent first.
+    /// Originally deliberately NOT the same shift-avoidance rule MoveTaskToToday
+    /// uses (confirmed with the user 2026-07-09, after an audit flagged the
+    /// difference as a possible inconsistency): MoveTaskToToday's "I got ahead
+    /// of schedule" closes the gap it leaves; this one's "place this specific
+    /// task on this specific day" only pushed the target day's existing task
+    /// later, leaving the vacated day empty. Re-confirmed and reversed
+    /// 2026-08-05 (user report: a plan with Sat/Sun already excluded still
+    /// showed two consecutive empty weekdays after individual reschedules moved
+    /// their tasks elsewhere) — now closes the gap it leaves too, same as
+    /// MoveTaskToToday, while still pushing the target day forward so the
+    /// moved task never doubles up with whatever's already there. See the
+    /// comment on the two-step day computation below for why this can't be two
+    /// independent shift loops (they'd fight over any task caught between the
+    /// old and new day) and has to be one combined formula per task instead.
     /// </summary>
     public void RescheduleTask(Plan plan, string taskText, int originalDay, int newAssignedDay)
     {
@@ -610,15 +611,51 @@ public sealed class ScoreService : IDisposable
             newAssignedDay = NextWorkingDay(newAssignedDay, daysOff);
 
             var tasks = PlanStore.TasksFor(plan, _db, _completions);
+            var oldDay = tasks.FirstOrDefault(t => t.Task.Text == taskText)?.AssignedDay;
+
+            // Only close the gap if this move actually empties the old day out — a day
+            // holding more than one task (a transient "did extra today" state, per
+            // MoveTaskToToday's own doc comment) shouldn't compact just because one of
+            // its tasks moved elsewhere; the others are still there. Also only for a
+            // vacated day that's today or later: ReplanOverdueDialog reuses this same
+            // method for tasks whose old day is by definition already overdue/past, and
+            // compacting there would pull a currently-future task backward across
+            // planDay, silently making it overdue too — renumbering days already lived
+            // through, not filling a hole in the upcoming schedule.
+            var closeGap = oldDay is { } od && od != newAssignedDay && od >= plan.PlanDay &&
+                tasks.All(t => t.Task.Text == taskText || t.AssignedDay != od);
+
             foreach (var t in tasks)
             {
                 if (t.Task.Text == taskText || t.Completed) continue;
-                if (t.AssignedDay >= newAssignedDay)
+
+                // Step 1 — close the gap: every task after the vacated day shifts back
+                // one to fill it (skipping over days already off, same as
+                // MoveTaskToToday's PrevWorkingDay compaction).
+                var day = closeGap && t.AssignedDay > oldDay!.Value
+                    ? PrevWorkingDay(t.AssignedDay - 1, daysOff)
+                    : t.AssignedDay;
+
+                // Step 2 — open a slot at the target day: whatever ends up sitting on
+                // newAssignedDay after step 1 shifts forward one instead, so the moved
+                // task still gets its own day. Chaining off `day` (not the original
+                // t.AssignedDay) is what keeps this from double-shifting a task that
+                // both compaction and the push would otherwise each want to move —
+                // worked through on paper: moving a task later compacts the whole block
+                // between old and new day back by one and then only the actual overflow
+                // past the new day gets pushed forward again, netting to no change for
+                // it; moving a task earlier needs no separate gap-close step at all,
+                // since the forward push alone shifts the whole block right by one and
+                // lands its last member exactly on the vacated day.
+                if (day >= newAssignedDay)
+                    day = NextWorkingDay(day + 1, daysOff);
+
+                if (day != t.AssignedDay)
                     // Skip over any other day already marked off instead of a flat
-                    // "+1" — a naive shift can walk a task straight onto a day-off
-                    // day (making it look occupied) while a plain working day
-                    // further along is left empty instead (2026-07-16 bug report).
-                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, NextWorkingDay(t.AssignedDay + 1, daysOff));
+                    // "+1"/"-1" — a naive shift can walk a task straight onto a day-off
+                    // day (making it look occupied) while a plain working day further
+                    // along is left empty instead (2026-07-16 bug report).
+                    SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, day);
             }
             SaveOverride(plan.Id, taskText, originalDay, newAssignedDay);
         });

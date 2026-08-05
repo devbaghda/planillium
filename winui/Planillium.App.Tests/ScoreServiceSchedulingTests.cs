@@ -84,14 +84,15 @@ public sealed class ScoreServiceSchedulingTests
     [Fact]
     public void RescheduleTask_ShiftsLaterPendingTasksForward()
     {
-        // Deliberately the OPPOSITE behavior from MoveTaskToToday — see
-        // ScoreService.RescheduleTask's doc comment and CONTEXT.md business
-        // rule 7. Rescheduling an overdue task onto a day that already has
-        // its own task must push that day (and later ones) forward by one,
-        // preserving one-task-per-day, rather than doubling up. This test
-        // exists specifically so a future "fix" that makes RescheduleTask
-        // match MoveTaskToToday (as one audit pass initially, incorrectly,
-        // suggested) fails loudly instead of silently changing behavior.
+        // Rescheduling an OVERDUE task onto a day that already has its own
+        // task must push that day (and later ones) forward by one,
+        // preserving one-task-per-day, rather than doubling up — and, since
+        // 2026-08-05, must NOT also compact the vacated day's gap, because
+        // that day is already in the past (overdue means AssignedDay <
+        // planDay): pulling a future task backward to fill it would silently
+        // renumber history instead of closing a hole in the upcoming
+        // schedule. See RescheduleTask_ClosesGapWhenVacatedDayIsInTheFuture
+        // below for the non-overdue case, where the gap DOES get closed.
         var planId = "test-" + Guid.NewGuid();
         var plan = MakePlan(planId, startDayOffset: -5,
             (1, "Overdue task"), (6, "Existing day-6 task"), (7, "Existing day-7 task"));
@@ -106,6 +107,40 @@ public sealed class ScoreServiceSchedulingTests
         Assert.Equal(6, tasks.Single(t => t.Task.Text == "Overdue task").AssignedDay);
         Assert.Equal(7, tasks.Single(t => t.Task.Text == "Existing day-6 task").AssignedDay);
         Assert.Equal(8, tasks.Single(t => t.Task.Text == "Existing day-7 task").AssignedDay);
+    }
+
+    [Fact]
+    public void RescheduleTask_ClosesGapWhenVacatedDayIsInTheFuture()
+    {
+        // Regression test for the 2026-08-05 bug report: two upcoming
+        // weekdays showed "No tasks" after their originally-assigned tasks
+        // were individually rescheduled forward — Sat/Sun were already
+        // excluded from the plan, so the empty weekdays read as a real
+        // scheduling gap, not a rest day. Moving a not-yet-due task now
+        // closes the day it leaves behind, same as MoveTaskToToday, while
+        // still avoiding doubling up on the target day: day 5 already holds
+        // its own task, so that task compacts back into the vacated slot
+        // instead of getting pushed out further, and the whole range from
+        // today through the new day ends up fully occupied with no gap
+        // anywhere in between.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: 0,
+            (1, "Today task"), (2, "Day 2 task"), (3, "Day 3 task"),
+            (4, "Day 4 task"), (5, "Day 5 task"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.RescheduleTask(plan, "Day 2 task", originalDay: 2, newAssignedDay: 5);
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(1, tasks.Single(t => t.Task.Text == "Today task").AssignedDay);
+        Assert.Equal(2, tasks.Single(t => t.Task.Text == "Day 3 task").AssignedDay);
+        Assert.Equal(3, tasks.Single(t => t.Task.Text == "Day 4 task").AssignedDay);
+        Assert.Equal(4, tasks.Single(t => t.Task.Text == "Day 5 task").AssignedDay);
+        Assert.Equal(5, tasks.Single(t => t.Task.Text == "Day 2 task").AssignedDay);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, tasks.Select(t => t.AssignedDay).OrderBy(d => d));
     }
 
     [Fact]
@@ -174,12 +209,19 @@ public sealed class ScoreServiceSchedulingTests
     [Fact]
     public void RescheduleTask_SkipsOverDayMarkedOff()
     {
-        // Regression test for the 2026-07-16 bug report: a naive "+1" shift
-        // used to walk a task straight onto a day already marked off (making
-        // it look occupied) while a plain working day further along was left
-        // looking like an unmarked gap instead. Day 3 is marked off first
-        // (pushing C/D to 4/5); rescheduling A onto day 2 must then shift
-        // B/C/D forward while still hopping over day 3.
+        // Regression test for the 2026-07-16 bug report: a naive "+1"/"-1"
+        // shift used to walk a task straight onto a day already marked off
+        // (making it look occupied) while a plain working day further along
+        // was left looking like an unmarked gap instead. Day 3 is marked off
+        // first (pushing C/D to 4/5); rescheduling A onto day 2 then both
+        // closes the gap A leaves at day 1 (B compacts back into it, hopping
+        // over day 3 the same as the forward shift below) and pushes B out
+        // of A's new slot at day 2 — net a swap between A and B, with C/D
+        // landing back exactly where they already were since there's nothing
+        // left over to pull further (worked out by hand against
+        // ScoreService.RescheduleTask's own doc comment on the combined
+        // two-step formula; changed 2026-08-05 along with the gap-closing
+        // feature itself — day 1 is today, not the past, so it qualifies).
         var planId = "test-" + Guid.NewGuid();
         var plan = MakePlan(planId, startDayOffset: 0,
             (1, "A"), (2, "B"), (3, "C"), (4, "D"));
@@ -193,9 +235,9 @@ public sealed class ScoreServiceSchedulingTests
         var tasks = PlanStore.TasksFor(plan, db, completions);
 
         Assert.Equal(2, tasks.Single(t => t.Task.Text == "A").AssignedDay);
-        Assert.Equal(4, tasks.Single(t => t.Task.Text == "B").AssignedDay);
-        Assert.Equal(5, tasks.Single(t => t.Task.Text == "C").AssignedDay);
-        Assert.Equal(6, tasks.Single(t => t.Task.Text == "D").AssignedDay);
+        Assert.Equal(1, tasks.Single(t => t.Task.Text == "B").AssignedDay);
+        Assert.Equal(4, tasks.Single(t => t.Task.Text == "C").AssignedDay);
+        Assert.Equal(5, tasks.Single(t => t.Task.Text == "D").AssignedDay);
         Assert.Contains(3, score.DaysOff(planId));
         Assert.DoesNotContain(3, tasks.Select(t => t.AssignedDay));
     }

@@ -25,6 +25,12 @@ going forward; the original Python/Tkinter version is retired.
   width — it only caps it, so the column's real width tracked whatever happened to be on screen
   and visibly shifted left/right as content changed. All four pages (plus Settings, on its own
   different layout) now hold still.
+- Rescheduling a not-yet-due task to a different day now closes the day it leaves behind — every
+  later task shifts back one to fill it, the same compaction "Move to today" already did — instead
+  of leaving that day sitting empty in the Schedule view. Rescheduling still pushes whatever's
+  already on the target day forward so the two never double up; an overdue task's own (already
+  past) day is never compacted, since pulling a future task backward across today would quietly
+  make it overdue too.
 - Fixed a bug where the evening review could ask "where have you been?" for a stretch you were
   actually at your computer for the whole time, if you'd been continuously active in one app
   right up to review time. Answering it (or letting it default to "unaccounted time") then got

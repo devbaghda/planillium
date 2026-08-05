@@ -36,21 +36,32 @@
    applies once for the day-of miss (folded into that day's `daily_score`) and again
    *every subsequent day* it stays outstanding (`overdue_accrual`, capped at 3 days).
    Rescheduling doesn't refund penalties already taken.
-7. **The user's steady-state rule: one task per day.** A day holding two tasks is only ever
-   a transient fact ("I did two things today"), never a permanent state a scheduling
-   action should create. This is *why* Reschedule/Day-off and Move-to-today deliberately
-   behave differently (clarified with the user 2026-07-09, after an audit flagged the
-   difference as a possible inconsistency — it isn't one):
+7. **The user's steady-state rule: one task per day, and no dead days either.** A day
+   holding two tasks is only ever a transient fact ("I did two things today"), never a
+   permanent state a scheduling action should create; a day left holding zero once
+   something moves off it isn't meant to be permanent either. Reschedule/Day-off and
+   Move-to-today still differ on the *doubling-up* half of this (confirmed 2026-07-09,
+   after an audit flagged the difference and the user clarified it wasn't an
+   inconsistency), but as of 2026-08-05 (bug report: two upcoming weekdays showed empty
+   in Schedule after individual reschedules) they no longer differ on the *gap* half:
    - **Reschedule / Day-off** use the "insert, don't overlap" forward shift: whatever's
      already on the target day (and everything after it) shifts forward one day first,
      rather than doubling up — because these are "place this specific task on this
      specific day" actions, and the one-task-per-day rule must hold going forward.
-   - **Move-to-today** does *not* shift forward (changed 2026-07-09): pulling a future
-     task to today just adds it alongside today's own task (a deliberate, transient
-     exception to the rule — you really did finish two things today). If that empties
-     out the task's old day, everything after it shifts *back* one day to close the gap
-     — finishing something ahead of schedule compresses the remaining plan back down to
-     one-task-per-day, rather than leaving a dead day in the middle of it.
+   - **Move-to-today** does *not* shift forward: pulling a future task to today just adds
+     it alongside today's own task (a deliberate, transient exception to the rule — you
+     really did finish two things today).
+   - **Gap-closing now applies to both.** If a move empties out the task's old day,
+     everything after it shifts *back* one day to close the gap — Move-to-today already
+     did this (2026-07-09: finishing ahead of schedule compresses the remaining plan);
+     Reschedule now does too (2026-08-05), computed as one combined formula per task
+     rather than two independent shift passes, so a task caught between the old and new
+     day isn't fought over by both — see `ScoreService.RescheduleTask`'s own doc comment
+     for the worked-through cases. **Exception: an overdue task's own (already past) day
+     is never compacted** — that would pull a currently-future task backward across
+     today, silently making it overdue too, rather than filling a hole in the *upcoming*
+     schedule. `ReplanOverdueDialog` relies on this: every day it reschedules off of is
+     by definition already overdue/past.
    - **Already-completed tasks are never shifted** by any of these four operations
      (fixed 2026-07-09; see Session handoff notes — shifting a completed task orphaned
      its `task_completions` row, keyed by assigned day, silently unmarking it and
