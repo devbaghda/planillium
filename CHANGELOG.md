@@ -36,12 +36,18 @@ going forward; the original Python/Tkinter version is retired.
   in by hand every time.
 
 **Changed**
-- Settings is now seven collapsible sections (General, Hours & reminders, Scoring, Activity
-  keywords, Idle-answer library, TickTick, Data) instead of one long scroll. Each heading shows a
-  summary of what's inside it — your hours, how many keywords are in each list, whether TickTick
-  is connected — so the closed page works as an overview and you only open what you're changing.
-  Whether tracking is running, and the result of your last save, stay visible outside the
-  sections.
+- Settings is now seven sections (General, Hours & reminders, Scoring, Activity keywords,
+  Idle-answer library, TickTick, Data) picked from a menu down the right-hand side, instead of one
+  long scroll. Each menu entry shows a summary of what's inside it — your hours, how many keywords
+  are in each list, whether TickTick is connected — so the menu doubles as an overview and you go
+  straight to whatever you're changing. The page keeps the same shape whichever section you're on:
+  switching swaps the contents without anything else moving or resizing, and Settings reopens on
+  the section you used last. Whether tracking is running, and the result of your last save, stay
+  visible on every section.
+- Two settings were renamed to fit: "Warn if tasks open, before day ends (hrs)" is now "Warn
+  before day ends (hrs)", and the idle-answer columns are headed "On-plan"/"Off-plan"/"Neutral"
+  rather than "Counts as on-plan" and so on. Same settings, same values — only the labels are
+  shorter, so they can't get cut off on a narrow window.
 - On Reports, everything above the diary now follows the Day/Week/Month/Year selector. The score
   card was always showing today no matter what you'd picked, and the insights underneath were
   always calculated from this week. The card now reads "SCORE EARNED — THIS MONTH" (and so on)

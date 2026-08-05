@@ -13,10 +13,32 @@ public sealed partial class SettingsPage : Page
     /// both iterate the same table the score formula itself reads from.</summary>
     private readonly Dictionary<string, NumberBox> _scoringBoxes = new(StringComparer.Ordinal);
 
+    /// <summary>The section panels, in the same order as the menu entries in XAML — index i of
+    /// SectionList shows index i of this. Kept as one list so the two can't drift into showing
+    /// the wrong panel for a click; the pairing is asserted once, in the constructor.</summary>
+    private readonly StackPanel[] _panels;
+
+    /// <summary>Which section was last open, remembered for the lifetime of the app rather than
+    /// per page instance: navigating away and back re-creates this page from scratch, and landing
+    /// on "General" every time is exactly the annoyance a menu is supposed to remove.</summary>
+    private static int _lastSection;
+
     public SettingsPage()
     {
         InitializeComponent();
+        _panels = [GeneralPanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
+        if (_panels.Length != SectionList.Items.Count)
+            throw new InvalidOperationException(
+                $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
+                "every menu entry must open a section.");
         BuildScoringSection();
+        SectionList.SelectedIndex = _lastSection;
+        // The strip is fixed at two lines so it can't resize the page (see XAML), which means a
+        // long message trims. Mirroring it into the tooltip here rather than at ~20 assignment
+        // sites keeps every one of them a plain `SaveStatus.Text = ...` and makes it impossible
+        // for a new one to forget.
+        SaveStatus.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) =>
+            ToolTipService.SetToolTip(SaveStatus, SaveStatus.Text.Length > 0 ? SaveStatus.Text : null));
         Loaded += (_, _) =>
         {
             var theme = StateService.Load().Theme;
@@ -49,9 +71,28 @@ public sealed partial class SettingsPage : Page
         };
     }
 
+    /// <summary>Shows the chosen section and hides the rest. Nothing is created or destroyed
+    /// here — every panel stays loaded, so the values in a section you haven't opened are still
+    /// the ones SaveRules writes, and switching costs a visibility flip rather than a rebuild.
+    /// The scroll position resets so a section can't open halfway down.</summary>
+    private void Section_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        // Clicking the already-selected row, or a click that lands between rows, leaves the
+        // ListView with nothing selected — restore rather than showing an empty pane.
+        if (SectionList.SelectedIndex < 0)
+        {
+            SectionList.SelectedIndex = _lastSection;
+            return;
+        }
+        _lastSection = SectionList.SelectedIndex;
+        for (var i = 0; i < _panels.Length; i++)
+            _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
+        SectionScroll.ChangeView(null, 0, null, disableAnimation: true);
+    }
+
     /// <summary>
-    /// Fills each collapsed section header with a one-line summary of what's inside it, so the
-    /// page reads as a settings overview rather than seven closed doors (2026-08-04). Every
+    /// Fills each menu entry with a one-line summary of what's inside that section, so the menu
+    /// reads as a settings overview rather than seven labels (2026-08-04). Every
     /// figure here is read back from the same source the section's own controls load from —
     /// never from the controls' current text — so a header can't show a value that failed
     /// validation and was never actually saved.
@@ -68,10 +109,9 @@ public sealed partial class SettingsPage : Page
             "dark" => "Dark",
             _ => "Follow Windows",
         };
-        // Kept deliberately terse. A header summary shares its row with the section title, so
-        // the space it gets shrinks as the title grows — and TextTrimming means an overlong one
-        // doesn't wrap or complain, it just quietly loses its tail. Measured against the
-        // narrowest column (Hours &, at ~277px) rather than the roomiest.
+        // Kept deliberately terse. A summary gets two wrapped lines in a 200px-wide menu entry,
+        // and TextTrimming means an overlong one doesn't complain, it just quietly loses its
+        // tail — so the leading item has to be the one worth reading.
         SumGeneral.Text = string.Join(" · ", new[]
         {
             name.Length > 0 ? name : "No name set",
@@ -126,21 +166,13 @@ public sealed partial class SettingsPage : Page
               "data/mentor-winui.log if you didn't pause it yourself.";
     }
 
-    /// <summary>Lays the SCORING inputs out two per row from <see cref="ScoringRules.All"/>.
-    /// Runs from the constructor, not Loaded: LoadRules() (which fills the values) runs on
-    /// Loaded and needs the boxes to already exist.</summary>
+    /// <summary>Creates one input per <see cref="ScoringRules.All"/> entry. Runs from the
+    /// constructor, not Loaded: LoadRules() (which fills the values) runs on Loaded and needs
+    /// the boxes to already exist. Where they sit is <see cref="LayoutScoringGrid"/>'s job.</summary>
     private void BuildScoringSection()
     {
-        const int columns = 2;
-        for (var c = 0; c < columns; c++)
-            ScoringGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        for (var i = 0; i < ScoringRules.All.Count; i++)
+        foreach (var rule in ScoringRules.All)
         {
-            var rule = ScoringRules.All[i];
-            var row = i / columns;
-            if (i % columns == 0) ScoringGrid.RowDefinitions.Add(new RowDefinition());
-
             var box = new NumberBox
             {
                 Header = rule.Label,
@@ -154,12 +186,52 @@ public sealed partial class SettingsPage : Page
             // Rules_Changed's doc comment for why nothing here has a Save button.
             box.ValueChanged += Rules_ValueChanged;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, rule.Label);
-            Grid.SetColumn(box, i % columns);
-            Grid.SetRow(box, row);
             ScoringGrid.Children.Add(box);
             _scoringBoxes[rule.Key] = box;
         }
+        LayoutScoringGrid(TwoColumnMinWidth);
     }
+
+    /// <summary>Below this, the scoring inputs go one per row. Measured, not guessed: the widest
+    /// label in <see cref="ScoringRules.All"/> ("Overdue penalty repeats for (days)") needs about
+    /// 215px, and a NumberBox header neither wraps nor reports that it clipped — it just renders
+    /// a different, shorter setting name. Two columns plus the 12px gap therefore need ~440.</summary>
+    private const double TwoColumnMinWidth = 440;
+
+    private int _scoringColumns;
+
+    /// <summary>Reflows the scoring inputs between one and two columns for the width actually
+    /// available. Cheap and idempotent — it returns immediately unless the column count itself
+    /// changes, which is also what stops the re-layout it triggers from calling it again.</summary>
+    private void LayoutScoringGrid(double available)
+    {
+        var columns = available >= TwoColumnMinWidth ? 2 : 1;
+        if (columns == _scoringColumns) return;
+        _scoringColumns = columns;
+
+        ScoringGrid.ColumnDefinitions.Clear();
+        ScoringGrid.RowDefinitions.Clear();
+        for (var c = 0; c < columns; c++)
+            ScoringGrid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(1, GridUnitType.Star),
+                // Capped for the same reason as the hand-written grids in XAML: on a wide window
+                // an uncapped star column gives a two-digit number a 400px-wide box.
+                MaxWidth = 300,
+            });
+        for (var r = 0; r < (ScoringRules.All.Count + columns - 1) / columns; r++)
+            ScoringGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        for (var i = 0; i < ScoringRules.All.Count; i++)
+        {
+            var box = _scoringBoxes[ScoringRules.All[i].Key];
+            Grid.SetColumn(box, i % columns);
+            Grid.SetRow(box, i / columns);
+        }
+    }
+
+    private void ScoringGrid_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        LayoutScoringGrid(e.NewSize.Width);
 
     // ── rules & timing (writes the shared config.json) ───────────────────
 

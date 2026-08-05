@@ -4,50 +4,84 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-        Collapsible sections rather than a left-hand menu (2026-08-04 request, which asked for
-        one or the other). Reasons, in order of weight:
-          * Everything here saves as ONE group — SaveRules writes working_hours, reminders,
-            retention, activity_rules, idle_activity_rules and scoring in a single Mutate. A menu
-            would scatter those across destinations while the save still wrote all of them, so a
-            field you never navigated to would still be persisted. Expanders keep one page, one
-            save, one mental model.
-          * Seven groups is below the size where a navigation level earns a permanent slot. A menu
-            also shows exactly one group at a time, so finding a setting means already knowing
-            which category holds it; with expanders every heading stays on screen and scannable.
-          * It's the platform's own answer — WinUI's guidance names Expander for settings groups,
-            with manual visibility toggling as the anti-pattern.
-        Each header carries a live summary of that section's current values, so the collapsed page
-        reads as an at-a-glance settings overview rather than a list of labels you must open one by
-        one. Summaries are refreshed by RefreshSummaries() after every save.
+        A section list on the RIGHT, one section shown at a time, in a content pane whose
+        rectangle never changes (2026-08-04, replacing the collapsible Expanders shipped earlier
+        the same day at the user's direction: "put an additional sub-menu on the right side, the
+        settings pages should be of the same size with no bouncing").
 
-        HorizontalContentAlignment="Stretch" is load-bearing on every Expander below, not styling:
-        without it the content is arranged at its minimum width, which would collapse the
-        three-column keyword grids and re-create the silent clipping this page has already been
-        bitten by (2026-07-21, 2026-07-28).
+        The no-bouncing property is structural, not cosmetic — three things create it, and all
+        three are load-bearing:
+          * The outer Grid fills the frame: row 1 takes ALL remaining height (`*`), so the
+            content rectangle is a function of the window, never of which section is selected.
+            Sections taller than it scroll inside it; shorter ones leave whitespace below.
+          * Every section panel lives in the SAME Grid cell with exactly one Visible. Collapsed
+            siblings are not measured, so a tall section can't pad a short one — and, more to the
+            point, no section can push the status line or the menu around.
+          * The status strip is a fixed-height row. Left to size itself it would grow by a line
+            the moment a save message appeared and shrink again when it cleared, which is the
+            bounce this layout exists to remove.
+
+        Why a menu is safe here even though everything on this page saves as one group: every
+        section's controls are loaded and stay loaded whether or not they're on screen, and
+        SaveRules writes all of them in one Mutate regardless of what's selected. Hiding a
+        section hides the controls, not their values.
+
+        The right side rather than the left is deliberate: the app's own NavigationView pane is
+        already on the left, and a second left-hand menu immediately beside it reads as one
+        two-level tree, where clicking "Reports" and clicking "Scoring" look like the same kind of
+        move. Facing it across the content pane keeps the page-level and within-page navigation
+        visibly different things.
+
+        Each menu entry carries a live summary of that section's current values, so the menu
+        doubles as an at-a-glance settings overview instead of being seven labels — the property
+        the Expander headers had, kept. Summaries are refreshed by RefreshSummaries().
+
+        Widths are set for the app's MINIMUM window (900dip: 248 nav pane + 40 padding + 200 menu
+        + 16 gap leaves ~388 for content), not for the comfortable case. Everything below fits in
+        388 or reflows to fit it — the scoring grid drops to one column, see LayoutScoringGrid.
+        This page has twice shipped controls that were silently clipped at real window sizes
+        (2026-07-21, 2026-07-28); narrow is the case worth designing against.
     -->
-    <ScrollViewer Padding="28,8,28,28">
-        <StackPanel MaxWidth="720" HorizontalAlignment="Center" Spacing="8">
-            <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" Margin="0,8,0,0"/>
+    <Grid Padding="20,8,20,12" ColumnSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="200"/>
+        </Grid.ColumnDefinitions>
 
-            <!-- Deliberately outside every expander: this is live status, not a setting, and
-                 hiding it behind a disclosure would mean "is it actually tracking?" costs a
-                 click. -->
-            <TextBlock x:Name="TrackerInfo" TextWrapping="Wrap" Margin="0,0,0,8"
+        <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Spacing="4" Margin="0,4,0,12">
+            <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+            <!-- Above the menu, not inside a section: this is live status, not a setting, and
+                 putting it behind a menu entry would mean "is it actually tracking?" costs a
+                 click and a guess about which entry holds it. -->
+            <TextBlock x:Name="TrackerInfo" TextWrapping="Wrap"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
 
-            <Expander x:Name="GeneralSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="General" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumGeneral" Grid.Column="1" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="16" Margin="0,4,0,4">
+        <!-- ══ content pane ══════════════════════════════════════════════════════════════ -->
+        <ScrollViewer x:Name="SectionScroll" Grid.Row="1" Grid.Column="0"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled"
+                      Padding="0,0,4,0">
+            <!-- The cap lives on a COLUMN, not on the Grid: `MaxWidth` plus
+                 `HorizontalAlignment="Left"` would make this Grid size to its content instead of
+                 to the space it's given, and every star column inside the sections would then
+                 collapse to the width of its own text — the same silent under-sizing the
+                 Expanders needed `HorizontalContentAlignment="Stretch"` to avoid. A capped star
+                 column stretches up to the cap and stops, which is what's wanted: on a wide
+                 window the explanatory paragraphs would otherwise run to ~110 characters a line
+                 and the controls stretch with them (a 284px box holding "08:00"). Below the cap
+                 everything still shrinks to fit, which is what keeps the narrow case working. -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="820"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel x:Name="GeneralPanel" Spacing="16" VerticalAlignment="Top">
+                    <TextBlock Text="General" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <!-- Previously set once at first run (NameSetupDialog) with no way to see or
                          change it afterward short of opening config.json directly
                          (2026-07-18 audit finding R10-13). -->
@@ -65,142 +99,103 @@
                     <ToggleSwitch x:Name="StartupToggle" Header="Start with Windows (minimized to the tray)"
                                   Toggled="Startup_Toggled"/>
                 </StackPanel>
-            </Expander>
 
-            <Expander x:Name="HoursSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
+                <StackPanel x:Name="HoursPanel" Spacing="16" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Hours &amp; reminders" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <!-- Star columns rather than a horizontal StackPanel, here and in the two
+                         rows below: a StackPanel hands each child its desired width and lets the
+                         overflow fall off the right edge with no error, which is exactly how
+                         RetentionDays and LateDayReminderHours came to render as slivers in
+                         2026-07-21. Star columns shrink instead, and MinWidth stops the shrink
+                         before a NumberBox header (which does not wrap) starts clipping. -->
+                    <Grid ColumnSpacing="12">
+                        <!-- Capped on the COLUMN rather than the control: a MaxWidth on the TextBox
+                             centres it in whatever the column turns out to be, so the left edges of
+                             consecutive rows stop lining up. Capping the column packs them left. -->
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*" MaxWidth="150"/><ColumnDefinition Width="*" MaxWidth="150"/><ColumnDefinition Width="*" MaxWidth="150"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Hours &amp; reminders" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumHours" Grid.Column="1" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                        <TextBox x:Name="WorkStart" Grid.Column="0" Header="Work start" MinWidth="100" PlaceholderText="08:00" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="WorkEnd" Grid.Column="1" Header="Work end" MinWidth="100" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="EodTimeBox" Grid.Column="2" Header="Day review at" MinWidth="100" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
                     </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="16" Margin="0,4,0,4">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <TextBox x:Name="WorkStart" Header="Work start" MinWidth="110" PlaceholderText="08:00" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="WorkEnd" Header="Work end" MinWidth="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="EodTimeBox" Header="Day review at" MinWidth="110" PlaceholderText="20:00" LostFocus="Rules_Changed"/>
-                    </StackPanel>
                     <!-- No separate diary-window pair here on purpose (2026-08-04): the diary logs
                          exactly the working hours above. Two pairs of hours was one pair too many. -->
                     <TextBlock Text="Your activity is recorded only between these hours. Outside them nothing is tracked, and time away isn't counted against you."
                                TextWrapping="Wrap" FontSize="12" Margin="2,-8,0,0"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <NumberBox x:Name="GraceMin" Header="Grace before alert (min)" MinWidth="170" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                        <NumberBox x:Name="RepeatMin" Header="Repeat every (min)" MinWidth="150" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                        <NumberBox x:Name="IdleMin" Header="Idle after (min)" MinWidth="130" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                    </StackPanel>
-                    <!-- Split onto its own row (2026-07-21 fix): together with the row above, these
-                         5 boxes needed ~918px, well past this page's 720px MaxWidth content column —
-                         a horizontal StackPanel doesn't wrap, so RetentionDays/LateDayReminderHours
-                         were silently clipped at the right edge. Reported as "there's no setting for
-                         the reminder" even though the control was there, just rendering a sliver wide
-                         with its header text truncated to "Warn / (hrs)". -->
-                    <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Grid ColumnSpacing="12" RowSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="240"/><ColumnDefinition Width="*" MaxWidth="240"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <NumberBox x:Name="GraceMin" Grid.Row="0" Grid.Column="0" Header="Grace before alert (min)" MinWidth="170" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                        <NumberBox x:Name="RepeatMin" Grid.Row="0" Grid.Column="1" Header="Repeat every (min)" MinWidth="150" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                        <NumberBox x:Name="IdleMin" Grid.Row="1" Grid.Column="0" Header="Idle after (min)" MinWidth="130" Minimum="1" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
                         <!-- Maximum added (2026-07-18 audit finding R11-10): unbounded, this could
                              silently defeat the app's own documented "kept for a configurable
                              number of days, 90 by default" retention promise. -->
-                        <NumberBox x:Name="RetentionDays" Header="Keep detailed diary (days)" MinWidth="190" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                        <NumberBox x:Name="LateDayReminderHours" Header="Warn if tasks open, before day ends (hrs)" MinWidth="260" Minimum="0.25" Maximum="12" SmallChange="0.25" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
-                    </StackPanel>
-                </StackPanel>
-            </Expander>
-
-            <Expander x:Name="ScoringSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Scoring" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumScoring" Grid.Column="1" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                        <NumberBox x:Name="RetentionDays" Grid.Row="1" Grid.Column="1" Header="Keep detailed diary (days)" MinWidth="170" Minimum="1" Maximum="3650" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
+                        <!-- Header shortened from "Warn if tasks open, before day ends (hrs)"
+                             (2026-08-04): at this column width the old one clipped, and a clipped
+                             NumberBox header is silent — it just reads as a different setting. -->
+                        <NumberBox x:Name="LateDayReminderHours" Grid.Row="2" Grid.Column="0" Header="Warn before day ends (hrs)" MinWidth="170" Minimum="0.25" Maximum="12" SmallChange="0.25" SpinButtonPlacementMode="Compact" ValueChanged="Rules_ValueChanged"/>
                     </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="12" Margin="0,4,0,4">
+                    <TextBlock Text="The warning fires that many hours before your day review, if tasks are still open."
+                               TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+
+                <StackPanel x:Name="ScoringPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Scoring" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <!-- Populated in code from ScoringRules.All rather than hand-listed here: the table
                          already holds every key, default and range, and a second hand-typed copy in XAML
-                         is precisely the drift this project keeps getting bitten by. Two columns, not
-                         three — a NumberBox header doesn't wrap and silently clips, and these labels are
-                         long (2026-07-21's clipped RetentionDays/LateDayReminderHours row, above). -->
-                    <Grid x:Name="ScoringGrid" ColumnSpacing="12" RowSpacing="10"/>
+                         is precisely the drift this project keeps getting bitten by. Column count is
+                         chosen from the measured width (LayoutScoringGrid) because these labels are the
+                         longest on the page and a NumberBox header neither wraps nor complains. -->
+                    <Grid x:Name="ScoringGrid" ColumnSpacing="12" RowSpacing="12" SizeChanged="ScoringGrid_SizeChanged"/>
                     <TextBlock Text="Changing these affects days scored from now on. Days already closed keep the score they were credited with — they're only recalculated if you edit that day's diary."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
-            </Expander>
 
-            <Expander x:Name="KeywordsSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Activity keywords" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumKeywords" Grid.Column="1" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="12" Margin="0,4,0,4">
-                    <TextBlock Text="One per line, matched inside window titles."
+                <StackPanel x:Name="KeywordsPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Activity keywords" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="One per line, matched inside window titles. A window whose title contains one of these words is counted as that kind of time."
+                               TextWrapping="Wrap"
                                FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="RulesOn" Grid.Column="0" Header="On-plan" AcceptsReturn="True" Height="160" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="RulesOff" Grid.Column="1" Header="Off-plan" AcceptsReturn="True" Height="160" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="RulesNeutral" Grid.Column="2" Header="Neutral" AcceptsReturn="True" Height="160" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="RulesOn" Grid.Column="0" Header="On-plan" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="RulesOff" Grid.Column="1" Header="Off-plan" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="RulesNeutral" Grid.Column="2" Header="Neutral" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
                     </Grid>
                 </StackPanel>
-            </Expander>
 
-            <Expander x:Name="IdleSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Idle-answer library" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumIdle" Grid.Column="1" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="12" Margin="0,4,0,4">
-                    <TextBlock Text="Classifies what you type after being away."
+                <StackPanel x:Name="IdlePanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Idle-answer library" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="When you come back from being away and say what you were doing, these words decide how that time is counted. One per line."
+                               TextWrapping="Wrap"
                                FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="IdleOn" Grid.Column="0" Header="Counts as on-plan" AcceptsReturn="True" Height="120" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="IdleOff" Grid.Column="1" Header="Counts as off-plan" AcceptsReturn="True" Height="120" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="IdleNeutral" Grid.Column="2" Header="Counts as neutral" AcceptsReturn="True" Height="120" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
+                        <!-- Headers shortened from "Counts as on-plan" etc (2026-08-04): three of
+                             those don't fit three columns at this page's minimum width, and the
+                             sentence above already says what the columns mean. -->
+                        <TextBox x:Name="IdleOn" Grid.Column="0" Header="On-plan" AcceptsReturn="True" Height="200" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="IdleOff" Grid.Column="1" Header="Off-plan" AcceptsReturn="True" Height="200" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
+                        <TextBox x:Name="IdleNeutral" Grid.Column="2" Header="Neutral" AcceptsReturn="True" Height="200" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
                     </Grid>
                 </StackPanel>
-            </Expander>
 
-            <Expander x:Name="TickTickSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="TickTick" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SumTickTick" Grid.Column="1" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="12" Margin="0,4,0,4">
+                <StackPanel x:Name="TickTickPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="TickTick" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock x:Name="TickTickStatus" TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -211,43 +206,130 @@
                                 Visibility="Collapsed"/>
                     </StackPanel>
                 </StackPanel>
-            </Expander>
 
-            <Expander x:Name="DataSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <Grid ColumnSpacing="12" Padding="0,6,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Data" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="Export or clear what the app has stored"
-                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                    </Grid>
-                </Expander.Header>
-                <StackPanel Spacing="12" Margin="0,4,0,4">
+                <StackPanel x:Name="DataPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Data" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock x:Name="DataInfo" TextWrapping="Wrap" IsTextSelectionEnabled="True"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button x:Name="ExportAllBtn" Content="Export all my data…" Click="ExportAll_Click"/>
-                        <Button x:Name="ClearHistoryBtn" Content="Clear activity history…" Click="ClearHistory_Click"
+                    <!-- Two by two rather than one row of four (2026-08-04): four buttons side by
+                         side needed ~690px, which no longer exists once the menu takes its column.
+                         A horizontal StackPanel would have dropped "Clear all my data" off the
+                         edge in silence — the same failure this page shipped in 2026-07-21. -->
+                    <Grid ColumnSpacing="10" RowSpacing="10" HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="230"/><ColumnDefinition Width="*" MaxWidth="230"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Button x:Name="ExportAllBtn" Grid.Row="0" Grid.Column="0" Content="Export all my data…"
+                                HorizontalAlignment="Stretch" Click="ExportAll_Click"/>
+                        <Button x:Name="ClearHistoryBtn" Grid.Row="0" Grid.Column="1" Content="Clear activity history…"
+                                HorizontalAlignment="Stretch" Click="ClearHistory_Click"
                                 Style="{StaticResource DangerButtonStyle}"/>
-                        <Button x:Name="ClearReflectionsBtn" Content="Clear my reflections…" Click="ClearReflections_Click"
+                        <Button x:Name="ClearReflectionsBtn" Grid.Row="1" Grid.Column="0" Content="Clear my reflections…"
+                                HorizontalAlignment="Stretch" Click="ClearReflections_Click"
                                 Style="{StaticResource DangerButtonStyle}"/>
-                        <Button x:Name="ClearAllDataBtn" Content="Clear all my data…" Click="ClearAllData_Click"
+                        <Button x:Name="ClearAllDataBtn" Grid.Row="1" Grid.Column="1" Content="Clear all my data…"
+                                HorizontalAlignment="Stretch" Click="ClearAllData_Click"
                                 Style="{StaticResource DangerButtonStyle}"/>
-                    </StackPanel>
+                    </Grid>
                     <TextBlock Text="Export writes every stored row (tasks, notes, score history, activity diary, evening reflections) to one JSON file. Clearing activity history removes the tracked window-activity diary only; clearing reflections removes your evening-review answers only. &quot;Clear all my data&quot; removes everything at once — task completions, reschedules/day-offs, notes, score history, reflections, TickTick sync links, the activity diary, and the debug log — but never your plan definitions themselves (archive or delete those from the Plans page). Your plans, task completions, and score are always untouched by the two narrower buttons above."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                 </StackPanel>
-            </Expander>
+            </Grid>
+        </ScrollViewer>
 
-            <!-- Outside the expanders on purpose: a save is triggered from three different
-                 sections, and the confirmation (or the validation error that blocked it) must be
-                 visible whichever one you were editing — including after you collapse it. -->
-            <TextBlock x:Name="SaveStatus" Margin="2,8,0,0" TextWrapping="Wrap"
+        <!-- ══ section menu ══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" CornerRadius="8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                VerticalAlignment="Top" Padding="4">
+            <!-- ListView, not a stack of RadioButtons or hand-toggled Buttons: selection state,
+                 arrow-key navigation and the screen-reader "N of 7" announcement all come for
+                 free, and the selected-item indicator is the platform's own rather than a colour
+                 this page invented.
+
+                 AutomationProperties.Name on every item is not optional: a ListViewItem whose
+                 content is a panel rather than a string derives NO accessible name from its
+                 children, so a screen reader announced all seven as blank. Caught by reading the
+                 UIA tree back (2026-08-04) — nothing about it is visible on screen, which is
+                 exactly why it has to be asserted rather than looked at. The name is the
+                 destination only; the summary underneath is read as the item's content. -->
+            <ListView x:Name="SectionList" SelectionMode="Single" SelectionChanged="Section_Changed">
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="General">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="General" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumGeneral" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Hours and reminders">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Hours &amp; reminders" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumHours" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Scoring">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Scoring" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumScoring" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Activity keywords">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Activity keywords" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumKeywords" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Idle-answer library">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Idle-answer library" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumIdle" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="TickTick">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="TickTick" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumTickTick" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Data">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Data" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="Export or clear what's stored" FontSize="11"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+            </ListView>
+        </Border>
+
+        <!-- ══ status strip ══════════════════════════════════════════════════════════════ -->
+        <!-- Fixed height, always present, outside every section: a save is triggered from three
+             different sections and its confirmation (or the validation error that blocked it)
+             must be visible whichever one you're on. Height is fixed at two lines rather than
+             left to the text, so a message appearing or clearing can't resize the content pane
+             above it. Longer messages (an export path, say) trim; a tooltip carries the whole
+             string, kept in step by the property-changed callback in the constructor, and the
+             text stays selectable so a trimmed path can still be copied. -->
+        <Border Grid.Row="2" Grid.Column="0" Height="40" Margin="0,8,0,0">
+            <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" MaxLines="2" FontSize="12"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                       IsTextSelectionEnabled="True"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-        </StackPanel>
-    </ScrollViewer>
+        </Border>
+    </Grid>
 </Page>

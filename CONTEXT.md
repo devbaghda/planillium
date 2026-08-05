@@ -316,15 +316,39 @@ late" beside them; the Year score card's minutes (56h10m / 21h40m) **match the s
 Total row exactly**, two independently computed paths agreeing; Settings inputs fill their rows
 (3 keyword boxes at 221px, 12 scoring boxes in two 337px columns), nothing clipped; all four diary
 date controls step correctly and a past day stays pinned across page switches.
+**2026-08-05** (same session, fourth round). The Expander Settings shipped the day before was
+**rejected on sight** — "put an additional sub-menu on the right side, the settings pages should be
+of the same size with no bouncing" — and replaced by a right-hand `ListView` of the seven sections
+with one panel visible at a time. The no-bouncing property is structural: row 1 of the page grid is
+`*` so the content rectangle is a function of the window and never of the selection; all seven
+panels share one grid cell (collapsed siblings aren't measured); the status strip is a fixed-height
+row, since left to size itself it grows a line whenever a save message appears. The one-group-save
+objection that had argued for Expanders turns out not to apply — every panel stays loaded, so
+`SaveRules` writes the same values whatever is on screen. Header summaries moved onto the menu
+entries, so the overview property survived the change. Sized for the **minimum** window (900dip
+leaves ~388 for content): the hours rows became star-column grids, the Data buttons went 2×2, three
+NumberBox/TextBox headers were shortened, and `LayoutScoringGrid` reflows the 12 scoring inputs
+between one and two columns off the measured width. Column-level `MaxWidth` (not control-level)
+caps them on wide windows — a `MaxWidth` on the control centres it in its column and the rows stop
+lining up. *Verified* live via UIA at both 900 and 1500dip: pane/menu/status rectangles **byte-
+identical across all seven sections** at each width, nothing overflowing, scoring at 1 column then
+2. Two defects the sweep caught that looking would not have: every menu item announced a **blank
+accessible name** (a `ListViewItem` whose content is a panel derives none — fixed with
+`AutomationProperties.Name`), and six scoring boxes reported `BoundingRectangle.Empty`, which is
+ambiguous between clipped and below-the-fold — resolved by `ScrollIntoView` on the last one, after
+which boxes 6–12 all measured 300px wide with the earlier ones going Empty in turn. 124/124 tests,
+clean build.
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight
     with the app sitting on Reports. If the diary still shows yesterday some morning, the
     assignment at the top of `BuildDiarySection` is the first place to look.
-  - **The 2026-08-04 scoring Settings section and the tracker split have not been exercised in
-    the live app** — clean build and 120/120 tests only. The split is behaviour-preserving by
-    construction (moved code verbatim, forwarders left behind) but it touches the poll loop, which
-    is this project's highest-risk file.
+  - **The tracker split has not been exercised in the live app** — clean build and 124/124 tests
+    only. It is behaviour-preserving by construction (moved code verbatim, forwarders left behind)
+    but it touches the poll loop, which is this project's highest-risk file. *(The scoring Settings
+    section was live-checked on 08-05: all 12 inputs present, correctly sized and reachable at both
+    window extremes. Their **values** were still not edited live — that writes `config.json` and
+    restarts the tracker, so it stays code-inspection-only.)*
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field specifically (not
     "App Service URL").

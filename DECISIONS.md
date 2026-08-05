@@ -174,6 +174,22 @@ compaction. General versions of several now also live in the global `windows-app
   collapses to the width of its text instead of filling the row — the same silent under-sizing
   class as the rounded-`Border` clip above, with the same absence of any error. Set it on every
   Expander, and verify with UIA rects rather than by eye (2026-08-04).
+- **`MaxWidth` on a control centres it inside its cell; `MaxWidth` on the `ColumnDefinition` packs
+  it left.** Capping the controls looks right in isolation and wrong in a form — consecutive rows
+  stop sharing a left edge, because each control is centred in whatever width its own column
+  happened to get. Cap the column. Related: `MaxWidth` + `HorizontalAlignment="Left"` on a *panel*
+  makes it size to its content rather than to its cell, which collapses every star column inside it
+  — the same trap as the `Expander` one above. A capped star column has neither problem (2026-08-05).
+- **A `ListViewItem` whose content is a panel rather than a string has no accessible name** — a
+  screen reader announces nothing at all for it. Set `AutomationProperties.Name` on every such
+  item. Invisible on screen and in code review; only reading the UIA tree back finds it
+  (2026-08-05, all seven Settings menu entries).
+- **`BoundingRectangle.Empty` inside a ScrollViewer usually means below the fold, not clipped** —
+  resolve the ambiguity rather than guessing, by calling `ScrollItemPattern.ScrollIntoView()` on
+  the furthest element and re-measuring: the far items acquire rects and the near ones go Empty in
+  turn. Note `ScrollPattern.SetScrollPercent` was a silent no-op on this app's ScrollViewer, so
+  don't read "nothing moved" as "nothing to scroll" — check `VerticallyScrollable`/`VerticalViewSize`
+  first (2026-08-05).
 - `CopyFromScreen`/GDI `BitBlt` doesn't capture WinUI3 Mica/DirectComposition content — use
   `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons, UIA
   `BoundingRectangle` beats pixel-diffing.

@@ -147,11 +147,13 @@ your most commonly used past descriptions as you type, so recurring ones don't n
 
 ## Settings and configuration
 
-Settings is organised as seven collapsible sections — General, Hours & reminders, Scoring,
-Activity keywords, Idle-answer library, TickTick, and Data. Each heading shows a summary of what
-that section currently holds, so you can read your whole configuration without opening anything,
-and only expand the part you actually want to change. Whether tracking is currently running, and
-the confirmation (or error) from your last change, stay visible outside the sections at all times.
+Settings is organised as seven sections — General, Hours & reminders, Scoring, Activity keywords,
+Idle-answer library, TickTick, and Data — chosen from the menu down the right-hand side. Each menu
+entry shows a summary of what that section currently holds, so you can read your whole
+configuration off the menu without opening anything, and go straight to the part you want to
+change. The page stays the same size and shape whichever section you're on, and it reopens on the
+one you used last. Whether tracking is currently running, and the confirmation (or error) from
+your last change, stay visible on every section.
 
 Everything saves as you go — there is no Save button.
 
