@@ -144,6 +144,62 @@ public sealed class ScoreServiceSchedulingTests
     }
 
     [Fact]
+    public void CompactFutureGaps_ClosesTwoAdjacentGapsLeftByPreFixReschedules()
+    {
+        // Backs the one-time real-data cleanup for the exact pattern the 2026-08-05 bug report
+        // exposed: two consecutive empty plan days (22, 23) left behind by individual
+        // RescheduleTask calls made before that fix shipped. Days 24+ should pull all the way
+        // back to close both, landing contiguously from today onward with nothing left empty.
+        var planId = "test-" + Guid.NewGuid();
+        // startDayOffset -20 makes today plan day 21, matching the real report (Day 21 = Today).
+        var plan = MakePlan(planId, startDayOffset: -20,
+            (21, "Day 21 task"), (24, "Day 24 task"), (25, "Day 25 task"), (26, "Day 26 task"));
+
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.CompactFutureGaps(plan);
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(21, tasks.Single(t => t.Task.Text == "Day 21 task").AssignedDay);
+        Assert.Equal(22, tasks.Single(t => t.Task.Text == "Day 24 task").AssignedDay);
+        Assert.Equal(23, tasks.Single(t => t.Task.Text == "Day 25 task").AssignedDay);
+        Assert.Equal(24, tasks.Single(t => t.Task.Text == "Day 26 task").AssignedDay);
+    }
+
+    [Fact]
+    public void CompactFutureGaps_SkipsOverDaysMarkedOffAndNeverTouchesThePast()
+    {
+        // Marked-off days must stay empty on purpose, not get treated as gaps to close, and a
+        // completed task's own day must still count as occupied — not moved itself (it's in the
+        // past/today, done), but also not mistaken for a hole just because it's excluded from
+        // the set of tasks eligible to shift.
+        var planId = "test-" + Guid.NewGuid();
+        var plan = MakePlan(planId, startDayOffset: 0,
+            (1, "Today task"), (2, "Weekend"), (5, "Later task"));
+
+        using var db = new Database();
+        db.SaveCompletion(planId, 1, "Today task", true);
+
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 2);
+        // MarkDayOff already pushed Weekend to day 3 (the next working day). Today's task
+        // (completed) correctly anchors day 1; day 2 is off on purpose. Days 4 is the one real,
+        // task-free gap — Later should compact back into it, and nothing else should move.
+        score.CompactFutureGaps(plan);
+
+        var completions = db.LoadCompletions();
+        var tasks = PlanStore.TasksFor(plan, db, completions);
+
+        Assert.Equal(1, tasks.Single(t => t.Task.Text == "Today task").AssignedDay);
+        Assert.Contains(2, score.DaysOff(planId));
+        Assert.DoesNotContain(2, tasks.Select(t => t.AssignedDay));
+        Assert.Equal(3, tasks.Single(t => t.Task.Text == "Weekend").AssignedDay);
+        Assert.Equal(4, tasks.Single(t => t.Task.Text == "Later task").AssignedDay);
+    }
+
+    [Fact]
     public void ReplanOverdueTo_CascadesShiftsWhenTwoTasksTargetTheSameDay()
     {
         // Backs Dialogs/ReplanOverdueDialog (added 2026-07-14, replacing the

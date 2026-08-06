@@ -661,6 +661,56 @@ public sealed class ScoreService : IDisposable
         });
     }
 
+    /// <summary>
+    /// One-time cleanup for gaps that predate 2026-08-05's gap-closing fix — every path that
+    /// can create a hole in the *future* schedule (RescheduleTask, MoveTaskToToday, MarkDayOff/
+    /// UnmarkDayOff) now closes it itself as it happens, so this exists purely to retroactively
+    /// fix up holes that were left behind by RescheduleTask calls made before that fix shipped
+    /// (the "two working days with no tasks" bug report). Not wired to any UI — every
+    /// gap-creating action is now self-healing going forward, so this should only ever need to
+    /// run once per plan, by hand, against real data the user has explicitly confirmed.
+    ///
+    /// Repeatedly finds the earliest empty, not-marked-off day at or after today that has any
+    /// occupied day later than it, and pulls everything after that hole back by one to close it
+    /// — same PrevWorkingDay hop-over-days-off logic as every other compaction in this class —
+    /// until no such hole remains. A loop rather than one pass because closing one hole can only
+    /// ever reveal at most the *next* hole (each pass fully closes the earliest one), not create
+    /// a new one, so this always terminates within (number of remaining holes) passes.
+    /// </summary>
+    public void CompactFutureGaps(Plan plan)
+    {
+        _db.RunInTransaction(() =>
+        {
+            var daysOff = DaysOff(plan.Id);
+            var planDay = plan.PlanDay;
+            while (true)
+            {
+                var tasks = PlanStore.TasksFor(plan, _db, _completions);
+                var movable = tasks.Where(t => !t.Completed && t.AssignedDay >= planDay).ToList();
+                if (movable.Count == 0) break;
+
+                // A completed task still anchors its day — it just never moves. Deriving
+                // "occupied" from movable alone would treat a completed task's own day as an
+                // empty hole to close, which it isn't.
+                var occupied = new HashSet<int>(tasks.Select(t => t.AssignedDay));
+                var lastDay = movable.Max(t => t.AssignedDay);
+
+                var hole = -1;
+                for (var day = planDay; day < lastDay; day++)
+                {
+                    if (daysOff.Contains(day) || occupied.Contains(day)) continue;
+                    hole = day;
+                    break;
+                }
+                if (hole < 0) break;  // no gap left before the last occupied day — done
+
+                foreach (var t in movable)
+                    if (t.AssignedDay > hole)
+                        SaveOverride(plan.Id, t.Task.Text, t.OriginalDay, PrevWorkingDay(t.AssignedDay - 1, daysOff));
+            }
+        });
+    }
+
     // Memoized per plan for this ScoreService instance's lifetime — AllPlansScoringExempt
     // (2026-07-17) can now call this hundreds of times in one Reports render (once per
     // date in a year range), and every instance of this class is short-lived and
