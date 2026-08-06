@@ -39,6 +39,9 @@ public sealed partial class ReportsPage
     private static string? _diaryCategoryFilter;
     private static string? _diaryAppFilter;
     private static string? _diaryPageFilter;
+    // The DiaryTag axis (2026-08-06) — same null-means-no-filter, survives-navigation
+    // treatment as the three filters above.
+    private static string? _diaryTagFilter;
 
     // 2026-07-23 request: filters/search normally scope to whichever single day the date
     // nav/picker is showing; this widens that scope to the full retention window (same range
@@ -64,6 +67,7 @@ public sealed partial class ReportsPage
     private const string AllCategories = "All categories";
     private const string AllApps = "All apps";
     private const string AllPages = "All pages";
+    private const string AllTags = "All tags";
 
     // The debounce timer itself is created once and reused across renders
     // (NavigationCacheMode="Enabled" reuses this page instance, and
@@ -138,7 +142,7 @@ public sealed partial class ReportsPage
             Body.Children.Add(ReflectionCallout(reflection));
 
         var searchBox = BuildDiarySearchBox();
-        var (categoryBox, appBox, pageBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
+        var (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
 
         // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
         // below, right along with the list itself.
@@ -227,14 +231,17 @@ public sealed partial class ReportsPage
             bool MatchesPage(ReportData.DiaryEntry e) =>
                 _diaryPageFilter is not { } page ||
                 string.Equals(AppNames.Sub(e.Window) ?? "", page, StringComparison.OrdinalIgnoreCase);
+            bool MatchesTag(ReportData.DiaryEntry e) =>
+                _diaryTagFilter is not { } tag || e.Tag == tag;
             bool MatchesSearch(ReportData.DiaryEntry e) =>
                 !searching ||
                 AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
-                e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase);
+                e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (DiaryTag.LabelOf(e.Tag) is { } tagLabel && tagLabel.Contains(q, StringComparison.OrdinalIgnoreCase));
 
             syncingFilters = true;
-            var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesSearch(e))
+            var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Group(e.Window))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
@@ -247,7 +254,7 @@ public sealed partial class ReportsPage
             appBox.SelectedItem = matchedApp ?? AllApps;
             _diaryAppFilter = matchedApp; // drops a filter whose app no longer appears in view
 
-            var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesSearch(e))
+            var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
                 .Where(p => p is { Length: > 0 })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -264,15 +271,20 @@ public sealed partial class ReportsPage
             categoryBox.SelectedItem = _diaryCategoryFilter is { } wantCat
                 ? DiaryCategory.EditableOptions.FirstOrDefault(o => o.Value == wantCat).Label ?? AllCategories
                 : AllCategories;
+            // Fixed option list, same as categoryBox — never rebuilt from what's in view.
+            tagBox.SelectedItem = _diaryTagFilter is { } wantTag
+                ? DiaryTag.LabelOf(wantTag) ?? AllTags
+                : AllTags;
             allTimeBox.IsChecked = _diaryAllTime;
             syncingFilters = false;
 
-            // Same four predicates decide what actually shows in the results list — the
+            // Same five predicates decide what actually shows in the results list — the
             // dropdown-option narrowing above and the results below can never disagree with
             // each other, since both read from the same single definition of each filter.
             var filteredList = rows.Where(e =>
-                MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesSearch(e)).ToList();
-            var filtersActive = _diaryCategoryFilter != null || _diaryAppFilter != null || _diaryPageFilter != null;
+                MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e)).ToList();
+            var filtersActive = _diaryCategoryFilter != null || _diaryAppFilter != null ||
+                _diaryPageFilter != null || _diaryTagFilter != null;
 
             var totalMin = filteredList.Sum(e => e.Dur);
             subtotalText.Text = filteredList.Count == 0
@@ -312,7 +324,7 @@ public sealed partial class ReportsPage
             // count fresh; the periodic live-refresh timer re-running this same method with an
             // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
             var scopeKey = string.Join('|', _diaryDate, q, _diaryCategoryFilter, _diaryAppFilter,
-                _diaryPageFilter, _diaryAllTime);
+                _diaryPageFilter, _diaryTagFilter, _diaryAllTime);
             if (scopeKey != _diaryRowsShownScopeKey)
             {
                 _diaryRowsShown = DefaultDiaryRowsShown;
@@ -357,6 +369,15 @@ public sealed partial class ReportsPage
             _diaryPageFilter = chosen is null or AllPages ? null : chosen;
             RenderDiaryResults();
         };
+        tagBox.SelectionChanged += (_, _) =>
+        {
+            if (syncingFilters) return;
+            var chosen = tagBox.SelectedItem as string;
+            _diaryTagFilter = chosen is null or AllTags
+                ? null
+                : DiaryTag.Options.FirstOrDefault(o => o.Label == chosen).Value;
+            RenderDiaryResults();
+        };
         // Unlike the category/app/page boxes, this needs a full Render() (not just
         // RenderDiaryResults()) — it changes wideMode, which DiaryHeader() also reads to decide
         // the "TIME DIARY · ALL TIME" caption and whether the date-nav arrows/picker are
@@ -368,6 +389,7 @@ public sealed partial class ReportsPage
             _diaryCategoryFilter = null;
             _diaryAppFilter = null;
             _diaryPageFilter = null;
+            _diaryTagFilter = null;
             _diaryAllTime = false;
             // The search box sits directly above this button and reads as part of the same
             // filter row — leaving it untouched made "Clear filters" look broken when a typed
@@ -460,15 +482,15 @@ public sealed partial class ReportsPage
         return searchBox;
     }
 
-    /// <summary>The category/app/page filter row plus "All time" checkbox and "Clear
+    /// <summary>The category/app/page/tag filter row plus "All time" checkbox and "Clear
     /// filters" button, in their own horizontally-scrollable row — split out of
     /// BuildDiarySection for the same reason as BuildDiarySearchBox above.
     /// RenderDiaryResults (which stays in BuildDiarySection, since it also touches
     /// diaryResults/subtotalText/lastRows) re-syncs these boxes' items/selection on every
     /// call; this method only constructs them, seeded with whatever filter state already
     /// persisted from before.</summary>
-    private (ComboBox CategoryBox, ComboBox AppBox, ComboBox PageBox, CheckBox AllTimeBox, Button ClearFiltersBtn)
-        BuildDiaryFilterRow()
+    private (ComboBox CategoryBox, ComboBox AppBox, ComboBox PageBox, ComboBox TagBox,
+        CheckBox AllTimeBox, Button ClearFiltersBtn) BuildDiaryFilterRow()
     {
         var categoryBox = new ComboBox { PlaceholderText = "Category", MinWidth = 140 };
         categoryBox.Items.Add(AllCategories);
@@ -480,6 +502,13 @@ public sealed partial class ReportsPage
 
         var pageBox = new ComboBox { PlaceholderText = "Page", MinWidth = 180 };
         AutomationProperties.SetName(pageBox, "Filter diary by page");
+
+        // The DiaryTag axis (2026-08-06) — fixed option list like Category (not rebuilt from
+        // what's in view like App/Page, which are open-ended value sets).
+        var tagBox = new ComboBox { PlaceholderText = "Tag", MinWidth = 140 };
+        tagBox.Items.Add(AllTags);
+        foreach (var (label, _) in DiaryTag.Options) tagBox.Items.Add(label);
+        AutomationProperties.SetName(tagBox, "Filter diary by tag");
 
         var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
         AutomationProperties.SetName(allTimeBox,
@@ -496,6 +525,7 @@ public sealed partial class ReportsPage
         filterRow.Children.Add(categoryBox);
         filterRow.Children.Add(appBox);
         filterRow.Children.Add(pageBox);
+        filterRow.Children.Add(tagBox);
         filterRow.Children.Add(allTimeBox);
         filterRow.Children.Add(clearFiltersBtn);
         // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
@@ -512,7 +542,7 @@ public sealed partial class ReportsPage
             Content = filterRow,
         });
 
-        return (categoryBox, appBox, pageBox, allTimeBox, clearFiltersBtn);
+        return (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn);
     }
 
     /// <summary>The "select all / mark on-plan / off-plan / neutral" bulk-action toolbar —
@@ -633,7 +663,9 @@ public sealed partial class ReportsPage
                 {
                     var row = lastRows.FirstOrDefault(e => e.Id == id);
                     if (row is null || row.Id != id) continue;
-                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc);
+                    // row.Tag passed through unchanged — this bulk action only ever
+                    // re-categorizes (on/off-plan/neutral), it was never meant to touch tags.
+                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc, row.Tag);
                     var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
                     if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
                     affectedDates.Add(row.Date);
@@ -805,7 +837,7 @@ public sealed partial class ReportsPage
 
         Grid BuildRow(ReportData.DiaryEntry entry)
         {
-            var (id, date, start, end, dur, cat, window, desc) = entry;
+            var (id, date, start, end, dur, cat, window, desc, tag) = entry;
             // Left, not the FrameworkElement default Stretch (2026-07-28 — the MinWidth
             // changes above turned out not to be enough on their own): a Stretch-aligned
             // Grid gets ARRANGED at whatever final size its ancestor chain hands it, and
@@ -893,8 +925,12 @@ public sealed partial class ReportsPage
             ToolTipService.SetToolTip(pageText, pageSub);
             // No parens around the duration (2026-07-29 report) — just "12m", or
             // "“desc” 12m" when there's a description that didn't already move to the Page
-            // column above.
-            var detailsText = !descInPage && desc is { Length: > 0 } ? $"“{desc}” {dur}m" : $"{dur}m";
+            // column above. The tag (2026-08-06), when set, appends as its own short suffix —
+            // this column already handles overflow via TextTrimming+tooltip below, so it's the
+            // lowest-risk place to surface a second, optional field without touching any of
+            // the row's fixed pixel column widths (see this row's own width comments above).
+            var detailsText = (!descInPage && desc is { Length: > 0 } ? $"“{desc}” {dur}m" : $"{dur}m") +
+                (DiaryTag.LabelOf(tag) is { } tagLabel ? $" · #{tagLabel}" : "");
             var details = new TextBlock
             {
                 Text = detailsText,
@@ -916,7 +952,7 @@ public sealed partial class ReportsPage
             AutomationProperties.SetName(edit, $"Edit entry: {windowLabel}, {start}–{end}");
             edit.Click += async (_, _) =>
             {
-                var ok = await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, desc);
+                var ok = await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, desc, tag);
                 if (ok == true) Render();
                 else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
             };
@@ -931,7 +967,7 @@ public sealed partial class ReportsPage
             AutomationProperties.SetName(split, $"Split into several activities: {windowLabel}, {start}–{end}");
             split.Click += async (_, _) =>
             {
-                var ok = await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc);
+                var ok = await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc, tag);
                 if (ok == true) Render();
                 else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
             };

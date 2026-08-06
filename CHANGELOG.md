@@ -6,6 +6,12 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **New**
+- Diary entries can now carry a second, optional tag — Routine, Documents, Studioshoo, Selfdev, or
+  Procrastination — alongside the existing on-plan/off-plan/neutral/paid/idle category. It has no
+  effect on score or streaks; it's purely a finer breakdown for your own reading, e.g. telling apart
+  *why* something was off-plan. Set it in Edit or Split (each split piece can carry its own), shows
+  as a small suffix on the row ("12m · #Procrastination"), and there's a new Tag filter alongside
+  Category/App/Page in the diary's filter row.
 - Your working hours are now also the diary's tracking window. Activity is recorded between
   "Work start" and "Work end" and nowhere else. Previously the diary ran on a fixed 06:00–20:00
   built into the app, unrelated to your working hours and impossible to change — so moving your

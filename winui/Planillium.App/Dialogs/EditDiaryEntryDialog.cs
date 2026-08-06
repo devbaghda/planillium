@@ -17,7 +17,7 @@ public static class EditDiaryEntryDialog
     /// round-6 audit finding #6: callers used to treat false the same as a
     /// cancel).</returns>
     public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
-        string start, string end, int durationMin, string category, string? description)
+        string start, string end, int durationMin, string category, string? description, string? tag)
     {
         var panel = new StackPanel { Spacing = 10, MinWidth = 320 };
 
@@ -42,6 +42,17 @@ public static class EditDiaryEntryDialog
             catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
         catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == category) is >= 0 and var i ? i : 0;
         panel.Children.Add(catBox);
+
+        // A second, independent axis (2026-08-06) — unlike Category, "(none)" is a real,
+        // common choice here (most entries have no tag), so it's first in the list rather
+        // than defaulted away like Category's mandatory five.
+        var tagBox = new ComboBox { Header = "Tag (optional)", HorizontalAlignment = HorizontalAlignment.Stretch };
+        tagBox.Items.Add(new ComboBoxItem { Content = "(none)", Tag = null });
+        foreach (var (label, value) in DiaryTag.Options)
+            tagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+        tagBox.SelectedIndex = tag is null ? 0
+            : Array.FindIndex(DiaryTag.Options, t => t.Value == tag) is >= 0 and var ti ? ti + 1 : 0;
+        panel.Children.Add(tagBox);
 
         // AutoSuggestBox, not a plain TextBox — surfaces your own most commonly-used
         // descriptions (across every category, not just idle-answer text) as soon as you
@@ -110,8 +121,9 @@ public static class EditDiaryEntryDialog
             if (result == ContentDialogResult.Primary)
             {
                 var cat = ((ComboBoxItem)catBox.SelectedItem).Tag as string ?? category;
+                var chosenTag = ((ComboBoxItem)tagBox.SelectedItem).Tag as string;
                 db.UpdateDiaryEntry(id, startBox.Text.Trim(), endBox.Text.Trim(),
-                    (int)durBox.Value, cat, descBox.Text.Trim() is { Length: > 0 } d ? d : null);
+                    (int)durBox.Value, cat, descBox.Text.Trim() is { Length: > 0 } d ? d : null, chosenTag);
                 ScoreService.TryRecalculateDayScores(db, [date], "EditDiaryEntryDialog.RecalculateScore");
                 return true;
             }

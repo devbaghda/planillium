@@ -370,7 +370,7 @@ public static class ReportData
     }
 
     public sealed record DiaryEntry(long Id, DateOnly Date, string Start, string End,
-        int Dur, string Cat, string Window, string? Desc);
+        int Dur, string Cat, string Window, string? Desc, string? Tag);
 
     /// <summary>
     /// Raw time_diary rows in a date range, newest first — backs the diary
@@ -389,7 +389,7 @@ public static class ReportData
         using var conn = AppPaths.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT id, date, start_time, end_time, duration_min, category, window, description " +
+            "SELECT id, date, start_time, end_time, duration_min, category, window, description, tag " +
             "FROM time_diary WHERE date BETWEEN $from AND $to ORDER BY date DESC, start_time DESC";
         cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
         cmd.Parameters.AddWithValue("$to", to.ToIsoDate());
@@ -399,7 +399,8 @@ public static class ReportData
         {
             if (!r.GetString(1).TryParseIsoDate(out var d)) continue;
             result.Add(new DiaryEntry(r.GetInt64(0), d, r.GetString(2), r.GetString(3), r.GetInt32(4),
-                r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7)));
+                r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7),
+                r.IsDBNull(8) ? null : r.GetString(8)));
         }
         return result;
     }

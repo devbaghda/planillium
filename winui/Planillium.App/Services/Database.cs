@@ -176,7 +176,14 @@ public sealed class Database : IDisposable
             "  duration_min INTEGER NOT NULL," +
             "  category     TEXT NOT NULL," +
             "  window       TEXT NOT NULL," +
-            "  description  TEXT" +
+            "  description  TEXT," +
+            // The DiaryTag axis (2026-08-06) — nullable, most rows have none. Added to the
+            // CREATE for a fresh install; ExistingTimeDiaryHasTagColumn/the ALTER below cover
+            // a pre-existing database that predates this column (this app's first-ever
+            // ADD COLUMN migration — SQLite has no "ADD COLUMN IF NOT EXISTS", so the
+            // existence check has to happen in code, same shape as the sl_reason_date index
+            // check just above).
+            "  tag          TEXT" +
             ");" +
             // activity_log (id, logged_at, window, class) used to be
             // created here too, but nothing in this codebase has ever
@@ -228,6 +235,27 @@ public sealed class Database : IDisposable
             "CREATE VIEW IF NOT EXISTS v_score_daily AS " +
             "  SELECT date, SUM(delta) AS score_delta FROM score_ledger GROUP BY date;";
         cmd.ExecuteNonQuery();
+
+        // A pre-existing database from before 2026-08-06 has time_diary without the tag
+        // column the CREATE above already covers for a fresh install — PRAGMA table_info is
+        // SQLite's own way to ask "does this column exist," there's no ADD COLUMN IF NOT
+        // EXISTS to lean on instead. This is the first schema migration this app has ever
+        // needed; the sl_reason_date index check above is the same shape of problem (detect,
+        // then fix up) for a different kind of schema drift.
+        using (var cols = CreateCommand())
+        {
+            cols.CommandText = "PRAGMA table_info(time_diary)";
+            using var r = cols.ExecuteReader();
+            var hasTag = false;
+            while (r.Read())
+                if (string.Equals(r.GetString(1), "tag", StringComparison.OrdinalIgnoreCase)) { hasTag = true; break; }
+            if (!hasTag)
+            {
+                using var alter = CreateCommand();
+                alter.CommandText = "ALTER TABLE time_diary ADD COLUMN tag TEXT";
+                alter.ExecuteNonQuery();
+            }
+        }
     }
 
     /// <summary>
@@ -347,14 +375,16 @@ public sealed class Database : IDisposable
 
     /// <summary>Inserts one time_diary row directly — used when splitting an existing
     /// entry into several (unlike ActivityTracker.LogIdleAnswer, this isn't idle-specific:
-    /// category is whatever the caller decides, not auto-classified from description text).</summary>
+    /// category is whatever the caller decides, not auto-classified from description text).
+    /// tag defaults to null (untagged) — ActivityTracker's own auto-written rows never pass
+    /// one; only SplitDiaryEntryDialog's per-row tag picker does.</summary>
     public void InsertDiaryEntry(string date, string startTime, string endTime, int durationMin,
-        string category, string window, string? description)
+        string category, string window, string? description, string? tag = null)
     {
         using var cmd = CreateCommand();
         cmd.CommandText =
-            "INSERT INTO time_diary (date, start_time, end_time, duration_min, category, window, description) " +
-            "VALUES ($d, $s, $e, $m, $c, $w, $x)";
+            "INSERT INTO time_diary (date, start_time, end_time, duration_min, category, window, description, tag) " +
+            "VALUES ($d, $s, $e, $m, $c, $w, $x, $t)";
         cmd.Parameters.AddWithValue("$d", date);
         cmd.Parameters.AddWithValue("$s", startTime);
         cmd.Parameters.AddWithValue("$e", endTime);
@@ -362,6 +392,7 @@ public sealed class Database : IDisposable
         cmd.Parameters.AddWithValue("$c", category);
         cmd.Parameters.AddWithValue("$w", window);
         cmd.Parameters.AddWithValue("$x", (object?)description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$t", (object?)tag ?? DBNull.Value);
         cmd.ExecuteNonQuery();
     }
 
@@ -530,19 +561,24 @@ public sealed class Database : IDisposable
         return result;
     }
 
-    /// <summary>Same UPDATE as main.py's _edit_diary_entry Save.</summary>
+    /// <summary>Same UPDATE as main.py's _edit_diary_entry Save, plus the tag column
+    /// (2026-08-06). tag has no default — deliberately forces every call site to be explicit
+    /// about what happens to it, rather than a default silently clearing an existing tag on
+    /// a caller that was only ever written with category in mind (e.g. a bulk re-category
+    /// must pass the row's own existing tag back through unchanged, not null it out).</summary>
     public void UpdateDiaryEntry(long id, string startTime, string endTime, int durationMin,
-        string category, string? description)
+        string category, string? description, string? tag)
     {
         using var cmd = CreateCommand();
         cmd.CommandText =
             "UPDATE time_diary SET start_time=$start, end_time=$end, duration_min=$dur, " +
-            "category=$cat, description=$desc WHERE id=$id";
+            "category=$cat, description=$desc, tag=$tag WHERE id=$id";
         cmd.Parameters.AddWithValue("$start", startTime);
         cmd.Parameters.AddWithValue("$end", endTime);
         cmd.Parameters.AddWithValue("$dur", durationMin);
         cmd.Parameters.AddWithValue("$cat", category);
         cmd.Parameters.AddWithValue("$desc", (object?)description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$tag", (object?)tag ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
     }

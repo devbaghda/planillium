@@ -21,7 +21,8 @@ public static class SplitDiaryEntryDialog
     /// still returning a plain bool, so a save failure was indistinguishable from
     /// Cancel and the caller could never show an error for it).</returns>
     public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, long id, DateOnly date,
-        string start, string end, int durationMin, string category, string window, string? description)
+        string start, string end, int durationMin, string category, string window, string? description,
+        string? tag)
     {
         if (!DateExtensions.TryParseTimeOfDay(start, out var startTime))
             return false;
@@ -33,8 +34,29 @@ public static class SplitDiaryEntryDialog
             TextWrapping = TextWrapping.Wrap,
         });
 
+        // Horizontally scrollable, not just widened (2026-08-06 follow-up to adding the Tag
+        // combo): ContentDialog's own template caps its width around the platform's
+        // ContentDialogMaxWidth theme resource regardless of this content's MinWidth — a row
+        // with duration+category+tag+description+remove genuinely doesn't fit inside that cap.
+        // Past it, a Stretch-arranged Grid zero-arranges its trailing Auto columns instead of
+        // visibly clipping (confirmed live: the Remove button's BoundingRectangle read Empty,
+        // same ambiguous-looking symptom this project already root-caused once for the diary
+        // row list — see ReportsPage.Diary.cs's DiaryList/BuildRow comments on HorizontalAlignment
+        // .Left + a MinWidth for the Star column, and its diaryScroller sibling for the
+        // horizontal-scroll half of that same fix). This is that fix applied here.
         var rowsPanel = new StackPanel { Spacing = 6 };
-        root.Children.Add(rowsPanel);
+        var rowsScroller = new ScrollViewer
+        {
+            // Visible, not Auto — this project already learned that lesson once
+            // (ReportsPage.Diary.cs's diaryScroller, 2026-07-28: "can't split the unaccounted
+            // time" — Auto's hover-only indicator went unnoticed and read as broken/missing
+            // content rather than scrollable). Applying it here before anyone has to hit the
+            // same thing a second time in a different dialog.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = rowsPanel,
+        };
+        root.Children.Add(rowsScroller);
 
         var addRowBtn = new Button { Content = "+ Add activity", Padding = new Thickness(0) };
         var remainingText = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
@@ -54,7 +76,7 @@ public static class SplitDiaryEntryDialog
         try { using var db = new Database(); frequent = db.MostFrequentDescriptions(); }
         catch (Exception ex) { Log.Error("SplitDiaryEntryDialog.MostFrequentDescriptions", ex); frequent = new(); }
 
-        var rows = new List<(NumberBox Dur, ComboBox Cat, AutoSuggestBox Desc, Button Remove)>();
+        var rows = new List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, AutoSuggestBox Desc, Button Remove)>();
 
         void UpdateState()
         {
@@ -70,7 +92,7 @@ public static class SplitDiaryEntryDialog
             dialog.IsPrimaryButtonEnabled = remaining == 0 && allDurOk && rows.Count > 1;
         }
 
-        void AddRow(int? prefillMin, string prefillCat, string? prefillDesc)
+        void AddRow(int? prefillMin, string prefillCat, string? prefillDesc, string? prefillTag)
         {
             var durBox = DialogControls.MinutesBox(prefillMin);
             var catBox = new ComboBox { Width = 110 };
@@ -78,31 +100,53 @@ public static class SplitDiaryEntryDialog
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
             catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
             AutomationProperties.SetName(catBox, "Category");
+            // Independent axis (2026-08-06) — inherits the original entry's tag on every new
+            // row by default, same as category does, since that's the least surprising
+            // starting point; each row can still change it.
+            var tagBox = new ComboBox { Width = 130 };
+            tagBox.Items.Add(new ComboBoxItem { Content = "(no tag)", Tag = null });
+            foreach (var (label, value) in DiaryTag.Options)
+                tagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+            tagBox.SelectedIndex = prefillTag is null ? 0
+                : Array.FindIndex(DiaryTag.Options, t => t.Value == prefillTag) is >= 0 and var ti ? ti + 1 : 0;
+            AutomationProperties.SetName(tagBox, "Tag (optional)");
+            // Fixed width, not Star (2026-08-06 follow-up) — inside rowsScroller's horizontal
+            // ScrollViewer this Grid is offered effectively unconstrained width, and a Star
+            // column has nothing finite to divide against there, so it measures to ~0 instead
+            // of the description actually being usable (same trap ReportsPage.Diary.cs's own
+            // row comments already documented: "a Grid measured with infinite width can
+            // collapse its Star column").
             var descBox = new AutoSuggestBox
             {
                 PlaceholderText = "description",
                 Text = prefillDesc ?? "",
-                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Width = 220,
             };
             DialogControls.WireFrequentSuggestions(descBox, frequent);
             AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
             AutomationProperties.SetName(removeBtn, "Remove this activity");
 
-            var row = new Grid { ColumnSpacing = 8 };
+            // Left, not the default Stretch — same reasoning as DiaryList/BuildRow's row Grid:
+            // sizes itself to its true natural (Measure-time) width and is never compressed by
+            // Arrange, which is what lets rowsScroller actually reach the Remove button instead
+            // of zero-arranging it away.
+            var row = new Grid { ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Left };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(durBox, 0); Grid.SetColumn(catBox, 1);
-            Grid.SetColumn(descBox, 2); Grid.SetColumn(removeBtn, 3);
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(durBox, 0); Grid.SetColumn(catBox, 1); Grid.SetColumn(tagBox, 2);
+            Grid.SetColumn(descBox, 3); Grid.SetColumn(removeBtn, 4);
             row.Children.Add(durBox);
             row.Children.Add(catBox);
+            row.Children.Add(tagBox);
             row.Children.Add(descBox);
             row.Children.Add(removeBtn);
             rowsPanel.Children.Add(row);
 
-            var entry = (durBox, catBox, descBox, removeBtn);
+            var entry = (durBox, catBox, tagBox, descBox, removeBtn);
             rows.Add(entry);
 
             durBox.ValueChanged += (_, _) => UpdateState();
@@ -121,15 +165,15 @@ public static class SplitDiaryEntryDialog
         // left for the user to fill in on the second (mirrors the idle
         // dialog's "first row = full total" convention, minus the case
         // where one row alone would be a no-op split).
-        AddRow(durationMin, category, description);
-        AddRow(null, category, null);
+        AddRow(durationMin, category, description, tag);
+        AddRow(null, category, null, tag);
 
         // Was never wired at all — the button existed and looked clickable, but had no
         // Click handler, so nothing happened no matter how many times it was pressed
         // (2026-07-29 user report: "not possible to add more than 2 lines"). Same
         // defaults as the second seed row above: empty duration for the user to fill in,
-        // the original entry's category, no prefilled description.
-        addRowBtn.Click += (_, _) => AddRow(null, category, null);
+        // the original entry's category/tag, no prefilled description.
+        addRowBtn.Click += (_, _) => AddRow(null, category, null, tag);
 
         var result = await DialogGate.ShowAsync(dialog);
         if (result != ContentDialogResult.Primary) return null;
@@ -146,14 +190,15 @@ public static class SplitDiaryEntryDialog
                 db.DeleteDiaryEntry(id);
                 var t = startTime;
                 var dateStr = date.ToIsoDate();
-                foreach (var (dur, cat, desc, _) in rows)
+                foreach (var (dur, cat, rowTag, desc, _) in rows)
                 {
                     var mins = (int)dur.Value;
                     var segEnd = t.AddMinutes(mins);
                     var catValue = ((ComboBoxItem)cat.SelectedItem).Tag as string ?? category;
+                    var tagValue = ((ComboBoxItem)rowTag.SelectedItem).Tag as string;
                     db.InsertDiaryEntry(dateStr, t.ToIsoTimeOfDay(),
                         segEnd.ToIsoTimeOfDay(), mins, catValue, window,
-                        desc.Text.Trim() is { Length: > 0 } d ? d : null);
+                        desc.Text.Trim() is { Length: > 0 } d ? d : null, tagValue);
                     t = segEnd;
                 }
             });
