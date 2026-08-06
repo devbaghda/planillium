@@ -371,10 +371,6 @@ Button removed right after. 139/139, Release rebuilt.
   - **New diary tag axis requested** (2026-08-06): home/staff, documents, studio shoot, self dev,
     procrastination — independent of on/off-plan scoring, shown alongside it not replacing it. Not
     yet designed or built.
-  - **Memory usage question raised** (2026-08-06): ~150-230MB depending on pages visited —
-    `NavigationCacheMode="Enabled"` (Today/Schedule/Reports/Plans) keeps every visited page's tree
-    resident for the session, likely the main lever, not a leak; WinUI3's own baseline is separately
-    real. Investigation started, no fix applied.
   - **The diary's midnight rollover has never been observed actually happening** — every other
     part of that fix was verified live, but the rollover itself needs the clock to cross midnight
     with the app sitting on Reports. If the diary still shows yesterday some morning, the
@@ -389,7 +385,11 @@ Button removed right after. 139/139, Release rebuilt.
     "App Service URL").
   - **Settled, not action items**: 42 overlapping `time_diary` pairs 06-29→07-16 (only 2 match
     `HandleActiveSession`; rest unconfirmed; user's call 2026-07-18 — leave untouched); `ActivateQueuedPlan`'s
-    non-atomic write-then-delete (2026-07-28).
+    non-atomic write-then-delete (2026-07-28); the ~150-230MB memory footprint (2026-08-06) — mostly
+    `NavigationCacheMode="Enabled"` keeping visited pages resident plus WinUI3's own interop/compositor
+    baseline (no leak found); WPF/Avalonia would be lighter but cost a multi-week UI rewrite for an
+    unsized win — **user's call: leave as-is**, no tradeoff analysis was on record for the original
+    WinUI3 choice either.
   - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium` rename
     2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit auto-publishing for
     `posting-plan` dropped 2026-07-22 (APIs gated/unsuitable; dormant Reddit OAuth2 tool at
