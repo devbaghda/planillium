@@ -160,11 +160,22 @@ public static class ReviewDialog
             $"{DateTime.Today.ToDisplayDateFull()} — day review", panel,
             primaryButtonText: $"Close the day · {(stats.FinalTotal >= 0 ? "+" : "")}{stats.FinalTotal} pts",
             closeButtonText: beforeEod ? "Close" : "Later",
-            defaultButton: ContentDialogButton.Primary,
+            // Close, not Primary, while the primary button is disabled (beforeEod) — WinUI's
+            // DefaultButton can still fire on Enter even when the button it names is disabled,
+            // a real, documented WinUI gotcha independent of what actually caused the
+            // 2026-08-07 incident below (ruled out here by state.json's own last_review still
+            // reading the day before — this dialog was never confirmed that day at all).
+            // Hardened anyway: Enter should dismiss a preview, not silently act as the
+            // disabled button beside it.
+            defaultButton: beforeEod ? ContentDialogButton.Close : ContentDialogButton.Primary,
             isPrimaryButtonEnabled: !beforeEod);
 
         var result = await DialogGate.ShowAsync(dialog);
-        if (result == ContentDialogResult.Primary && !PersistReview(db, score, stats.Today, reflection, window))
+        // Second, independent gate on top of the disabled button above — never trust a
+        // UI-disabled state alone for a write this consequential. Whatever let Primary fire
+        // before EodTime, this refuses to persist it.
+        if (result == ContentDialogResult.Primary && !beforeEod &&
+            !PersistReview(db, score, stats.Today, reflection, window))
             // The dialog itself is already gone by this point (ShowAsync just
             // returned), so a page-level error bar isn't reachable from here —
             // toast is the same fallback the timed prompts already use for
@@ -363,7 +374,20 @@ public static class ReviewDialog
         {
             db.RunInTransaction(() =>
             {
-                score.CreditDayScoreIfMissing(today);
+                // RecalculateDayScore (overwrite), not CreditDayScoreIfMissing (skip-if-
+                // present) — real 2026-08-07 incident: editing a diary entry's category for
+                // today (an ordinary Reports/Diary action, unrelated to this dialog) already
+                // calls RecalculateDayScore(today) as a side effect of that edit, the same as
+                // it would for any past day. That earlier, incidental recompute — a snapshot
+                // from whenever the edit happened, not the finished day — left a real
+                // daily_score row sitting for today, so CreditDayScoreIfMissing here saw the
+                // date as already handled and silently skipped it, permanently freezing the
+                // day at that stale, partial figure with nothing left to ever correct it. This
+                // is the ONE place in the app meant to give a day its final, authoritative
+                // score — by the time this runs, beforeEod (checked by ShowCore's caller) is
+                // already false, so it's always correct to overwrite whatever a diary edit
+                // left behind with the real, complete end-of-day total.
+                score.RecalculateDayScore(today);
                 score.CreditOverdueAccrualIfMissing(today);
                 score.CreditWeeklyComebackIfMissing(today);
                 if (reflection.Text.Trim() is { Length: > 0 } text)

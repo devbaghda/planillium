@@ -14,6 +14,15 @@ namespace Planillium.App.Dialogs;
 /// Python dialog's multi-row editor, minus the modal blocking. Logs through
 /// ActivityTracker.LogIdleAnswer (once per segment when split), so the
 /// idle-answer library still reclassifies matched text per segment.
+///
+/// Category and Tag are explicit fields (2026-08-07 request: "it is not giving me the field
+/// to fill in also the category and the tag"), in both single mode and each split row —
+/// previously Category was silently inferred from the typed text with no way to see or
+/// override the guess, and Tag didn't exist here at all. A chip click now fills the
+/// description box and re-runs the same guess instead of instant-submitting (it used to close
+/// the dialog on the spot, which left no room to look at or change the fields this added) —
+/// one extra tap for the common case, but the only way the new fields mean anything on the
+/// chip path too, not just the typed-text one.
 /// </summary>
 public static class IdleReturnDialog
 {
@@ -92,7 +101,7 @@ public static class IdleReturnDialog
             TextWrapping = TextWrapping.Wrap,
         });
 
-        // ── single-answer mode (default): chips + free text ──────────────
+        // ── single-answer mode (default): chips + free text + category/tag ─
         var singleRoot = new StackPanel { Spacing = 12 };
         var input = new TextBox
         {
@@ -100,7 +109,6 @@ public static class IdleReturnDialog
         };
         AutomationProperties.SetName(input, "What you were doing");
 
-        string? chosen = null;
         ContentDialog dialog = null!;
 
         var chipRows = new StackPanel { Spacing = 6 };
@@ -110,13 +118,56 @@ public static class IdleReturnDialog
             foreach (var chip in chips.Skip(i).Take(ChipsPerRow))
             {
                 var b = new Button { Content = chip };
-                b.Click += (_, _) => { chosen = chip; dialog.Hide(); };
+                // Fills the field rather than submitting on the spot (was an instant
+                // dialog.Hide() before 2026-08-07) — a one-tap submit left no chance to look
+                // at or adjust the Category/Tag fields below, which would make them dead
+                // weight on the chip path. Setting Text here re-runs the same classifier
+                // guess via input.TextChanged below, same as typing it by hand.
+                b.Click += (_, _) => input.Text = chip;
                 row.Children.Add(b);
             }
             chipRows.Children.Add(row);
         }
         singleRoot.Children.Add(chipRows);
         singleRoot.Children.Add(input);
+
+        var catBox = new ComboBox { Header = "Category", HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var (label, value) in DiaryCategory.EditableOptions)
+            catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+        catBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == DiaryCategory.Idle);
+
+        // A second, independent axis (2026-08-06 elsewhere in this app) — "(none)" first
+        // since most idle answers won't carry one, same convention EditDiaryEntryDialog uses.
+        var tagBox = new ComboBox { Header = "Tag (optional)", HorizontalAlignment = HorizontalAlignment.Stretch };
+        tagBox.Items.Add(new ComboBoxItem { Content = "(none)", Tag = null });
+        foreach (var (label, value) in DiaryTag.Options)
+            tagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+        tagBox.SelectedIndex = 0;
+
+        var catTagRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        catTagRow.Children.Add(catBox);
+        catTagRow.Children.Add(tagBox);
+        singleRoot.Children.Add(catTagRow);
+
+        // Category starts as ClassifyIdleText's guess and keeps re-guessing as the text
+        // changes — until the user picks something themselves, at which point it stops
+        // overriding their choice. programmaticCatChange distinguishes "we just set this from
+        // the guess" from "the user just picked something" so the first doesn't get mistaken
+        // for the second and immediately disable the guessing it was performing.
+        var catTouched = false;
+        var programmaticCatChange = false;
+        void AutoClassifyCat(string text)
+        {
+            if (catTouched) return;
+            var guess = tracker.ClassifyIdleText(text);
+            var idx = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == guess);
+            if (idx < 0) return;
+            programmaticCatChange = true;
+            catBox.SelectedIndex = idx;
+            programmaticCatChange = false;
+        }
+        catBox.SelectionChanged += (_, _) => { if (!programmaticCatChange) catTouched = true; };
+        input.TextChanged += (_, _) => AutoClassifyCat(input.Text);
 
         var splitLink = new HyperlinkButton
         {
@@ -130,8 +181,23 @@ public static class IdleReturnDialog
         var splitRoot = new StackPanel { Spacing = 10, Visibility = Visibility.Collapsed };
         root.Children.Add(splitRoot);
 
+        // Horizontally scrollable, not just a plain panel — adding Category+Tag columns
+        // (2026-08-07) means a row with duration+category+tag+description+remove can exceed
+        // ContentDialog's own width cap, which zero-arranges trailing Auto columns instead of
+        // visibly clipping (the exact bug already root-caused for ReportsPage.Diary.cs's row
+        // list and SplitDiaryEntryDialog's own rows — see either's comments for the full
+        // story). Applying that same proven fix here pre-emptively.
         var rowsPanel = new StackPanel { Spacing = 6 };
-        splitRoot.Children.Add(rowsPanel);
+        var rowsScroller = new ScrollViewer
+        {
+            // Visible, not Auto — this project already learned that lesson once
+            // (ReportsPage.Diary.cs's diaryScroller, 2026-07-28: an Auto scrollbar's
+            // hover-only indicator went unnoticed and read as broken/missing content).
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = rowsPanel,
+        };
+        splitRoot.Children.Add(rowsScroller);
 
         var addRowBtn = new Button { Content = "+ Add activity", Padding = new Thickness(0) };
         var remainingText = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
@@ -143,7 +209,7 @@ public static class IdleReturnDialog
         dialog = DialogControls.Build(window.Content.XamlRoot, "Welcome back", root,
             primaryButtonText: "Log it", closeButtonText: "Skip", defaultButton: ContentDialogButton.Primary);
 
-        var rows = new List<(NumberBox Dur, TextBox Desc, Button Remove)>();
+        var rows = new List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, TextBox Desc, Button Remove)>();
 
         void UpdateSplitState()
         {
@@ -160,32 +226,69 @@ public static class IdleReturnDialog
 
             foreach (var r in rows) r.Remove.IsEnabled = rows.Count > 1;
 
-            dialog.IsPrimaryButtonEnabled = remaining >= 0 && allDurOk && allDescOk;
+            var canSubmit = remaining >= 0 && allDurOk && allDescOk;
+            dialog.IsPrimaryButtonEnabled = canSubmit;
+            // DefaultButton follows the enabled state once split rows exist, not fixed at
+            // Primary — WinUI's DefaultButton can still fire on Enter even while the button it
+            // names is disabled (confirmed live 2026-08-07, same trap in ReviewDialog: an
+            // Enter press froze a day's score through a disabled "Close the day" button). Here
+            // that would mean pressing Enter mid-split, with an over-budget or blank-description
+            // row, could still commit an invalid split.
+            dialog.DefaultButton = canSubmit ? ContentDialogButton.Primary : ContentDialogButton.Close;
         }
 
-        void AddRow(int? prefillMin)
+        // Each row picks its own category/tag rather than re-guessing per keystroke — same
+        // choice SplitDiaryEntryDialog already made for its own rows ("a recorded block isn't
+        // auto-classified from text"); once split, a row is its own activity, not a live guess.
+        // prefillCat/prefillTag seed a new row from whatever the single-mode fields currently
+        // hold, so switching to split mode after already narrowing those down doesn't discard it.
+        void AddRow(int? prefillMin, string prefillCat, string? prefillTag)
         {
             var durBox = DialogControls.MinutesBox(prefillMin);
+
+            var rowCatBox = new ComboBox { Width = 110 };
+            foreach (var (label, value) in DiaryCategory.EditableOptions)
+                rowCatBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+            rowCatBox.SelectedIndex = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == prefillCat) is >= 0 and var ci ? ci : 0;
+            AutomationProperties.SetName(rowCatBox, "Category");
+
+            var rowTagBox = new ComboBox { Width = 130 };
+            rowTagBox.Items.Add(new ComboBoxItem { Content = "(none)", Tag = null });
+            foreach (var (label, value) in DiaryTag.Options)
+                rowTagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+            rowTagBox.SelectedIndex = prefillTag is null ? 0
+                : Array.FindIndex(DiaryTag.Options, t => t.Value == prefillTag) is >= 0 and var ti ? ti + 1 : 0;
+            AutomationProperties.SetName(rowTagBox, "Tag (optional)");
+
+            // Fixed width, not Stretch — inside rowsScroller's horizontal ScrollViewer this
+            // Grid is offered effectively unconstrained width, and a Star/Stretch column has
+            // nothing finite to size against there, collapsing toward zero instead of staying
+            // usable (same trap documented on SplitDiaryEntryDialog's own descBox).
             var descBox = new TextBox
             {
                 PlaceholderText = "e.g. lunch, walked the dog…",
-                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Width = 220,
             };
             AutomationProperties.SetName(descBox, "Activity description");
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
             AutomationProperties.SetName(removeBtn, "Remove this activity");
 
-            var row = new Grid { ColumnSpacing = 8 };
+            var row = new Grid { ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Left };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(durBox, 0); Grid.SetColumn(descBox, 1); Grid.SetColumn(removeBtn, 2);
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(durBox, 0); Grid.SetColumn(rowCatBox, 1); Grid.SetColumn(rowTagBox, 2);
+            Grid.SetColumn(descBox, 3); Grid.SetColumn(removeBtn, 4);
             row.Children.Add(durBox);
+            row.Children.Add(rowCatBox);
+            row.Children.Add(rowTagBox);
             row.Children.Add(descBox);
             row.Children.Add(removeBtn);
             rowsPanel.Children.Add(row);
 
-            var entry = (durBox, descBox, removeBtn);
+            var entry = (durBox, rowCatBox, rowTagBox, descBox, removeBtn);
             rows.Add(entry);
 
             durBox.ValueChanged += (_, _) => UpdateSplitState();
@@ -199,35 +302,53 @@ public static class IdleReturnDialog
             UpdateSplitState();
         }
 
+        string CurrentCategory() => ((ComboBoxItem)catBox.SelectedItem).Tag as string ?? DiaryCategory.Idle;
+        string? CurrentTag() => ((ComboBoxItem)tagBox.SelectedItem).Tag as string;
+
         var splitMode = false;
         splitLink.Click += (_, _) =>
         {
             splitMode = true;
             singleRoot.Visibility = Visibility.Collapsed;
             splitRoot.Visibility = Visibility.Visible;
-            if (rows.Count == 0) AddRow(idleMinutes);
+            if (rows.Count == 0) AddRow(idleMinutes, CurrentCategory(), CurrentTag());
             UpdateSplitState();
         };
-        addRowBtn.Click += (_, _) => AddRow(null);
+        addRowBtn.Click += (_, _) => AddRow(null, CurrentCategory(), CurrentTag());
 
         var result = await DialogGate.ShowAsync(dialog);
 
         try
         {
-            if (chosen is null && result != ContentDialogResult.Primary)
+            if (result != ContentDialogResult.Primary)
             {
-                tracker.LogIdleAnswer(idleStart, idleMinutes, DiaryCategory.IdlePlaceholder);
+                tracker.LogIdleAnswer(idleStart, idleMinutes, DiaryCategory.IdlePlaceholder, DiaryCategory.Idle);
                 return;
             }
 
-            if (splitMode && chosen is null)
+            if (splitMode)
             {
+                // Re-validate before writing, independent of the dialog's last-known enabled
+                // state — never trust IsPrimaryButtonEnabled alone for a write this
+                // consequential (same reasoning as ReviewDialog's/SpendDialog's/
+                // SplitDiaryEntryDialog's own post-await re-checks). An over-budget or
+                // blank-description split falls back to the same placeholder path as Skip,
+                // rather than silently committing incomplete rows.
+                var used = rows.Sum(r => double.IsNaN(r.Dur.Value) ? 0 : (int)r.Dur.Value);
+                var valid = used <= idleMinutes && rows.All(r => !double.IsNaN(r.Dur.Value) && r.Dur.Value > 0 &&
+                    r.Desc.Text.Trim().Length > 0);
+                if (!valid)
+                {
+                    tracker.LogIdleAnswer(idleStart, idleMinutes, DiaryCategory.IdlePlaceholder, DiaryCategory.Idle);
+                    return;
+                }
                 tracker.LogIdleAnswers(BuildSegments(idleStart, rows));
                 return;
             }
 
-            var text = chosen ?? input.Text.Trim();
-            tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : DiaryCategory.IdlePlaceholder);
+            var text = input.Text.Trim();
+            tracker.LogIdleAnswer(idleStart, idleMinutes, text.Length > 0 ? text : DiaryCategory.IdlePlaceholder,
+                CurrentCategory(), CurrentTag());
         }
         catch (Exception ex)
         {
@@ -246,19 +367,21 @@ public static class IdleReturnDialog
     /// than UI wiring or closure-shared dialog state, pulled out on its own so it can be
     /// read (and eventually tested) independently of the dialog around it (audit finding
     /// #5). The rest of ShowAsync stays one method deliberately — its closures (rows,
-    /// dialog, chosen, splitMode) share too much mutable state specific to this one
-    /// widget's two UI modes to split further without adding more complexity than it
-    /// removes, the same reasoning ReportsPage.Diary.BuildDiarySection's own doc comment
-    /// already gives for staying unsplit.</summary>
-    private static List<(DateTime Start, int Minutes, string Description)> BuildSegments(
-        DateTime idleStart, List<(NumberBox Dur, TextBox Desc, Button Remove)> rows)
+    /// dialog, splitMode) share too much mutable state specific to this one widget's two UI
+    /// modes to split further without adding more complexity than it removes, the same
+    /// reasoning ReportsPage.Diary.BuildDiarySection's own doc comment already gives for
+    /// staying unsplit.</summary>
+    private static List<(DateTime Start, int Minutes, string Description, string Category, string? Tag)> BuildSegments(
+        DateTime idleStart, List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, TextBox Desc, Button Remove)> rows)
     {
         var t = idleStart;
-        var segments = new List<(DateTime, int, string)>();
-        foreach (var (dur, desc, _) in rows)
+        var segments = new List<(DateTime, int, string, string, string?)>();
+        foreach (var (dur, cat, tag, desc, _) in rows)
         {
             var mins = (int)dur.Value;
-            segments.Add((t, mins, desc.Text.Trim()));
+            var catValue = ((ComboBoxItem)cat.SelectedItem).Tag as string ?? DiaryCategory.Idle;
+            var tagValue = ((ComboBoxItem)tag.SelectedItem).Tag as string;
+            segments.Add((t, mins, desc.Text.Trim(), catValue, tagValue));
             t = t.AddMinutes(mins);
         }
         return segments;

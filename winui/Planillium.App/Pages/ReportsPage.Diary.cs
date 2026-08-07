@@ -155,7 +155,7 @@ public sealed partial class ReportsPage
         // just flips enabled/label state as the selection changes.
         var selectedIds = new HashSet<long>();
         var lastRows = new List<ReportData.DiaryEntry>();
-        var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn) = BuildDiaryMarkToolbar();
+        var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons) = BuildDiaryMarkToolbar();
 
         var diaryResults = BuildDiaryResultsArea();
 
@@ -177,6 +177,7 @@ public sealed partial class ReportsPage
             _diarySelectedCount = n;
             selectedLabel.Text = n > 0 ? $"{n} selected" : "";
             markOnBtn.IsEnabled = markOffBtn.IsEnabled = markNeutralBtn.IsEnabled = n > 0;
+            foreach (var (_, btn) in tagMarkButtons) btn.IsEnabled = n > 0;
 
             syncingSelectAll = true;
             selectAllBox.IsEnabled = lastRows.Count > 0;
@@ -406,6 +407,8 @@ public sealed partial class ReportsPage
         markOnBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OnPlan, selectedIds, lastRows, RenderDiaryResults);
         markOffBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OffPlan, selectedIds, lastRows, RenderDiaryResults);
         markNeutralBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.Neutral, selectedIds, lastRows, RenderDiaryResults);
+        foreach (var (tagValue, btn) in tagMarkButtons)
+            btn.Click += (_, _) => MarkSelectedDiaryRowsTag(tagValue, selectedIds, lastRows, RenderDiaryResults);
 
         selectAllBox.Checked += (_, _) =>
         {
@@ -550,7 +553,8 @@ public sealed partial class ReportsPage
     /// UpdateMarkToolbar (which stays in BuildDiarySection, since it also touches
     /// selectedIds/lastRows) flips these controls' enabled/label state as the selection
     /// changes; this method only constructs them, starting disabled/empty.</summary>
-    private (CheckBox SelectAllBox, TextBlock SelectedLabel, Button MarkOnBtn, Button MarkOffBtn, Button MarkNeutralBtn)
+    private (CheckBox SelectAllBox, TextBlock SelectedLabel, Button MarkOnBtn, Button MarkOffBtn,
+        Button MarkNeutralBtn, List<(string? Tag, Button Btn)> TagMarkButtons)
         BuildDiaryMarkToolbar()
     {
         var markToolbar = new StackPanel
@@ -576,7 +580,41 @@ public sealed partial class ReportsPage
         markToolbar.Children.Add(markNeutralBtn);
         Body.Children.Add(markToolbar);
 
-        return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn);
+        // Second row, its own independent axis (2026-08-07 request) — kept off the row
+        // above rather than appended to it: on-plan/off-plan/neutral plus five tags plus
+        // "Clear tag" would be eight buttons wide, well past what a plain horizontal
+        // StackPanel (no wrapping in this app's toolkit) can show without running off the
+        // page. A leading "Tag:" label reads it as the same kind of row as the category
+        // one above, not an unrelated second toolbar.
+        var tagToolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8),
+        };
+        tagToolbar.Children.Add(new TextBlock
+        {
+            Text = "Tag:",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+        var tagMarkButtons = new List<(string? Tag, Button Btn)>();
+        foreach (var (label, value) in DiaryTag.Options)
+        {
+            var btn = new Button { Content = $"Mark {label}", IsEnabled = false };
+            tagToolbar.Children.Add(btn);
+            tagMarkButtons.Add((value, btn));
+        }
+        // (none) last, not first — the five real tags are the common case and read left to
+        // right in the same order as every other tag picker in this app; clearing is the
+        // exception, same reasoning EditDiaryEntryDialog's combo puts "(none)" first in a
+        // dropdown (scanned top-down) but this button belongs at the end of a row (scanned
+        // left-right, common actions first).
+        var clearTagBtn = new Button { Content = "Clear tag", IsEnabled = false };
+        tagToolbar.Children.Add(clearTagBtn);
+        tagMarkButtons.Add((null, clearTagBtn));
+        Body.Children.Add(tagToolbar);
+
+        return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons);
     }
 
     /// <summary>The diary list's own scrollable area — split out of BuildDiarySection for
@@ -684,6 +722,45 @@ public sealed partial class ReportsPage
         catch (Exception ex)
         {
             Log.Error("ReportsPage.MarkSelected", ex);
+            SaveErrorBar.IsOpen = true;
+        }
+        selectedIds.Clear();
+        renderDiaryResults();
+    }
+
+    /// <summary>The bulk "mark selected rows with a tag" action (2026-08-07 request) — same
+    /// shape as <see cref="MarkSelectedDiaryRows"/> one level down the axis: that one
+    /// re-categorizes and passes tag through unchanged, this one re-tags and passes category
+    /// through unchanged. <paramref name="tag"/> is null for "Clear tag." Deliberately doesn't
+    /// share a helper with MarkSelectedDiaryRows despite the near-identical loop — category
+    /// changes also touch the idle-answer/activity-rule learning and trigger a score
+    /// recalculation, neither of which applies to a tag (DiaryTag.cs: "Never read by
+    /// ScoreService, purely descriptive"), so folding them into one parameterized method would
+    /// mean either axis carrying dead branches for the other's concerns.</summary>
+    private void MarkSelectedDiaryRowsTag(string? tag, HashSet<long> selectedIds,
+        List<ReportData.DiaryEntry> lastRows, Action renderDiaryResults)
+    {
+        if (selectedIds.Count == 0) return;
+        try
+        {
+            using var db = new Database();
+            // Same all-or-nothing reasoning as MarkSelectedDiaryRows — a multi-row bulk write
+            // failing partway through must not leave some rows re-tagged and others not.
+            db.RunInTransaction(() =>
+            {
+                foreach (var id in selectedIds)
+                {
+                    var row = lastRows.FirstOrDefault(e => e.Id == id);
+                    if (row is null || row.Id != id) continue;
+                    // row.Cat passed through unchanged — this bulk action only ever touches
+                    // the tag axis, it was never meant to re-categorize.
+                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, row.Cat, row.Desc, tag);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReportsPage.MarkSelectedTag", ex);
             SaveErrorBar.IsOpen = true;
         }
         selectedIds.Clear();
@@ -852,6 +929,12 @@ public sealed partial class ReportsPage
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            // Its own column (2026-08-07 report: was riding along inside the Details column as
+            // a " · #Label" suffix, easy to miss next to the duration and liable to get
+            // ellipsis-trimmed off first). Narrower than Category — tag labels are short and
+            // most rows have none at all, so "—" is the common case here, same convention the
+            // Page column already uses for "nothing to show."
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
             // Fixed pixel widths, not Auto/Star — the page body is a
             // MaxWidth+Center StackPanel (ReportsPage.xaml), which sizes
             // itself to its widest child's natural content width rather
@@ -893,6 +976,16 @@ public sealed partial class ReportsPage
                 Foreground = (Brush)Application.Current.Resources[CategoryBrushKey(cat)],
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            var tagLabelText = DiaryTag.LabelOf(tag) ?? "—";
+            var tagText = new TextBlock
+            {
+                Text = tagLabelText,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            if (DiaryTag.LabelOf(tag) is { } realTagLabel) ToolTipService.SetToolTip(tagText, realTagLabel);
             // Split app/page, same grouping AppNames already does for the combined label
             // (kept below for accessible names/tooltips) and for the app/page filters.
             var windowLabel = AppNames.Label(window);
@@ -925,12 +1018,10 @@ public sealed partial class ReportsPage
             ToolTipService.SetToolTip(pageText, pageSub);
             // No parens around the duration (2026-07-29 report) — just "12m", or
             // "“desc” 12m" when there's a description that didn't already move to the Page
-            // column above. The tag (2026-08-06), when set, appends as its own short suffix —
-            // this column already handles overflow via TextTrimming+tooltip below, so it's the
-            // lowest-risk place to surface a second, optional field without touching any of
-            // the row's fixed pixel column widths (see this row's own width comments above).
-            var detailsText = (!descInPage && desc is { Length: > 0 } ? $"“{desc}” {dur}m" : $"{dur}m") +
-                (DiaryTag.LabelOf(tag) is { } tagLabel ? $" · #{tagLabel}" : "");
+            // column above. The tag used to append here as a " · #Label" suffix (2026-08-06)
+            // but moved to its own column (2026-08-07 report) — easy to miss buried next to
+            // the duration, and the first thing ellipsis-trimming would cut off.
+            var detailsText = !descInPage && desc is { Length: > 0 } ? $"“{desc}” {dur}m" : $"{dur}m";
             var details = new TextBlock
             {
                 Text = detailsText,
@@ -973,13 +1064,15 @@ public sealed partial class ReportsPage
             };
             Grid.SetColumn(time, 1);
             Grid.SetColumn(catText, 2);
-            Grid.SetColumn(appText, 3);
-            Grid.SetColumn(pageText, 4);
-            Grid.SetColumn(details, 5);
-            Grid.SetColumn(edit, 6);
-            Grid.SetColumn(split, 7);
+            Grid.SetColumn(tagText, 3);
+            Grid.SetColumn(appText, 4);
+            Grid.SetColumn(pageText, 5);
+            Grid.SetColumn(details, 6);
+            Grid.SetColumn(edit, 7);
+            Grid.SetColumn(split, 8);
             row.Children.Add(time);
             row.Children.Add(catText);
+            row.Children.Add(tagText);
             row.Children.Add(appText);
             row.Children.Add(pageText);
             row.Children.Add(details);

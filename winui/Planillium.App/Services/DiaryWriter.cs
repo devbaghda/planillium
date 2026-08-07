@@ -22,15 +22,16 @@ internal static class DiaryWriter
     /// <summary>Appends one diary row. Duration is floored at 1 minute — a sub-minute session
     /// still happened, and a 0 would make it invisible in every total.</summary>
     internal static void LogSession(SqliteConnection conn, DateTime start, DateTime end,
-        string category, string window, string? description = null, SqliteTransaction? tx = null)
+        string category, string window, string? description = null, string? tag = null,
+        SqliteTransaction? tx = null)
     {
         var duration = Math.Max(1, (int)(end - start).TotalMinutes);
         using var cmd = conn.CreateCommand();
         if (tx is not null) cmd.Transaction = tx;
         cmd.CommandText =
             "INSERT INTO time_diary " +
-            "(date, start_time, end_time, duration_min, category, window, description) " +
-            "VALUES ($d, $s, $e, $m, $c, $w, $x)";
+            "(date, start_time, end_time, duration_min, category, window, description, tag) " +
+            "VALUES ($d, $s, $e, $m, $c, $w, $x, $t)";
         cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
         cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
         cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
@@ -38,6 +39,7 @@ internal static class DiaryWriter
         cmd.Parameters.AddWithValue("$c", category);
         cmd.Parameters.AddWithValue("$w", window.Length > 240 ? window[..240] : window);
         cmd.Parameters.AddWithValue("$x", (object?)description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$t", (object?)tag ?? DBNull.Value);
         cmd.ExecuteNonQuery();
     }
 

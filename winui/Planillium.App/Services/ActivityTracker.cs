@@ -204,17 +204,21 @@ public sealed class ActivityTracker : IDisposable
 
     private static double IdleSeconds() => NativeInput.IdleSeconds();
     // -- database (delegated to DiaryWriter) -----------------------------
-    /// <summary>Port of log_idle_answer — called by the idle-return dialog.</summary>
-    public void LogIdleAnswer(DateTime idleStart, int idleMinutes, string description)
+    /// <summary>Port of log_idle_answer — called by the idle-return dialog. Category and tag
+    /// are now explicit, chosen by the user in IdleReturnDialog (2026-08-07 request: the dialog
+    /// gave no field for either), not silently re-derived from the text here — the dialog still
+    /// offers ClassifyIdleText's guess as the field's starting value, but this method just
+    /// writes whatever was actually selected.</summary>
+    public void LogIdleAnswer(DateTime idleStart, int idleMinutes, string description, string category,
+        string? tag = null)
     {
         var end = idleStart.AddMinutes(idleMinutes);
-        var category = ClassifyIdleText(description);
         using var conn = AppPaths.OpenConnection();
         DiaryWriter.ClearIdlePlaceholder(conn, idleStart, end);
         // DiaryCategory.Idle doubles as the "window" placeholder here — no real app was
         // in the foreground, so the diary row's window field is the same sentinel value
         // ReportData.cs checks for when deciding whether to show the description instead.
-        DiaryWriter.LogSession(conn, idleStart, end, category, DiaryCategory.Idle, description);
+        DiaryWriter.LogSession(conn, idleStart, end, category, DiaryCategory.Idle, description, tag);
     }
 
     /// <summary>
@@ -224,23 +228,24 @@ public sealed class ActivityTracker : IDisposable
     /// so a failure partway through a multi-segment split could leave some
     /// segments logged and the rest silently missing with no error shown
     /// (2026-07-14 round-6 audit finding #5). One connection, one
-    /// all-or-nothing transaction for the whole split.
+    /// all-or-nothing transaction for the whole split. Category and tag are now per-segment
+    /// (2026-08-07) — each split row picks its own, same reasoning as LogIdleAnswer above.
     /// </summary>
-    public void LogIdleAnswers(IEnumerable<(DateTime Start, int Minutes, string Description)> segments)
+    public void LogIdleAnswers(
+        IEnumerable<(DateTime Start, int Minutes, string Description, string Category, string? Tag)> segments)
     {
         using var conn = AppPaths.OpenConnection();
         using var tx = conn.BeginTransaction();
         try
         {
-            foreach (var (start, minutes, description) in segments)
+            foreach (var (start, minutes, description, category, tag) in segments)
             {
                 var end = start.AddMinutes(minutes);
-                var category = ClassifyIdleText(description);
                 // Same placeholder-replacement reasoning as LogIdleAnswer above — the split
                 // dialog's segments collectively cover the same original placeholder range,
                 // so this clears whatever's left of it as each segment is written.
                 DiaryWriter.ClearIdlePlaceholder(conn, start, end, tx);
-                DiaryWriter.LogSession(conn, start, end, category, DiaryCategory.Idle, description, tx);
+                DiaryWriter.LogSession(conn, start, end, category, DiaryCategory.Idle, description, tag, tx);
             }
             tx.Commit();
         }

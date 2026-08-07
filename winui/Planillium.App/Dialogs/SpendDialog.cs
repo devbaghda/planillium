@@ -95,6 +95,13 @@ public static class SpendDialog
             {
                 costText.Text = "Cost: —";
                 dialog.IsPrimaryButtonEnabled = false;
+                // DefaultButton follows the enabled state, not fixed at Primary — WinUI's
+                // DefaultButton can still fire on Enter even while the button it names is
+                // disabled (confirmed live 2026-08-07, same trap in ReviewDialog: an Enter
+                // press froze a day's score through a disabled "Close the day" button). Here
+                // that would mean pressing Enter with an empty/invalid amount could still
+                // attempt a purchase.
+                dialog.DefaultButton = ContentDialogButton.Close;
                 return;
             }
             var c = cost(amount);
@@ -104,7 +111,9 @@ public static class SpendDialog
                 : $"Cost: {c} pts — over your {balance} pts balance";
             costText.Foreground = (Brush)Application.Current.Resources[
                 affordable ? "TextFillColorSecondaryBrush" : "SystemFillColorCriticalBrush"];
-            dialog.IsPrimaryButtonEnabled = affordable && c > 0;
+            var canConfirm = affordable && c > 0;
+            dialog.IsPrimaryButtonEnabled = canConfirm;
+            dialog.DefaultButton = canConfirm ? ContentDialogButton.Primary : ContentDialogButton.Close;
         }
         input.ValueChanged += (_, _) => Update();
         Update();
@@ -115,7 +124,18 @@ public static class SpendDialog
         {
             using var db = new Database();
             using var score = new ScoreService(new List<Models.Plan>(), db);
-            onConfirm(score, input.Value, cost(input.Value));
+            // Re-validate against a freshly-read balance right before spending — never trust
+            // the dialog's last-known enabled state alone for a write this consequential
+            // (same reasoning as ReviewDialog's post-await re-check). Also closes a real, if
+            // narrow, race: `balance` above was read once when the dialog opened, so another
+            // spend (a second SpendDialog) or a score credit landing while this one sat open
+            // could make it stale by the time this fires.
+            var freshBalance = db.ScoreBalance();
+            var finalAmount = input.Value;
+            var finalCost = cost(finalAmount);
+            if (double.IsNaN(finalAmount) || finalAmount <= 0 || finalCost <= 0 || finalCost > freshBalance)
+                return;
+            onConfirm(score, finalAmount, finalCost);
         }
         catch (Exception ex)
         {

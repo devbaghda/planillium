@@ -8,8 +8,8 @@
 > `Measure-Object -Line` silently skips blank lines and under-reported this file by ~60).
 >
 > Compacted hard on 2026-08-04 (771→476→520→**347 by splitting the two registers into
-> `DECISIONS.md`**, once it was clear the remaining bulk was reference material, not narrative to
-> squeeze — same move as DigiFlow's split). **Nothing was rewritten in the move.**
+> `DECISIONS.md`**, once clear the remaining bulk was reference material, not narrative to squeeze).
+> **Nothing was rewritten in the move.**
 
 **Display name is "Planillium"** (renamed 2026-07-08; the app was originally internally
 called Mentor-Overseer). The repo folder, GitHub repo, and C# namespace were all still
@@ -204,57 +204,35 @@ none may be dropped in a compaction.
 
 ### Session log
 
-**Pre-2026-07-18 arc** (detail in git log): WinUI 3 rebuild landed 07-07 as v1.0.0 (18 findings fixed
-at ship time; TickTick secret purged from git history and rotated). Audit rounds 1-6 (07-09→07-15)
-introduced the mechanisms every later round built on — `Database.RunInTransaction`,
-`DateExtensions.ToIsoTimestamp()`, `JsonFileIO` atomic writes, `PlanStore.IsValidPlanId`,
-transactional dialogs with a `SaveErrorBar` — and fixed diary column width, window-clamp-to-monitor,
-the completed-task-shift data-loss bug (business rule 7), move-to-today backward compaction,
-`ReviewDialog` reentrancy, three Add-Plan templates keying phases wrong, and idle-detection
-double-counting. 07-16 fixed day-off/reschedule shifting to skip already-taken days
-(`NextWorkingDay`/`PrevWorkingDay`). 07-17's full 5-category audit added `TreatWarningsAsErrors`, the
-shared `CategoryStyle.cs` colour table, "Clear all my data", and Settings autosave; same day, day-off
-scoring shipped (business rule 10).
+**Through 2026-07-22** (detail in git log): WinUI 3 rebuild landed 07-07 as v1.0.0. Audit rounds
+1-6 (07-09→07-15) introduced `Database.RunInTransaction`, `DateExtensions.ToIsoTimestamp()`,
+`JsonFileIO` atomic writes, `PlanStore.IsValidPlanId` and transactional dialogs with a
+`SaveErrorBar` — the mechanisms every later round built on — and fixed diary column width,
+window-clamp-to-monitor, the completed-task-shift data-loss bug (business rule 7), move-to-today
+backward compaction, `ReviewDialog` reentrancy, three Add-Plan templates keying phases wrong, and
+idle-detection double-counting. 07-16 fixed day-off/reschedule shifting to skip already-taken days.
+07-17 added `TreatWarningsAsErrors`, `CategoryStyle.cs`, "Clear all my data", Settings autosave, and
+day-off scoring (business rule 10). 07-18→07-22 (four more audit rounds, tests 19→83):
+`CurrentStreak`/`WeekStats` took an optional `asOf` (silent streak-bonus bug editing past entries);
+closed-form `PlanDayForDate`/`DateForPlanDay`; `CredentialStore.Delete`; 42 overlapping `time_diary`
+pairs found, only 2 matching the known bug — **user's call: leave untouched**; personal-data
+git-history purge (134 commits); late-day task reminder; diary-tracking-gap fix; repo renamed
+`planillium`, **v1.1.0 public**; `DispatcherQueueTimer` root-caused (Standing lessons); queued plan
+ideas (v1.2.0); tray stuck-badge; Diary category/app filtering; `ActiveWindowTitle` process-name
+fallback (~118 bare "-" rows/day fixed); `posting-plan`/`project-media` skills bootstrapped.
 
-**2026-07-18 → 07-22**: four audit rounds (~60 findings, 0 Critical), each fixed same-day, tests 19→83.
-`ScoreService.CurrentStreak`/`ReportData.WeekStats` took an optional `asOf` (a silent streak-bonus bug
-when editing past entries); closed-form `PlanDayForDate`/`DateForPlanDay`; `CredentialStore.Delete` +
-"Disconnect TickTick"; a full-history scan found 42 overlapping
-`time_diary` pairs, only 2 matching the known bug — **user's call: leave the data untouched**;
-personal-data git-history purge (134 commits, `git filter-repo`). Then: late-day task reminder;
-`AppNames.Sub()` "File Explorer" case; diary-tracking-gap bug resolved via `PollOnce`'s
-`HandleSessionLock`/`HandleSleepGap` order; Reports slow-load (build-first-N); repo renamed to
-`planillium`; **first public release v1.1.0**. Then: desktop shortcut; `DispatcherQueueTimer`
-root-caused (Standing lessons); queued plan ideas (v1.2.0); tray stuck-badge (`TaskbarIcon` disposing
-a reused `Icon`); Diary category/app filtering; tray unread-dot recap; Settings overflow/sidebar-
-Reports score-label confusion; `ActivityTracker.ActiveWindowTitle` falls back to the process name
-when title/`ExeAppNames` are both empty (~118 bare "-" rows/day fixed). Same week: `posting-plan`/
-`project-media` skills bootstrapped; a Reddit post reformatted for r/ClaudeAI's Megathread.
-
-**2026-07-23 → 07-29** (four dated rounds, condensed): internal rename `MentorOverseer`→`Planillium`
-(3 legacy-compat values deliberately untouched — see top of file); Diary App/Page filter split;
-Reports' redundant "Exclusion Impact" panel removed (business rule 12); 26 `ContentDialog` sites
-unified onto `DialogControls.Build`; tray "Pause tracking"; `StartDayChangeWatcher` for "have to
-switch pages to see the new day" (`NavigationCacheMode="Enabled"` never recomputed today), extended
-to Plans/Reports after a re-audit caught the gap; note-wipe risk (`TaskNoteView.AnyEditInProgress`,
-later strengthened to persist drafts across any rebuild); Schedule re-snap; Diary filter-row
-overflow; VACUUM off the UI thread; docx zip-bomb check counts real decompressed bytes;
-`VacuumAndCheckpoint()` truncates the WAL. Four 5-category audits (24+22+22+12 findings, 0 Critical)
-plus two re-audits, all fixed same-day, 86/86 tests.
-**07-27**: app wouldn't start — bisected to 07-24's `SetDefaultDllDirectories` breaking WinRT
-activation of the bundled WinUI3 DLLs; clean revert (`4d0f161`). Diary-appeared-to-start-on-first-
-touch: wake-from-sleep toast only logged a gap with no UI handler wired (never true live); rejected
-fix (evening-review sweep) replaced by `HandleIdleReturn` always logging "unaccounted time" the
-instant a gap is detected, matching the old Python guarantee (`d3373a5`).
-**07-28**: Diary Edit/Split unreachable via `Card()`'s rounded-`CornerRadius` clip (Standing lessons);
-missed-notification recap now round-trips the toast's args via `PendingNotification`. *Feature*: plan
-tasks gained a `tools` list via `TeachPlanTools`, both live plans hand-edited after cross-checking
-every `task_completions`/`task_overrides`/`task_notes` row (zero mismatches), 12 keywords taught.
-Also: diary-description AutoSuggestBox; `LearnActivityRule` refuses a bare browser name; "Show more"
-batched at 50. Clean 5-category audit, `BuildDiarySection` split 389→294 lines. `56cbdb7`.
-**07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" `Click` never wired. Diary filters didn't narrow
-each other — options built from unfiltered rows; fixed by building each dropdown from rows matching
-every *other* active filter. Idle rows show the typed answer in Page instead of "—".
+**2026-07-23 → 07-29** (condensed): internal rename `MentorOverseer`→`Planillium` (3 legacy-compat
+values deliberately untouched, see top of file); Diary App/Page filter split; "Exclusion Impact"
+panel removed (business rule 12); 26 `ContentDialog` sites unified onto `DialogControls.Build`;
+`StartDayChangeWatcher` for the new-day-without-switching-pages gap; note-wipe risk fixed; VACUUM off
+the UI thread; docx zip-bomb check counts real decompressed bytes. Four 5-category audits (0
+Critical) plus two re-audits, 86/86 tests. **07-27**: app wouldn't start — bisected to 07-24's
+`SetDefaultDllDirectories` breaking WinRT activation; clean revert. Wake-from-sleep toast only logged
+a gap with no UI handler wired; `HandleIdleReturn` now always logs "unaccounted time" the instant a
+gap is detected. **07-28**: Diary Edit/Split unreachable via `Card()`'s rounded-clip (Standing
+lessons); plan tasks gained a `tools` list (`TeachPlanTools`, 12 keywords, zero mismatches); diary
+AutoSuggestBox; "Show more" batched at 50. **07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never
+wired; Diary filters didn't narrow each other; idle rows show the typed answer in Page not "—".
 
 **2026-08-04** (one session, three rounds — all shipped, verified and pushed; commits `e4c4f11`,
 `ee981c0`, `488424f`, `0ffdde4`). *Reported issues*: (1) the diary window was hardcoded 06:00–20:00
@@ -281,120 +259,139 @@ insights always this week). `ReportData.PeriodStats` aggregates from one `DailyM
 recomputed rather than read from `score_ledger` **deliberately** — the ledger only holds days the
 app ran to credit, so a stretch where it wasn't open would read as zero. Card relabelled "SCORE
 EARNED — <period>" to stay distinct from the sidebar's BALANCE (all-time, net of purchases).
-*Verified*: 124/124, Release rebuilt/relaunched each round, live UIA on a scratch-root instance —
-"Day 1 of 28"/"Day 1 of 160" at calendar day 8 with "7 day(s) late"; Year card minutes matched the
-summary table's Total row exactly, two independent paths agreeing; nothing clipped; diary date
-controls stepped correctly and a past day stayed pinned across page switches.
+*Verified*: 124/124, live UIA on a scratch-root instance — "Day 1 of 28"/"Day 1 of 160" correct at
+calendar day 8; Year card minutes matched the summary table's Total row exactly (two independent
+paths agreeing); diary date controls stepped correctly and a past day stayed pinned.
 **2026-08-05** (same session, four further rounds). The Expander Settings was **rejected on sight**
 ("put an additional sub-menu on the right side, the settings pages should be of the same size with
 no bouncing") and replaced by a right-hand `ListView`, one panel visible at a time. No-bouncing is
 structural: page-grid row 1 is `*`; all seven panels share one grid cell (collapsed siblings aren't
-measured); the status strip is fixed-height (sizing to its text grows a line on a save message). The
-one-group-save objection that had argued for Expanders doesn't apply — every panel stays loaded, so
-`SaveRules` writes the same values whatever is shown. Summaries moved to the menu entries. Sized for
-the **900dip minimum** (~388 for content): hours rows became star-column grids, Data buttons 2×2,
-`LayoutScoringGrid` reflows the 12 scoring inputs 1↔2 columns off measured width. *Verified* UIA at
-900/1500dip: rects identical across all seven sections at each width. Two defects looking would not
-have caught: every menu item announced a **blank accessible name** (`ListViewItem` with panel content
-derives none), and six scoring boxes read `BoundingRectangle.Empty` (clipped vs. below-fold,
-resolved via `ScrollIntoView`). 124/124.
-*Then* ("align all the reports"): three left edges for one column unified into
-`LabelColumnWidth`/`ColumnGap`/`SubRowIndent` (`ReportsPage.Styling.cs`), read by both tables, the
-distraction list and `AppUsageRow`. *Verified* against a **copy** of the real DB (deleting stale
-`-wal`/`-shm` sidecars first — see `DECISIONS.md`): label columns end 574, first figures start 586.
-*Then* ("add all the categories and summary for the rows"): tables carried only on/off-plan; now
-all five via `DiaryCategory.ReportOrder` (deliberately separate order from `EditableOptions`, test
-asserts same five values) plus a per-row Total — **which changed meaning**, all tracked time not
-on+off (Year total 80h10m→294h34m). New `ReportData.CategoryMinutes`; three near-duplicate queries
-collapsed into one `DailyMinutes`, fixing two latent bugs found in the collapse: `MonthBuckets`
-never read `diary_daily_rollup` at all, and the rollup's neutral/paid/idle columns had never been
-read back despite being stored correctly. HTML/CSV exports match.
-*Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours`, `"5,5 h"` everywhere but the diary
-(kept h/m — a clock event, not a quantity). Month/Year gained Tasks/Score columns+totals; day-off
-dates now contribute score with no minutes via one shared `DailyRows` walk, so a table's score total
-equals the card by construction (test asserts it). Found by measuring at 900dip: Score was clipped
-off entirely by the card — tables now sit in `Scrollable()`, a horizontal `ScrollViewer`. 132/132.
-*Then*: **"the app asks me about my absence twice"** — real bug in `ActivityTracker.PendingDayGap`,
-two compounding causes: (1) judged only by `db.LastDiaryEnd()`, blind to a currently-open session,
-so continuous activity through review time read as absence, logged, then logged again when the
-session flushed; (2) never remembered what it had already asked, so a second manual "Evening
-review" click re-asked/re-logged. Fixed with two clamps: lock-protected `_openSessionStart` (new
-`SetSession`, replacing eight independently-typed triples) caps how far the gap extends;
-`_accountedUntil` caps how far back it starts. Two new tests reproduce both bugs and fail without
-the fix; root-caused via git archaeology, not guessing. 136/136.
-*Then*: **"fix width on all of the pages, Schedule for example is not fixed"** — Today, Schedule,
-Plans still used the *pre*-2026-07-28 `StackPanel MaxWidth Center` bug already fixed once for
-Reports (MaxWidth caps a StackPanel's width, doesn't force it). New `Pages/PageLayout.cs`,
-`CenterContent()`, shares Reports' own `SizeChanged` math; Settings untouched (different, already
-fixed). *Verified*: UIA at 1400/950/750dip. *Same round*, re-read a screenshot correctly on the
-second look: the "Day off" text on every Schedule row is the **toggle button**, not a status chip
-(`plan_days_off` confirmed none flagged were off); the two empty weekdays traced to
-`task_overrides` — real reschedule history that exposed a real gap in `RescheduleTask`, fixed next.
-136/136.
-*Then*: **"if I moved a task and the day remains empty, fill the gap with the following day's
-task"** — reverses the 2026-07-09 "Reschedule never closes gaps" call (business rule 7 in
-`DECISIONS.md`, updated; re-confirmed with the user, not assumed). `RescheduleTask` now runs one
-combined formula per task — compact back to close the vacated day, *then* push forward to avoid
-doubling up at the target day — instead of two independent shift loops, which would overwrite each
-other for any task caught between the old and new day (worked by hand on paper first; both
-directions checked). **Future-only guard**: a vacated day compacts only if it's today or later,
-since `ReplanOverdueDialog` reuses this method on days that are by definition already past —
-compacting there would pull a future task backward across today and silently make it overdue.
-`RescheduleTaskDialog`'s disclosure text updated to match. *Tests*: 1 new
-(`RescheduleTask_ClosesGapWhenVacatedDayIsInTheFuture`), 2 updated to the new (hand- and
-test-verified) arithmetic — `RescheduleTask_SkipsOverDayMarkedOff`'s expected days changed since
-its scenario's vacated day is today, not the past. 137/137.
+measured); the status strip is fixed-height. The one-group-save objection that argued for Expanders
+doesn't apply — every panel stays loaded, `SaveRules` writes the same values whatever is shown. Sized
+for the **900dip minimum**: hours rows became star-column grids, Data buttons 2×2, `LayoutScoringGrid`
+reflows 12 scoring inputs 1↔2 columns off measured width. *Verified* UIA at 900/1500dip — rects
+identical at each width; two defects looking wouldn't have caught: every menu item had a **blank
+accessible name**, six scoring boxes read `BoundingRectangle.Empty` (below-fold, `ScrollIntoView`
+fixed). 124/124.
+*Then* ("align all the reports"): three left edges unified into `LabelColumnWidth`/`ColumnGap`/
+`SubRowIndent` (`ReportsPage.Styling.cs`), read by both tables, the distraction list and
+`AppUsageRow`. *Verified* against a **copy** of the real DB (stale `-wal`/`-shm` sidecars deleted
+first — see `DECISIONS.md`).
+*Then* ("add all the categories and summary for the rows"): tables carried only on/off-plan; now all
+five via `DiaryCategory.ReportOrder` plus a per-row Total — **which changed meaning**, all tracked
+time not on+off (Year total 80h10m→294h34m). New `ReportData.CategoryMinutes`; three near-duplicate
+queries collapsed into one `DailyMinutes`, fixing two latent bugs: `MonthBuckets` never read
+`diary_daily_rollup` at all, and the rollup's neutral/paid/idle columns were never read back despite
+being stored correctly.
+*Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours` everywhere but the diary (kept h/m).
+Month/Year gained Tasks/Score columns+totals via one shared `DailyRows` walk, so a table's score
+total equals the card by construction (test asserts it). 132/132.
+*Then*: **"the app asks me about my absence twice"** — two compounding causes in
+`ActivityTracker.PendingDayGap`: judged only by `db.LastDiaryEnd()`, blind to a currently-open
+session (logged once live, again when the session flushed); never remembered what it had already
+asked, so a second manual review click re-logged it. Fixed with two clamps: `_openSessionStart`
+caps how far the gap extends, `_accountedUntil` caps how far back it starts. Root-caused via git
+archaeology, not guessing. 136/136.
+*Then*: **"fix width on all of the pages"** — Today/Schedule/Plans still had the *pre*-07-28
+`StackPanel MaxWidth Center` bug already fixed once for Reports. New `Pages/PageLayout.cs`,
+`CenterContent()`. *Same round*: the "Day off" text on every Schedule row is the toggle button, not
+a status chip; two empty weekdays traced to real `task_overrides` history exposing a genuine gap in
+`RescheduleTask`, fixed next. 136/136.
+*Then*: **"if the day remains empty, fill the gap with the following day's task"** — reverses the
+07-09 "Reschedule never closes gaps" call (business rule 7, re-confirmed with the user).
+`RescheduleTask` now runs one combined formula per task — compact back to close the vacated day,
+*then* push forward — instead of two independent shift loops that could overwrite each other.
+**Future-only guard**: a vacated day compacts only if today or later, since `ReplanOverdueDialog`
+reuses this on already-past days. 137/137.
 *Then*: **"go ahead and fix it"** — user approved closing the existing days-22/23 gap retroactively.
-New `ScoreService.CompactFutureGaps(plan)`: repeatedly finds the earliest empty, not-off day at/after
-today with a later occupied day, pulls everything after it back one, loops until no hole remains
-(same `PrevWorkingDay` primitive as the rest of this class). Bug caught before it ran: hole detection
-must count a completed task's day as occupied even though the task itself is excluded from what's
-eligible to move — deriving "occupied" from the movable set alone treated it as a hole. Not wired to
-any UI (every gap-creating path is self-healing now, previous entry) — applied once via a temporary
-Debug-only Schedule button the user clicked (a direct-write classifier block on my first approach, a
-MENTOR_ROOT-pointed test file, meant the write had to go through the app, not from my side). DB backed
-up to `data/backup/` first. *Verified* read-only after: days 21→39 sequential, override row count
-unchanged (nothing lost/duplicated); the one pre-existing day-2 double-booking (unrelated) untouched.
-Button removed right after. 139/139, Release rebuilt.
+New `ScoreService.CompactFutureGaps(plan)`: finds the earliest empty not-off day at/after today with
+a later occupied day, pulls everything after it back one, loops until no hole remains. Bug caught
+before it ran: hole detection must count a completed task's day as occupied even though the task
+itself is excluded from what's eligible to move. Applied once via a temporary Debug-only button
+(a direct-write classifier block on my first approach meant the write had to go through the app);
+DB backed up first, verified read-only after: days 21→39 sequential, nothing lost/duplicated.
+Button removed right after. 139/139.
 *Then*: **"add an additional layer of categorization"** — new independent `DiaryTag` axis on
-`time_diary` (nullable `tag`, this app's first-ever ADD COLUMN migration: PRAGMA table_info check +
-guarded ALTER, no IF NOT EXISTS for that in SQLite). Never read by ScoreService, purely descriptive.
-"Tag (optional)" combo in Edit; per-row in Split (inherits the original tag, each piece editable);
-new Tag filter alongside Category/App/Page; shows as a row suffix ("12m · #Procrastination"). Values
-are the user's own literal wording, kept verbatim after a first pass silently prettified them
-(Home/staff etc.) and got corrected twice — final five: Routine, Documents, Studioshoo, Selfdev,
-Procrastination.
-*Found live, not by review*: Split's new Tag combo pushed the row past `ContentDialog`'s own width
-cap (independent of the dialog's inner MinWidth) — WinUI zero-arranges a Stretch Grid's trailing
-Auto columns past that cap instead of clipping visibly, so Remove read `BoundingRectangle.Empty`/
-`IsOffscreen=true`. Same bug class already root-caused once for the diary row list; same fix —
-`HorizontalAlignment.Left` + fixed (not Star) columns + a horizontal `ScrollViewer`, `Visible` not
-`Auto` (the diaryScroller lesson, applied proactively). *Verified* on a scratch-root instance
-(MENTOR_ROOT copy, real DB untouched): Tag round-trips through a real save (read back via sqlite3),
-row shows the suffix, filter narrows correctly, Remove reachable via `ScrollIntoView` post-fix. 5 new
+`time_diary` (nullable `tag`, this app's first-ever ADD COLUMN migration). Never read by
+ScoreService, purely descriptive. Combo in Edit; per-row in Split; new Tag filter alongside
+Category/App/Page; shown as a row suffix at first — **superseded 08-07, see below: moved to its own
+column**. Values are the user's own literal wording, kept verbatim after a first pass silently
+prettified them and got corrected twice — final five: Routine, Documents, Studioshoo, Selfdev,
+Procrastination. *Found live, not by review*: Split's new Tag combo pushed the row past
+`ContentDialog`'s own width cap — same bug class already root-caused once for the diary row list;
+same fix (`HorizontalAlignment.Left` + fixed columns + a `Visible` horizontal `ScrollViewer`).
+*Verified* on a scratch-root instance (MENTOR_ROOT copy, real DB untouched). 5 new
 tests, 144/144.
+
+**2026-08-07**: two user reports on Tag/idle-answer. (1) Tag was riding inside the diary row's
+Details column as a suffix, easy to lose next to the duration — now its own fixed-width column
+(`DiaryList`/`BuildRow`, column 3, "—" when unset). (2) `IdleReturnDialog` ("welcome back") had no
+Category/Tag field anywhere — category was silently re-derived from typed text via
+`ClassifyIdleText` with no way to see/correct the guess, tag didn't exist there at all. Added
+explicit combos to both modes: single mode auto-fills Category from the classifier guess and
+keeps re-guessing until the user picks one themselves (`catTouched` flag), then stops; split rows
+are manual only, matching `SplitDiaryEntryDialog`'s own "a recorded block isn't auto-classified"
+choice. Chip click used to submit instantly — now fills the description field instead, since
+instant-submit left no room to see the new fields (one extra tap on the common path).
+`DiaryWriter.LogSession` gained `tag`; `LogIdleAnswer`/`LogIdleAnswers` now take explicit category
+(+optional tag) instead of deriving it internally. Split rows reused `SplitDiaryEntryDialog`'s
+proven `ContentDialog`-width-cap fix pre-emptively rather than hitting the same bug a third time.
+3 new tests, 147/147. **Not yet live-UIA-verified** (see Open TODOs).
+
+**Then** ("check if the score balance is calculated correctly"): audited read-only against a DB copy
+— sum arithmetic, single writer (`AddLedger`), `sl_reason_date` UNIQUE — no dupes/gaps/unknown
+reasons. Found a real live bug: today's `daily_score` frozen at 0 (written 08:40am) despite 51 more
+on-plan minutes tracked since — traced via the log + `winui_state.json`'s `last_review` (still 08-06,
+ruling out an early review). Root cause: a diary edit recomputes that date's score via
+`RecalculateDayScore` regardless of whether it's *today* (correct for a past day) — but
+`ReviewDialog.PersistReview` used `CreditDayScoreIfMissing` (skip-if-present) for today's real
+end-of-day credit, so the earlier incidental recompute pre-empted it forever. Fixed: `PersistReview`
+now calls `RecalculateDayScore(today)`, already proven by an existing test
+(`RecalculateDayScore_OverwritesAnAlreadyCreditedDay`) — dialog-layer call site changed, no new test
+needed. **Real-data fix, user-confirmed**: deleted the one stale row (`score_ledger` id 140) after
+explicit confirmation naming the table/row; DB backed up first. User then asked directly whether
+08-06 (already past, so never auto-recredited) was undercounted the same way — it was: real formula
+against that day's final data gives 31, ledger held 0. Computed via a throwaway, isolated test that
+set its own `MENTOR_ROOT` against a scratch copy (real plans + DB copy), never the real code path,
+to avoid hand-replicating the formula. Corrected row id 138 to delta=31 after the same explicit
+naming-the-row confirmation; balance -4→27. Test file deleted after use.
+Checked siblings while in there: `ReviewDialog`'s disabled "Close the day" button sits next to
+`DefaultButton=Primary`, and WinUI's DefaultButton can still fire on Enter while disabled — real
+WinUI behaviour, ruled out as *this* incident's cause but hardened anyway, and found in three more
+dialogs (`SpendDialog`, `SplitDiaryEntryDialog`, `IdleReturnDialog` split mode) — each now switches
+`DefaultButton` off Primary while disabled and re-validates before writing. 147/147, Release
+rebuilt/relaunched.
+**Then** ("Mark … buttons for tags"): second toolbar row under Mark on-plan/off-plan/neutral — one
+"Mark <label>" button per `DiaryTag.Options` entry plus "Clear tag," built in a loop. New
+`MarkSelectedDiaryRowsTag` doesn't share a helper with `MarkSelectedDiaryRows`: category changes
+also touch activity-rule learning and a score recalc, neither applies to a tag. No dedicated test,
+same as its sibling — page-level UI, outside this project's Service/Data test scope.
+
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **08-07's IdleReturnDialog Category/Tag fields, and the new Mark-tag toolbar row, have not been
+    live-UIA-verified** — clean build + 147/147 tests only. The width-cap fix reapplies an
+    already-proven pattern, but the chip-click change and auto-classify-until-touched wiring
+    haven't been exercised live.
   - **The diary's midnight rollover has never been observed actually happening** — every other part
     of that fix was verified live, but the rollover itself needs the clock to cross midnight with the
     app sitting on Reports. If the diary still shows yesterday some morning, the assignment at the
     top of `BuildDiarySection` is the first place to look.
-  - **The tracker split has not been exercised in the live app** — clean build and 124/124 tests only.
-    Behaviour-preserving by construction (moved code verbatim, forwarders left behind), but it touches
-    the poll loop, this project's highest-risk file. *(Scoring Settings live-checked 08-05: all 12
-    inputs present/reachable at both window extremes; their **values** still not edited live — that
-    writes `config.json` and restarts the tracker, so it stays code-inspection-only.)*
+  - Scoring Settings' 12 inputs are live-checked (08-05, present/reachable at both window extremes)
+    but their **values** have never been edited live — that writes `config.json` and restarts the
+    tracker, so it stays code-inspection-only.
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field (not "App Service URL").
   - **Settled, not action items**: 42 overlapping `time_diary` pairs 06-29→07-16 (only 2 match
-    `HandleActiveSession`; rest unconfirmed; user's call 2026-07-18 — leave untouched); `ActivateQueuedPlan`'s
-    non-atomic write-then-delete (2026-07-28); ~150-230MB memory footprint (2026-08-06, mostly
-    `NavigationCacheMode="Enabled"` + WinUI3's own interop/compositor baseline, no leak found; WPF/Avalonia
-    lighter but a multi-week rewrite for an unsized win — **user's call: leave as-is**).
+    `HandleActiveSession`; rest unconfirmed; user's call 2026-07-18 — leave untouched);
+    `ActivateQueuedPlan`'s non-atomic write-then-delete (2026-07-28); ~150-230MB memory footprint
+    (2026-08-06, mostly `NavigationCacheMode="Enabled"` + WinUI3's own baseline, no leak found;
+    lighter frameworks exist but a multi-week rewrite for an unsized win — **leave as-is**).
   - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium` rename
-    2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit auto-publishing for
-    `posting-plan` dropped 2026-07-22 (APIs gated/unsuitable; dormant Reddit OAuth2 tool at
-    `~/Desktop/CLAUDE/skills/posting-plan/tools/reddit-publish/`); `PlanDayForDate` closed form
-    2026-07-18; TickTick secret rotated 2026-07-09, reconnected 2026-08-04; personal-data git-history
-    scrub 2026-07-18; v1.1.0 + GitHub Release + repo flipped Public 2026-07-21; duplicate
-    `devbaghda/planillium` repo deleted 2026-07-21; tray icon vanishing — confirmed fine 2026-08-04;
-    2026-07-17 keyboard/dark-mode/timing item — closed 2026-08-04.
+    2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit auto-publishing
+    for `posting-plan` dropped 2026-07-22 (APIs gated/unsuitable; dormant Reddit OAuth2 tool at
+    `posting-plan/tools/reddit-publish/`); `PlanDayForDate` closed form 2026-07-18; TickTick secret
+    rotated 2026-07-09, reconnected 2026-08-04; personal-data git-history scrub 2026-07-18; v1.1.0 +
+    GitHub Release + repo flipped Public 2026-07-21; duplicate `devbaghda/planillium` repo deleted
+    2026-07-21; tray icon vanishing — confirmed fine 2026-08-04; 2026-07-17 keyboard/dark-mode/timing
+    item; **the 08-04 tracker split — confirmed exercised live**, not just built: the log shows
+    `HandleSleepGap`/`HandleIdleReturn`/`HandleActiveSession` all firing correctly through 08-07.

@@ -89,7 +89,15 @@ public static class SplitDiaryEntryDialog
                 : $"{-remaining} min over — reduce a duration";
 
             foreach (var r in rows) r.Remove.IsEnabled = rows.Count > 1;
-            dialog.IsPrimaryButtonEnabled = remaining == 0 && allDurOk && rows.Count > 1;
+            var canSplit = remaining == 0 && allDurOk && rows.Count > 1;
+            dialog.IsPrimaryButtonEnabled = canSplit;
+            // DefaultButton follows the enabled state, not fixed at Primary — WinUI's
+            // DefaultButton can still fire on Enter even while the button it names is
+            // disabled (confirmed live 2026-08-07, same trap in ReviewDialog: an Enter press
+            // froze a day's score through a disabled "Close the day" button). Here that would
+            // mean pressing Enter with durations that don't sum to the original length could
+            // still commit an unbalanced split.
+            dialog.DefaultButton = canSplit ? ContentDialogButton.Primary : ContentDialogButton.Close;
         }
 
         void AddRow(int? prefillMin, string prefillCat, string? prefillDesc, string? prefillTag)
@@ -177,6 +185,13 @@ public static class SplitDiaryEntryDialog
 
         var result = await DialogGate.ShowAsync(dialog);
         if (result != ContentDialogResult.Primary) return null;
+        // Re-validate before writing, independent of the dialog's last-known enabled state —
+        // never trust IsPrimaryButtonEnabled alone for a write this consequential (same
+        // reasoning as ReviewDialog's/SpendDialog's own post-await re-checks). A split that
+        // doesn't sum to the original entry's length would otherwise lose or duplicate time.
+        var finalUsed = rows.Sum(r => double.IsNaN(r.Dur.Value) ? 0 : (int)r.Dur.Value);
+        if (finalUsed != durationMin || rows.Count <= 1 || rows.Any(r => double.IsNaN(r.Dur.Value) || r.Dur.Value <= 0))
+            return null;
 
         try
         {

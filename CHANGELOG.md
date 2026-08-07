@@ -5,13 +5,42 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Fixes**
+- **A day's score could get permanently stuck at whatever it happened to be the moment you first
+  edited a diary entry that morning** — instead of the real total it earned by the time you
+  actually reviewed the day. Editing a diary entry's category (or splitting one, or bulk-marking
+  several) recomputes that day's score as a side effect, same as it always has for a past day —
+  but for *today*, that early recompute then blocked the evening review from ever crediting the
+  rest of the day's work, silently. The evening review now always gives today's score the final
+  word, overwriting whatever an earlier edit left behind, the same way it's always been able to
+  correct a past day. Found while checking the sidebar balance for correctness — one real day's
+  score (2026-08-07) had frozen at 0 by 08:40am despite real on-plan time tracked afterward; that
+  stale ledger entry was cleared (with your confirmation) so tonight's review scores it properly.
+  The day before (2026-08-06) had the same problem already locked in as a past day — the real
+  formula gave 31 for that day's final data, not the 0 sitting in the ledger; corrected (with your
+  confirmation) directly, since a past day never gets automatically re-touched.
+- Four dialogs (evening review, buy/spend, split-diary, idle-return's split mode) could, in
+  principle, submit through a disabled "confirm" button by pressing Enter — a WinUI quirk where
+  the default button can still fire on Enter even while it's shown disabled. Each now also
+  double-checks its own conditions right before writing anything, so an early/invalid submission
+  can't sneak through regardless of how it was triggered.
+
 **New**
 - Diary entries can now carry a second, optional tag — Routine, Documents, Studioshoo, Selfdev, or
   Procrastination — alongside the existing on-plan/off-plan/neutral/paid/idle category. It has no
   effect on score or streaks; it's purely a finer breakdown for your own reading, e.g. telling apart
   *why* something was off-plan. Set it in Edit or Split (each split piece can carry its own), shows
-  as a small suffix on the row ("12m · #Procrastination"), and there's a new Tag filter alongside
-  Category/App/Page in the diary's filter row.
+  in its own column on the diary row (moved out of the duration/description column, where it was
+  easy to miss), and there's a new Tag filter alongside Category/App/Page in the diary's filter row.
+  Select several rows and a second toolbar row — "Mark Routine," "Mark Documents," … "Clear tag" —
+  bulk-tags (or un-tags) all of them at once, the same way the existing Mark on-plan/off-plan/
+  neutral buttons already bulk-recategorize; the two rows are independent, each only ever touches
+  its own axis.
+- The "welcome back" idle-return prompt now has its own Category and Tag fields, in both the
+  single-answer form and each row of "split it" — previously the category was silently guessed from
+  whatever you typed with no way to see or correct the guess, and tag wasn't offered here at all.
+  A chip still fills in the description with one click, but no longer submits immediately — it
+  leaves you a moment to check or change the category/tag before confirming with "Log it."
 - Your working hours are now also the diary's tracking window. Activity is recorded between
   "Work start" and "Work end" and nowhere else. Previously the diary ran on a fixed 06:00–20:00
   built into the app, unrelated to your working hours and impossible to change — so moving your
