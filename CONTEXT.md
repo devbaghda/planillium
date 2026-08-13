@@ -349,7 +349,26 @@ row count unchanged (78) after a Release run post-fix. **Lesson for any source-l
 project**: a `#if DEBUG`-gated test-only hook is only as safe as "tests always build Debug" — untrue
 the moment anyone runs `-c Release`, and the failure mode is silent, not a build error.
 
+**Then**: a screenshot ("theres a mess there") surfaced the *rest* of the `time_diary` pollution —
+the test-isolation bug above hadn't just hit the 3 plan-scoped tables, it wrote 42 fake diary rows
+too (literal `TestWindow`/`test-window-<guid>` windows, `idle-split-`/`idle-single-<guid>`
+descriptions, one row with an invalid category `some_future_category`), on the two real dates a
+Release test run happened: 2026-08-07 and 2026-08-13. Backed up
+(`data/backup/progress.db.20260813_190410.bak`) and deleted after confirmation naming the table and
+count; the one genuine row sharing 08-13 with them (a real detected "unaccounted time" gap,
+14:52–18:00) was identified and left alone. Same request also asked to remove the diary's
+horizontal scrollbar by narrowing the description columns — root cause turned out to be
+**`DiaryListWidth` itself was stale**: set for the App/Page column split (07-23), never revisited
+when the Tag column was added (08-07), so the row's true natural width had quietly outgrown the
+page's own max content width, forcing the scrollbar to engage on *any* window, not just a narrow
+one. Recomputed `DiaryListWidth` (950→870), narrowed Page (210→130) and Details (260→160) — both
+already ellipsis-trim with a tooltip, narrowing just makes that the common case — and switched the
+scroller from permanently-`Visible` back to `Auto` now that content actually fits.
+
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **08-13's narrowed diary columns / Auto scrollbar have not been live-UIA-verified** — clean
+    build only; the exact new widths (870/130/160) were computed from the pre-Tag-column math, not
+    measured live.
   - **08-13's Reports score-card DayOffs figure has not been live-UIA-verified** — clean build +
     152/152 tests only.
   - **08-07's IdleReturnDialog Category/Tag fields, and the Mark-tag toolbar row, have not been

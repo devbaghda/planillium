@@ -639,16 +639,15 @@ public sealed partial class ReportsPage
         var diaryScroller = new ScrollViewer
         {
             MaxHeight = 520,
-            // Visible, not Auto (2026-07-28 user report: "can't split the unaccounted
-            // time") — Auto's overlay-style indicator only appears on hover and is easy to
-            // never notice at all, so scrollable content used to silently look complete
-            // without it. The page's own content column (ReportsPage.xaml.cs'
-            // maxContentWidth) is now widened to fit a diary row's own MinWidth
-            // (DiaryCardWidth) on a wide-enough window, so this scroller/scrollbar mostly
-            // matters on a narrower one now — kept regardless as a belt-and-suspenders
-            // layer, since the row's fixed pixel columns can still exceed whatever width
-            // the window actually has to give.
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+            // Back to Auto (2026-08-13 report: "remove the horizontal scroll bar") — Visible was
+            // set 2026-07-28 because the row's own width had silently outgrown the page's max
+            // content width (DiaryListWidth was stale — see its own comment), so a permanently
+            // shown scrollbar was the only thing standing between the user and silently-clipped
+            // Edit/Split buttons. That root cause is fixed now (DiaryListWidth recomputed, Page/
+            // Details narrowed), so the row fits without scrolling on any window this app
+            // supports — Auto still engages if a future column ever grows past that again, it
+            // just doesn't sit there permanently, mostly empty, when there's nothing to scroll.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollMode = ScrollMode.Enabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = diaryResults,
@@ -949,8 +948,14 @@ public sealed partial class ReportsPage
             // they're independently meaningful (e.g. "Chrome"/"GitHub" vs.
             // "Telegram"/"Liza Ponomarenko").
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            // Page and Details narrowed from 210/260 (2026-08-13 report, "remove the horizontal
+            // scroll bar... narrow the descriptions column truncating the name and showing …").
+            // Both already ellipsis-trim with a tooltip for the full text (TextTrimming.
+            // CharacterEllipsis below, same pattern App already used) — narrowing just makes that
+            // the common case instead of the rare one, so the row's natural width stops
+            // outgrowing the page (see DiaryListWidth's own comment for why it was doing that).
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 

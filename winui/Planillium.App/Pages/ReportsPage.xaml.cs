@@ -38,10 +38,17 @@ public sealed partial class ReportsPage : Page
     // The Diary section's own list/card widths (ReportsPage.Diary.cs) — declared once here so
     // this file's own column-width cap and Diary's card-clip fix can never drift apart the way
     // two independently-hardcoded copies of the same number already have elsewhere in this app's
-    // history. DiaryListWidth is the row content's own required width (App/Page column split,
-    // 2026-07-23); DiaryCardWidth adds Card()'s horizontal padding (18+18) on top, since that's
-    // what actually has to fit without clipping (2026-07-28 — see ReportsPage.Diary.cs).
-    internal const double DiaryListWidth = 950;
+    // history. DiaryListWidth is the row content's own required width; DiaryCardWidth adds
+    // Card()'s horizontal padding (18+18) on top, since that's what actually has to fit without
+    // clipping (2026-07-28 — see ReportsPage.Diary.cs).
+    //
+    // Was 950, set for the App/Page column split (2026-07-23) and never revisited when the Tag
+    // column was added (2026-08-07, +90 +12 gap) — so the row's real natural width quietly grew
+    // past this constant, which is exactly what forced a horizontal scrollbar on every window
+    // size regardless of how wide, not just narrow ones (2026-08-13 report, "remove the
+    // horizontal scroll bar"). Recomputed here alongside narrowing Page/Details (see BuildRow) —
+    // narrowing alone wouldn't have fixed it, since this constant was already wrong before that.
+    internal const double DiaryListWidth = 870;
     internal const double DiaryCardWidth = DiaryListWidth + 36;
 
     // Was a flat 880 — comfortably fit every OTHER section (they all stretch/wrap fine at

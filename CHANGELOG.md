@@ -37,6 +37,20 @@ going forward; the original Python/Tkinter version is retired.
   one look identical after the fact. Fixed: the override now also requires a `PLANILLIUM_TESTS`
   constant the test project defines unconditionally (both configurations), so isolation no longer
   depends on which configuration `dotnet test` happens to build.
+  **Found a second batch the same bug left behind**: the diary itself — 42 fake `time_diary` rows
+  (literal `TestWindow`/`test-window-<guid>` windows, `idle-split-`/`idle-single-<guid>`
+  descriptions, and one row with an outright invalid category, `some_future_category`) across
+  2026-08-07 and 2026-08-13, visible directly in the Diary list. Backed up and deleted after
+  confirmation naming the exact table and count; the one genuine row sharing a date with them
+  (a real detected "unaccounted time" gap) was left alone.
+- **The diary list's horizontal scrollbar was permanently visible, on any window, regardless of
+  content.** Its width constant (`DiaryListWidth`) was set for the App/Page column split
+  (2026-07-23) and never revisited when the Tag column was added later (2026-08-07) — so the row's
+  real natural width had quietly outgrown the page's own max content width, which is what actually
+  forced the scrollbar to always engage rather than only on a narrow window as intended. Recomputed
+  `DiaryListWidth` to match, narrowed the Page and Details columns (both already truncate long text
+  with "…" and a tooltip — narrowing just makes that the common case instead of the rare one), and
+  switched the scroller back from permanently-shown to auto-hide-when-not-needed.
 
 **New**
 - The Reports score card now also shows how many days you've manually marked off (Schedule's "Day
