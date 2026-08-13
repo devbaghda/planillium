@@ -39,12 +39,11 @@ going forward; the original Python/Tkinter version is retired.
   depends on which configuration `dotnet test` happens to build.
 
 **New**
-- Reports and Schedule now show how many days you've manually marked off (Schedule's "Day off"
-  button) this week, this month and this year — a small "DAY-OFFS ADDED MANUALLY" card on Reports
-  (always all three, regardless of the Day/Week/Month/Year selector) and a one-line summary at the
-  top of Schedule. Deliberately excludes a plan's recurring weekly rest days (e.g. a plan with
-  Saturdays/Sundays off) — only dates explicitly marked off count, matching "added by me manually."
-  A date marked off on more than one plan still counts once.
+- The Reports score card now also shows how many days you've manually marked off (Schedule's "Day
+  off" button) — following the Day/Week/Month/Year selector exactly like everything else on the
+  card, not a fixed number. Deliberately excludes a plan's recurring weekly rest days (e.g. a plan
+  with Saturdays/Sundays off) — only dates explicitly marked off count, matching "added by me
+  manually." A date marked off on more than one plan still counts once.
 - Diary entries can now carry a second, optional tag — Routine, Documents, Studioshoo, Selfdev, or
   Procrastination — alongside the existing on-plan/off-plan/neutral/paid/idle category. It has no
   effect on score or streaks; it's purely a finer breakdown for your own reading, e.g. telling apart

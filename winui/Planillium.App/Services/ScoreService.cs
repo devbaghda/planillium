@@ -161,9 +161,11 @@ public sealed class ScoreService : IDisposable
     /// on any particular occasion, so they're excluded here (2026-08-13 request: totals for
     /// "day-offs ... added by me manually").
     ///
-    /// Unbounded by "today" on purpose, unlike DailyRows/PeriodStats: a day off is known as
-    /// soon as it's marked, so one set for later this week/month/year is real ahead of time —
-    /// there's no need to wait for the date to arrive the way there is for diary minutes.
+    /// Takes an explicit [from, to] rather than assuming "through today" the way DailyRows does —
+    /// a day off is known as soon as it's marked, so a date later in the range is real ahead of
+    /// time. ReportData.PeriodStats still chooses to cap `to` at today, deliberately matching every
+    /// other figure on the same card rather than giving this one its own, smarter boundary (the
+    /// user's own call, 2026-08-13) — that's a caller choice, not a constraint of this method.
     ///
     /// Two plans separately marking the same calendar date off still count once: this answers
     /// "how many days did I take off", not "how many mark-off actions did I take".</summary>

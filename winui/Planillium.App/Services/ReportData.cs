@@ -198,10 +198,14 @@ public static class ReportData
 
     /// <summary>Everything the score card and the insights panel need, aggregated over the
     /// selected period instead of over today/this-week (2026-08-04 request: the whole page above
-    /// the diary should follow the Day/Week/Month/Year selector). Score is the sum of each day's
-    /// own score — <b>points earned in the period</b>, which is a different figure from the
-    /// sidebar's running balance, since that also nets off entertainment purchases.</summary>
-    public sealed record PeriodTotals(int Score, int Done, int Total, int OnMin, int OffMin);
+    /// the diary should follow the Day/Week/Month/Year selector — DayOffs joined the rest of this
+    /// record 2026-08-13 for the same reason, after first shipping as its own always-three-numbers
+    /// card, which the user then corrected: "everything besides the diary should update based on
+    /// the chosen timescale... the same about the day-offs statistics", "we do not need an
+    /// additional card for it"). Score is the sum of each day's own score — <b>points earned in
+    /// the period</b>, which is a different figure from the sidebar's running balance, since that
+    /// also nets off entertainment purchases.</summary>
+    public sealed record PeriodTotals(int Score, int Done, int Total, int OnMin, int OffMin, int DayOffs);
 
     /// <summary>
     /// Per-date on/off-plan minutes across [from, today], from both sources: raw `time_diary`,
@@ -262,22 +266,29 @@ public static class ReportData
     }
 
     /// <summary>
-    /// Task counts, on/off-plan minutes and score summed over the selected period. Day-off dates
-    /// contribute no minutes (same rule as every other Reports total, 2026-07-17) but their score
-    /// is still included, because a task genuinely completed on a day off still earns its credit.
+    /// Task counts, on/off-plan minutes, score and manually-marked day-offs summed over the
+    /// selected period. Day-off dates contribute no minutes (same rule as every other Reports
+    /// total, 2026-07-17) but their score is still included, because a task genuinely completed on
+    /// a day off still earns its credit.
     ///
     /// Scores are recomputed per day rather than read back from `score_ledger` deliberately: the
     /// ledger only holds days the app was running to credit, so a stretch where it wasn't open
     /// would silently read as zero rather than as the score those days actually earned. Task
     /// counts and streaks are in-memory lookups, so the per-day loop stays cheap even over a year.
+    ///
+    /// DayOffs is bounded the same as everything else here — period start through today, never
+    /// into the future — even though a day off can legitimately be marked ahead of time for a date
+    /// later in the period. Deliberate: the user asked for this to follow the selector exactly like
+    /// every other figure on this card, not to invent its own, smarter boundary.
     /// </summary>
     public static PeriodTotals PeriodStats(ReportPeriod period, SqliteConnection conn, ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
+        var periodStart = PeriodStart(period, today);
         int scoreSum = 0, done = 0, total = 0, onSum = 0, offSum = 0;
         // The same sequence the tables below the card fold — see DailyRows for the two day-off
         // rules that used to be restated at each of these call sites.
-        foreach (var r in DailyRows(conn, score, PeriodStart(period, today)))
+        foreach (var r in DailyRows(conn, score, periodStart))
         {
             scoreSum += r.Score;
             total += r.Total;
@@ -285,26 +296,8 @@ public static class ReportData
             onSum += r.Minutes.On;
             offSum += r.Minutes.Off;
         }
-        return new PeriodTotals(scoreSum, done, total, onSum, offSum);
-    }
-
-    /// <summary>How many distinct calendar dates the user has explicitly marked a plan day off
-    /// (Schedule's "Day off" button), within the current calendar week/month/year — see
-    /// ScoreService.ManuallyMarkedDaysOff for exactly what counts and why. Bounded by the whole
-    /// period (through its last day, not just up to today) since a day off can be marked ahead
-    /// for a date later in the same period.</summary>
-    public sealed record DayOffTotals(int Week, int Month, int Year);
-
-    public static DayOffTotals ManualDayOffTotals(ScoreService score)
-    {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var weekStart = MondayOf(today);
-        var monthStart = new DateOnly(today.Year, today.Month, 1);
-        var yearStart = new DateOnly(today.Year, 1, 1);
-        return new DayOffTotals(
-            score.ManuallyMarkedDaysOff(weekStart, weekStart.AddDays(6)).Count,
-            score.ManuallyMarkedDaysOff(monthStart, monthStart.AddMonths(1).AddDays(-1)).Count,
-            score.ManuallyMarkedDaysOff(yearStart, new DateOnly(today.Year, 12, 31)).Count);
+        var dayOffs = score.ManuallyMarkedDaysOff(periodStart, today).Count;
+        return new PeriodTotals(scoreSum, done, total, onSum, offSum, dayOffs);
     }
 
     private static string MonthLabel(string yyyyMm) =>

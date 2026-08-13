@@ -116,6 +116,44 @@ public sealed class ReportPeriodStatsTests
         }
     }
 
+    /// <summary>DayOffs follows the period selector exactly like every other figure on this card
+    /// — a day off marked for today shows up in Day/Week/Month/Year alike, since today is inside
+    /// all four (2026-08-13: shipped first as its own always-three-numbers card, then folded into
+    /// PeriodTotals on the user's own correction — "everything besides the diary should update
+    /// based on the chosen timescale... the same about the day-offs statistics").</summary>
+    [Fact]
+    public void DayOffsFollowsThePeriodSelectorLikeEveryOtherFigure()
+    {
+        var planId = "period-dayoff-" + Guid.NewGuid();
+        var plan = MakePlan(planId);
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 1);  // plan day 1 == today, no exclusions
+
+        foreach (var period in new[] { ReportPeriod.Day, ReportPeriod.Week, ReportPeriod.Month, ReportPeriod.Year })
+        {
+            var totals = ReportData.PeriodStats(period, db.Conn, score);
+            Assert.True(totals.DayOffs >= 1, $"{period}: DayOffs {totals.DayOffs}");
+        }
+    }
+
+    /// <summary>DayOffs stops at today, the same boundary every other PeriodStats figure uses —
+    /// a day off marked for a date later in the period (still real, still known in advance) is
+    /// deliberately NOT counted yet, so this card can't show a different "as of" point than the
+    /// tasks/minutes/score sitting right next to it.</summary>
+    [Fact]
+    public void DayOffMarkedForAFutureDateInThePeriodIsNotCountedYet()
+    {
+        var planId = "period-dayoff-future-" + Guid.NewGuid();
+        var plan = MakePlan(planId, (1, "Task A"), (2, "Task B"));
+        using var db = new Database();
+        using var score = new ScoreService(new List<Plan> { plan }, db);
+        score.MarkDayOff(plan, 2);  // plan day 2 == tomorrow, still inside this week/month/year
+
+        var totals = ReportData.PeriodStats(ReportPeriod.Week, db.Conn, score);
+        Assert.Equal(0, totals.DayOffs);
+    }
+
     /// <summary>Day ⊆ Week ⊆ Year and Day ⊆ Month ⊆ Year, so a wider period's totals can never
     /// be smaller. Cheap, but it catches a whole class of range and merge mistakes — including
     /// double-counting between raw time_diary rows and the rollup table they age out into.

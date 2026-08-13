@@ -90,18 +90,6 @@ public sealed partial class SchedulePage : Page
             using var score = new ScoreService(plans, db);
             var completions = db.LoadCompletions();
 
-            // Only the manually-marked ones (this page's own "Day off" button) — not a plan's
-            // recurring weekday rest days, which are a standing rule rather than something
-            // added on any occasion (2026-08-13 request; see ScoreService.ManuallyMarkedDaysOff).
-            var dayOffs = ReportData.ManualDayOffTotals(score);
-            Sections.Children.Add(new TextBlock
-            {
-                Text = $"Day-offs added — {dayOffs.Week} this week · {dayOffs.Month} this month · {dayOffs.Year} this year",
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = Res("TextFillColorTertiaryBrush"),
-                Margin = new Thickness(0, 0, 0, 8),
-            });
-
             foreach (var plan in plans)
                 RenderPlan(plan, db, score, completions, scrollToToday);
         }

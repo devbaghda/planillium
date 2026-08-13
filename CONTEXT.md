@@ -313,12 +313,19 @@ same as its sibling — page-level UI, outside this project's Service/Data test 
 
 **2026-08-13** ("totals for day-offs … added by me manually"): new `ScoreService.ManuallyMarkedDaysOff`
 (distinct calendar dates with a `plan_days_off` row, deliberately narrower than
-`AllPlansScoringExempt`/`ScoringExemptDates` which also count a plan's recurring weekday rest days)
-+ `ReportData.ManualDayOffTotals` (week/month/year windows, bounded by the whole calendar period
-since a day off can be marked ahead of time). Shown both places, per user's own choice: a small
-always-on card on Reports (independent of the Day/Week/Month/Year selector, like the sidebar
-Balance) and a one-line summary atop Schedule. 4 new tests (`ManualDayOffTotalsTests.cs`) pin the
-scope: manual-only, range boundary, cross-plan same-date dedup, recurring-exclusion exclusion.
+`AllPlansScoringExempt`/`ScoringExemptDates` which also count a plan's recurring weekday rest days).
+**First shipped, then corrected same session**: v1 added a standalone always-three-numbers
+(week/month/year) card on Reports plus a summary line on Schedule — the user pushed back on both:
+"everything besides the diary should update based on the chosen timescale... the same about the
+day-offs statistics", "we do not need an additional card for it", "remove the day-offs info from
+the schedule page". Reworked to match: `DayOffs` joined `ReportData.PeriodTotals` itself (bounded
+period-start-through-today, same as every other figure there — deliberately not a smarter
+future-aware boundary, for consistency with the rest of the card) and folded into the existing
+Reports score card's caption line ("N days off marked"); the Schedule summary was removed outright,
+nothing replaced it there. Tests renamed/moved to match: `ManuallyMarkedDaysOffTests.cs` keeps the
+raw-method scope tests (manual-only, range boundary, cross-plan dedup, recurring-exclusion
+exclusion), two new tests in `ReportPeriodStatsTests.cs` pin the period-selector and today-boundary
+behavior. 152/152.
 
 **Same session, real finding**: while verifying, `dotnet test -c Release` turned out to have been
 silently running the whole suite against the REAL `data/progress.db`, not an isolated copy —
@@ -343,8 +350,8 @@ project**: a `#if DEBUG`-gated test-only hook is only as safe as "tests always b
 the moment anyone runs `-c Release`, and the failure mode is silent, not a build error.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **08-13's Reports/Schedule day-off total cards have not been live-UIA-verified** — clean build +
-    151/151 tests only.
+  - **08-13's Reports score-card DayOffs figure has not been live-UIA-verified** — clean build +
+    152/152 tests only.
   - **08-07's IdleReturnDialog Category/Tag fields, and the Mark-tag toolbar row, have not been
     live-UIA-verified** — clean build + 147/147 tests only. The width-cap fix reapplies an
     already-proven pattern, but the chip-click change and auto-classify-until-touched wiring

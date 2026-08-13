@@ -4,9 +4,8 @@ using Planillium.App.Services;
 namespace Planillium.App.Tests;
 
 /// <summary>
-/// ScoreService.ManuallyMarkedDaysOff / ReportData.ManualDayOffTotals — the week/month/year
-/// totals behind Reports' and Schedule's "Day-offs added" figures (2026-08-13 request, "totals
-/// for day-offs ... that were added by me manually").
+/// ScoreService.ManuallyMarkedDaysOff — the raw range query behind ReportData.PeriodStats'
+/// DayOffs figure (see ReportPeriodStatsTests for the period-boundary behavior on top of it).
 ///
 /// The one invariant worth pinning here isn't the arithmetic (that's a HashSet.Count) — it's the
 /// *scope*: only plan_days_off rows count, never a plan's recurring weekday rest days, and a date
@@ -15,7 +14,7 @@ namespace Planillium.App.Tests;
 /// case for a different purpose.
 /// </summary>
 [Collection("TestRoot")]
-public sealed class ManualDayOffTotalsTests
+public sealed class ManuallyMarkedDaysOffTests
 {
     private static Plan MakePlan(string planId, int startDayOffset = 0, List<int>? excludedWeekdays = null)
     {
@@ -31,29 +30,9 @@ public sealed class ManualDayOffTotalsTests
         };
     }
 
-    /// <summary>Marking today off must show up in the range query, and in all three totals,
-    /// since today is always inside this week/month/year.</summary>
-    [Fact]
-    public void MarkingTodayOffCountsInEveryTotal()
-    {
-        var planId = "dayoff-today-" + Guid.NewGuid();
-        var plan = MakePlan(planId);
-        using var db = new Database();
-        using var score = new ScoreService(new List<Plan> { plan }, db);
-        var today = DateOnly.FromDateTime(DateTime.Today);
-
-        score.MarkDayOff(plan, 1);
-
-        Assert.Contains(today, score.ManuallyMarkedDaysOff(today, today));
-        var totals = ReportData.ManualDayOffTotals(score);
-        Assert.True(totals.Week >= 1, $"week {totals.Week}");
-        Assert.True(totals.Month >= 1, $"month {totals.Month}");
-        Assert.True(totals.Year >= 1, $"year {totals.Year}");
-    }
-
-    /// <summary>A day off outside the queried range must not be counted — the boundary the
-    /// week/month totals actually depend on to stay accurate rather than just "everything ever
-    /// marked off".</summary>
+    /// <summary>A day off outside the queried range must not be counted — the boundary
+    /// ReportData.PeriodStats actually depends on to stay accurate rather than just "everything
+    /// ever marked off".</summary>
     [Fact]
     public void DayOffOutsideTheQueriedRangeIsExcluded()
     {
