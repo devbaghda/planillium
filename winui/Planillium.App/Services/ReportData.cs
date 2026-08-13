@@ -288,6 +288,25 @@ public static class ReportData
         return new PeriodTotals(scoreSum, done, total, onSum, offSum);
     }
 
+    /// <summary>How many distinct calendar dates the user has explicitly marked a plan day off
+    /// (Schedule's "Day off" button), within the current calendar week/month/year — see
+    /// ScoreService.ManuallyMarkedDaysOff for exactly what counts and why. Bounded by the whole
+    /// period (through its last day, not just up to today) since a day off can be marked ahead
+    /// for a date later in the same period.</summary>
+    public sealed record DayOffTotals(int Week, int Month, int Year);
+
+    public static DayOffTotals ManualDayOffTotals(ScoreService score)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var weekStart = MondayOf(today);
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var yearStart = new DateOnly(today.Year, 1, 1);
+        return new DayOffTotals(
+            score.ManuallyMarkedDaysOff(weekStart, weekStart.AddDays(6)).Count,
+            score.ManuallyMarkedDaysOff(monthStart, monthStart.AddMonths(1).AddDays(-1)).Count,
+            score.ManuallyMarkedDaysOff(yearStart, new DateOnly(today.Year, 12, 31)).Count);
+    }
+
     private static string MonthLabel(string yyyyMm) =>
         DateTime.TryParseExact(yyyyMm, "yyyy-MM", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out var d)

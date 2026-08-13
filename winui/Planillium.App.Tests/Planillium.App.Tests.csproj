@@ -27,6 +27,14 @@
          dependency versions weren't pinned/reproducible across restores the way the
          main app's are (audit finding #15). -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Unconditional (not scoped to a Configuration) — must be defined in BOTH Debug and
+         Release builds of this project. AppPaths.cs (source-linked below, not referenced as a
+         compiled DLL) checks this to decide whether TestRootFixture's MENTOR_ROOT override is
+         allowed to redirect it away from the real data/progress.db. It used to check only
+         DEBUG, on the assumption `dotnet test` always builds Debug — a `-c Release` run
+         silently pointed the "isolated" suite at the real database instead (2026-08-13,
+         see AppPaths.Root's own comment for the confirmed damage). -->
+    <DefineConstants>$(DefineConstants);PLANILLIUM_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

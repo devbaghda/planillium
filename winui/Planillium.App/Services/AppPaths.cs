@@ -24,10 +24,28 @@ public static class AppPaths
             // via an environment variable, and leaving it live there meant anything able to
             // set an env var before launch (a script, a modified shortcut) could point the
             // app at an arbitrary folder of its choosing (2026-07-24 audit finding #10).
-            // Genuinely still needed in Debug: Planillium.App.Tests' TestRootFixture relies
-            // on this exact hook to isolate the test suite's SQLite file from the real
-            // data/progress.db (dotnet test builds Debug by default, so this stays live for it).
-#if DEBUG
+            //
+            // ALSO gated on PLANILLIUM_TESTS (defined unconditionally — both Debug and
+            // Release — by Planillium.App.Tests.csproj, which source-links this exact file
+            // rather than referencing the compiled Planillium.App.dll): this file used to be
+            // #if DEBUG only, on the assumption that `dotnet test` always builds Debug. It
+            // doesn't when invoked with `-c Release`, and this file gets recompiled from
+            // source as part of that build — DEBUG is then undefined, the block below never
+            // exists in the compiled test binary, and TestRootFixture's env var has nothing
+            // to attach to. AppPaths.Root then falls straight through to the walk-up-from-
+            // exe-directory branch, which finds THIS REPO'S OWN config.json + plans/ and
+            // silently points the "isolated" test run at the real data/progress.db.
+            //
+            // Confirmed real (2026-08-13): a `dotnet test -c Release` run left dozens of
+            // fake plan_id rows in the real task_overrides/task_completions/plan_days_off
+            // tables, and — because score_ledger's daily_score row is keyed by (reason,
+            // date) with no plan_id at all — any test that called CreditDayScoreIfMissing/
+            // RecalculateDayScore for DateTime.Today (several do) could silently overwrite
+            // or delete the real ledger row for whatever the real calendar date happened to
+            // be at test-run time. That's indistinguishable from a legitimate recompute after
+            // the fact, so the historical extent of this is not something a query can recover
+            // — see CONTEXT.md for what was and wasn't cleaned up.
+#if DEBUG || PLANILLIUM_TESTS
             var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
             if (!string.IsNullOrEmpty(env) && Directory.Exists(env))
                 return _root = env;

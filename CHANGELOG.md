@@ -24,8 +24,27 @@ going forward; the original Python/Tkinter version is retired.
   the default button can still fire on Enter even while it's shown disabled. Each now also
   double-checks its own conditions right before writing anything, so an early/invalid submission
   can't sneak through regardless of how it was triggered.
+- **The test suite was silently running against the real database instead of an isolated copy
+  whenever run with `dotnet test -c Release`.** Test isolation (TestRootFixture's MENTOR_ROOT
+  override) only compiled in under a `#if DEBUG` check, on the assumption tests always build
+  Debug — a Release run recompiles the same source file with DEBUG undefined, so the override
+  silently never existed and every test wrote real rows into `data/progress.db`. Left 112 orphaned
+  rows behind under fake test plan ids (78 in task_overrides, 14 in task_completions, 20 in
+  plan_days_off) — deleted, after backup and your confirmation naming the exact tables and counts;
+  none were ever read by the real app since no real plan uses those ids. `score_ledger` isn't
+  plan-scoped, so a test crediting/recalculating "today" could in principle have overwritten a
+  real day's ledger row too — not retroactively auditable, since a test-derived score and a real
+  one look identical after the fact. Fixed: the override now also requires a `PLANILLIUM_TESTS`
+  constant the test project defines unconditionally (both configurations), so isolation no longer
+  depends on which configuration `dotnet test` happens to build.
 
 **New**
+- Reports and Schedule now show how many days you've manually marked off (Schedule's "Day off"
+  button) this week, this month and this year — a small "DAY-OFFS ADDED MANUALLY" card on Reports
+  (always all three, regardless of the Day/Week/Month/Year selector) and a one-line summary at the
+  top of Schedule. Deliberately excludes a plan's recurring weekly rest days (e.g. a plan with
+  Saturdays/Sundays off) — only dates explicitly marked off count, matching "added by me manually."
+  A date marked off on more than one plan still counts once.
 - Diary entries can now carry a second, optional tag — Routine, Documents, Studioshoo, Selfdev, or
   Procrastination — alongside the existing on-plan/off-plan/neutral/paid/idle category. It has no
   effect on score or streaks; it's purely a finer breakdown for your own reading, e.g. telling apart

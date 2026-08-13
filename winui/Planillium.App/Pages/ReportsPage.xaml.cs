@@ -131,6 +131,10 @@ public sealed partial class ReportsPage : Page
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
+            // Always all three calendar windows at once, regardless of the Day/Week/Month/Year
+            // selector above — same reasoning as the sidebar's all-time Balance staying put no
+            // matter what page you're on (2026-08-13 request).
+            Body.Children.Add(Card(DayOffCard(ReportData.ManualDayOffTotals(score))));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -213,6 +217,30 @@ public sealed partial class ReportsPage : Page
         card.Children.Add(Dim($"{totals.Done}/{totals.Total} tasks · " +
                               $"{ReportData.FmtHours(totals.OnMin)} on-plan · " +
                               $"{ReportData.FmtHours(totals.OffMin)} off-plan"));
+        return card;
+    }
+
+    /// <summary>Days off explicitly marked via Schedule's "Day off" button — never the
+    /// recurring weekday rest days a plan can also have (2026-08-13 request, "added by me
+    /// manually"). Deliberately period-selector-independent (unlike ScoreCard above it): three
+    /// numbers side by side, not one that changes underneath the same label depending on what's
+    /// selected elsewhere on the page.</summary>
+    private static StackPanel DayOffCard(ReportData.DayOffTotals totals)
+    {
+        var card = new StackPanel { Spacing = 2 };
+        card.Children.Add(Caption("DAY-OFFS ADDED MANUALLY"));
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 28, Margin = new Thickness(0, 4, 0, 0) };
+        void Stat(string label, int value)
+        {
+            var col = new StackPanel { Spacing = 0 };
+            col.Children.Add(new TextBlock { Text = value.ToString(), FontSize = 28, FontWeight = FontWeights.Bold });
+            col.Children.Add(Dim(label));
+            row.Children.Add(col);
+        }
+        Stat("This week", totals.Week);
+        Stat("This month", totals.Month);
+        Stat("This year", totals.Year);
+        card.Children.Add(row);
         return card;
     }
 

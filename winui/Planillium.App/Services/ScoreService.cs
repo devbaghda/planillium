@@ -154,6 +154,31 @@ public sealed class ScoreService : IDisposable
         return result;
     }
 
+    /// <summary>Distinct calendar dates within [from, to] where the user explicitly marked a
+    /// plan day off via SchedulePage's "Day off" button (a plan_days_off row) — deliberately
+    /// narrower than <see cref="ScoringExemptDates"/>, which also counts a plan's recurring
+    /// weekday rest days (ExcludedWeekdays). Those are an ongoing rule, not something "added"
+    /// on any particular occasion, so they're excluded here (2026-08-13 request: totals for
+    /// "day-offs ... added by me manually").
+    ///
+    /// Unbounded by "today" on purpose, unlike DailyRows/PeriodStats: a day off is known as
+    /// soon as it's marked, so one set for later this week/month/year is real ahead of time —
+    /// there's no need to wait for the date to arrive the way there is for diary minutes.
+    ///
+    /// Two plans separately marking the same calendar date off still count once: this answers
+    /// "how many days did I take off", not "how many mark-off actions did I take".</summary>
+    public HashSet<DateOnly> ManuallyMarkedDaysOff(DateOnly from, DateOnly to)
+    {
+        var result = new HashSet<DateOnly>();
+        foreach (var plan in _plans)
+            foreach (var day in DaysOff(plan.Id))
+            {
+                var d = plan.DateForPlanDay(day);
+                if (d >= from && d <= to) result.Add(d);
+            }
+        return result;
+    }
+
     public (int Total, int Done) DayTaskCounts(DateOnly d)
     {
         int total = 0, done = 0;

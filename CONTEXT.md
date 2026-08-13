@@ -234,94 +234,38 @@ lessons); plan tasks gained a `tools` list (`TeachPlanTools`, 12 keywords, zero 
 AutoSuggestBox; "Show more" batched at 50. **07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never
 wired; Diary filters didn't narrow each other; idle rows show the typed answer in Page not "—".
 
-**2026-08-04** (one session, three rounds — all shipped, verified and pushed; commits `e4c4f11`,
-`ee981c0`, `488424f`, `0ffdde4`). *Reported issues*: (1) the diary window was hardcoded 06:00–20:00
-inside `ActivityTracker`, unrelated to working hours, so 08:00 working days still logged/back-filled
-from 06:00 — **merged into working hours** on the user's call (`InDiaryHours` collapsed into
-`InWorkingHours`; `SaveRules` rejects work start ≥ end). Two hardcoded "06:00–20:00" display strings
-now read live values. (2) Reports never rolled over at midnight — not the day-change watcher (it did
-re-render) but `_diaryDate`, a static seeded once at class load; fixed with `_diaryFollowsToday`, set
-through a single `GoTo` all four date controls route through. (3) "Day X of Y" → `Plan.ProgressDay`,
-business rule 13; user resolved the "hole further back" ambiguity themselves ("if I want to skip day
-10 I do replanning"), making stall-on-first-unfinished-day safe. (4) Reports gained a shared
-`AddTotalsRow` under both summary tables (Tasks/Score columns deliberately blank).
-*Then*: all 12 scoring rules became editable (new SCORING section in Settings, built from a new
-`ScoringRules` table that also feeds the formula and the config lookup — see `DECISIONS.md`).
-**`ActivityTracker`'s God-Object split landed** (deferred since 07-23): 855→597 lines, extracting
-`NativeInput` (Win32 P/Invoke), `WindowTitleResolver` (title decoration + pid cache),
-`ActivityClassifier` (keywords), `DiaryWriter` (the two `time_diary` statements). Only pieces owning
-state nothing else touched moved; the poll loop's interlocking session/idle/alert state stayed, and
-`EffectiveClass` with it (reads `PaidUntil`). Public surface unchanged via forwarders.
-*Then*: Settings became seven `Expander`s — **superseded next day, see below**. And **everything
-above the diary on Reports now follows the period selector** (the card always showed today, the
-insights always this week). `ReportData.PeriodStats` aggregates from one `DailyMinutes` pass (raw
-`time_diary` + `diary_daily_rollup`, two queries not 365) plus in-memory per-day scoring; scores are
-recomputed rather than read from `score_ledger` **deliberately** — the ledger only holds days the
-app ran to credit, so a stretch where it wasn't open would read as zero. Card relabelled "SCORE
-EARNED — <period>" to stay distinct from the sidebar's BALANCE (all-time, net of purchases).
-*Verified*: 124/124, live UIA on a scratch-root instance — "Day 1 of 28"/"Day 1 of 160" correct at
-calendar day 8; Year card minutes matched the summary table's Total row exactly (two independent
-paths agreeing); diary date controls stepped correctly and a past day stayed pinned.
-**2026-08-05** (same session, four further rounds). The Expander Settings was **rejected on sight**
-("put an additional sub-menu on the right side, the settings pages should be of the same size with
-no bouncing") and replaced by a right-hand `ListView`, one panel visible at a time. No-bouncing is
-structural: page-grid row 1 is `*`; all seven panels share one grid cell (collapsed siblings aren't
-measured); the status strip is fixed-height. The one-group-save objection that argued for Expanders
-doesn't apply — every panel stays loaded, `SaveRules` writes the same values whatever is shown. Sized
-for the **900dip minimum**: hours rows became star-column grids, Data buttons 2×2, `LayoutScoringGrid`
-reflows 12 scoring inputs 1↔2 columns off measured width. *Verified* UIA at 900/1500dip — rects
-identical at each width; two defects looking wouldn't have caught: every menu item had a **blank
-accessible name**, six scoring boxes read `BoundingRectangle.Empty` (below-fold, `ScrollIntoView`
-fixed). 124/124.
-*Then* ("align all the reports"): three left edges unified into `LabelColumnWidth`/`ColumnGap`/
-`SubRowIndent` (`ReportsPage.Styling.cs`), read by both tables, the distraction list and
-`AppUsageRow`. *Verified* against a **copy** of the real DB (stale `-wal`/`-shm` sidecars deleted
-first — see `DECISIONS.md`).
-*Then* ("add all the categories and summary for the rows"): tables carried only on/off-plan; now all
-five via `DiaryCategory.ReportOrder` plus a per-row Total — **which changed meaning**, all tracked
-time not on+off (Year total 80h10m→294h34m). New `ReportData.CategoryMinutes`; three near-duplicate
-queries collapsed into one `DailyMinutes`, fixing two latent bugs: `MonthBuckets` never read
-`diary_daily_rollup` at all, and the rollup's neutral/paid/idle columns were never read back despite
-being stored correctly.
-*Then* (decimal hours + Score everywhere): `FmtMins`→`FmtHours` everywhere but the diary (kept h/m).
-Month/Year gained Tasks/Score columns+totals via one shared `DailyRows` walk, so a table's score
-total equals the card by construction (test asserts it). 132/132.
-*Then*: **"the app asks me about my absence twice"** — two compounding causes in
-`ActivityTracker.PendingDayGap`: judged only by `db.LastDiaryEnd()`, blind to a currently-open
-session (logged once live, again when the session flushed); never remembered what it had already
-asked, so a second manual review click re-logged it. Fixed with two clamps: `_openSessionStart`
-caps how far the gap extends, `_accountedUntil` caps how far back it starts. Root-caused via git
-archaeology, not guessing. 136/136.
-*Then*: **"fix width on all of the pages"** — Today/Schedule/Plans still had the *pre*-07-28
-`StackPanel MaxWidth Center` bug already fixed once for Reports. New `Pages/PageLayout.cs`,
-`CenterContent()`. *Same round*: the "Day off" text on every Schedule row is the toggle button, not
-a status chip; two empty weekdays traced to real `task_overrides` history exposing a genuine gap in
-`RescheduleTask`, fixed next. 136/136.
-*Then*: **"if the day remains empty, fill the gap with the following day's task"** — reverses the
-07-09 "Reschedule never closes gaps" call (business rule 7, re-confirmed with the user).
-`RescheduleTask` now runs one combined formula per task — compact back to close the vacated day,
-*then* push forward — instead of two independent shift loops that could overwrite each other.
-**Future-only guard**: a vacated day compacts only if today or later, since `ReplanOverdueDialog`
-reuses this on already-past days. 137/137.
-*Then*: **"go ahead and fix it"** — user approved closing the existing days-22/23 gap retroactively.
-New `ScoreService.CompactFutureGaps(plan)`: finds the earliest empty not-off day at/after today with
-a later occupied day, pulls everything after it back one, loops until no hole remains. Bug caught
-before it ran: hole detection must count a completed task's day as occupied even though the task
-itself is excluded from what's eligible to move. Applied once via a temporary Debug-only button
-(a direct-write classifier block on my first approach meant the write had to go through the app);
-DB backed up first, verified read-only after: days 21→39 sequential, nothing lost/duplicated.
-Button removed right after. 139/139.
-*Then*: **"add an additional layer of categorization"** — new independent `DiaryTag` axis on
-`time_diary` (nullable `tag`, this app's first-ever ADD COLUMN migration). Never read by
-ScoreService, purely descriptive. Combo in Edit; per-row in Split; new Tag filter alongside
-Category/App/Page; shown as a row suffix at first — **superseded 08-07, see below: moved to its own
-column**. Values are the user's own literal wording, kept verbatim after a first pass silently
-prettified them and got corrected twice — final five: Routine, Documents, Studioshoo, Selfdev,
-Procrastination. *Found live, not by review*: Split's new Tag combo pushed the row past
-`ContentDialog`'s own width cap — same bug class already root-caused once for the diary row list;
-same fix (`HorizontalAlignment.Left` + fixed columns + a `Visible` horizontal `ScrollViewer`).
-*Verified* on a scratch-root instance (MENTOR_ROOT copy, real DB untouched). 5 new
-tests, 144/144.
+**2026-08-04 → 08-05** (one continuous session, many rounds — commits `e4c4f11`, `ee981c0`,
+`488424f`, `0ffdde4`): diary window merged into working hours (`InDiaryHours`→`InWorkingHours`,
+`SaveRules` rejects work start ≥ end); Reports' midnight rollover fixed (`_diaryFollowsToday`, every
+date control routed through one `GoTo`); "Day X of Y" → `Plan.ProgressDay` (business rule 13, user
+resolved the "hole further back" ambiguity themselves); shared `AddTotalsRow`; all 12 scoring rules
+made editable (`ScoringRules` table, feeds both the formula and Settings). `ActivityTracker`'s
+God-Object split landed (855→597 lines): `NativeInput`/`WindowTitleResolver`/`ActivityClassifier`/
+`DiaryWriter` extracted, forwarders kept the public surface unchanged. Reports above the diary
+follows the period selector throughout (`ReportData.PeriodStats`; scores recomputed rather than
+read from `score_ledger` **deliberately** — the ledger only holds days the app ran to credit); card
+relabelled "SCORE EARNED" to stay distinct from the sidebar's all-time BALANCE. Settings' Expander
+layout was **rejected on sight** ("no bouncing") and replaced by a right-hand `ListView`, one panel
+visible at a time, sized for the 900dip minimum — found and fixed blank accessible names plus
+off-screen `BoundingRectangle.Empty` scoring boxes (`ScrollIntoView`) along the way. "Align all the
+reports": `LabelColumnWidth`/`ColumnGap`/`SubRowIndent` unified. Report tables gained all 5
+categories plus a per-row Total — **meaning changed**, Year total 80h10m→294h34m; new
+`ReportData.CategoryMinutes`, and consolidating three near-duplicate queries into `DailyMinutes`
+fixed two latent bugs (`MonthBuckets` never read `diary_daily_rollup`; the rollup's neutral/paid/idle
+columns were never read back). Hours switched to decimal (`FmtHours`, diary kept h/m); Month/Year
+gained Tasks/Score + totals via `DailyRows`. "Asks about absence twice": two compounding causes in
+`ActivityTracker.PendingDayGap`, fixed with `_openSessionStart`/`_accountedUntil` clamps,
+root-caused via git archaeology. New `Pages/PageLayout.cs`/`CenterContent()` fixed the same
+pre-07-28 width bug on Today/Schedule/Plans. "Fill the gap with the following day's task" reverses
+the 07-09 no-gap-closing call (business rule 7, re-confirmed with the user); `RescheduleTask` now
+runs one combined compact-then-push formula, future-only guarded (`ReplanOverdueDialog` still needs
+past days left alone). User then approved closing the existing days-22/23 gap retroactively: new
+`ScoreService.CompactFutureGaps`, applied once via a temporary Debug-only button, DB backed up and
+verified 21→39 sequential, button removed after. New independent `DiaryTag` axis added
+(`time_diary.tag`, this app's first ADD COLUMN migration) — never read by ScoreService, purely
+descriptive; five user-literal values (Routine/Documents/Studioshoo/Selfdev/Procrastination); hit
+and fixed the same `ContentDialog` width-cap bug a third time. Verified throughout via live UIA on
+scratch-root instances; ended the arc at 144/144.
 
 **2026-08-07**: two user reports on Tag/idle-answer. (1) Tag was riding inside the diary row's
 Details column as a suffix, easy to lose next to the duration — now its own fixed-width column
@@ -367,8 +311,41 @@ rebuilt/relaunched.
 also touch activity-rule learning and a score recalc, neither applies to a tag. No dedicated test,
 same as its sibling — page-level UI, outside this project's Service/Data test scope.
 
+**2026-08-13** ("totals for day-offs … added by me manually"): new `ScoreService.ManuallyMarkedDaysOff`
+(distinct calendar dates with a `plan_days_off` row, deliberately narrower than
+`AllPlansScoringExempt`/`ScoringExemptDates` which also count a plan's recurring weekday rest days)
++ `ReportData.ManualDayOffTotals` (week/month/year windows, bounded by the whole calendar period
+since a day off can be marked ahead of time). Shown both places, per user's own choice: a small
+always-on card on Reports (independent of the Day/Week/Month/Year selector, like the sidebar
+Balance) and a one-line summary atop Schedule. 4 new tests (`ManualDayOffTotalsTests.cs`) pin the
+scope: manual-only, range boundary, cross-plan same-date dedup, recurring-exclusion exclusion.
+
+**Same session, real finding**: while verifying, `dotnet test -c Release` turned out to have been
+silently running the whole suite against the REAL `data/progress.db`, not an isolated copy —
+`TestRootFixture`'s `MENTOR_ROOT` override lived behind `#if DEBUG` on the assumption tests always
+build Debug; a `-c Release` run recompiles the same source file (source-linked, not a project
+reference — see `Planillium.App.Tests.csproj`) with `DEBUG` undefined, so the override silently
+never existed and `AppPaths.Root` fell through to the real repo's own `config.json`/`plans/`.
+Confirmed via matching `score_ledger` row counts between a "fresh" filtered test run and the real
+DB. Left 112 orphaned rows under fake plan ids across `task_overrides` (78), `task_completions`
+(14), `plan_days_off` (20) — deleted after backup (`data/backup/progress.db.20260813_180041.bak`)
+and explicit confirmation naming the exact tables/counts; none were ever read by the real app.
+`score_ledger` has no `plan_id` (keyed only by reason+date), so a test crediting/recalculating
+"today" could in principle have clobbered a real day's ledger row too — **not retroactively
+auditable**, a test-derived score and a real one are indistinguishable after the fact; nothing
+further done there beyond the two rows (138, 140) already corrected on 08-07 for unrelated reasons.
+Fixed properly: the override now also requires `PLANILLIUM_TESTS`, a constant the test project
+defines unconditionally in **both** configurations (`Planillium.App.Tests.csproj`'s
+`DefineConstants`), so isolation no longer depends on which configuration `dotnet test` happens to
+build. Verified: 151/151 passing in both `-c Release` and default Debug; real DB's `score_ledger`
+row count unchanged (78) after a Release run post-fix. **Lesson for any source-linked test
+project**: a `#if DEBUG`-gated test-only hook is only as safe as "tests always build Debug" — untrue
+the moment anyone runs `-c Release`, and the failure mode is silent, not a build error.
+
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **08-07's IdleReturnDialog Category/Tag fields, and the new Mark-tag toolbar row, have not been
+  - **08-13's Reports/Schedule day-off total cards have not been live-UIA-verified** — clean build +
+    151/151 tests only.
+  - **08-07's IdleReturnDialog Category/Tag fields, and the Mark-tag toolbar row, have not been
     live-UIA-verified** — clean build + 147/147 tests only. The width-cap fix reapplies an
     already-proven pattern, but the chip-click change and auto-classify-until-touched wiring
     haven't been exercised live.
