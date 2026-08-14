@@ -53,6 +53,9 @@ going forward; the original Python/Tkinter version is retired.
   switched the scroller back from permanently-shown to auto-hide-when-not-needed.
 
 **New**
+- You can now keep three active plans at once instead of two. Everywhere that number showed up
+  (the "Add Plan" limit dialog, the Start/Restore button tooltips, the manual, the README) reads
+  it from one place, so nothing else needed to change to raise it.
 - The Reports score card now also shows how many days you've manually marked off (Schedule's "Day
   off" button) — following the Day/Week/Month/Year selector exactly like everything else on the
   card, not a fixed number. Deliberately excludes a plan's recurring weekly rest days (e.g. a plan

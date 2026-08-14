@@ -2,6 +2,11 @@
 data/
 config.json
 plans/active/*.json
+# Gap found 2026-08-14: archive/queued weren't covered, so a plan finishing (moving
+# active → archive) or a queued idea landed untracked instead of ignored — real
+# personal plan content, one git-add-A away from getting committed by accident.
+plans/archive/*.json
+plans/queued/*.json
 
 # Publishing/marketing drafts — local-only, not part of the app (2026-07-21).
 # Kept on disk for the user's own posting workflow; deliberately not pushed to

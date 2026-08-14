@@ -26,7 +26,7 @@ entries (mirrors the same list). Compiled exe: `Planillium.App.exe`.
 
 ## What this app is
 A desktop personal mentor and accountability companion that tracks the user's progress
-across up to 2 active life/career plans simultaneously. It monitors his activity,
+across up to 3 active life/career plans simultaneously. It monitors his activity,
 keeps him on-plan, logs his full day (06:00–20:00), and generates weekly reports.
 
 ## The user
@@ -55,7 +55,7 @@ Planillium/
 │                              secrets — TickTick client_secret/access_token live in
 │                              Windows Credential Manager via CredentialStore, not on disk)
 ├── plans/
-│   ├── active/             ← up to 2 active plan JSONs (e.g. netherlands.json)
+│   ├── active/             ← up to 3 active plan JSONs (e.g. netherlands.json)
 │   ├── queued/             ← plan ideas saved for later (2026-07-22) — inert until
 │   │                          activated (PlanStore.ActivateQueuedPlan resets start_date)
 │   └── archive/            ← completed plans moved here; frees a slot for a new plan
@@ -82,7 +82,7 @@ Planillium/
 - **Credentials:** Windows Credential Manager (`CredentialStore`, python-keyring-compatible
   byte format)
 - **Packaging:** Inno Setup via `release/release.ps1` (see `release/README.md`)
-- **App name constant:** `AppNames`, `MAX_PLANS = 2`
+- **App name constant:** `AppNames`, `AppInfo.MaxActivePlans = 3` (raised from 2, 2026-08-13)
 
 ---
 
@@ -204,7 +204,7 @@ none may be dropped in a compaction.
 
 ### Session log
 
-**Through 2026-07-22** (detail in git log): WinUI 3 rebuild landed 07-07 as v1.0.0. Audit rounds
+**Through 2026-07-29** (detail in git log): WinUI 3 rebuild landed 07-07 as v1.0.0. Audit rounds
 1-6 (07-09→07-15) introduced `Database.RunInTransaction`, `DateExtensions.ToIsoTimestamp()`,
 `JsonFileIO` atomic writes, `PlanStore.IsValidPlanId` and transactional dialogs with a
 `SaveErrorBar` — the mechanisms every later round built on — and fixed diary column width,
@@ -219,20 +219,19 @@ pairs found, only 2 matching the known bug — **user's call: leave untouched**;
 git-history purge (134 commits); late-day task reminder; diary-tracking-gap fix; repo renamed
 `planillium`, **v1.1.0 public**; `DispatcherQueueTimer` root-caused (Standing lessons); queued plan
 ideas (v1.2.0); tray stuck-badge; Diary category/app filtering; `ActiveWindowTitle` process-name
-fallback (~118 bare "-" rows/day fixed); `posting-plan`/`project-media` skills bootstrapped.
-
-**2026-07-23 → 07-29** (condensed): internal rename `MentorOverseer`→`Planillium` (3 legacy-compat
-values deliberately untouched, see top of file); Diary App/Page filter split; "Exclusion Impact"
-panel removed (business rule 12); 26 `ContentDialog` sites unified onto `DialogControls.Build`;
-`StartDayChangeWatcher` for the new-day-without-switching-pages gap; note-wipe risk fixed; VACUUM off
-the UI thread; docx zip-bomb check counts real decompressed bytes. Four 5-category audits (0
-Critical) plus two re-audits, 86/86 tests. **07-27**: app wouldn't start — bisected to 07-24's
-`SetDefaultDllDirectories` breaking WinRT activation; clean revert. Wake-from-sleep toast only logged
-a gap with no UI handler wired; `HandleIdleReturn` now always logs "unaccounted time" the instant a
-gap is detected. **07-28**: Diary Edit/Split unreachable via `Card()`'s rounded-clip (Standing
-lessons); plan tasks gained a `tools` list (`TeachPlanTools`, 12 keywords, zero mismatches); diary
-AutoSuggestBox; "Show more" batched at 50. **07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never
-wired; Diary filters didn't narrow each other; idle rows show the typed answer in Page not "—".
+fallback (~118 bare "-" rows/day fixed); `posting-plan`/`project-media` skills bootstrapped. 07-23:
+internal rename `MentorOverseer`→`Planillium` (3 legacy-compat values deliberately untouched, see
+top of file); Diary App/Page filter split; "Exclusion Impact" panel removed (business rule 12); 26
+`ContentDialog` sites unified onto `DialogControls.Build`; `StartDayChangeWatcher` for the
+new-day-without-switching-pages gap; note-wipe risk fixed; VACUUM off the UI thread; docx zip-bomb
+check counts real decompressed bytes; four 5-category audits (0 Critical) plus two re-audits,
+86/86 tests. **07-27**: app wouldn't start — bisected to 07-24's `SetDefaultDllDirectories`
+breaking WinRT activation, clean revert; wake-from-sleep toast only logged a gap with no UI handler
+wired, `HandleIdleReturn` now always logs "unaccounted time" the instant a gap is detected. **07-28**:
+Diary Edit/Split unreachable via `Card()`'s rounded-clip (Standing lessons); plan tasks gained a
+`tools` list (`TeachPlanTools`, 12 keywords, zero mismatches); diary AutoSuggestBox; "Show more"
+batched at 50. **07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never wired; Diary filters
+didn't narrow each other; idle rows show the typed answer in Page not "—".
 
 **2026-08-04 → 08-05** (one continuous session, many rounds — commits `e4c4f11`, `ee981c0`,
 `488424f`, `0ffdde4`): diary window merged into working hours (`InDiaryHours`→`InWorkingHours`,
@@ -312,60 +311,59 @@ also touch activity-rule learning and a score recalc, neither applies to a tag. 
 same as its sibling — page-level UI, outside this project's Service/Data test scope.
 
 **2026-08-13** ("totals for day-offs … added by me manually"): new `ScoreService.ManuallyMarkedDaysOff`
-(distinct calendar dates with a `plan_days_off` row, deliberately narrower than
-`AllPlansScoringExempt`/`ScoringExemptDates` which also count a plan's recurring weekday rest days).
-**First shipped, then corrected same session**: v1 added a standalone always-three-numbers
-(week/month/year) card on Reports plus a summary line on Schedule — the user pushed back on both:
-"everything besides the diary should update based on the chosen timescale... the same about the
-day-offs statistics", "we do not need an additional card for it", "remove the day-offs info from
-the schedule page". Reworked to match: `DayOffs` joined `ReportData.PeriodTotals` itself (bounded
-period-start-through-today, same as every other figure there — deliberately not a smarter
-future-aware boundary, for consistency with the rest of the card) and folded into the existing
-Reports score card's caption line ("N days off marked"); the Schedule summary was removed outright,
-nothing replaced it there. Tests renamed/moved to match: `ManuallyMarkedDaysOffTests.cs` keeps the
-raw-method scope tests (manual-only, range boundary, cross-plan dedup, recurring-exclusion
-exclusion), two new tests in `ReportPeriodStatsTests.cs` pin the period-selector and today-boundary
-behavior. 152/152.
+(distinct dates with a `plan_days_off` row, narrower than `AllPlansScoringExempt`/
+`ScoringExemptDates`, which also count recurring weekday rest days). **v1 corrected same session**:
+a standalone always-three-numbers Reports card + Schedule summary line were rejected ("everything
+besides the diary should update based on the chosen timescale... we do not need an additional card
+for it... remove the day-offs info from the schedule page") — reworked into
+`ReportData.PeriodTotals.DayOffs` (bounded period-start-through-today like every other figure
+there) folded into the Reports score card's caption line; Schedule's line removed outright. Tests:
+`ManuallyMarkedDaysOffTests.cs` (raw-method scope), two new `ReportPeriodStatsTests.cs` tests
+(period-selector + today-boundary). 152/152.
 
-**Same session, real finding**: while verifying, `dotnet test -c Release` turned out to have been
-silently running the whole suite against the REAL `data/progress.db`, not an isolated copy —
-`TestRootFixture`'s `MENTOR_ROOT` override lived behind `#if DEBUG` on the assumption tests always
-build Debug; a `-c Release` run recompiles the same source file (source-linked, not a project
-reference — see `Planillium.App.Tests.csproj`) with `DEBUG` undefined, so the override silently
-never existed and `AppPaths.Root` fell through to the real repo's own `config.json`/`plans/`.
-Confirmed via matching `score_ledger` row counts between a "fresh" filtered test run and the real
-DB. Left 112 orphaned rows under fake plan ids across `task_overrides` (78), `task_completions`
-(14), `plan_days_off` (20) — deleted after backup (`data/backup/progress.db.20260813_180041.bak`)
-and explicit confirmation naming the exact tables/counts; none were ever read by the real app.
-`score_ledger` has no `plan_id` (keyed only by reason+date), so a test crediting/recalculating
-"today" could in principle have clobbered a real day's ledger row too — **not retroactively
-auditable**, a test-derived score and a real one are indistinguishable after the fact; nothing
-further done there beyond the two rows (138, 140) already corrected on 08-07 for unrelated reasons.
-Fixed properly: the override now also requires `PLANILLIUM_TESTS`, a constant the test project
-defines unconditionally in **both** configurations (`Planillium.App.Tests.csproj`'s
-`DefineConstants`), so isolation no longer depends on which configuration `dotnet test` happens to
-build. Verified: 151/151 passing in both `-c Release` and default Debug; real DB's `score_ledger`
-row count unchanged (78) after a Release run post-fix. **Lesson for any source-linked test
-project**: a `#if DEBUG`-gated test-only hook is only as safe as "tests always build Debug" — untrue
-the moment anyone runs `-c Release`, and the failure mode is silent, not a build error.
+**Real finding while verifying**: `dotnet test -c Release` was silently running the whole suite
+against the REAL `data/progress.db` — `TestRootFixture`'s `MENTOR_ROOT` override lived behind
+`#if DEBUG`, and since `AppPaths.cs` is source-linked (not project-referenced) into
+`Planillium.App.Tests.csproj`, a `-c Release` run compiles it with `DEBUG` undefined, silently
+dropping the override. Confirmed via matching `score_ledger` counts between a "fresh" filtered run
+and the real DB. Left 112 orphaned rows (fake plan ids) across `task_overrides` (78)/
+`task_completions` (14)/`plan_days_off` (20) — deleted after backup + confirmation naming
+tables/counts. `score_ledger` has no `plan_id`, so a test crediting "today" could in principle have
+clobbered a real ledger row — not retroactively auditable; nothing further done beyond rows
+138/140 already fixed 08-07. **Fix**: override now also requires `PLANILLIUM_TESTS`, defined
+unconditionally in both configs, so isolation no longer depends on which one `dotnet test` builds.
+151/151 both configs; real `score_ledger` count unchanged after a post-fix Release run. **Lesson**:
+a `#if DEBUG`-gated test-only hook is only as safe as "tests always build Debug."
 
-**Then**: a screenshot ("theres a mess there") surfaced the *rest* of the `time_diary` pollution —
-the test-isolation bug above hadn't just hit the 3 plan-scoped tables, it wrote 42 fake diary rows
-too (literal `TestWindow`/`test-window-<guid>` windows, `idle-split-`/`idle-single-<guid>`
-descriptions, one row with an invalid category `some_future_category`), on the two real dates a
-Release test run happened: 2026-08-07 and 2026-08-13. Backed up
-(`data/backup/progress.db.20260813_190410.bak`) and deleted after confirmation naming the table and
-count; the one genuine row sharing 08-13 with them (a real detected "unaccounted time" gap,
-14:52–18:00) was identified and left alone. Same request also asked to remove the diary's
-horizontal scrollbar by narrowing the description columns — root cause turned out to be
-**`DiaryListWidth` itself was stale**: set for the App/Page column split (07-23), never revisited
-when the Tag column was added (08-07), so the row's true natural width had quietly outgrown the
-page's own max content width, forcing the scrollbar to engage on *any* window, not just a narrow
-one. Recomputed `DiaryListWidth` (950→870), narrowed Page (210→130) and Details (260→160) — both
-already ellipsis-trim with a tooltip, narrowing just makes that the common case — and switched the
-scroller from permanently-`Visible` back to `Auto` now that content actually fits.
+**Then** (screenshot, "theres a mess there"): same bug had also written 42 fake `time_diary` rows
+(`TestWindow`/`test-window-<guid>` windows, `idle-split-`/`idle-single-<guid>` descriptions, one
+invalid category `some_future_category`) on 2026-08-07 and 08-13. Backed up + deleted after
+confirmation; the one genuine row sharing 08-13 (a real "unaccounted time" gap, 14:52–18:00) was
+identified and kept. Same request asked to remove the diary's horizontal scrollbar — root cause:
+`DiaryListWidth` was stale (set for the 07-23 App/Page split, never updated for the 08-07 Tag
+column), so the row had quietly outgrown the page's max width, forcing the scrollbar on any window.
+Recomputed `DiaryListWidth` (950→870), narrowed Page (210→130)/Details (260→160) — both already
+ellipsis-trim with a tooltip — and switched the scroller `Visible`→`Auto`.
+
+**Then** ("I am afraid you deleted also the real data from today starting from 8 am"): the pre-delete
+backup already had nothing before 09:00 for 08-13, so the delete (test-fingerprint-only) didn't
+touch an 8am row. Dug further: the real log shows a genuine 08:00→11:28 gap detected at 11:28:31,
+and `HandleIdleReturn` unconditionally logs an "unaccounted time" placeholder the instant that
+happens — that row should exist and doesn't, in the backup or now. `ClearIdlePlaceholder` only ever
+removes a placeholder for an *answered* range, never a real row; a 191s `DialogGate` wait for the
+next prompt is consistent with the user having answered it, but no replacement landed either.
+**Left open**: no error logged, cause not found.
+
+**Then** ("increase the ongoing projects number to 3"): `AppInfo.MaxActivePlans` 2→3 — single source
+of truth, already read dynamically everywhere; every plan-list layout is a plain
+`StackPanel`/`foreach`, confirmed via grep (no `plans[0]`/`Count == 2` anywhere). `MANUAL.md`/
+`README.md` updated to match — MANUAL's old wording said "a third idea," which needed rewording,
+not just a number swap.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **The real 08:00–11:28 gap on 2026-08-13 never produced a diary row, and the cause is
+    unconfirmed** — ruled out as caused by the same-day test-data cleanup (backup taken first
+    proves it was already missing), but not yet root-caused. Worth revisiting if it recurs.
   - **08-13's narrowed diary columns / Auto scrollbar have not been live-UIA-verified** — clean
     build only; the exact new widths (870/130/160) were computed from the pre-Tag-column math, not
     measured live.

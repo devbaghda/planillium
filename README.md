@@ -20,7 +20,7 @@ The app is especially suited for people working on major life or career projects
 
 Planillium helps the user:
 
-- manage up to two active plans at once,
+- manage up to three active plans at once,
 - track daily tasks by plan day,
 - reschedule or move tasks when life changes,
 - record notes on tasks and progress,
