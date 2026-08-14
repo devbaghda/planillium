@@ -34,6 +34,16 @@ public static class AddPlanDialog
     private record Mode(string Label, string Template, string Preview, string Field1Label,
         string Field1Hint, string Field2Hint, string Field3Hint, bool Reformat);
 
+    // Must be declared (and therefore initialized) before Modes below — C# runs static field
+    // initializers in textual declaration order, and Modes's initializer calls ExtractPreview,
+    // which loops over this array. With the two the other way around, ExtractPreview ran against
+    // a still-null PreviewTokens the moment anything touched AddPlanDialog for the first time
+    // (i.e. the instant "Add Plan" was clicked), throwing a TypeInitializationException that made
+    // the button silently do nothing (2026-08-14 regression, caught by the user: "add plan button
+    // stopped working").
+    private static readonly string[] PreviewTokens =
+        { "{subject}", "{claude_role}", "{area_of_interest}", "{user_plan}" };
+
     private static readonly Mode[] Modes =
     {
         new("🎯 Learn a skill", PlanTemplates.Skill, ExtractPreview(PlanTemplates.Skill, "Before any plan"),
@@ -50,9 +60,6 @@ public static class AddPlanDialog
             ExtractPreview(PlanTemplates.Reformat, "Where something is ambiguous"), "Title for this plan",
             "e.g. 'Q3 fitness block', 'Dutch A2 in 90 days'", "", "", true),
     };
-
-    private static readonly string[] PreviewTokens =
-        { "{subject}", "{claude_role}", "{area_of_interest}", "{user_plan}" };
 
     /// <summary>Pulls out just the sentences that actually name a field — straight out of the
     /// real template's own opening (everything before <paramref name="cutMarker"/>, which keeps

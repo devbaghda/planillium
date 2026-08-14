@@ -273,24 +273,21 @@ of submitting instantly, to leave room to see the new fields. `DiaryWriter.LogSe
 
 **Then** ("check if the score balance is calculated correctly"): audited read-only against a DB copy
 — sum arithmetic, single writer, `sl_reason_date` UNIQUE — no dupes/gaps/unknown reasons. Found a
-real live bug: today's `daily_score` frozen at 0 despite 51 more on-plan minutes tracked since.
-Root cause: a diary edit recomputes that date's score via `RecalculateDayScore` regardless of
-whether it's *today* — but `ReviewDialog.PersistReview` used skip-if-present logic for today's
-real end-of-day credit, so the earlier incidental recompute pre-empted it forever. Fixed:
-`PersistReview` now calls `RecalculateDayScore(today)` (already proven by an existing test, no new
-one needed). **Real-data fix, user-confirmed**: deleted stale `score_ledger` row 140 after explicit
-confirmation, DB backed up first. User then asked whether 08-06 (already past) was undercounted the
-same way — it was (real formula gives 31, ledger held 0), computed via a throwaway isolated test
-against a scratch DB copy, never the real code path. Corrected row 138 to delta=31 after the same
+real bug: today's `daily_score` frozen at 0 despite 51 more on-plan minutes tracked since — a diary
+edit recomputes that date's score via `RecalculateDayScore` regardless of whether it's *today*, but
+`ReviewDialog.PersistReview` used skip-if-present logic for today's real end-of-day credit, so the
+earlier incidental recompute pre-empted it forever. Fixed: `PersistReview` now calls
+`RecalculateDayScore(today)` (already proven by an existing test). **Real-data fix, user-confirmed**:
+deleted stale `score_ledger` row 140, backed up first. 08-06 (already past) had the same problem
+locked in — real formula gives 31, ledger held 0 — corrected row 138 to delta=31 after the same
 confirmation; balance -4→27. Checked siblings: `ReviewDialog`'s disabled "Close the day" button sat
-next to `DefaultButton=Primary` (WinUI can still fire Enter on a disabled default button) — ruled
-out as this incident's cause but hardened, and found in 3 more dialogs (`SpendDialog`,
-`SplitDiaryEntryDialog`, `IdleReturnDialog` split mode); each now switches `DefaultButton` off
-Primary while disabled. 147/147.
-**Then** ("Mark … buttons for tags"): second toolbar row under Mark on-plan/off-plan/neutral — one
-"Mark <label>" button per `DiaryTag.Options` entry plus "Clear tag." New `MarkSelectedDiaryRowsTag`
-doesn't share a helper with `MarkSelectedDiaryRows` (category changes also touch activity-rule
-learning + score recalc; tag doesn't). No dedicated test — page-level UI, outside test scope.
+next to `DefaultButton=Primary` (WinUI can fire Enter on a disabled default button) — ruled out as
+this incident's cause but hardened, also found in `SpendDialog`/`SplitDiaryEntryDialog`/
+`IdleReturnDialog` split mode. 147/147.
+**Then** ("Mark … buttons for tags"): second toolbar row under Mark on-plan/off-plan/neutral, one
+button per `DiaryTag.Options` entry plus "Clear tag." `MarkSelectedDiaryRowsTag` doesn't share a
+helper with `MarkSelectedDiaryRows` (category changes also touch activity-rule learning + score
+recalc; tag doesn't). No dedicated test — page-level UI, outside test scope.
 
 **2026-08-13**: new `ScoreService.ManuallyMarkedDaysOff` (distinct dates with a `plan_days_off` row,
 narrower than `AllPlansScoringExempt`/`ScoringExemptDates`, which also count recurring rest days) —
@@ -346,23 +343,26 @@ Also found the same `.gitignore` gap noted in the MaxActivePlans commit above �
 
 **"I want to see a short context example of the fields... a description on top with the blank
 fields... so I understand what to fill in and how it's going to look"**: `AddPlanDialog` gained a
-live mad-libs preview above the fields — the real prompt's own words, each `{token}` replaced by
-that field's current text (bold/accent) or a muted italic `[Field label]` placeholder while empty,
-sourced from `PlanTemplates.cs`'s own string (`Mode.Preview`/`ExtractPreview`) so it can't drift
-from what's actually copied to claude.ai. **v1** was a straight prefix-cut of the template — a
-screenshot showed it cluttered with connective filler *and* clipped mid-word past the dialog's real
-edge instead of wrapping (`ContentDialog`'s template caps rendered width at the platform's
-`ContentDialogMaxWidth` theme resource regardless of content's own `MinWidth` — same bug class hit
-3 times before, see `SplitDiaryEntryDialog.cs`). **v2, same session**: `ExtractPreview` now keeps
-only sentences naming a blank (deduped — a repeated `{subject}` later isn't shown twice), joined
-with " … "; dialog overrides `ContentDialogMaxWidth` on its own `Resources` (640, was silently
-capped ~520) instead of relying on `panel.MinWidth` alone, plus explicit `MaxWidth` on the preview
-TextBlocks as a second guard. 152/152 tests both rounds; no new tests (page-level UI, existing
-convention). **Not yet live-UIA-verified**, both rounds.
+live mad-libs preview above the fields — real prompt words, each `{token}` replaced by that field's
+current text (bold/accent) or a muted italic `[Field label]` while empty, sourced from
+`PlanTemplates.cs`'s own string (`Mode.Preview`/`ExtractPreview`) so it can't drift from what's
+actually copied to claude.ai. **v1** was a prefix-cut of the template — cluttered with connective
+filler and clipped mid-word past the dialog's real edge instead of wrapping (`ContentDialog`'s
+template caps rendered width at the `ContentDialogMaxWidth` theme resource regardless of content's
+own `MinWidth` — same bug class hit 3 times before, `SplitDiaryEntryDialog.cs`). **v2**:
+`ExtractPreview` keeps only sentences naming a blank (deduped), joined with " … "; dialog overrides
+`ContentDialogMaxWidth` on its own `Resources` (640, was silently capped ~520) plus explicit
+`MaxWidth` on the preview TextBlocks as a second guard. No new tests (page-level UI, convention).
+
+**v3 (same session): "add plan button stopped working"** — self-inflicted regression. `Modes`'s
+static initializer calls `ExtractPreview`, which loops over `PreviewTokens`, declared *after*
+`Modes`; C# runs static field initializers in textual order, so `Modes` built against a still-null
+array — `TypeInitializationException` the instant anything touched `AddPlanDialog`. Fix: reordered.
+**Live-UIA-verified this time** (PowerShell + `System.Windows.Automation`): dialog opens without
+crashing; preview renders unclipped (570×35, wraps 2 lines); typing/mode-switch live-update it;
+Cancel closes clean, process stays alive, nothing imported. 152/152 tests.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **08-14's AddPlanDialog mad-libs preview has not been live-UIA-verified** — clean build only;
-    confirm the blanks render live and the widened dialog actually fixed the clipping.
   - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
   - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
     out as the test-data cleanup, see that entry). Revisit if it recurs.
