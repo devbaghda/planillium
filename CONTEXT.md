@@ -310,60 +310,62 @@ rebuilt/relaunched.
 also touch activity-rule learning and a score recalc, neither applies to a tag. No dedicated test,
 same as its sibling — page-level UI, outside this project's Service/Data test scope.
 
-**2026-08-13** ("totals for day-offs … added by me manually"): new `ScoreService.ManuallyMarkedDaysOff`
-(distinct dates with a `plan_days_off` row, narrower than `AllPlansScoringExempt`/
-`ScoringExemptDates`, which also count recurring weekday rest days). **v1 corrected same session**:
-a standalone always-three-numbers Reports card + Schedule summary line were rejected ("everything
-besides the diary should update based on the chosen timescale... we do not need an additional card
-for it... remove the day-offs info from the schedule page") — reworked into
+**2026-08-13**: new `ScoreService.ManuallyMarkedDaysOff` (distinct dates with a `plan_days_off` row,
+narrower than `AllPlansScoringExempt`/`ScoringExemptDates`, which also count recurring rest days) —
+shipped as a standalone always-three-numbers Reports card + Schedule summary, then corrected same
+session ("everything besides the diary should update based on the chosen timescale... we do not
+need an additional card... remove the day-offs info from the schedule page"): reworked into
 `ReportData.PeriodTotals.DayOffs` (bounded period-start-through-today like every other figure
-there) folded into the Reports score card's caption line; Schedule's line removed outright. Tests:
-`ManuallyMarkedDaysOffTests.cs` (raw-method scope), two new `ReportPeriodStatsTests.cs` tests
-(period-selector + today-boundary). 152/152.
+there), folded into the score card's caption line; Schedule's line removed. Tests:
+`ManuallyMarkedDaysOffTests.cs` + two `ReportPeriodStatsTests.cs` additions. 152/152.
 
 **Real finding while verifying**: `dotnet test -c Release` was silently running the whole suite
 against the REAL `data/progress.db` — `TestRootFixture`'s `MENTOR_ROOT` override lived behind
-`#if DEBUG`, and since `AppPaths.cs` is source-linked (not project-referenced) into
-`Planillium.App.Tests.csproj`, a `-c Release` run compiles it with `DEBUG` undefined, silently
-dropping the override. Confirmed via matching `score_ledger` counts between a "fresh" filtered run
-and the real DB. Left 112 orphaned rows (fake plan ids) across `task_overrides` (78)/
-`task_completions` (14)/`plan_days_off` (20) — deleted after backup + confirmation naming
-tables/counts. `score_ledger` has no `plan_id`, so a test crediting "today" could in principle have
-clobbered a real ledger row — not retroactively auditable; nothing further done beyond rows
-138/140 already fixed 08-07. **Fix**: override now also requires `PLANILLIUM_TESTS`, defined
-unconditionally in both configs, so isolation no longer depends on which one `dotnet test` builds.
-151/151 both configs; real `score_ledger` count unchanged after a post-fix Release run. **Lesson**:
-a `#if DEBUG`-gated test-only hook is only as safe as "tests always build Debug."
-
-**Then** (screenshot, "theres a mess there"): same bug had also written 42 fake `time_diary` rows
+`#if DEBUG`, and since `AppPaths.cs` is source-linked (not project-referenced) into the Tests
+project, a Release run compiled it with `DEBUG` undefined, dropping the override. Left 112 orphaned
+rows (fake plan ids) across `task_overrides`(78)/`task_completions`(14)/`plan_days_off`(20), plus —
+found later via a screenshot, "theres a mess there" — 42 fake `time_diary` rows on 08-07 and 08-13
 (`TestWindow`/`test-window-<guid>` windows, `idle-split-`/`idle-single-<guid>` descriptions, one
-invalid category `some_future_category`) on 2026-08-07 and 08-13. Backed up + deleted after
-confirmation; the one genuine row sharing 08-13 (a real "unaccounted time" gap, 14:52–18:00) was
-identified and kept. Same request asked to remove the diary's horizontal scrollbar — root cause:
-`DiaryListWidth` was stale (set for the 07-23 App/Page split, never updated for the 08-07 Tag
-column), so the row had quietly outgrown the page's max width, forcing the scrollbar on any window.
-Recomputed `DiaryListWidth` (950→870), narrowed Page (210→130)/Details (260→160) — both already
-ellipsis-trim with a tooltip — and switched the scroller `Visible`→`Auto`.
+invalid category `some_future_category`); all deleted after backup + confirmation, the one genuine
+08-13 row (a real "unaccounted time" gap, 14:52–18:00) kept. `score_ledger` isn't plan-scoped, so a
+test crediting "today" could in principle have clobbered a real row — not retroactively auditable,
+nothing further done beyond rows 138/140 already fixed 08-07. **Fix**: override now also requires
+`PLANILLIUM_TESTS`, defined unconditionally in both configs. 151/151 both configs; real row counts
+confirmed unchanged after a post-fix Release run. **Lesson**: a `#if DEBUG`-gated test-only hook is
+only as safe as "tests always build Debug."
 
-**Then** ("I am afraid you deleted also the real data from today starting from 8 am"): the pre-delete
-backup already had nothing before 09:00 for 08-13, so the delete (test-fingerprint-only) didn't
-touch an 8am row. Dug further: the real log shows a genuine 08:00→11:28 gap detected at 11:28:31,
-and `HandleIdleReturn` unconditionally logs an "unaccounted time" placeholder the instant that
-happens — that row should exist and doesn't, in the backup or now. `ClearIdlePlaceholder` only ever
-removes a placeholder for an *answered* range, never a real row; a 191s `DialogGate` wait for the
-next prompt is consistent with the user having answered it, but no replacement landed either.
-**Left open**: no error logged, cause not found.
+Same screenshot also asked to remove the diary's horizontal scrollbar — root cause: `DiaryListWidth`
+was stale (set 07-23, never updated for the 08-07 Tag column), so the row had outgrown the page's
+own max width, forcing the scrollbar on any window. Recomputed `DiaryListWidth` (950→870), narrowed
+Page (210→130)/Details (260→160) — both already ellipsis-trim with a tooltip — switched scroller
+`Visible`→`Auto`.
 
-**Then** ("increase the ongoing projects number to 3"): `AppInfo.MaxActivePlans` 2→3 — single source
-of truth, already read dynamically everywhere; every plan-list layout is a plain
-`StackPanel`/`foreach`, confirmed via grep (no `plans[0]`/`Count == 2` anywhere). `MANUAL.md`/
-`README.md` updated to match — MANUAL's old wording said "a third idea," which needed rewording,
-not just a number swap.
+**"I am afraid you deleted also the real data from today starting from 8 am"**: the pre-delete
+backup already had nothing before 09:00, so the delete (test-fingerprint-only) didn't touch it.
+Dug further: the log shows a genuine 08:00→11:28 gap, and `HandleIdleReturn` unconditionally logs
+an "unaccounted time" placeholder the instant that's detected — that row should exist and doesn't,
+in the backup or now. **Left open**: no error logged, cause not found.
+
+**"Increase the ongoing projects number to 3"**: `AppInfo.MaxActivePlans` 2→3, single source of
+truth, confirmed via grep no hardcoded 2-count assumptions anywhere. `MANUAL.md`/`README.md`
+updated to match.
+
+**2026-08-14** ("the plan that finished should not have moved... I do not have a way to restore
+it"): `claude-code-10-level-mastery.json` was sitting in `plans/archive/`, but only 11/23 tasks had
+ever had a completion event (10 done, 1 unmarked) — well short of the 100% `PlansPage`'s Archive
+button requires to even be clickable (`IsEnabled = complete`). Rules out the app's own Archive flow;
+likely moved outside the app — **unconfirmed, no log or reliable timestamp survived**. File verified
+intact (4 phases, 23 tasks) and moved back to `plans/active/` (same op as the app's own Restore
+button). Archive/Restore only ever moves the JSON; DB rows (`task_completions`/`task_overrides`/
+`plan_days_off`/`task_notes`, keyed by plan_id) are untouched by either — confirmed all 4 tables
+still had every row (11/22/5/4). No restart needed/done — both pages re-read `plans/` from disk on
+every render, and one right after yesterday's tracking-gap investigation risked creating another.
+Also found the same `.gitignore` gap noted in the MaxActivePlans commit above — now closed.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **The real 08:00–11:28 gap on 2026-08-13 never produced a diary row, and the cause is
-    unconfirmed** — ruled out as caused by the same-day test-data cleanup (backup taken first
-    proves it was already missing), but not yet root-caused. Worth revisiting if it recurs.
+  - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
+  - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
+    out as the test-data cleanup, see that entry). Revisit if it recurs.
   - **08-13's narrowed diary columns / Auto scrollbar have not been live-UIA-verified** — clean
     build only; the exact new widths (870/130/160) were computed from the pre-Tag-column math, not
     measured live.
