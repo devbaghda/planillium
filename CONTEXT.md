@@ -268,22 +268,19 @@ unset). (2) `IdleReturnDialog` had no Category/Tag field — category was silent
 single mode auto-fills Category from the guess and keeps re-guessing until touched (`catTouched`
 flag), then stops; split rows are manual only. Chip click now fills the description field instead
 of submitting instantly, to leave room to see the new fields. `DiaryWriter.LogSession` gained `tag`;
-`LogIdleAnswer(s)` now take explicit category(+tag) instead of deriving it. 3 new tests, 147/147.
-**Not yet live-UIA-verified** (see Open TODOs).
+`LogIdleAnswer(s)` now take explicit category(+tag) instead of deriving it. 3 new tests, 147/147,
+**not yet live-UIA-verified** (see Open TODOs).
 
-**Then** ("check if the score balance is calculated correctly"): audited read-only against a DB copy
-— sum arithmetic, single writer, `sl_reason_date` UNIQUE — no dupes/gaps/unknown reasons. Found a
-real bug: today's `daily_score` frozen at 0 despite 51 more on-plan minutes tracked since — a diary
-edit recomputes that date's score via `RecalculateDayScore` regardless of whether it's *today*, but
-`ReviewDialog.PersistReview` used skip-if-present logic for today's real end-of-day credit, so the
-earlier incidental recompute pre-empted it forever. Fixed: `PersistReview` now calls
-`RecalculateDayScore(today)` (already proven by an existing test). **Real-data fix, user-confirmed**:
-deleted stale `score_ledger` row 140, backed up first. 08-06 (already past) had the same problem
-locked in — real formula gives 31, ledger held 0 — corrected row 138 to delta=31 after the same
-confirmation; balance -4→27. Checked siblings: `ReviewDialog`'s disabled "Close the day" button sat
-next to `DefaultButton=Primary` (WinUI can fire Enter on a disabled default button) — ruled out as
-this incident's cause but hardened, also found in `SpendDialog`/`SplitDiaryEntryDialog`/
-`IdleReturnDialog` split mode. 147/147.
+**Then** ("check if the score balance is calculated correctly"): audited read-only against a DB copy,
+no dupes/gaps/unknown reasons. Found a real bug: today's `daily_score` frozen at 0 despite 51 more
+on-plan minutes tracked since — a diary edit recomputes that date's score regardless of whether it's
+*today*, but `ReviewDialog.PersistReview` used skip-if-present logic for today's real end-of-day
+credit, so the earlier incidental recompute pre-empted it forever. Fixed: `PersistReview` now calls
+`RecalculateDayScore(today)`. **Real-data fix, user-confirmed**: deleted stale `score_ledger` row
+140, backed up first; 08-06 had the same problem locked in (formula gives 31, ledger held 0),
+corrected row 138 to delta=31 after the same confirmation, balance -4→27. Checked siblings:
+`ReviewDialog`'s disabled "Close the day" button could still fire Enter while disabled — hardened,
+also found in `SpendDialog`/`SplitDiaryEntryDialog`/`IdleReturnDialog` split mode. 147/147.
 **Then** ("Mark … buttons for tags"): second toolbar row under Mark on-plan/off-plan/neutral, one
 button per `DiaryTag.Options` entry plus "Clear tag." `MarkSelectedDiaryRowsTag` doesn't share a
 helper with `MarkSelectedDiaryRows` (category changes also touch activity-rule learning + score
@@ -343,38 +340,42 @@ Also found the same `.gitignore` gap noted in the MaxActivePlans commit above �
 
 **"I want to see a short context example of the fields... a description on top with the blank
 fields... so I understand what to fill in and how it's going to look"**: `AddPlanDialog` gained a
-live mad-libs preview above the fields — real prompt words, each `{token}` replaced by that field's
-current text (bold/accent) or a muted italic `[Field label]` while empty, sourced from
-`PlanTemplates.cs`'s own string (`Mode.Preview`/`ExtractPreview`) so it can't drift from what's
-actually copied to claude.ai. **v1** was a prefix-cut of the template — cluttered with connective
-filler and clipped mid-word past the dialog's real edge instead of wrapping (`ContentDialog`'s
-template caps rendered width at the `ContentDialogMaxWidth` theme resource regardless of content's
-own `MinWidth` — same bug class hit 3 times before, `SplitDiaryEntryDialog.cs`). **v2**:
-`ExtractPreview` keeps only sentences naming a blank (deduped), joined with " … "; dialog overrides
-`ContentDialogMaxWidth` on its own `Resources` (640, was silently capped ~520) plus explicit
-`MaxWidth` on the preview TextBlocks as a second guard. No new tests (page-level UI, convention).
+live mad-libs preview — real prompt words, each `{token}` replaced by that field's current text
+(bold/accent) or a muted italic `[Field label]` while empty, sourced from `PlanTemplates.cs`'s own
+string so it can't drift from what's copied to claude.ai. **v1** was a prefix-cut of the template —
+cluttered with filler, clipped past the dialog's real edge (`ContentDialog` caps width at the
+`ContentDialogMaxWidth` theme resource regardless of content's `MinWidth` — same bug class hit 3
+times before, `SplitDiaryEntryDialog.cs`). **v2**: `ExtractPreview` keeps only sentences naming a
+blank, joined with " … "; dialog overrides `ContentDialogMaxWidth` (640, was silently capped ~520).
 
-**v3 (same session): "add plan button stopped working"** — self-inflicted regression. `Modes`'s
-static initializer calls `ExtractPreview`, which loops over `PreviewTokens`, declared *after*
-`Modes`; C# runs static field initializers in textual order, so `Modes` built against a still-null
-array — `TypeInitializationException` the instant anything touched `AddPlanDialog`. Fix: reordered.
-**Live-UIA-verified this time** (PowerShell + `System.Windows.Automation`): dialog opens without
-crashing; preview renders unclipped (570×35, wraps 2 lines); typing/mode-switch live-update it;
-Cancel closes clean, process stays alive, nothing imported. 152/152 tests.
+**v3 (same session): "add plan button stopped working"** — self-inflicted. `Modes`'s static
+initializer calls `ExtractPreview`, which loops over `PreviewTokens`, declared *after* `Modes`; C#
+runs static field initializers in textual order, so `Modes` built against a still-null array —
+`TypeInitializationException` the instant anything touched `AddPlanDialog`. Fixed by reordering.
+Live-UIA confirmed the crash/live-typing fix — **but its "unclipped" claim was wrong**:
+`AutomationElement.Name`/`BoundingRectangle` report a TextBlock's own text/self-computed layout, not
+whether an ancestor is visually clipping it, so that check couldn't have caught the width bug at all.
+
+**v4: "still the text is going outside the boundaries"** — the real clipping bug, still unfixed.
+SDK's template (`generic.xaml`, WindowsAppSDK.WinUI 1.8.260528001):
+`Border[MaxWidth=ContentDialogMaxWidth] > ScrollViewer[HorizontalScrollBarVisibility=Disabled] >
+Grid[Padding=24] > (content)` — inner Padding costs 48px before content sees any space, and the
+ScrollViewer can't scroll to absorb overflow. v2 set `panel.MinWidth` to the *same* value as the
+outer `ContentDialogMaxWidth` override (640 both) — forced the panel to demand 48px more than the
+non-scrolling area had, the identical bug moved from ~520 to ~640. Fixed: new
+`DialogContentWidth = DialogWidth - 64`, panel/preview `MaxWidth`s sized to that, not the outer cap.
+**Verified with an actual screenshot this time** (`System.Drawing.CopyFromScreen` off the real
+window rect, not UIA text properties) at both maximized (1920px) and resized to 900px: preview wraps
+cleanly, no clipping either way. 152/152 tests, all four rounds.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
   - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
     out as the test-data cleanup, see that entry). Revisit if it recurs.
-  - **08-13's narrowed diary columns / Auto scrollbar have not been live-UIA-verified** — clean
-    build only; the exact new widths (870/130/160) were computed from the pre-Tag-column math, not
-    measured live.
-  - **08-13's Reports score-card DayOffs figure has not been live-UIA-verified** — clean build +
-    152/152 tests only.
-  - **08-07's IdleReturnDialog Category/Tag fields, and the Mark-tag toolbar row, have not been
-    live-UIA-verified** — clean build + 147/147 tests only. The width-cap fix reapplies an
-    already-proven pattern, but the chip-click change and auto-classify-until-touched wiring
-    haven't been exercised live.
+  - **Not yet live-UIA-verified** (clean build + tests only): 08-13's narrowed diary columns/Auto
+    scrollbar (widths 870/130/160 computed, not measured live); 08-13's Reports DayOffs figure;
+    08-07's IdleReturnDialog Category/Tag fields + Mark-tag toolbar row (chip-click change and
+    auto-classify-until-touched wiring unexercised live).
   - **The diary's midnight rollover has never been observed actually happening** — every other part
     of that fix was verified live, but the rollover itself needs the clock to cross midnight with the
     app sitting on Reports. If the diary still shows yesterday some morning, the assignment at the
@@ -385,16 +386,15 @@ Cancel closes clean, process stays alive, nothing imported. 152/152 tests.
   - TickTick redirect URI must be registered at developer.ticktick.com as
     `http://localhost:8765/callback` in the **OAuth redirect URL** field (not "App Service URL").
   - **Settled, not action items**: 42 overlapping `time_diary` pairs 06-29→07-16 (only 2 match
-    `HandleActiveSession`; rest unconfirmed; user's call 2026-07-18 — leave untouched);
+    `HandleActiveSession`, rest unconfirmed, user's call 2026-07-18 — leave untouched);
     `ActivateQueuedPlan`'s non-atomic write-then-delete (2026-07-28); ~150-230MB memory footprint
-    (2026-08-06, mostly `NavigationCacheMode="Enabled"` + WinUI3's own baseline, no leak found;
-    lighter frameworks exist but a multi-week rewrite for an unsized win — **leave as-is**).
-  - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium` rename
-    2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit auto-publishing
-    for `posting-plan` dropped 2026-07-22 (APIs gated/unsuitable; dormant Reddit OAuth2 tool at
+    (2026-08-06, mostly `NavigationCacheMode="Enabled"` + WinUI3's baseline, no leak — leave as-is).
+  - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium`
+    rename 2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit
+    auto-publishing for `posting-plan` dropped 2026-07-22 (dormant Reddit OAuth2 tool at
     `posting-plan/tools/reddit-publish/`); `PlanDayForDate` closed form 2026-07-18; TickTick secret
     rotated 2026-07-09, reconnected 2026-08-04; personal-data git-history scrub 2026-07-18; v1.1.0 +
-    GitHub Release + repo flipped Public 2026-07-21; duplicate `devbaghda/planillium` repo deleted
-    2026-07-21; tray icon vanishing — confirmed fine 2026-08-04; 2026-07-17 keyboard/dark-mode/timing
-    item; **the 08-04 tracker split — confirmed exercised live**, not just built: the log shows
+    GitHub Release + repo flipped Public 2026-07-21; duplicate repo deleted 2026-07-21; tray icon
+    vanishing — confirmed fine 2026-08-04; 2026-07-17 keyboard/dark-mode/timing item; **the 08-04
+    tracker split — confirmed exercised live**, not just built: the log shows
     `HandleSleepGap`/`HandleIdleReturn`/`HandleActiveSession` all firing correctly through 08-07.

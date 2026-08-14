@@ -22,14 +22,26 @@ public static class AddPlanDialog
     private const int MaxPlans = AppInfo.MaxActivePlans;
     private const long MaxImportFileBytes = 5 * 1024 * 1024;
     // ContentDialog's own template caps its rendered width at the platform's
-    // ContentDialogMaxWidth theme resource regardless of what width the content itself asks for
-    // (panel.MinWidth below) — the same class of bug this project has already root-caused and
-    // fixed three times (see SplitDiaryEntryDialog.cs's comment on this exact resource). Here it
-    // showed as the mad-libs preview text getting clipped mid-word at the dialog's real (narrower
-    // than requested) edge, not wrapped (2026-08-14 screenshot: "I would have made the pop-up
-    // window wider"). Overriding the resource on this dialog instance, not just widening the
-    // panel, is what actually changes the rendered width.
+    // ContentDialogMaxWidth theme resource regardless of what width the content itself asks for —
+    // the same class of bug this project has already root-caused and fixed three times (see
+    // SplitDiaryEntryDialog.cs's comment on this exact resource). Overriding that resource on this
+    // dialog instance (not just widening the panel) is what actually changes the rendered width.
+    //
+    // DialogWidth is that outer cap, passed straight to dialog.Resources["ContentDialogMaxWidth"].
+    // It is NOT the width our own content actually gets, though — read from the SDK's own
+    // generic.xaml (Microsoft.WindowsAppSDK.WinUI 1.8.260528001): the template's content area is
+    // `Border[MaxWidth=ContentDialogMaxWidth] > ScrollViewer[HorizontalScrollBarVisibility=
+    // Disabled] > Grid[Padding=ContentDialogPadding(24)] > (our content)`. That inner Padding costs
+    // 24px on *each* side (48 total) before our content ever sees any space, and the ScrollViewer
+    // wrapping it can't scroll horizontally — so anything we hand it wider than DialogWidth minus
+    // that 48px simply has nowhere to go but clipped, silently, no error. First attempt at this fix
+    // set panel.MinWidth to the exact same DialogWidth value used for the outer cap, which forced
+    // the panel to demand 48px more than the (non-scrolling) content area actually had — same
+    // clipping bug, just moved from ~520 to ~640 (2026-08-14 second screenshot: "still the text is
+    // going outside the boundaries"). DialogContentWidth is the corrected, padding-aware value
+    // everything inside the dialog should actually size itself to.
     private const double DialogWidth = 640;
+    private const double DialogContentWidth = DialogWidth - 64; // 48px template padding + margin
 
     private record Mode(string Label, string Template, string Preview, string Field1Label,
         string Field1Hint, string Field2Hint, string Field3Hint, bool Reformat);
@@ -113,7 +125,7 @@ public static class AddPlanDialog
             queueOnly = true;
         }
 
-        var panel = new StackPanel { Spacing = 10, MinWidth = DialogWidth };
+        var panel = new StackPanel { Spacing = 10, MinWidth = DialogContentWidth };
 
         var modeBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var m in Modes) modeBox.Items.Add(m.Label);
@@ -133,14 +145,15 @@ public static class AddPlanDialog
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = DialogWidth - 40,
+            MaxWidth = DialogContentWidth - 40,
         };
         // Explicit MaxWidth as a belt-and-braces guard, not just TextWrapping=Wrap — a plain
         // TextBlock's wrap only engages if something actually constrains its available width
         // during measure, and this project has already hit ContentDialog layout silently handing
-        // a child unbounded width once before (see the DialogWidth comment above).
+        // a child unbounded width once before (see the DialogContentWidth comment above). The -40
+        // (not just DialogContentWidth) leaves room for previewBorder's own 12px-each-side Padding.
         var previewBlock = new TextBlock
-        { TextWrapping = TextWrapping.Wrap, FontSize = 13, MaxWidth = DialogWidth - 40 };
+        { TextWrapping = TextWrapping.Wrap, FontSize = 13, MaxWidth = DialogContentWidth - 40 };
         var previewBorder = new Border
         {
             Background = (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"],
@@ -304,8 +317,9 @@ public static class AddPlanDialog
             primaryButtonText: queueOnly ? "Save idea" : "Import plan", closeButtonText: "Cancel",
             defaultButton: ContentDialogButton.Primary);
         // An instance-level resource shadows the app-wide ContentDialogMaxWidth theme resource
-        // the default ContentDialog style reads from — see the DialogWidth comment above for why
-        // this is needed at all (panel.MinWidth alone doesn't widen the dialog past the cap).
+        // the default ContentDialog style reads from — see the DialogWidth/DialogContentWidth
+        // comment above for why this is needed at all, and why panel/preview elements below are
+        // sized to DialogContentWidth (smaller than this) rather than to this same value.
         dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
 
         // Keep the dialog open on failed import: cancel the close, show the error.
