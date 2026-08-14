@@ -235,80 +235,62 @@ didn't narrow each other; idle rows show the typed answer in Page not "—".
 
 **2026-08-04 → 08-05** (one continuous session, many rounds — commits `e4c4f11`, `ee981c0`,
 `488424f`, `0ffdde4`): diary window merged into working hours (`InDiaryHours`→`InWorkingHours`,
-`SaveRules` rejects work start ≥ end); Reports' midnight rollover fixed (`_diaryFollowsToday`, every
-date control routed through one `GoTo`); "Day X of Y" → `Plan.ProgressDay` (business rule 13, user
-resolved the "hole further back" ambiguity themselves); shared `AddTotalsRow`; all 12 scoring rules
-made editable (`ScoringRules` table, feeds both the formula and Settings). `ActivityTracker`'s
+`SaveRules` rejects work start ≥ end); Reports' midnight rollover fixed (`_diaryFollowsToday`, one
+`GoTo`); "Day X of Y"→`Plan.ProgressDay` (business rule 13); shared `AddTotalsRow`; all 12 scoring
+rules made editable (`ScoringRules` table feeds both the formula and Settings). `ActivityTracker`'s
 God-Object split landed (855→597 lines): `NativeInput`/`WindowTitleResolver`/`ActivityClassifier`/
-`DiaryWriter` extracted, forwarders kept the public surface unchanged. Reports above the diary
-follows the period selector throughout (`ReportData.PeriodStats`; scores recomputed rather than
-read from `score_ledger` **deliberately** — the ledger only holds days the app ran to credit); card
-relabelled "SCORE EARNED" to stay distinct from the sidebar's all-time BALANCE. Settings' Expander
-layout was **rejected on sight** ("no bouncing") and replaced by a right-hand `ListView`, one panel
-visible at a time, sized for the 900dip minimum — found and fixed blank accessible names plus
-off-screen `BoundingRectangle.Empty` scoring boxes (`ScrollIntoView`) along the way. "Align all the
-reports": `LabelColumnWidth`/`ColumnGap`/`SubRowIndent` unified. Report tables gained all 5
-categories plus a per-row Total — **meaning changed**, Year total 80h10m→294h34m; new
-`ReportData.CategoryMinutes`, and consolidating three near-duplicate queries into `DailyMinutes`
-fixed two latent bugs (`MonthBuckets` never read `diary_daily_rollup`; the rollup's neutral/paid/idle
-columns were never read back). Hours switched to decimal (`FmtHours`, diary kept h/m); Month/Year
-gained Tasks/Score + totals via `DailyRows`. "Asks about absence twice": two compounding causes in
-`ActivityTracker.PendingDayGap`, fixed with `_openSessionStart`/`_accountedUntil` clamps,
-root-caused via git archaeology. New `Pages/PageLayout.cs`/`CenterContent()` fixed the same
-pre-07-28 width bug on Today/Schedule/Plans. "Fill the gap with the following day's task" reverses
-the 07-09 no-gap-closing call (business rule 7, re-confirmed with the user); `RescheduleTask` now
-runs one combined compact-then-push formula, future-only guarded (`ReplanOverdueDialog` still needs
-past days left alone). User then approved closing the existing days-22/23 gap retroactively: new
-`ScoreService.CompactFutureGaps`, applied once via a temporary Debug-only button, DB backed up and
-verified 21→39 sequential, button removed after. New independent `DiaryTag` axis added
-(`time_diary.tag`, this app's first ADD COLUMN migration) — never read by ScoreService, purely
-descriptive; five user-literal values (Routine/Documents/Studioshoo/Selfdev/Procrastination); hit
-and fixed the same `ContentDialog` width-cap bug a third time. Verified throughout via live UIA on
-scratch-root instances; ended the arc at 144/144.
+`DiaryWriter` extracted, public surface unchanged. Reports above the diary follow the period
+selector throughout (`ReportData.PeriodStats`; scores recomputed, not read from `score_ledger`
+**deliberately** — the ledger only holds days the app ran to credit); card relabelled "SCORE
+EARNED" vs. the sidebar's all-time BALANCE. Settings' Expander layout **rejected on sight** ("no
+bouncing"), replaced by a right-hand `ListView` (900dip min) — fixed blank accessible names + an
+off-screen `BoundingRectangle.Empty` scoring-box bug along the way. Report tables aligned
+(`LabelColumnWidth`/`ColumnGap`/`SubRowIndent`) and gained all 5 categories + a per-row Total —
+**meaning changed**, Year total 80h10m→294h34m; new `ReportData.CategoryMinutes`; consolidating 3
+near-duplicate queries into `DailyMinutes` fixed 2 latent bugs (`MonthBuckets` never read
+`diary_daily_rollup`; its neutral/paid/idle columns were never read back). Hours switched to decimal
+(`FmtHours`); Month/Year gained Tasks/Score totals via `DailyRows`. "Asks about absence twice": two
+compounding causes in `ActivityTracker.PendingDayGap`, fixed via `_openSessionStart`/
+`_accountedUntil` clamps. New `PageLayout.cs`/`CenterContent()` fixed the pre-07-28 width bug on
+Today/Schedule/Plans. "Fill the gap with the following day's task" reverses the 07-09 no-gap-closing
+call (business rule 7); `RescheduleTask` now runs one compact-then-push formula, future-only
+(`ReplanOverdueDialog` still leaves past days alone). User approved closing the existing days-22/23
+gap retroactively: `ScoreService.CompactFutureGaps`, one-time Debug button, DB backed up, verified
+21→39, button removed. New `DiaryTag` axis (`time_diary.tag`, first ADD COLUMN migration) —
+descriptive only, never read by ScoreService; 5 values (Routine/Documents/Studioshoo/Selfdev/
+Procrastination); hit the `ContentDialog` width-cap bug a third time, fixed. Verified via live UIA
+on scratch-root instances throughout; ended the arc at 144/144.
 
 **2026-08-07**: two user reports on Tag/idle-answer. (1) Tag was riding inside the diary row's
-Details column as a suffix, easy to lose next to the duration — now its own fixed-width column
-(`DiaryList`/`BuildRow`, column 3, "—" when unset). (2) `IdleReturnDialog` ("welcome back") had no
-Category/Tag field anywhere — category was silently re-derived from typed text via
-`ClassifyIdleText` with no way to see/correct the guess, tag didn't exist there at all. Added
-explicit combos to both modes: single mode auto-fills Category from the classifier guess and
-keeps re-guessing until the user picks one themselves (`catTouched` flag), then stops; split rows
-are manual only, matching `SplitDiaryEntryDialog`'s own "a recorded block isn't auto-classified"
-choice. Chip click used to submit instantly — now fills the description field instead, since
-instant-submit left no room to see the new fields (one extra tap on the common path).
-`DiaryWriter.LogSession` gained `tag`; `LogIdleAnswer`/`LogIdleAnswers` now take explicit category
-(+optional tag) instead of deriving it internally. Split rows reused `SplitDiaryEntryDialog`'s
-proven `ContentDialog`-width-cap fix pre-emptively rather than hitting the same bug a third time.
-3 new tests, 147/147. **Not yet live-UIA-verified** (see Open TODOs).
+Details column as a suffix — now its own fixed-width column (`DiaryList`/`BuildRow`, "—" when
+unset). (2) `IdleReturnDialog` had no Category/Tag field — category was silently re-derived via
+`ClassifyIdleText`, no way to correct the guess, tag didn't exist there. Added explicit combos:
+single mode auto-fills Category from the guess and keeps re-guessing until touched (`catTouched`
+flag), then stops; split rows are manual only. Chip click now fills the description field instead
+of submitting instantly, to leave room to see the new fields. `DiaryWriter.LogSession` gained `tag`;
+`LogIdleAnswer(s)` now take explicit category(+tag) instead of deriving it. 3 new tests, 147/147.
+**Not yet live-UIA-verified** (see Open TODOs).
 
 **Then** ("check if the score balance is calculated correctly"): audited read-only against a DB copy
-— sum arithmetic, single writer (`AddLedger`), `sl_reason_date` UNIQUE — no dupes/gaps/unknown
-reasons. Found a real live bug: today's `daily_score` frozen at 0 (written 08:40am) despite 51 more
-on-plan minutes tracked since — traced via the log + `winui_state.json`'s `last_review` (still 08-06,
-ruling out an early review). Root cause: a diary edit recomputes that date's score via
-`RecalculateDayScore` regardless of whether it's *today* (correct for a past day) — but
-`ReviewDialog.PersistReview` used `CreditDayScoreIfMissing` (skip-if-present) for today's real
-end-of-day credit, so the earlier incidental recompute pre-empted it forever. Fixed: `PersistReview`
-now calls `RecalculateDayScore(today)`, already proven by an existing test
-(`RecalculateDayScore_OverwritesAnAlreadyCreditedDay`) — dialog-layer call site changed, no new test
-needed. **Real-data fix, user-confirmed**: deleted the one stale row (`score_ledger` id 140) after
-explicit confirmation naming the table/row; DB backed up first. User then asked directly whether
-08-06 (already past, so never auto-recredited) was undercounted the same way — it was: real formula
-against that day's final data gives 31, ledger held 0. Computed via a throwaway, isolated test that
-set its own `MENTOR_ROOT` against a scratch copy (real plans + DB copy), never the real code path,
-to avoid hand-replicating the formula. Corrected row id 138 to delta=31 after the same explicit
-naming-the-row confirmation; balance -4→27. Test file deleted after use.
-Checked siblings while in there: `ReviewDialog`'s disabled "Close the day" button sits next to
-`DefaultButton=Primary`, and WinUI's DefaultButton can still fire on Enter while disabled — real
-WinUI behaviour, ruled out as *this* incident's cause but hardened anyway, and found in three more
-dialogs (`SpendDialog`, `SplitDiaryEntryDialog`, `IdleReturnDialog` split mode) — each now switches
-`DefaultButton` off Primary while disabled and re-validates before writing. 147/147, Release
-rebuilt/relaunched.
+— sum arithmetic, single writer, `sl_reason_date` UNIQUE — no dupes/gaps/unknown reasons. Found a
+real live bug: today's `daily_score` frozen at 0 despite 51 more on-plan minutes tracked since.
+Root cause: a diary edit recomputes that date's score via `RecalculateDayScore` regardless of
+whether it's *today* — but `ReviewDialog.PersistReview` used skip-if-present logic for today's
+real end-of-day credit, so the earlier incidental recompute pre-empted it forever. Fixed:
+`PersistReview` now calls `RecalculateDayScore(today)` (already proven by an existing test, no new
+one needed). **Real-data fix, user-confirmed**: deleted stale `score_ledger` row 140 after explicit
+confirmation, DB backed up first. User then asked whether 08-06 (already past) was undercounted the
+same way — it was (real formula gives 31, ledger held 0), computed via a throwaway isolated test
+against a scratch DB copy, never the real code path. Corrected row 138 to delta=31 after the same
+confirmation; balance -4→27. Checked siblings: `ReviewDialog`'s disabled "Close the day" button sat
+next to `DefaultButton=Primary` (WinUI can still fire Enter on a disabled default button) — ruled
+out as this incident's cause but hardened, and found in 3 more dialogs (`SpendDialog`,
+`SplitDiaryEntryDialog`, `IdleReturnDialog` split mode); each now switches `DefaultButton` off
+Primary while disabled. 147/147.
 **Then** ("Mark … buttons for tags"): second toolbar row under Mark on-plan/off-plan/neutral — one
-"Mark <label>" button per `DiaryTag.Options` entry plus "Clear tag," built in a loop. New
-`MarkSelectedDiaryRowsTag` doesn't share a helper with `MarkSelectedDiaryRows`: category changes
-also touch activity-rule learning and a score recalc, neither applies to a tag. No dedicated test,
-same as its sibling — page-level UI, outside this project's Service/Data test scope.
+"Mark <label>" button per `DiaryTag.Options` entry plus "Clear tag." New `MarkSelectedDiaryRowsTag`
+doesn't share a helper with `MarkSelectedDiaryRows` (category changes also touch activity-rule
+learning + score recalc; tag doesn't). No dedicated test — page-level UI, outside test scope.
 
 **2026-08-13**: new `ScoreService.ManuallyMarkedDaysOff` (distinct dates with a `plan_days_off` row,
 narrower than `AllPlansScoringExempt`/`ScoringExemptDates`, which also count recurring rest days) —
@@ -362,7 +344,19 @@ still had every row (11/22/5/4). No restart needed/done — both pages re-read `
 every render, and one right after yesterday's tracking-gap investigation risked creating another.
 Also found the same `.gitignore` gap noted in the MaxActivePlans commit above — now closed.
 
+**"I want to see a short context example of the fields... a description on top with the blank
+fields... so I understand what to fill in and how it's going to look"**: `AddPlanDialog` gained a
+live mad-libs preview above the fields — the real prompt's own opening sentence(s), each `{token}`
+replaced by that field's current text (bold/accent) or a muted italic `[Field label]` placeholder
+while empty, updating on every keystroke and on mode switch. `Mode.Preview` is sliced straight out
+of `PlanTemplates.cs`'s own template string (`ExtractPreview`, cut at a marker like "Before any
+plan") rather than a hand-copied duplicate, so it can't drift from what actually gets copied to
+claude.ai. 152/152 tests (no new tests — page-level UI, same as this dialog's existing untested
+surface). **Not yet live-UIA-verified** — clean build only.
+
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **08-14's AddPlanDialog mad-libs preview has not been live-UIA-verified** — clean build only;
+    confirm the blanks render distinctly and update live when actually typed into.
   - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
   - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
     out as the test-data cleanup, see that entry). Revisit if it recurs.

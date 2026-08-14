@@ -53,6 +53,12 @@ going forward; the original Python/Tkinter version is retired.
   switched the scroller back from permanently-shown to auto-hide-when-not-needed.
 
 **New**
+- The "Add Plan" dialog now shows a live preview of the actual prompt's opening lines right above
+  the fields, with each one still blank shown in muted italics — e.g. "[Skill you want to learn]" —
+  and filled in, bold, the moment you type it. Previously the only guidance was a placeholder hint
+  that vanished once you started typing, so there was no way to see how your answer would actually
+  read inside the prompt until after generating it. Switching mode (Learn a skill / Achieve a goal /
+  Format my own plan) updates the preview to that mode's own wording.
 - You can now keep three active plans at once instead of two. Everywhere that number showed up
   (the "Add Plan" limit dialog, the Start/Restore button tooltips, the manual, the README) reads
   it from one place, so nothing else needed to change to raise it.

@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Models;
 using Planillium.App.Services;
@@ -20,22 +22,38 @@ public static class AddPlanDialog
     private const int MaxPlans = AppInfo.MaxActivePlans;
     private const long MaxImportFileBytes = 5 * 1024 * 1024;
 
-    private record Mode(string Label, string Template, string Field1Label,
+    private record Mode(string Label, string Template, string Preview, string Field1Label,
         string Field1Hint, string Field2Hint, string Field3Hint, bool Reformat);
 
     private static readonly Mode[] Modes =
     {
-        new("🎯 Learn a skill", PlanTemplates.Skill, "Skill you want to learn",
+        new("🎯 Learn a skill", PlanTemplates.Skill, ExtractPreview(PlanTemplates.Skill, "Before any plan"),
+            "Skill you want to learn",
             "e.g. 'Power BI DAX', 'public speaking', 'Spanish conversation'",
             "e.g. 'senior data analyst', 'professional speech coach', 'native Spanish tutor'",
             "e.g. 'business intelligence', 'executive communication', 'language teaching'", false),
-        new("📌 Achieve a goal", PlanTemplates.Goal, "Goal you want to achieve",
+        new("📌 Achieve a goal", PlanTemplates.Goal, ExtractPreview(PlanTemplates.Goal, "Before any plan"),
+            "Goal you want to achieve",
             "e.g. 'move to the Netherlands', 'buy a reliable car', 'become more productive'",
             "e.g. 'relocation consultant', 'car-buying advisor', 'productivity coach'",
             "e.g. 'EU relocation & visas', 'used-car markets', 'personal productivity systems'", false),
-        new("📝 Format my own plan", PlanTemplates.Reformat, "Title for this plan",
+        new("📝 Format my own plan", PlanTemplates.Reformat,
+            ExtractPreview(PlanTemplates.Reformat, "Where something is ambiguous"), "Title for this plan",
             "e.g. 'Q3 fitness block', 'Dutch A2 in 90 days'", "", "", true),
     };
+
+    /// <summary>Pulls the opening 2-3 sentences straight out of the real template — up to
+    /// (not including) <paramref name="cutMarker"/> — rather than hand-duplicating a shortened
+    /// copy of the wording. Guarantees the live mad-libs preview shown while filling the dialog
+    /// can never drift out of sync with what actually gets copied to claude.ai, even if
+    /// PlanTemplates.cs's wording changes later (2026-08-14 request: "I want to see... how is it
+    /// going to look in my prompt" — the preview has to be the prompt's own words, not a summary
+    /// of them).</summary>
+    private static string ExtractPreview(string template, string cutMarker)
+    {
+        var idx = template.IndexOf(cutMarker, StringComparison.Ordinal);
+        return (idx > 0 ? template[..idx] : template).Trim();
+    }
 
     public static async Task<bool> ShowAsync(Page host)
     {
@@ -62,6 +80,29 @@ public static class AddPlanDialog
         foreach (var m in Modes) modeBox.Items.Add(m.Label);
         modeBox.SelectedIndex = 0;
         AutomationProperties.SetName(modeBox, "Mode");
+
+        // Live "mad-libs" preview of the prompt's own opening lines (2026-08-14 request:
+        // seeing an example prompt after the fact didn't say what to type into which box —
+        // this shows the real sentence with each field's current value dropped straight into
+        // it, so the fields read as blanks-to-fill rather than an unlabeled form). Unfilled
+        // fields show as a muted, italic [bracketed hint] instead of vanishing, since an empty
+        // placeholder there would just look like a typo in the sentence.
+        var previewCaption = new TextBlock
+        {
+            Text = "This is the start of the prompt you'll copy to claude.ai — the highlighted " +
+                   "words below fill in as you type:",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var previewBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13 };
+        var previewBorder = new Border
+        {
+            Background = (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"],
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12),
+            Child = previewBlock,
+        };
 
         var field1Label = new TextBlock { Text = Modes[0].Field1Label, FontSize = 12 };
         var subject = new TextBox { PlaceholderText = Modes[0].Field1Hint };
@@ -118,6 +159,35 @@ public static class AddPlanDialog
             Visibility = Visibility.Collapsed,
         };
 
+        // Rebuilds previewBlock's Inlines from the selected mode's Preview text, dropping
+        // each {token} for the matching field's current value — bold + accent when filled,
+        // italic + muted "[Field label]" when still blank, so the sentence always reads as
+        // real English rather than showing raw {subject}/{claude_role} tokens.
+        var mutedBrush = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var accentBrush = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+        void RefreshPreview()
+        {
+            var m = Modes[modeBox.SelectedIndex];
+            previewBlock.Inlines.Clear();
+
+            Run Blank(string value, string label) => value.Trim().Length > 0
+                ? new Run { Text = value.Trim(), FontWeight = FontWeights.SemiBold, Foreground = accentBrush }
+                : new Run { Text = $"[{label}]", FontStyle = Windows.UI.Text.FontStyle.Italic, Foreground = mutedBrush };
+
+            foreach (var part in Regex.Split(m.Preview, @"(\{subject\}|\{claude_role\}|\{area_of_interest\})"))
+            {
+                Inline inline = part switch
+                {
+                    "{subject}" => Blank(subject.Text, m.Field1Label),
+                    "{claude_role}" => Blank(role.Text, "Claude's role"),
+                    "{area_of_interest}" => Blank(area.Text, "Area of expertise"),
+                    _ => new Run { Text = part },
+                };
+                if (inline is Run { Text.Length: 0 }) continue;
+                previewBlock.Inlines.Add(inline);
+            }
+        }
+
         modeBox.SelectionChanged += (_, _) =>
         {
             var m = Modes[modeBox.SelectedIndex];
@@ -127,7 +197,12 @@ public static class AddPlanDialog
             area.Visibility = m.Reformat ? Visibility.Collapsed : Visibility.Visible;
             ownPlan.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
             loadBtn.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
+            RefreshPreview();
         };
+        subject.TextChanged += (_, _) => RefreshPreview();
+        role.TextChanged += (_, _) => RefreshPreview();
+        area.TextChanged += (_, _) => RefreshPreview();
+        RefreshPreview();
 
         loadBtn.Click += async (_, _) => await LoadFromFileAsync(reply, ownPlan, error);
 
@@ -166,6 +241,8 @@ public static class AddPlanDialog
         };
 
         panel.Children.Add(modeBox);
+        panel.Children.Add(previewCaption);
+        panel.Children.Add(previewBorder);
         panel.Children.Add(field1Label);
         panel.Children.Add(subject);
         panel.Children.Add(role);
