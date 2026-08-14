@@ -346,17 +346,23 @@ Also found the same `.gitignore` gap noted in the MaxActivePlans commit above �
 
 **"I want to see a short context example of the fields... a description on top with the blank
 fields... so I understand what to fill in and how it's going to look"**: `AddPlanDialog` gained a
-live mad-libs preview above the fields — the real prompt's own opening sentence(s), each `{token}`
-replaced by that field's current text (bold/accent) or a muted italic `[Field label]` placeholder
-while empty, updating on every keystroke and on mode switch. `Mode.Preview` is sliced straight out
-of `PlanTemplates.cs`'s own template string (`ExtractPreview`, cut at a marker like "Before any
-plan") rather than a hand-copied duplicate, so it can't drift from what actually gets copied to
-claude.ai. 152/152 tests (no new tests — page-level UI, same as this dialog's existing untested
-surface). **Not yet live-UIA-verified** — clean build only.
+live mad-libs preview above the fields — the real prompt's own words, each `{token}` replaced by
+that field's current text (bold/accent) or a muted italic `[Field label]` placeholder while empty,
+sourced from `PlanTemplates.cs`'s own string (`Mode.Preview`/`ExtractPreview`) so it can't drift
+from what's actually copied to claude.ai. **v1** was a straight prefix-cut of the template — a
+screenshot showed it cluttered with connective filler *and* clipped mid-word past the dialog's real
+edge instead of wrapping (`ContentDialog`'s template caps rendered width at the platform's
+`ContentDialogMaxWidth` theme resource regardless of content's own `MinWidth` — same bug class hit
+3 times before, see `SplitDiaryEntryDialog.cs`). **v2, same session**: `ExtractPreview` now keeps
+only sentences naming a blank (deduped — a repeated `{subject}` later isn't shown twice), joined
+with " … "; dialog overrides `ContentDialogMaxWidth` on its own `Resources` (640, was silently
+capped ~520) instead of relying on `panel.MinWidth` alone, plus explicit `MaxWidth` on the preview
+TextBlocks as a second guard. 152/152 tests both rounds; no new tests (page-level UI, existing
+convention). **Not yet live-UIA-verified**, both rounds.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
   - **08-14's AddPlanDialog mad-libs preview has not been live-UIA-verified** — clean build only;
-    confirm the blanks render distinctly and update live when actually typed into.
+    confirm the blanks render live and the widened dialog actually fixed the clipping.
   - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
   - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
     out as the test-data cleanup, see that entry). Revisit if it recurs.

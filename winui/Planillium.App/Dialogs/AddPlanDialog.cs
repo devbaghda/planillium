@@ -21,6 +21,15 @@ public static class AddPlanDialog
 {
     private const int MaxPlans = AppInfo.MaxActivePlans;
     private const long MaxImportFileBytes = 5 * 1024 * 1024;
+    // ContentDialog's own template caps its rendered width at the platform's
+    // ContentDialogMaxWidth theme resource regardless of what width the content itself asks for
+    // (panel.MinWidth below) — the same class of bug this project has already root-caused and
+    // fixed three times (see SplitDiaryEntryDialog.cs's comment on this exact resource). Here it
+    // showed as the mad-libs preview text getting clipped mid-word at the dialog's real (narrower
+    // than requested) edge, not wrapped (2026-08-14 screenshot: "I would have made the pop-up
+    // window wider"). Overriding the resource on this dialog instance, not just widening the
+    // panel, is what actually changes the rendered width.
+    private const double DialogWidth = 640;
 
     private record Mode(string Label, string Template, string Preview, string Field1Label,
         string Field1Hint, string Field2Hint, string Field3Hint, bool Reformat);
@@ -42,17 +51,40 @@ public static class AddPlanDialog
             "e.g. 'Q3 fitness block', 'Dutch A2 in 90 days'", "", "", true),
     };
 
-    /// <summary>Pulls the opening 2-3 sentences straight out of the real template — up to
-    /// (not including) <paramref name="cutMarker"/> — rather than hand-duplicating a shortened
-    /// copy of the wording. Guarantees the live mad-libs preview shown while filling the dialog
-    /// can never drift out of sync with what actually gets copied to claude.ai, even if
-    /// PlanTemplates.cs's wording changes later (2026-08-14 request: "I want to see... how is it
-    /// going to look in my prompt" — the preview has to be the prompt's own words, not a summary
-    /// of them).</summary>
+    private static readonly string[] PreviewTokens =
+        { "{subject}", "{claude_role}", "{area_of_interest}", "{user_plan}" };
+
+    /// <summary>Pulls out just the sentences that actually name a field — straight out of the
+    /// real template's own opening (everything before <paramref name="cutMarker"/>, which keeps
+    /// this out of the JSON schema block below; Reformat's schema literally contains "{subject}"
+    /// as an example value, not a blank to fill) — rather than showing the connective sentences
+    /// around them too. First round of this (2026-08-14) just cut a prefix of the template and
+    /// showed the whole thing verbatim; the user's follow-up ("the sentences that do not contain
+    /// fields... omitted, we just need the fields in context") asked for only the sentences that
+    /// actually place a blank. Each token is kept only the first time it appears (a template
+    /// mentions {subject} again later, e.g. "what people trying to {subject} typically get wrong"
+    /// — repeating that here would just be the same blank shown twice) and the kept sentences are
+    /// joined with " … " so it still reads as one flowing example rather than a bare fragment
+    /// list. Still sourced from PlanTemplates.cs's own text, not a hand-duplicated summary, so it
+    /// can't drift from what actually gets copied to claude.ai.</summary>
     private static string ExtractPreview(string template, string cutMarker)
     {
         var idx = template.IndexOf(cutMarker, StringComparison.Ordinal);
-        return (idx > 0 ? template[..idx] : template).Trim();
+        var scoped = idx > 0 ? template[..idx] : template;
+        var flat = Regex.Replace(scoped, @"\s+", " ").Trim();
+
+        var shown = new HashSet<string>();
+        var kept = new List<string>();
+        foreach (Match m in Regex.Matches(flat, @"[^.]+\."))
+        {
+            var sentence = m.Value.Trim();
+            var isNew = false;
+            foreach (var token in PreviewTokens)
+                if (sentence.Contains(token, StringComparison.Ordinal) && shown.Add(token))
+                    isNew = true;
+            if (isNew) kept.Add(sentence);
+        }
+        return string.Join(" … ", kept);
     }
 
     public static async Task<bool> ShowAsync(Page host)
@@ -74,7 +106,7 @@ public static class AddPlanDialog
             queueOnly = true;
         }
 
-        var panel = new StackPanel { Spacing = 10, MinWidth = 520 };
+        var panel = new StackPanel { Spacing = 10, MinWidth = DialogWidth };
 
         var modeBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var m in Modes) modeBox.Items.Add(m.Label);
@@ -94,8 +126,14 @@ public static class AddPlanDialog
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
+            MaxWidth = DialogWidth - 40,
         };
-        var previewBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13 };
+        // Explicit MaxWidth as a belt-and-braces guard, not just TextWrapping=Wrap — a plain
+        // TextBlock's wrap only engages if something actually constrains its available width
+        // during measure, and this project has already hit ContentDialog layout silently handing
+        // a child unbounded width once before (see the DialogWidth comment above).
+        var previewBlock = new TextBlock
+        { TextWrapping = TextWrapping.Wrap, FontSize = 13, MaxWidth = DialogWidth - 40 };
         var previewBorder = new Border
         {
             Background = (Brush)Application.Current.Resources["ControlFillColorSecondaryBrush"],
@@ -258,6 +296,10 @@ public static class AddPlanDialog
             new ScrollViewer { Content = panel, MaxHeight = 560 },
             primaryButtonText: queueOnly ? "Save idea" : "Import plan", closeButtonText: "Cancel",
             defaultButton: ContentDialogButton.Primary);
+        // An instance-level resource shadows the app-wide ContentDialogMaxWidth theme resource
+        // the default ContentDialog style reads from — see the DialogWidth comment above for why
+        // this is needed at all (panel.MinWidth alone doesn't widen the dialog past the cap).
+        dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
 
         // Keep the dialog open on failed import: cancel the close, show the error.
         var planTools = new List<string>();
