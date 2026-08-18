@@ -66,4 +66,29 @@ internal static class DiaryWriter
         cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
         cmd.ExecuteNonQuery();
     }
+
+    /// <summary>True if an unanswered idle placeholder still overlaps [start, end) on that
+    /// date — same match criteria as <see cref="ClearIdlePlaceholder"/>, so "still exists"
+    /// and "would be deleted by answering" never disagree. Lets a caller check before opening
+    /// IdleReturnDialog a second time for the same idle window: the toast click and the tray
+    /// "While you were away" recap's "Log it" button are two independent entry points to the
+    /// same event with nothing between them stopping both from firing (2026-08-17 user report:
+    /// two diary rows for one 12-minute gap, one real answer plus a leftover "unaccounted
+    /// time" row) — the second one to reach here should find its placeholder already replaced
+    /// by the first and skip instead of unconditionally logging another row.</summary>
+    internal static bool HasIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT EXISTS(SELECT 1 FROM time_diary WHERE date = $d AND window = $w " +
+            "AND description IN ($ph, $legacyPh) " +
+            "AND NOT (end_time <= $s OR start_time >= $e))";
+        cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
+        cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
+        cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
+        cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
+        return Convert.ToInt64(cmd.ExecuteScalar()) != 0;
+    }
 }

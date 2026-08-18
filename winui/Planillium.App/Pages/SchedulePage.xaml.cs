@@ -19,6 +19,12 @@ public sealed partial class SchedulePage : Page
 {
     private const double MaxContentWidth = 860;
 
+    // Plan.Id of every plan the user has manually collapsed. An instance field, not a
+    // local — Render() rebuilds every plan's UI from scratch on every save/toggle/day
+    // rollover, so this is the only thing that survives a rebuild to remember which
+    // plans were closed. Cleared only by navigating away and back (a fresh page instance).
+    private readonly HashSet<string> _collapsedPlans = new();
+
     public SchedulePage()
     {
         InitializeComponent();
@@ -131,15 +137,37 @@ public sealed partial class SchedulePage : Page
         var lastDay = Math.Max(plan.TotalDaysComputed,
                                tasks.Count > 0 ? tasks.Max(t => t.AssignedDay) : 1);
 
-        Sections.Children.Add(new TextBlock
+        var isCollapsed = _collapsedPlans.Contains(plan.Id);
+
+        // Clickable header — chevron + title — same manual click-to-expand pattern as
+        // ReportsPage's "time by app" rows (that file's own doc comment explains why a
+        // native Expander was rejected: its own card chrome draws a different inset than
+        // a plain row, so headers stop lining up with everything else on the page).
+        var header = new Grid { Margin = new Thickness(0, 8, 0, 4) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(new TextBlock
         {
             // Progress day, matching Today/Plans — planDay (the calendar day) still drives
             // everything below it: which card is highlighted as today, what counts as
             // overdue, where the view scrolls to (2026-08-04, Plan.ProgressDay).
             Text = $"{plan.Name} — day {plan.ProgressDay(tasks, lastDay)} of {lastDay}",
             Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
-            Margin = new Thickness(0, 8, 0, 4),
+            VerticalAlignment = VerticalAlignment.Center,
         });
+        var chevron = new FontIcon
+        {
+            Glyph = isCollapsed ? "" : "",
+            FontSize = 14,
+            Margin = new Thickness(8, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Res("TextFillColorSecondaryBrush"),
+        };
+        Grid.SetColumn(chevron, 1);
+        header.Children.Add(chevron);
+        header.IsTabStop = true;
+        AutomationProperties.SetHelpText(header, "Press Enter or Space to expand or collapse.");
+        Sections.Children.Add(header);
 
         // Data only here — no UI construction — so a 160-day plan costs a
         // list of records, not 160 Grids/Borders/TextBlocks built up front.
@@ -187,20 +215,48 @@ public sealed partial class SchedulePage : Page
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
-        Sections.Children.Add(new Border
+        var card = new Border
         {
             BorderBrush = Res("CardStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(4),
             Child = scroller,
-        });
+            Visibility = isCollapsed ? Visibility.Collapsed : Visibility.Visible,
+        };
+        Sections.Children.Add(card);
+
+        void SetHeaderState(bool collapsed)
+        {
+            AutomationProperties.SetName(header,
+                $"{plan.Name}, {(collapsed ? "collapsed" : "expanded")}");
+        }
+        SetHeaderState(isCollapsed);
+        void ToggleCollapse()
+        {
+            var collapsed = card.Visibility == Visibility.Visible;
+            card.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+            chevron.Glyph = collapsed ? "" : "";
+            SetHeaderState(collapsed);
+            if (collapsed) _collapsedPlans.Add(plan.Id); else _collapsedPlans.Remove(plan.Id);
+        }
+        header.Tapped += (_, _) => ToggleCollapse();
+        header.KeyDown += (_, e) =>
+        {
+            if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
+            {
+                ToggleCollapse();
+                e.Handled = true;
+            }
+        };
 
         // Land this plan's own viewport on its own today, not Day 1. Deferred
         // to Loaded (rather than called inline like the old eager StackPanel
         // version could) because the repeater can't realize/measure an item
-        // by index until it's actually been through a layout pass.
-        if (todayIndex >= 0 && scrollToToday)
+        // by index until it's actually been through a layout pass. Skipped
+        // entirely for a plan that starts collapsed — a Visibility.Collapsed
+        // subtree gets no layout pass, so there's nothing to bring into view yet.
+        if (todayIndex >= 0 && scrollToToday && !isCollapsed)
         {
             var idx = todayIndex;
             repeater.Loaded += (_, _) =>

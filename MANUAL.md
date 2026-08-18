@@ -91,6 +91,10 @@ It supports:
 - marking days off,
 - and reviewing task details.
 
+Each plan's list of day cards can be collapsed by clicking its header (or with Enter/Space on the
+header when it's focused), so a plan you're not focused on right now doesn't take up scroll space.
+Click the header again to bring it back.
+
 ### Notes and details
 
 Each task can carry personal notes. These are useful for:
@@ -156,7 +160,10 @@ The diary section of the Reports page has a date picker in its header for jumpin
 The diary list itself only loads a batch of entries at a time (40 up front, 50 more each time you
 click "Show more") rather than the whole matching history at once, so a long search or a busy day
 still stays responsive. When editing or splitting a diary entry, the description field suggests
-your most commonly used past descriptions as you type, so recurring ones don't need retyping.
+your most commonly used past descriptions as you type, so recurring ones don't need retyping — and
+your most common ones also show as one-tap buttons above the field, for when you don't want to
+type at all. When splitting an entry into several activities, tap fills in whichever row you last
+clicked into.
 
 ## Settings and configuration
 
@@ -168,7 +175,10 @@ change. The page stays the same size and shape whichever section you're on, and 
 one you used last. Whether tracking is currently running, and the confirmation (or error) from
 your last change, stay visible on every section.
 
-Everything saves as you go — there is no Save button.
+Everything saves as you go — there is no Save button. Working hours and the evening-review time
+save the moment you enter a valid value, independently of the rest of the page, so a problem
+elsewhere in Settings (an invalid reminder or scoring number, say) never costs you a change you've
+already made correctly — you'll see exactly what still needs fixing instead.
 
 The app includes configurable settings for:
 

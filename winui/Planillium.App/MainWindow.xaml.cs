@@ -273,7 +273,22 @@ public sealed partial class MainWindow : Window
                     DateTime.TryParse(startStr, CultureInfo.InvariantCulture,
                         DateTimeStyles.RoundtripKind, out var start))
                 {
-                    await IdleReturnDialog.ShowAsync(this, mins, start);
+                    // The native toast's own click and the tray "While you were away" recap's
+                    // "Log it" button both reach this same case for the same idle event, with
+                    // nothing upstream stopping both from firing (2026-08-17 user report: two
+                    // diary rows logged for one 12-minute gap). Whichever gets here first
+                    // replaces the placeholder via IdleReturnDialog/LogIdleAnswer as usual; if
+                    // it's already been replaced, the second one has nothing left to answer —
+                    // skip instead of opening the dialog again to log an unconditional duplicate.
+                    var alreadyAnswered = false;
+                    try
+                    {
+                        using var conn = AppPaths.OpenConnection();
+                        alreadyAnswered = !DiaryWriter.HasIdlePlaceholder(conn, start, start.AddMinutes(mins));
+                    }
+                    catch (Exception ex) { Log.Error("HandleNotificationActivation.HasIdlePlaceholder", ex); }
+                    if (!alreadyAnswered)
+                        await IdleReturnDialog.ShowAsync(this, mins, start);
                 }
                 break;
             case ToastArgs.Review:

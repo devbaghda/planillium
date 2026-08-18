@@ -2,6 +2,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 
 namespace Planillium.App.Dialogs;
@@ -30,6 +31,17 @@ public static class IdleReturnDialog
         { "Lunch", "Break", "Errand", "Work off-screen" };
 
     private const int ChipsPerRow = 4;
+
+    // Same bug class already fixed twice elsewhere (SplitDiaryEntryDialog, AddPlanDialog):
+    // ContentDialog's own template caps its rendered width at the ContentDialogMaxWidth theme
+    // resource (default 548) regardless of what width the content asks for — see either of
+    // those two for the full generic.xaml story. This dialog's split-mode row (duration +
+    // category + tag + description + remove) measures well past that cap, which zero-arranges
+    // the trailing columns instead of visibly clipping (2026-08-17 user report: "field is out
+    // of boundaries"). Overriding ContentDialogMaxWidth is the actual fix; rowsScroller's own
+    // horizontal scrollbar stays as the fallback for a narrower app window.
+    private const double DialogWidth = 780;
+    private const double DialogContentWidth = DialogWidth - 64; // 48px template padding + margin, same rule as the other two
 
     /// <summary>
     /// Poll-loop entry point: shows the interactive dialog directly when the
@@ -86,7 +98,7 @@ public static class IdleReturnDialog
             .Take(8)
             .ToArray();
 
-        var root = new StackPanel { Spacing = 12, MinWidth = 460 };
+        var root = new StackPanel { Spacing = 12, MinWidth = DialogContentWidth };
         if (leadIn is { Length: > 0 })
             root.Children.Add(new TextBlock
             {
@@ -208,8 +220,49 @@ public static class IdleReturnDialog
 
         dialog = DialogControls.Build(window.Content.XamlRoot, "Welcome back", root,
             primaryButtonText: "Log it", closeButtonText: "Skip", defaultButton: ContentDialogButton.Primary);
+        // Instance-level resource shadows the app-wide ContentDialogMaxWidth theme resource the
+        // default ContentDialog style reads from — see DialogWidth's comment above for why, and
+        // why root is sized to DialogContentWidth (smaller than this) rather than to this value.
+        dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
 
-        var rows = new List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, TextBox Desc, Button Remove)>();
+        var rows = new List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, AutoSuggestBox Desc, Button Remove)>();
+
+        // Split mode had no one-click answers at all, unlike single mode's chips above —
+        // reuses that same fixed+frequent `chips` list rather than a second, different set, so
+        // both modes offer the same one-tap answers (2026-08-17 user report: "no frequent
+        // answers one-click option"). Fills whichever row's description was last focused, since
+        // — unlike single mode's one input — several rows can be mid-edit at once here (same
+        // convention SplitDiaryEntryDialog's own quick-pick chips use).
+        AutoSuggestBox? activeDescBox = null;
+        if (chips.Length > 0)
+        {
+            var chipSection = new StackPanel { Spacing = 6 };
+            chipSection.Children.Add(new TextBlock
+            {
+                Text = "Quick pick:",
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            for (var i = 0; i < chips.Length; i += ChipsPerRow)
+            {
+                var chipRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                foreach (var chip in chips.Skip(i).Take(ChipsPerRow))
+                {
+                    var b = new Button { Content = chip, FontSize = 12, Padding = new Thickness(8, 3, 8, 3) };
+                    b.Click += (_, _) =>
+                    {
+                        var target = activeDescBox ?? rows.FirstOrDefault(r => r.Desc.Text.Length == 0).Desc;
+                        if (target != null) target.Text = chip;
+                    };
+                    chipRow.Children.Add(b);
+                }
+                chipSection.Children.Add(chipRow);
+            }
+            // Above rowsScroller, not appended after the toolbar — buried below the whole row
+            // list would defeat the point of being quick (same placement SplitDiaryEntryDialog
+            // uses for its own chip section).
+            splitRoot.Children.Insert(0, chipSection);
+        }
 
         void UpdateSplitState()
         {
@@ -264,12 +317,16 @@ public static class IdleReturnDialog
             // Grid is offered effectively unconstrained width, and a Star/Stretch column has
             // nothing finite to size against there, collapsing toward zero instead of staying
             // usable (same trap documented on SplitDiaryEntryDialog's own descBox).
-            var descBox = new TextBox
+            var descBox = new AutoSuggestBox
             {
                 PlaceholderText = "e.g. lunch, walked the dog…",
                 Width = 220,
             };
+            DialogControls.WireFrequentSuggestions(descBox, frequent);
             AutomationProperties.SetName(descBox, "Activity description");
+            // Tracks which row a quick-pick chip should fill — see activeDescBox's declaration
+            // above the chip section.
+            descBox.GotFocus += (_, _) => activeDescBox = descBox;
             var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
             AutomationProperties.SetName(removeBtn, "Remove this activity");
 
@@ -372,7 +429,7 @@ public static class IdleReturnDialog
     /// reasoning ReportsPage.Diary.BuildDiarySection's own doc comment already gives for
     /// staying unsplit.</summary>
     private static List<(DateTime Start, int Minutes, string Description, string Category, string? Tag)> BuildSegments(
-        DateTime idleStart, List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, TextBox Desc, Button Remove)> rows)
+        DateTime idleStart, List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, AutoSuggestBox Desc, Button Remove)> rows)
     {
         var t = idleStart;
         var segments = new List<(DateTime, int, string, string, string?)>();

@@ -6,6 +6,22 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Fixes**
+- **Changing your working hours in Settings could silently get discarded if anything else on the
+  page had a problem.** Settings saved the whole page as one all-or-nothing block, so an invalid
+  value in a completely unrelated field (a reminder timer, an idle threshold) quietly threw away
+  a correct, already-typed working-hours change with no message explaining why the day still
+  started at the old time. Working hours (and the evening-review time) now save the instant
+  they're valid, independently of everything else on the page — if something else does need
+  fixing, you're told exactly what and your working-hours change is kept either way.
+- Splitting a time-of-absence entry into several activities: the popup's fields ran outside its
+  own visible edges, and the "recently used" suggestions could only be picked through a dropdown
+  rather than a single click. Both fixed — the dialog is now sized to fit its own content, and
+  your most common descriptions show as one-tap buttons above the fields (same as the
+  single-entry edit dialog already offered, extended here to whichever row you're currently
+  filling in).
+- Same popup, follow-up: it still made you scroll sideways to see the rest of a row even though
+  the dialog had already been widened to fit. The popup is wider again and the row no longer
+  scrolls at all — everything is visible at once.
 - **A day's score could get permanently stuck at whatever it happened to be the moment you first
   edited a diary entry that morning** — instead of the real total it earned by the time you
   actually reviewed the day. Editing a diary entry's category (or splitting one, or bulk-marking
@@ -53,6 +69,9 @@ going forward; the original Python/Tkinter version is retired.
   switched the scroller back from permanently-shown to auto-hide-when-not-needed.
 
 **New**
+- Schedule's per-plan task lists can now be collapsed — click a plan's header (or press Enter/
+  Space on it) to hide its day cards and click again to bring them back, so a plan you're not
+  focused on right now doesn't take up scroll space.
 - The "Add Plan" dialog now shows a live preview right above the fields — just the sentence(s) from
   the actual prompt that use each field, e.g. "I need to become functional in [Skill you want to
   learn] as fast as possible." — with each blank shown in muted italics until you type into it, then

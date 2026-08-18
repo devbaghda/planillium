@@ -148,6 +148,17 @@ compaction. General versions of several now also live in the global `windows-app
   table" stood for two rounds.
 - **Don't infer a business rule** from one comment or one screenshot. If a fix depends on a rule
   that isn't written down, ask.
+- **A `#if DEBUG`-gated test-only safety hook is only as safe as "tests always build Debug."**
+  `TestRootFixture`'s real-DB-isolation override compiled out under `dotnet test -c Release`
+  (2026-08-13), silently writing 112+42 real rows before anyone noticed. Gate test-only behaviour
+  on a constant the test project defines unconditionally in every configuration, not on `DEBUG`.
+- **A settings/save page split across independent sections must save each section on its own
+  success, not gate the whole page behind one shared validation pass.** `SettingsPage.SaveRules`
+  used to validate scoring/reminder fields before writing *anything*, including the unrelated
+  working-hours pair the user had actually just changed — one invalid reminder box silently
+  discarded a correct working-hours edit with no error naming which field blocked it. Split into
+  independent phases (2026-08-17), each with its own validate-then-write and its own error
+  message; a failure in one phase never blocks a different phase's already-valid write.
 
 **Safety around real data**
 - Never simulate input (clicks/keystrokes) that would mutate real plan/score data — verify

@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
 
 namespace Planillium.App.Dialogs;
@@ -15,6 +16,24 @@ namespace Planillium.App.Dialogs;
 /// </summary>
 public static class SplitDiaryEntryDialog
 {
+    // ContentDialog's own template caps its rendered width at the ContentDialogMaxWidth theme
+    // resource (default 548) regardless of what width the content asks for — see AddPlanDialog.cs's
+    // comment on this exact resource for the full story (read straight from the SDK's generic.xaml:
+    // Border[MaxWidth=ContentDialogMaxWidth] > ScrollViewer[HorizontalScrollBarVisibility=Disabled]
+    // > Grid[Padding=24] > content, so 48px of that cap is never available to content, and the
+    // wrapping ScrollViewer can't scroll horizontally to recover it). A split row here — duration +
+    // category + tag + description + remove — measures ~660-740px wide (the exact figure depends on
+    // the platform's default Button MinWidth, which removeBtn below doesn't override), well past
+    // the ~500px the default cap actually leaves. The original fix widened the dialog to 780 but
+    // still wrapped the row list in its own horizontally-scrolling ScrollViewer as a fallback for a
+    // narrower app window — in practice that meant a normal-sized window still showed a horizontal
+    // scrollbar and a partly-offscreen row instead of the full row at a glance (2026-08-18 user
+    // report: "remove the horizontal rolling"). Widening further so the widest realistic row always
+    // fits, and removing removeBtn's dependence on the platform default, means there is nothing left
+    // to scroll — rowsPanel is added straight to root below, no ScrollViewer at all.
+    private const double DialogWidth = 860;
+    private const double DialogContentWidth = DialogWidth - 64; // 48px template padding + margin, same rule as AddPlanDialog
+
     /// <returns>null if the user cancelled, true once split, false if the split itself
     /// failed — matches EditDiaryEntryDialog's contract (2026-07-14 round-6 audit finding
     /// #6, applied here 2026-07-18 audit finding R8-06: this dialog was the one sibling
@@ -27,36 +46,21 @@ public static class SplitDiaryEntryDialog
         if (!DateExtensions.TryParseTimeOfDay(start, out var startTime))
             return false;
 
-        var root = new StackPanel { Spacing = 10, MinWidth = 460 };
+        var root = new StackPanel { Spacing = 10, MinWidth = DialogContentWidth };
         root.Children.Add(new TextBlock
         {
             Text = $"Split this {durationMin}-minute entry ({start} → {end}) into several activities.",
             TextWrapping = TextWrapping.Wrap,
         });
 
-        // Horizontally scrollable, not just widened (2026-08-06 follow-up to adding the Tag
-        // combo): ContentDialog's own template caps its width around the platform's
-        // ContentDialogMaxWidth theme resource regardless of this content's MinWidth — a row
-        // with duration+category+tag+description+remove genuinely doesn't fit inside that cap.
-        // Past it, a Stretch-arranged Grid zero-arranges its trailing Auto columns instead of
-        // visibly clipping (confirmed live: the Remove button's BoundingRectangle read Empty,
-        // same ambiguous-looking symptom this project already root-caused once for the diary
-        // row list — see ReportsPage.Diary.cs's DiaryList/BuildRow comments on HorizontalAlignment
-        // .Left + a MinWidth for the Star column, and its diaryScroller sibling for the
-        // horizontal-scroll half of that same fix). This is that fix applied here.
+        // No horizontal ScrollViewer here (removed 2026-08-18 — see DialogWidth's comment above):
+        // a row with duration+category+tag+description+remove now always fits inside
+        // DialogContentWidth, so there's nothing left that needs scrolling into view. Left over
+        // a Stretch-arranged Grid still matters — see BuildRow-style comments elsewhere in this
+        // file for why a Stretch Grid zero-arranges its trailing Auto columns instead of visibly
+        // clipping when it's offered less width than it needs.
         var rowsPanel = new StackPanel { Spacing = 6 };
-        var rowsScroller = new ScrollViewer
-        {
-            // Visible, not Auto — this project already learned that lesson once
-            // (ReportsPage.Diary.cs's diaryScroller, 2026-07-28: "can't split the unaccounted
-            // time" — Auto's hover-only indicator went unnoticed and read as broken/missing
-            // content rather than scrollable). Applying it here before anyone has to hit the
-            // same thing a second time in a different dialog.
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = rowsPanel,
-        };
-        root.Children.Add(rowsScroller);
+        root.Children.Add(rowsPanel);
 
         var addRowBtn = new Button { Content = "+ Add activity", Padding = new Thickness(0) };
         var remainingText = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
@@ -67,6 +71,11 @@ public static class SplitDiaryEntryDialog
 
         var dialog = DialogControls.Build(xamlRoot, "Split diary entry", root,
             primaryButtonText: "Split", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
+        // Instance-level resource shadows the app-wide ContentDialogMaxWidth theme resource the
+        // default ContentDialog style reads from — see the DialogWidth/DialogContentWidth comment
+        // above for why, and why root is sized to DialogContentWidth (smaller than this) rather
+        // than to this same value.
+        dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
 
         // Surfaces your own most commonly-used descriptions as soon as you focus an empty
         // row's description field, instead of retyping the same handful by hand every time
@@ -76,7 +85,45 @@ public static class SplitDiaryEntryDialog
         try { using var db = new Database(); frequent = db.MostFrequentDescriptions(); }
         catch (Exception ex) { Log.Error("SplitDiaryEntryDialog.MostFrequentDescriptions", ex); frequent = new(); }
 
+        // Real one-tap chips, not just the AutoSuggestBox dropdown above — MostFrequentDescriptions'
+        // own doc comment already promised "quick-pick chips on Edit/Split diary entry" but this
+        // dialog (and EditDiaryEntryDialog) only ever got the dropdown half of that; the dropdown
+        // still needs a click-then-select, IdleReturnDialog's chip buttons are the actual one-tap
+        // version (2026-08-17 user report: "no one-click suggested options are available"). Fills
+        // whichever row's description box was last focused, since — unlike IdleReturnDialog's single
+        // input — this dialog is always editing several rows at once; falls back to the first row
+        // that's still blank if nothing's been focused yet.
+        AutoSuggestBox? activeDescBox = null;
         var rows = new List<(NumberBox Dur, ComboBox Cat, ComboBox Tag, AutoSuggestBox Desc, Button Remove)>();
+        if (frequent.Count > 0)
+        {
+            const int chipsPerRow = 4;
+            var chipSection = new StackPanel { Spacing = 6 };
+            chipSection.Children.Add(new TextBlock
+            {
+                Text = "Quick pick:",
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            for (var i = 0; i < frequent.Count; i += chipsPerRow)
+            {
+                var chipRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                foreach (var chip in frequent.Skip(i).Take(chipsPerRow))
+                {
+                    var b = new Button { Content = chip, FontSize = 12, Padding = new Thickness(8, 3, 8, 3) };
+                    b.Click += (_, _) =>
+                    {
+                        var target = activeDescBox ?? rows.FirstOrDefault(r => r.Desc.Text.Length == 0).Desc;
+                        if (target != null) target.Text = chip;
+                    };
+                    chipRow.Children.Add(b);
+                }
+                chipSection.Children.Add(chipRow);
+            }
+            // Above rowsScroller, not appended after the toolbar — a quick-pick bar buried below
+            // the whole row list would defeat the point of being quick.
+            root.Children.Insert(1, chipSection);
+        }
 
         void UpdateState()
         {
@@ -132,7 +179,13 @@ public static class SplitDiaryEntryDialog
             };
             DialogControls.WireFrequentSuggestions(descBox, frequent);
             AutomationProperties.SetName(descBox, "Activity description");
-            var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
+            // Tracks which row a quick-pick chip should fill — see activeDescBox's declaration above.
+            descBox.GotFocus += (_, _) => activeDescBox = descBox;
+            // MinWidth pinned to 0 (2026-08-18): WinUI's default Button style carries its own
+            // MinWidth (platform default, not this app's choice) that a single-glyph button like
+            // this never needs — left unset, it was the main thing pushing a row past
+            // DialogContentWidth and forcing the horizontal scrolling this fix removes.
+            var removeBtn = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4), MinWidth = 0 };
             AutomationProperties.SetName(removeBtn, "Remove this activity");
 
             // Left, not the default Stretch — same reasoning as DiaryList/BuildRow's row Grid:

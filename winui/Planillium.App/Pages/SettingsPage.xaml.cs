@@ -292,47 +292,73 @@ public sealed partial class SettingsPage : Page
         SaveRules();
     }
 
+    /// <summary>Two independent save phases, not one all-or-nothing write. Working
+    /// hours/EOD used to be validated and saved in the same single Mutate() call as every
+    /// reminder/scoring/keyword field on this page — so a NaN scoring NumberBox (e.g. one
+    /// mid-edit, momentarily empty while the user is retyping it, the instant a LostFocus
+    /// on some other field fired this same handler) silently discarded an otherwise-valid
+    /// Work Start/End edit: the textbox kept showing the new time, but nothing was ever
+    /// written to config.json, so the tracker, Kickoff, Today — everything that reads
+    /// working hours — kept using the old value with no visible sign why (2026-08-17 user
+    /// report: "the day of the app starts at 8 though in the settings it is now set to 6";
+    /// confirmed live by reading config.json — it still held the old start time). Splitting
+    /// hours/EOD into their own save, attempted first and independent of everything else on
+    /// the page, means a bad field anywhere else here can never block that save again.</summary>
     private void SaveRules()
     {
-        // Validate the three times before anything is written.
+        if (!SaveHoursAndEod(out var hoursError))
+        {
+            SaveStatus.Text = hoursError;
+            return;
+        }
+
+        var rulesOk = SaveRemainingRules(out var rulesError);
+        // The tracker reads config once at construction — restart it so hours/keyword/
+        // threshold changes apply now, not at the next app start. Unconditional: hours/EOD
+        // above already succeeded even if the rest of the page didn't.
+        (App.MainWindow as MainWindow)?.RestartTracker();
+        if (rulesOk)
+        {
+            SaveStatus.Text = "Saved — tracker restarted with the new rules.";
+            // Only on the full-success path: a header must never advertise a value that a
+            // validation failure below stopped from being written.
+            RefreshSummaries();
+            RefreshTrackerInfo();
+        }
+        else
+        {
+            // Hours/EOD are already safely on disk at this point — say so, so a genuine
+            // partial save never reads as a total failure.
+            SaveStatus.Text = $"Working hours saved. {rulesError}";
+        }
+    }
+
+    /// <returns>true once working hours + EOD are validated and written (or unconditionally
+    /// once the write itself has been attempted); false only when nothing was written, with
+    /// <paramref name="error"/> explaining what to fix.</returns>
+    private bool SaveHoursAndEod(out string error)
+    {
         foreach (var (box, label) in new[]
                  { (WorkStart, "Work start"), (WorkEnd, "Work end"), (EodTimeBox, "Day review at") })
         {
             if (!DateExtensions.TryParseTimeOfDay(box.Text.Trim(), out _))
             {
-                SaveStatus.Text = $"{label} must be HH:MM (e.g. 08:00).";
-                return;
+                error = $"{label} must be HH:MM (e.g. 08:00).";
+                return false;
             }
         }
 
         // Work start must precede work end. This was only worth enforcing once the diary window
         // became these same hours (2026-08-04): inverted, it isn't a short working day, it's no
         // tracking at all — nothing logged, all day, with the app otherwise looking healthy.
-        if (DateExtensions.TryParseTimeOfDay(WorkStart.Text.Trim(), out var workStart) &&
-            DateExtensions.TryParseTimeOfDay(WorkEnd.Text.Trim(), out var workEnd) &&
-            workStart >= workEnd)
+        DateExtensions.TryParseTimeOfDay(WorkStart.Text.Trim(), out var workStart);
+        DateExtensions.TryParseTimeOfDay(WorkEnd.Text.Trim(), out var workEnd);
+        if (workStart >= workEnd)
         {
-            SaveStatus.Text = "\"Work start\" must be earlier than \"Work end\" — " +
-                              "otherwise nothing gets tracked at all.";
-            return;
+            error = "\"Work start\" must be earlier than \"Work end\" — " +
+                    "otherwise nothing gets tracked at all.";
+            return false;
         }
-
-        // A NumberBox emptied by the user reports Value = NaN, and (int)NaN is a garbage number
-        // (int.MinValue), not a zero — writing that into the score formula would be silent and
-        // spectacular. Bail out the same way an unparseable time does, rather than saving it.
-        foreach (var rule in ScoringRules.All)
-        {
-            if (double.IsNaN(_scoringBoxes[rule.Key].Value))
-            {
-                SaveStatus.Text = $"\"{rule.Label}\" needs a number (default: {rule.Default}).";
-                return;
-            }
-        }
-
-        static System.Text.Json.Nodes.JsonArray Lines(TextBox box) =>
-            new(box.Text.Split('\n', '\r')
-                .Select(l => l.Trim()).Where(l => l.Length > 0)
-                .Select(l => (System.Text.Json.Nodes.JsonNode)l).ToArray());
 
         try
         {
@@ -348,6 +374,57 @@ public sealed partial class SettingsPage : Page
                 // left behind, so nobody later finds it in config.json and assumes it's live.
                 cfg.Remove("diary_hours");
                 cfg["end_of_day_summary_time"] = EodTimeBox.Text.Trim();
+            });
+            error = "";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.SaveHoursAndEod", ex);
+            error = Log.Friendly("Couldn't save working hours", ex);
+            return false;
+        }
+    }
+
+    /// <returns>true once every reminder/idle/retention/scoring/keyword field is validated
+    /// and written; false if nothing in this phase was written, with <paramref name="error"/>
+    /// explaining what to fix. Never touches working_hours/end_of_day_summary_time — those
+    /// are SaveHoursAndEod's responsibility, already committed by the time this runs.</returns>
+    private bool SaveRemainingRules(out string error)
+    {
+        // A NumberBox emptied by the user reports Value = NaN, and (int)NaN is a garbage number
+        // (int.MinValue), not a zero — writing that into the score formula (or a reminder/idle/
+        // retention setting — these went unchecked before this split, same silent-garbage risk,
+        // just never yet reported) would be silent and spectacular. Bail out the same way an
+        // unparseable time does, rather than saving any of it.
+        foreach (var rule in ScoringRules.All)
+        {
+            if (double.IsNaN(_scoringBoxes[rule.Key].Value))
+            {
+                error = $"\"{rule.Label}\" needs a number (default: {rule.Default}) — the rest of this page wasn't saved.";
+                return false;
+            }
+        }
+        foreach (var (box, label) in new (NumberBox Box, string Label)[]
+                 { (GraceMin, "Reminder grace"), (RepeatMin, "Reminder repeat"), (IdleMin, "Idle threshold"),
+                   (RetentionDays, "Diary retention"), (LateDayReminderHours, "Late-day reminder") })
+        {
+            if (double.IsNaN(box.Value))
+            {
+                error = $"\"{label}\" needs a number — the rest of this page wasn't saved.";
+                return false;
+            }
+        }
+
+        static System.Text.Json.Nodes.JsonArray Lines(TextBox box) =>
+            new(box.Text.Split('\n', '\r')
+                .Select(l => l.Trim()).Where(l => l.Length > 0)
+                .Select(l => (System.Text.Json.Nodes.JsonNode)l).ToArray());
+
+        try
+        {
+            ConfigService.Mutate(cfg =>
+            {
                 cfg["reminder_grace_minutes"] = (int)GraceMin.Value;
                 cfg["reminder_interval_minutes"] = (int)RepeatMin.Value;
                 cfg["idle_threshold_minutes"] = (int)IdleMin.Value;
@@ -376,19 +453,14 @@ public sealed partial class SettingsPage : Page
                     [DiaryCategory.Neutral] = Lines(IdleNeutral),
                 };
             });
-            // The tracker reads config once at construction — restart it so
-            // keyword/threshold changes apply now, not at the next app start.
-            (App.MainWindow as MainWindow)?.RestartTracker();
-            SaveStatus.Text = "Saved — tracker restarted with the new rules.";
-            // Only on the success path: a header must never advertise a value that a validation
-            // failure above stopped from being written.
-            RefreshSummaries();
-            RefreshTrackerInfo();
+            error = "";
+            return true;
         }
         catch (Exception ex)
         {
-            Log.Error("SettingsPage.SaveRules", ex);
-            SaveStatus.Text = Log.Friendly("Couldn't save your settings", ex);
+            Log.Error("SettingsPage.SaveRemainingRules", ex);
+            error = Log.Friendly("Couldn't save your settings", ex);
+            return false;
         }
     }
 

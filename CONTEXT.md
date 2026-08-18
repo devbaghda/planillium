@@ -189,10 +189,8 @@ every feature that mattered.
 
 ## Session handoff notes
 _An index, not an archive — blow-by-blow detail for any entry lives in git log. Compress
-aggressively rather than letting this grow: it has been compacted ~15 times since 2026-07-06
-(852→224 was the first; the latest, 2026-08-04, took this section from ~503 to ~210 lines and
-promoted the Standing lessons into their own section — they had been accumulating as sub-bullets
-under one arbitrary 07-29 entry, which is a good way to lose them in the next pass)._
+aggressively; compacted ~16 times since 2026-07-06 (852→224 first; 2026-08-04 split
+`DECISIONS.md` out and promoted Standing lessons into their own section)._
 
 ### Standing lessons → `DECISIONS.md`
 
@@ -204,62 +202,40 @@ none may be dropped in a compaction.
 
 ### Session log
 
-**Through 2026-07-29** (detail in git log): WinUI 3 rebuild landed 07-07 as v1.0.0. Audit rounds
-1-6 (07-09→07-15) introduced `Database.RunInTransaction`, `DateExtensions.ToIsoTimestamp()`,
-`JsonFileIO` atomic writes, `PlanStore.IsValidPlanId` and transactional dialogs with a
-`SaveErrorBar` — the mechanisms every later round built on — and fixed diary column width,
-window-clamp-to-monitor, the completed-task-shift data-loss bug (business rule 7), move-to-today
-backward compaction, `ReviewDialog` reentrancy, three Add-Plan templates keying phases wrong, and
-idle-detection double-counting. 07-16 fixed day-off/reschedule shifting to skip already-taken days.
-07-17 added `TreatWarningsAsErrors`, `CategoryStyle.cs`, "Clear all my data", Settings autosave, and
-day-off scoring (business rule 10). 07-18→07-22 (four more audit rounds, tests 19→83):
-`CurrentStreak`/`WeekStats` took an optional `asOf` (silent streak-bonus bug editing past entries);
-closed-form `PlanDayForDate`/`DateForPlanDay`; `CredentialStore.Delete`; 42 overlapping `time_diary`
-pairs found, only 2 matching the known bug — **user's call: leave untouched**; personal-data
-git-history purge (134 commits); late-day task reminder; diary-tracking-gap fix; repo renamed
-`planillium`, **v1.1.0 public**; `DispatcherQueueTimer` root-caused (Standing lessons); queued plan
-ideas (v1.2.0); tray stuck-badge; Diary category/app filtering; `ActiveWindowTitle` process-name
-fallback (~118 bare "-" rows/day fixed); `posting-plan`/`project-media` skills bootstrapped. 07-23:
-internal rename `MentorOverseer`→`Planillium` (3 legacy-compat values deliberately untouched, see
-top of file); Diary App/Page filter split; "Exclusion Impact" panel removed (business rule 12); 26
-`ContentDialog` sites unified onto `DialogControls.Build`; `StartDayChangeWatcher` for the
-new-day-without-switching-pages gap; note-wipe risk fixed; VACUUM off the UI thread; docx zip-bomb
-check counts real decompressed bytes; four 5-category audits (0 Critical) plus two re-audits,
-86/86 tests. **07-27**: app wouldn't start — bisected to 07-24's `SetDefaultDllDirectories`
-breaking WinRT activation, clean revert; wake-from-sleep toast only logged a gap with no UI handler
-wired, `HandleIdleReturn` now always logs "unaccounted time" the instant a gap is detected. **07-28**:
-Diary Edit/Split unreachable via `Card()`'s rounded-clip (Standing lessons); plan tasks gained a
-`tools` list (`TeachPlanTools`, 12 keywords, zero mismatches); diary AutoSuggestBox; "Show more"
-batched at 50. **07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never wired; Diary filters
-didn't narrow each other; idle rows show the typed answer in Page not "—".
+**Through 2026-07-29** (full detail in git log): WinUI 3 rebuild landed 07-07 as v1.0.0. Audit
+rounds 1-6 (07-09→07-15): `Database.RunInTransaction`, `JsonFileIO` atomic writes,
+`PlanStore.IsValidPlanId`, transactional dialogs — the mechanisms every later round built on —
+plus completed-task-shift data-loss fix (rule 7), move-to-today backward compaction. 07-16:
+day-off/reschedule overlap fix. 07-17: `TreatWarningsAsErrors`, "Clear all my data", day-off
+scoring (rule 10). 07-18→07-22 (tests 19→83): `asOf`-aware streaks; closed-form `PlanDayForDate`;
+42 overlapping `time_diary` pairs found, only 2 matching the known bug — **user's call: leave
+untouched**; personal-data git-history purge (134 commits); repo renamed `planillium`, **v1.1.0
+public**; `DispatcherQueueTimer` root-caused (Standing lessons); queued plan ideas (v1.2.0);
+`ActiveWindowTitle` process-name fallback. 07-23: internal rename `MentorOverseer`→`Planillium`
+(3 legacy-compat exceptions, see top of file); "Exclusion Impact" panel removed (rule 12); 26
+`ContentDialog` sites unified onto `DialogControls.Build`; four 5-category audits (0 Critical),
+86/86 tests. **07-27**: app wouldn't start — bisected to `SetDefaultDllDirectories` breaking
+WinRT activation, reverted; `HandleIdleReturn` now always logs "unaccounted time" on detection.
+**07-28**: Diary Edit/Split unreachable via rounded-clip (Standing lessons); plan tasks gained
+`tools`. **07-29**: `SplitDiaryEntryDialog`'s "+ Add activity" never wired; Diary filters didn't
+narrow each other.
 
-**2026-08-04 → 08-05** (one continuous session, many rounds — commits `e4c4f11`, `ee981c0`,
-`488424f`, `0ffdde4`): diary window merged into working hours (`InDiaryHours`→`InWorkingHours`,
-`SaveRules` rejects work start ≥ end); Reports' midnight rollover fixed (`_diaryFollowsToday`, one
-`GoTo`); "Day X of Y"→`Plan.ProgressDay` (business rule 13); shared `AddTotalsRow`; all 12 scoring
-rules made editable (`ScoringRules` table feeds both the formula and Settings). `ActivityTracker`'s
-God-Object split landed (855→597 lines): `NativeInput`/`WindowTitleResolver`/`ActivityClassifier`/
-`DiaryWriter` extracted, public surface unchanged. Reports above the diary follow the period
-selector throughout (`ReportData.PeriodStats`; scores recomputed, not read from `score_ledger`
-**deliberately** — the ledger only holds days the app ran to credit); card relabelled "SCORE
-EARNED" vs. the sidebar's all-time BALANCE. Settings' Expander layout **rejected on sight** ("no
-bouncing"), replaced by a right-hand `ListView` (900dip min) — fixed blank accessible names + an
-off-screen `BoundingRectangle.Empty` scoring-box bug along the way. Report tables aligned
-(`LabelColumnWidth`/`ColumnGap`/`SubRowIndent`) and gained all 5 categories + a per-row Total —
-**meaning changed**, Year total 80h10m→294h34m; new `ReportData.CategoryMinutes`; consolidating 3
-near-duplicate queries into `DailyMinutes` fixed 2 latent bugs (`MonthBuckets` never read
-`diary_daily_rollup`; its neutral/paid/idle columns were never read back). Hours switched to decimal
-(`FmtHours`); Month/Year gained Tasks/Score totals via `DailyRows`. "Asks about absence twice": two
-compounding causes in `ActivityTracker.PendingDayGap`, fixed via `_openSessionStart`/
-`_accountedUntil` clamps. New `PageLayout.cs`/`CenterContent()` fixed the pre-07-28 width bug on
-Today/Schedule/Plans. "Fill the gap with the following day's task" reverses the 07-09 no-gap-closing
-call (business rule 7); `RescheduleTask` now runs one compact-then-push formula, future-only
-(`ReplanOverdueDialog` still leaves past days alone). User approved closing the existing days-22/23
-gap retroactively: `ScoreService.CompactFutureGaps`, one-time Debug button, DB backed up, verified
-21→39, button removed. New `DiaryTag` axis (`time_diary.tag`, first ADD COLUMN migration) —
-descriptive only, never read by ScoreService; 5 values (Routine/Documents/Studioshoo/Selfdev/
-Procrastination); hit the `ContentDialog` width-cap bug a third time, fixed. Verified via live UIA
-on scratch-root instances throughout; ended the arc at 144/144.
+**2026-08-04 → 08-05** (one continuous session, commits `e4c4f11`, `ee981c0`, `488424f`,
+`0ffdde4`): diary window merged into working hours (`SaveRules` rejects work start ≥ end);
+midnight rollover fixed; "Day X of Y"→`Plan.ProgressDay` (rule 13); all 12 scoring rules made
+editable (`ScoringRules` table). `ActivityTracker`'s God-Object split landed:
+`NativeInput`/`WindowTitleResolver`/`ActivityClassifier`/`DiaryWriter` extracted, public surface
+unchanged. Reports above the diary follow the period selector (scores recomputed, not read from
+`score_ledger` **deliberately** — the ledger only holds days the app ran to credit). Settings'
+Expander **rejected on sight** ("no bouncing"), replaced by a `ListView`. Report tables gained
+all 5 categories + a per-row Total — **meaning changed**, Year total 80h10m→294h34m; 3
+near-duplicate queries consolidated, fixing 2 latent bugs. Hours switched to decimal. "Asks
+about absence twice": two compounding causes in `ActivityTracker.PendingDayGap`, fixed via
+`_openSessionStart`/`_accountedUntil` clamps (see 2026-08-17's idle-return duplicate below — a
+related but distinct bug in the same area). "Fill the gap with the following day's task"
+reverses the 07-09 no-gap-closing call (rule 7); `RescheduleTask` now one compact-then-push
+formula, future-only; user approved closing the existing days-22/23 gap retroactively (DB backed
+up). New `DiaryTag` axis (`time_diary.tag`), descriptive only. Verified live UIA; 144/144.
 
 **2026-08-07**: two user reports on Tag/idle-answer. (1) Tag was riding inside the diary row's
 Details column as a suffix — now its own fixed-width column (`DiaryList`/`BuildRow`, "—" when
@@ -286,96 +262,118 @@ button per `DiaryTag.Options` entry plus "Clear tag." `MarkSelectedDiaryRowsTag`
 helper with `MarkSelectedDiaryRows` (category changes also touch activity-rule learning + score
 recalc; tag doesn't). No dedicated test — page-level UI, outside test scope.
 
-**2026-08-13**: new `ScoreService.ManuallyMarkedDaysOff` (distinct dates with a `plan_days_off` row,
-narrower than `AllPlansScoringExempt`/`ScoringExemptDates`, which also count recurring rest days) —
-shipped as a standalone always-three-numbers Reports card + Schedule summary, then corrected same
-session ("everything besides the diary should update based on the chosen timescale... we do not
-need an additional card... remove the day-offs info from the schedule page"): reworked into
-`ReportData.PeriodTotals.DayOffs` (bounded period-start-through-today like every other figure
-there), folded into the score card's caption line; Schedule's line removed. Tests:
-`ManuallyMarkedDaysOffTests.cs` + two `ReportPeriodStatsTests.cs` additions. 152/152.
+**2026-08-13**: `ScoreService.ManuallyMarkedDaysOff` (distinct `plan_days_off` dates, narrower than
+`AllPlansScoringExempt`) shipped as a standalone card, then reworked same session into
+`ReportData.PeriodTotals.DayOffs` (bounded like every other period figure) folded into the score
+card's caption; Schedule's separate line removed. Tests added, 152/152. **Real finding while
+verifying**: `dotnet test -c Release` was silently hitting the REAL `data/progress.db` (lesson →
+DECISIONS.md Verification discipline) — 112 orphaned rows + 42 fake `time_diary` rows (one genuine
+gap row kept) deleted after backup+confirmation; fixed via a `PLANILLIUM_TESTS` constant defined
+unconditionally in both configs, 151/151. Same screenshot: diary's horizontal scrollbar was only
+there because `DiaryListWidth` was stale (never updated for 08-07's Tag column) — recomputed,
+columns narrowed, scroller `Visible`→`Auto`. Follow-up worry ("deleted real data from today") ruled
+out — the pre-delete backup already had nothing there; but surfaced a genuine 08:00→11:28 gap with
+no placeholder row despite `HandleIdleReturn`'s "always logs one" guarantee — **cause never found,
+still open** (see Open TODOs). `AppInfo.MaxActivePlans` 2→3, docs updated to match.
 
-**Real finding while verifying**: `dotnet test -c Release` was silently running the whole suite
-against the REAL `data/progress.db` — `TestRootFixture`'s `MENTOR_ROOT` override lived behind
-`#if DEBUG`, and since `AppPaths.cs` is source-linked (not project-referenced) into the Tests
-project, a Release run compiled it with `DEBUG` undefined, dropping the override. Left 112 orphaned
-rows (fake plan ids) across `task_overrides`(78)/`task_completions`(14)/`plan_days_off`(20), plus —
-found later via a screenshot, "theres a mess there" — 42 fake `time_diary` rows on 08-07 and 08-13
-(`TestWindow`/`test-window-<guid>` windows, `idle-split-`/`idle-single-<guid>` descriptions, one
-invalid category `some_future_category`); all deleted after backup + confirmation, the one genuine
-08-13 row (a real "unaccounted time" gap, 14:52–18:00) kept. `score_ledger` isn't plan-scoped, so a
-test crediting "today" could in principle have clobbered a real row — not retroactively auditable,
-nothing further done beyond rows 138/140 already fixed 08-07. **Fix**: override now also requires
-`PLANILLIUM_TESTS`, defined unconditionally in both configs. 151/151 both configs; real row counts
-confirmed unchanged after a post-fix Release run. **Lesson**: a `#if DEBUG`-gated test-only hook is
-only as safe as "tests always build Debug."
+**2026-08-14** ("the plan that finished should not have moved... no way to restore it"): an
+archived plan (`claude-code-10-level-mastery.json`) had only 11/23 tasks ever completed — short of
+the 100% the app's own Archive button requires, ruling that flow out; **how it moved stays
+unconfirmed**. File verified intact and moved back to `plans/active/`; DB rows (keyed by plan_id,
+untouched by Archive/Restore either way) confirmed all still present. Closed the same `.gitignore`
+gap found in the MaxActivePlans work above.
 
-Same screenshot also asked to remove the diary's horizontal scrollbar — root cause: `DiaryListWidth`
-was stale (set 07-23, never updated for the 08-07 Tag column), so the row had outgrown the page's
-own max width, forcing the scrollbar on any window. Recomputed `DiaryListWidth` (950→870), narrowed
-Page (210→130)/Details (260→160) — both already ellipsis-trim with a tooltip — switched scroller
-`Visible`→`Auto`.
+**"I want to see a short context example of the fields... so I understand what to fill in and how
+it's going to look"**: `AddPlanDialog` gained a live mad-libs preview (`{token}` → typed text, or a
+muted `[Field label]` while empty, sourced from `PlanTemplates.cs` so it can't drift from what's
+copied to claude.ai). Four iterations: **v1** clipped past the dialog's real edge (`ContentDialog`
+caps width at the `ContentDialogMaxWidth` theme resource regardless of content's `MinWidth` — same
+bug class hit repeatedly since, see `SplitDiaryEntryDialog.cs`). **v2**'s `ExtractPreview` narrowed
+the text and overrode `ContentDialogMaxWidth` (640), but sized the panel's `MinWidth` to that same
+*outer* cap instead of the padding-aware inner width, moving the identical clip from ~520 to ~640.
+**v3** was a self-inflicted crash (`Modes`'s static initializer read `PreviewTokens` before its
+declaration — C# runs static fields in textual order) fixed by reordering; it also showed that
+`AutomationElement` text/bounds checks can't detect an ancestor clipping content, so v2's "verified
+unclipped" claim had never actually been checked. **v4**: introduced `DialogContentWidth =
+DialogWidth - 64` (the pattern every dialog since has followed), verified with an actual screenshot
+(`CopyFromScreen`, not UIA) at 1920px and 900px — no clipping either way. 152/152 tests.
 
-**"I am afraid you deleted also the real data from today starting from 8 am"**: the pre-delete
-backup already had nothing before 09:00, so the delete (test-fingerprint-only) didn't touch it.
-Dug further: the log shows a genuine 08:00→11:28 gap, and `HandleIdleReturn` unconditionally logs
-an "unaccounted time" placeholder the instant that's detected — that row should exist and doesn't,
-in the backup or now. **Left open**: no error logged, cause not found.
+**2026-08-17** (three user reports): (1) Schedule's per-plan day lists gained the project's
+standard manual click-to-expand pattern (chevron `FontIcon`, `E70D`/`E70E`, Tapped+Enter/Space,
+`AutomationProperties`) mirrored from `ReportsPage.TimeByApp.cs` — collapsed state kept in a
+`SchedulePage` instance field (`_collapsedPlans`, a `HashSet<Plan.Id>`) since `Render()` rebuilds
+every plan's UI from scratch on every save/toggle/day-rollover. (2) `SplitDiaryEntryDialog`'s
+fields ran outside the popup's margin and had no one-tap suggestion chips (only the dropdown):
+fixed via the project's own `ContentDialogMaxWidth`/`DialogWidth-64` pattern (business rule, see
+"v4" above) — `DialogWidth = 780`, `DialogContentWidth = DialogWidth - 64` — plus a "Quick pick"
+chip row per `AutoSuggestBox`, tracked via a `activeDescBox`/`GotFocus` so a chip fills whichever
+row is focused, defaulting to the first empty row. Sibling check: `EditDiaryEntryDialog` had the
+identical documented gap (single field, simpler) — same chip fix applied there too. (3) "Day
+starts at 8 though Settings say 6" — `SettingsPage.SaveRules` validated every scoring/reminder
+field before writing *anything*, so one invalid box elsewhere on the page silently discarded an
+already-valid working-hours edit with no error naming the cause (new standing lesson →
+DECISIONS.md). Split into two independent save phases, each validating and writing on its own;
+also closed a sibling gap where 5 reminder/idle/retention `NumberBox`es were never NaN-checked
+before being cast to `int` (`(int)NaN` → `int.MinValue`, a silent garbage-config risk). Debug
+build 0 errors, 152/152 tests. **Not yet live-UIA-verified** — no live app interaction this
+session (see Open TODOs).
 
-**"Increase the ongoing projects number to 3"**: `AppInfo.MaxActivePlans` 2→3, single source of
-truth, confirmed via grep no hardcoded 2-count assumptions anywhere. `MANUAL.md`/`README.md`
-updated to match.
+**Then, same day** ("double asking for absence time logging" — screenshot showed two
+`time_diary` rows, ids 6215/6216, both 13:47–13:59/12min: real answer plus a leftover
+`idle`/"unaccounted time" row). Root-caused via log + read-only DB query: the idle-return prompt
+has two independent entry points for one event — the native Windows toast and the tray "While
+you were away" recap's "Log it" — both converging on `MainWindow.HandleNotificationActivation`'s
+`ToastArgs.IdleReturn` case with nothing stopping both firing for the same gap. The first
+answer's `ClearIdlePlaceholder` replaces the placeholder correctly; the second finds none left
+and `LogSession` inserts an unconditional duplicate anyway. **Fixed**: new
+`DiaryWriter.HasIdlePlaceholder` (same overlap-match criteria as `ClearIdlePlaceholder`, so
+"still exists" and "would be deleted" never disagree), checked in that one convergence point
+before opening `IdleReturnDialog` a second time — deliberately *not* inside
+`IdleReturnDialog.ShowAsync` itself, since `ReviewDialog.ReconcilePendingGap` also calls it
+directly for a gap that was never placeholder-logged in the first place, which a blanket guard
+there would have silently broken. Fails open (shows the dialog) on a DB read error, matching the
+existing "always ask, never silently drop" philosophy. **Row 6216 deleted** (user-confirmed,
+named table+row); row 6215 (the real answer) untouched. Debug build 0 errors/warnings.
 
-**2026-08-14** ("the plan that finished should not have moved... I do not have a way to restore
-it"): `claude-code-10-level-mastery.json` was sitting in `plans/archive/`, but only 11/23 tasks had
-ever had a completion event (10 done, 1 unmarked) — well short of the 100% `PlansPage`'s Archive
-button requires to even be clickable (`IsEnabled = complete`). Rules out the app's own Archive flow;
-likely moved outside the app — **unconfirmed, no log or reliable timestamp survived**. File verified
-intact (4 phases, 23 tasks) and moved back to `plans/active/` (same op as the app's own Restore
-button). Archive/Restore only ever moves the JSON; DB rows (`task_completions`/`task_overrides`/
-`plan_days_off`/`task_notes`, keyed by plan_id) are untouched by either — confirmed all 4 tables
-still had every row (11/22/5/4). No restart needed/done — both pages re-read `plans/` from disk on
-every render, and one right after yesterday's tracking-gap investigation risked creating another.
-Also found the same `.gitignore` gap noted in the MaxActivePlans commit above — now closed.
+**2026-08-18** (new screenshot of the same dialog's split mode, three reports): (1) "field is
+out of boundaries" — `IdleReturnDialog` was the one dialog of this shape never given the v4
+`ContentDialogMaxWidth`/`DialogWidth-64` fix (see 07-17's "v4" entry) that `SplitDiaryEntryDialog`/
+`AddPlanDialog` already needed for the identical clipping bug; applied here too (`DialogWidth =
+780`). (2) "no frequent answers one-click option" — confirmed gap: split-mode's description field
+was a plain `TextBox` with zero suggestion wiring, unlike single mode's chips or
+`SplitDiaryEntryDialog`'s own quick-pick chips + `AutoSuggestBox`. Fixed by copying that same
+pattern: descBox → `AutoSuggestBox` + `DialogControls.WireFrequentSuggestions`, plus a "Quick
+pick" chip row (reusing single mode's fixed+frequent `chips` list) tracked via
+`activeDescBox`/`GotFocus`. (3) "frequent answers seem hardcoded" — checked against the live DB,
+not a bug: `MostFrequentIdleAnswers()` genuinely reflects real usage (`sleep` 39×, `dog walk`
+37×, `lunch` 15×, ...). What actually reads as static: the 4 `FixedChips` (Lunch/Break/Errand/
+Work off-screen) always occupy the first, most visible row regardless of real frequency, and
+split mode showed literally nothing dynamic at all (bug #2) — fixing #2 should resolve the
+perception on its own; left the fixed-first ordering alone as a separate design choice. Debug
+build 0 errors/warnings.
 
-**"I want to see a short context example of the fields... a description on top with the blank
-fields... so I understand what to fill in and how it's going to look"**: `AddPlanDialog` gained a
-live mad-libs preview — real prompt words, each `{token}` replaced by that field's current text
-(bold/accent) or a muted italic `[Field label]` while empty, sourced from `PlanTemplates.cs`'s own
-string so it can't drift from what's copied to claude.ai. **v1** was a prefix-cut of the template —
-cluttered with filler, clipped past the dialog's real edge (`ContentDialog` caps width at the
-`ContentDialogMaxWidth` theme resource regardless of content's `MinWidth` — same bug class hit 3
-times before, `SplitDiaryEntryDialog.cs`). **v2**: `ExtractPreview` keeps only sentences naming a
-blank, joined with " … "; dialog overrides `ContentDialogMaxWidth` (640, was silently capped ~520).
-
-**v3 (same session): "add plan button stopped working"** — self-inflicted. `Modes`'s static
-initializer calls `ExtractPreview`, which loops over `PreviewTokens`, declared *after* `Modes`; C#
-runs static field initializers in textual order, so `Modes` built against a still-null array —
-`TypeInitializationException` the instant anything touched `AddPlanDialog`. Fixed by reordering.
-Live-UIA confirmed the crash/live-typing fix — **but its "unclipped" claim was wrong**:
-`AutomationElement.Name`/`BoundingRectangle` report a TextBlock's own text/self-computed layout, not
-whether an ancestor is visually clipping it, so that check couldn't have caught the width bug at all.
-
-**v4: "still the text is going outside the boundaries"** — the real clipping bug, still unfixed.
-SDK's template (`generic.xaml`, WindowsAppSDK.WinUI 1.8.260528001):
-`Border[MaxWidth=ContentDialogMaxWidth] > ScrollViewer[HorizontalScrollBarVisibility=Disabled] >
-Grid[Padding=24] > (content)` — inner Padding costs 48px before content sees any space, and the
-ScrollViewer can't scroll to absorb overflow. v2 set `panel.MinWidth` to the *same* value as the
-outer `ContentDialogMaxWidth` override (640 both) — forced the panel to demand 48px more than the
-non-scrolling area had, the identical bug moved from ~520 to ~640. Fixed: new
-`DialogContentWidth = DialogWidth - 64`, panel/preview `MaxWidth`s sized to that, not the outer cap.
-**Verified with an actual screenshot this time** (`System.Drawing.CopyFromScreen` off the real
-window rect, not UIA text properties) at both maximized (1920px) and resized to 900px: preview wraps
-cleanly, no clipping either way. 152/152 tests, all four rounds.
+**Then, same day** ("remove the horizontal rolling [in Split diary entry's popup], if necessary
+make that pop-up window wider"): 08-17's `DialogWidth = 780` fix let the row fit in principle, but
+`SplitDiaryEntryDialog` still wrapped its row list in a horizontally-scrolling `ScrollViewer` kept
+as a narrow-window fallback — in practice a normal window still showed a scrollbar and a
+partly-offscreen row. Also found while sizing this properly: `removeBtn` (the "✕" button) never
+overrode the platform's default `Button` `MinWidth`, so the row was wider than the ~660px assumed.
+Fixed: `removeBtn.MinWidth = 0` (sizes to its own content instead of the platform default),
+`DialogWidth` 780→860 for headroom, `ScrollViewer` removed entirely — `rowsPanel` is now a direct
+child of `root`, nothing left to scroll. Debug build 0 errors/warnings, not yet live-verified.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
+  - **Live Release build is stale** — 08-17's dedupe fix + row-6216 deletion and 08-18's
+    IdleReturnDialog width/chips fix and SplitDiaryEntryDialog scroll removal are Debug-only so
+    far; rebuild Release + relaunch, then live-verify all three.
   - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
   - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
     out as the test-data cleanup, see that entry). Revisit if it recurs.
-  - **Not yet live-UIA-verified** (clean build + tests only): 08-13's narrowed diary columns/Auto
-    scrollbar (widths 870/130/160 computed, not measured live); 08-13's Reports DayOffs figure;
-    08-07's IdleReturnDialog Category/Tag fields + Mark-tag toolbar row (chip-click change and
-    auto-classify-until-touched wiring unexercised live).
+  - **Not yet live-UIA-verified** (clean build + tests only): 08-13's narrowed diary
+    columns/Auto scrollbar and Reports DayOffs figure; 08-07's IdleReturnDialog Category/Tag
+    fields + Mark-tag toolbar row; 08-17's Schedule collapsible cards + SplitDiaryEntryDialog/
+    EditDiaryEntryDialog quick-pick chips; 08-18's IdleReturnDialog width fix + split-mode chips
+    + SplitDiaryEntryDialog's scroll removal/width bump.
   - **The diary's midnight rollover has never been observed actually happening** — every other part
     of that fix was verified live, but the rollover itself needs the clock to cross midnight with the
     app sitting on Reports. If the diary still shows yesterday some morning, the assignment at the
@@ -387,14 +385,13 @@ cleanly, no clipping either way. 152/152 tests, all four rounds.
     `http://localhost:8765/callback` in the **OAuth redirect URL** field (not "App Service URL").
   - **Settled, not action items**: 42 overlapping `time_diary` pairs 06-29→07-16 (only 2 match
     `HandleActiveSession`, rest unconfirmed, user's call 2026-07-18 — leave untouched);
-    `ActivateQueuedPlan`'s non-atomic write-then-delete (2026-07-28); ~150-230MB memory footprint
-    (2026-08-06, mostly `NavigationCacheMode="Enabled"` + WinUI3's baseline, no leak — leave as-is).
+    `ActivateQueuedPlan`'s non-atomic write-then-delete; ~150-230MB memory footprint (mostly
+    `NavigationCacheMode="Enabled"` + WinUI3's baseline, no leak — leave as-is).
   - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium`
-    rename 2026-07-23; diary-tracking-gap bug 2026-07-21 (`PollOnce` order); LinkedIn/Reddit
-    auto-publishing for `posting-plan` dropped 2026-07-22 (dormant Reddit OAuth2 tool at
-    `posting-plan/tools/reddit-publish/`); `PlanDayForDate` closed form 2026-07-18; TickTick secret
-    rotated 2026-07-09, reconnected 2026-08-04; personal-data git-history scrub 2026-07-18; v1.1.0 +
-    GitHub Release + repo flipped Public 2026-07-21; duplicate repo deleted 2026-07-21; tray icon
-    vanishing — confirmed fine 2026-08-04; 2026-07-17 keyboard/dark-mode/timing item; **the 08-04
-    tracker split — confirmed exercised live**, not just built: the log shows
-    `HandleSleepGap`/`HandleIdleReturn`/`HandleActiveSession` all firing correctly through 08-07.
+    rename 07-23; diary-tracking-gap bug 07-21 (`PollOnce` order); Reddit auto-publishing for
+    `posting-plan` dropped 07-22 (dormant tool at `posting-plan/tools/reddit-publish/`);
+    `PlanDayForDate` closed form 07-18; TickTick secret rotated 07-09, reconnected 08-04;
+    personal-data git-history scrub 07-18; v1.1.0 + GitHub Release + repo flipped Public 07-21;
+    duplicate repo deleted 07-21; tray icon vanishing — confirmed fine 08-04; **the 08-04 tracker
+    split — confirmed exercised live**: log shows `HandleSleepGap`/`HandleIdleReturn`/
+    `HandleActiveSession` all firing correctly through 08-07.

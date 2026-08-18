@@ -72,6 +72,29 @@ public static class EditDiaryEntryDialog
         DialogControls.WireFrequentSuggestions(descBox, frequent);
         panel.Children.Add(descBox);
 
+        // Real one-tap chips alongside the dropdown, mirroring SplitDiaryEntryDialog's own fix for
+        // the same documented gap (MostFrequentDescriptions' doc comment promises "quick-pick chips
+        // on Edit/Split diary entry" — this dialog only ever got the dropdown half of that; see
+        // SplitDiaryEntryDialog.cs for the fuller history). Single field here, so no need for
+        // Split's "which row was last focused" tracking — a chip always fills this one box.
+        if (frequent.Count > 0)
+        {
+            const int chipsPerRow = 4;
+            var chipSection = new StackPanel { Spacing = 6 };
+            for (var chipStart = 0; chipStart < frequent.Count; chipStart += chipsPerRow)
+            {
+                var chipRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                foreach (var chip in frequent.Skip(chipStart).Take(chipsPerRow))
+                {
+                    var b = new Button { Content = chip, FontSize = 12, Padding = new Thickness(8, 3, 8, 3) };
+                    b.Click += (_, _) => descBox.Text = chip;
+                    chipRow.Children.Add(b);
+                }
+                chipSection.Children.Add(chipRow);
+            }
+            panel.Children.Add(chipSection);
+        }
+
         var error = new TextBlock
         {
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
