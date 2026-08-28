@@ -6,6 +6,10 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Fixes**
+- **The diary list needed sideways scrolling to reach Edit/Split whenever you searched or turned
+  on "All time"** — filtering to a specific day usually fit fine, which is why this was easy to
+  miss. Diary columns are tightened so the row fits either way; long values still show their full
+  text on hover, the same as before.
 - **Changing your working hours in Settings could silently get discarded if anything else on the
   page had a problem.** Settings saved the whole page as one all-or-nothing block, so an invalid
   value in a completely unrelated field (a reminder timer, an idle threshold) quietly threw away

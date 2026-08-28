@@ -48,6 +48,14 @@ public sealed partial class ReportsPage : Page
     // size regardless of how wide, not just narrow ones (2026-08-13 report, "remove the
     // horizontal scroll bar"). Recomputed here alongside narrowing Page/Details (see BuildRow) —
     // narrowing alone wouldn't have fixed it, since this constant was already wrong before that.
+    //
+    // 2026-08-13's recompute still only checked the showDate=false row (Time column = 110) — it
+    // never accounted for showDate=true (150, used whenever a search/All-time/filter widens the
+    // scope past one day), so any of those views kept overflowing by the same 40px this constant
+    // was already short by, forcing the scrollbar right back — 2026-08-28 report, reproduced by
+    // typing into the search box. Fixed by narrowing Category/Tag/App/Page/Details another 80px
+    // (see BuildRow) so the row fits within this same 870 budget even at the wider Time width —
+    // no change needed here, the constant was fine, the columns summing past it were the bug.
     internal const double DiaryListWidth = 870;
     internal const double DiaryCardWidth = DiaryListWidth + 36;
 

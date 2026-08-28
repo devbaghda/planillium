@@ -927,13 +927,16 @@ public sealed partial class ReportsPage
             var row = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Left };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
             // Its own column (2026-08-07 report: was riding along inside the Details column as
             // a " · #Label" suffix, easy to miss next to the duration and liable to get
             // ellipsis-trimmed off first). Narrower than Category — tag labels are short and
             // most rows have none at all, so "—" is the common case here, same convention the
-            // Page column already uses for "nothing to show."
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            // Page column already uses for "nothing to show." Narrowed further 2026-08-28 (see
+            // DiaryListWidth's own comment) — the longest label ("Procrastination") already
+            // needed the ellipsis+tooltip at 90, so shrinking to 75 just makes that the norm
+            // instead of the rare case, same tradeoff Page/Details already made.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(75) });
             // Fixed pixel widths, not Auto/Star — the page body is a
             // MaxWidth+Center StackPanel (ReportsPage.xaml), which sizes
             // itself to its widest child's natural content width rather
@@ -947,15 +950,18 @@ public sealed partial class ReportsPage
             // columns (and their own filters — see BuildDiarySection) since
             // they're independently meaningful (e.g. "Chrome"/"GitHub" vs.
             // "Telegram"/"Liza Ponomarenko").
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
             // Page and Details narrowed from 210/260 (2026-08-13 report, "remove the horizontal
-            // scroll bar... narrow the descriptions column truncating the name and showing …").
-            // Both already ellipsis-trim with a tooltip for the full text (TextTrimming.
-            // CharacterEllipsis below, same pattern App already used) — narrowing just makes that
-            // the common case instead of the rare one, so the row's natural width stops
-            // outgrowing the page (see DiaryListWidth's own comment for why it was doing that).
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+            // scroll bar... narrow the descriptions column truncating the name and showing …"),
+            // then again from 130/160 (2026-08-28 report — the 08-13 pass never accounted for
+            // showDate widening the Time column by 40px in search/All-time view, so the row
+            // still overflowed its budget exactly when a search or filter was active, e.g. the
+            // "unacc" search that surfaced this). Both already ellipsis-trim with a tooltip for
+            // the full text (TextTrimming.CharacterEllipsis below, same pattern App already
+            // used) — narrowing just makes that the common case instead of the rare one, so the
+            // row's natural width stops outgrowing the page (see DiaryListWidth's own comment).
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(115) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(135) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 

@@ -247,16 +247,13 @@ of submitting instantly, to leave room to see the new fields. `DiaryWriter.LogSe
 `LogIdleAnswer(s)` now take explicit category(+tag) instead of deriving it. 3 new tests, 147/147,
 **not yet live-UIA-verified** (see Open TODOs).
 
-**Then** ("check if the score balance is calculated correctly"): audited read-only against a DB copy,
-no dupes/gaps/unknown reasons. Found a real bug: today's `daily_score` frozen at 0 despite 51 more
-on-plan minutes tracked since — a diary edit recomputes that date's score regardless of whether it's
-*today*, but `ReviewDialog.PersistReview` used skip-if-present logic for today's real end-of-day
-credit, so the earlier incidental recompute pre-empted it forever. Fixed: `PersistReview` now calls
-`RecalculateDayScore(today)`. **Real-data fix, user-confirmed**: deleted stale `score_ledger` row
-140, backed up first; 08-06 had the same problem locked in (formula gives 31, ledger held 0),
-corrected row 138 to delta=31 after the same confirmation, balance -4→27. Checked siblings:
-`ReviewDialog`'s disabled "Close the day" button could still fire Enter while disabled — hardened,
-also found in `SpendDialog`/`SplitDiaryEntryDialog`/`IdleReturnDialog` split mode. 147/147.
+**Then** ("check if the score balance is calculated correctly"): found a real bug — a diary edit
+recomputed today's score regardless of whether it was *today*, but `ReviewDialog.PersistReview`'s
+skip-if-present logic for the real end-of-day credit let that incidental recompute pre-empt it
+forever, freezing `daily_score` at 0. Fixed: `PersistReview` now calls `RecalculateDayScore(today)`.
+**Real-data fix, user-confirmed**: corrected `score_ledger` rows 140/138 (backed up first), balance
+-4→27. Sibling check: disabled "Close the day"/similar buttons could still fire via Enter — hardened
+across `ReviewDialog`/`SpendDialog`/`SplitDiaryEntryDialog`/`IdleReturnDialog`. 147/147.
 **Then** ("Mark … buttons for tags"): second toolbar row under Mark on-plan/off-plan/neutral, one
 button per `DiaryTag.Options` entry plus "Clear tag." `MarkSelectedDiaryRowsTag` doesn't share a
 helper with `MarkSelectedDiaryRows` (category changes also touch activity-rule learning + score
@@ -283,20 +280,13 @@ unconfirmed**. File verified intact and moved back to `plans/active/`; DB rows (
 untouched by Archive/Restore either way) confirmed all still present. Closed the same `.gitignore`
 gap found in the MaxActivePlans work above.
 
-**"I want to see a short context example of the fields... so I understand what to fill in and how
-it's going to look"**: `AddPlanDialog` gained a live mad-libs preview (`{token}` → typed text, or a
-muted `[Field label]` while empty, sourced from `PlanTemplates.cs` so it can't drift from what's
-copied to claude.ai). Four iterations: **v1** clipped past the dialog's real edge (`ContentDialog`
-caps width at the `ContentDialogMaxWidth` theme resource regardless of content's `MinWidth` — same
-bug class hit repeatedly since, see `SplitDiaryEntryDialog.cs`). **v2**'s `ExtractPreview` narrowed
-the text and overrode `ContentDialogMaxWidth` (640), but sized the panel's `MinWidth` to that same
-*outer* cap instead of the padding-aware inner width, moving the identical clip from ~520 to ~640.
-**v3** was a self-inflicted crash (`Modes`'s static initializer read `PreviewTokens` before its
-declaration — C# runs static fields in textual order) fixed by reordering; it also showed that
-`AutomationElement` text/bounds checks can't detect an ancestor clipping content, so v2's "verified
-unclipped" claim had never actually been checked. **v4**: introduced `DialogContentWidth =
-DialogWidth - 64` (the pattern every dialog since has followed), verified with an actual screenshot
-(`CopyFromScreen`, not UIA) at 1920px and 900px — no clipping either way. 152/152 tests.
+**"I want to see a short context example of the fields"**: `AddPlanDialog` gained a live mad-libs
+preview (`{token}` → typed text, sourced from `PlanTemplates.cs`). Took 4 iterations to stop
+clipping (`ContentDialog` caps width at the `ContentDialogMaxWidth` theme resource regardless of
+content's `MinWidth`; `AutomationElement` bounds checks can't detect an ancestor clipping content
+— only a real screenshot proves it) — landed on **`DialogContentWidth = DialogWidth - 64`**, the
+pattern every dialog since has followed (see 08-17/08-18/08-28 entries). Verified via screenshot
+at 1920px and 900px. 152/152 tests.
 
 **2026-08-17** (three user reports): (1) Schedule's per-plan day lists gained the project's
 standard manual click-to-expand pattern (chevron `FontIcon`, `E70D`/`E70E`, Tapped+Enter/Space,
@@ -352,28 +342,34 @@ split mode showed literally nothing dynamic at all (bug #2) — fixing #2 should
 perception on its own; left the fixed-first ordering alone as a separate design choice. Debug
 build 0 errors/warnings.
 
-**Then, same day** ("remove the horizontal rolling [in Split diary entry's popup], if necessary
-make that pop-up window wider"): 08-17's `DialogWidth = 780` fix let the row fit in principle, but
-`SplitDiaryEntryDialog` still wrapped its row list in a horizontally-scrolling `ScrollViewer` kept
-as a narrow-window fallback — in practice a normal window still showed a scrollbar and a
-partly-offscreen row. Also found while sizing this properly: `removeBtn` (the "✕" button) never
-overrode the platform's default `Button` `MinWidth`, so the row was wider than the ~660px assumed.
-Fixed: `removeBtn.MinWidth = 0` (sizes to its own content instead of the platform default),
-`DialogWidth` 780→860 for headroom, `ScrollViewer` removed entirely — `rowsPanel` is now a direct
-child of `root`, nothing left to scroll. Debug build 0 errors/warnings, not yet live-verified.
+**Then, same day** ("remove the horizontal rolling [in Split diary entry's popup]"): row list's
+`ScrollViewer` fallback was still engaging on a normal window; `removeBtn` also never overrode
+the platform default `Button.MinWidth`, so the row measured wider than assumed. Fixed:
+`removeBtn.MinWidth = 0`, `DialogWidth` 780→860, `ScrollViewer` removed entirely. Verified live
+08-19 (see that entry).
+
+**2026-08-28** ("remove the horizontal scrolling [in Diary], tighten the columns"): root cause —
+the diary row's Time column widens 150 vs 110px whenever `showDate` is true (search active or
+"All time" checked, to fit the date prefix), but 08-13's `DiaryListWidth`/column recompute only
+ever checked the `showDate=false` case, so any search/filter view kept overflowing by that same
+40px and re-forced the scrollbar — why it looked intermittent. Fixed by narrowing
+Category/Tag/App/Page/Details another 80px total (still ellipsis+tooltip on overflow, same as
+before) so the row fits its existing 870px budget even at the wider Time width;
+`DiaryListWidth` itself didn't need to change. **Verified live**: killed the running Release
+instance (well before the 20:00 evening-review time, user-approved), rebuilt Release, relaunched,
+searched "idle" (233 real rows) at full/maximized window — no horizontal scrollbar, Edit/Split
+fully visible. **Known, unchanged tradeoff surfaced while testing**: at the app's minimum 900px
+window width, the diary row still needs horizontal scroll (needs ~926-966px, pre-existing, not
+part of this bug) — flagged to user, left alone pending a request.
 
 - **Open TODOs** (not yet done — the user's or a future session's to pick up):
-  - **Live Release build is stale** — 08-17's dedupe fix + row-6216 deletion and 08-18's
-    IdleReturnDialog width/chips fix and SplitDiaryEntryDialog scroll removal are Debug-only so
-    far; rebuild Release + relaunch, then live-verify all three.
   - **How the 08-14 archive move happened is unconfirmed** — see that entry above; watch for a recurrence.
   - **The 08:00–11:28 gap on 2026-08-13 never produced a diary row — cause unconfirmed** (ruled
     out as the test-data cleanup, see that entry). Revisit if it recurs.
   - **Not yet live-UIA-verified** (clean build + tests only): 08-13's narrowed diary
     columns/Auto scrollbar and Reports DayOffs figure; 08-07's IdleReturnDialog Category/Tag
-    fields + Mark-tag toolbar row; 08-17's Schedule collapsible cards + SplitDiaryEntryDialog/
-    EditDiaryEntryDialog quick-pick chips; 08-18's IdleReturnDialog width fix + split-mode chips
-    + SplitDiaryEntryDialog's scroll removal/width bump.
+    fields + Mark-tag toolbar row; 08-17's Schedule collapsible cards + EditDiaryEntryDialog
+    quick-pick chips.
   - **The diary's midnight rollover has never been observed actually happening** — every other part
     of that fix was verified live, but the rollover itself needs the clock to cross midnight with the
     app sitting on Reports. If the diary still shows yesterday some morning, the assignment at the
@@ -387,6 +383,11 @@ child of `root`, nothing left to scroll. Debug build 0 errors/warnings, not yet 
     `HandleActiveSession`, rest unconfirmed, user's call 2026-07-18 — leave untouched);
     `ActivateQueuedPlan`'s non-atomic write-then-delete; ~150-230MB memory footprint (mostly
     `NavigationCacheMode="Enabled"` + WinUI3's baseline, no leak — leave as-is).
+  - **2026-08-19**: user reported the split-of-absence popup still looked broken — root cause was
+    the running exe itself: 08-18's width/chip/scroll fixes were only ever built Debug, the live
+    Release exe (PID 22100) was untouched since before that fix. Killed it, rebuilt Release (0
+    errors), relaunched (PID 22768). **User-confirmed live**: dialog width and one-click chips
+    now correct. Closes the "Live Release build is stale" TODO for these two fixes specifically.
   - **Resolved-and-closed, one-line pointers** (prose in git log): `MentorOverseer`→`Planillium`
     rename 07-23; diary-tracking-gap bug 07-21 (`PollOnce` order); Reddit auto-publishing for
     `posting-plan` dropped 07-22 (dormant tool at `posting-plan/tools/reddit-publish/`);
