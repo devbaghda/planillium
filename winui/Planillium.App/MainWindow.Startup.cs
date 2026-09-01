@@ -238,6 +238,34 @@ public sealed partial class MainWindow
         // (2026-07-24 audit finding #3).
         if (ContentFrame.Content is ReportsPage { HasActiveDiarySelection: true }) return;
         _lastSeenDate = today;
+
+        // Yesterday's daily_score only gets written by the evening review (if it runs to
+        // completion) or by RunStartupCatchUp's EnsureScoreCaughtUp — and that only ever
+        // fires once, at actual process launch. An app that just stays open across
+        // midnight (asleep in the tray, which is the normal way this app lives) never
+        // re-runs it, so a day whose review was skipped/interrupted stayed uncredited
+        // forever, silently swallowing whatever was completed that day (2026-09-01 user
+        // report — two same-day task completions never showed up in the score). Off the UI
+        // thread for the same reason RunStartupCatchUp is: EnsureScoreCaughtUp can recompute
+        // up to LookbackDays of scoring math, and CheckDayChange runs on the dispatcher.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                CatchUpScores();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("CheckDayChange.CatchUpScores", ex);
+            }
+            _dq.TryEnqueue(FinishDayChange);
+        });
+    }
+
+    /// <summary>The UI-thread half of CheckDayChange, run after CatchUpScores completes so
+    /// RefreshScore picks up any day it just backfilled — see CheckDayChange's own comment.</summary>
+    private void FinishDayChange()
+    {
         try
         {
             // Sidebar's plan-drift/finish-date readouts are date-dependent too.
