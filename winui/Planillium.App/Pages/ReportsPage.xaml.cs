@@ -246,7 +246,7 @@ public sealed partial class ReportsPage : Page
     {
         var hints = ReportExport.Suggestions(
             totals.OnMin, totals.OffMin,
-            ReportData.TopDistractions(_period, conn, score));
+            ReportData.TopDistractions(_period, conn, score), _period);
         var hintPanel = new StackPanel { Spacing = 6 };
         foreach (var hint in hints)
         {

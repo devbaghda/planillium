@@ -63,7 +63,7 @@
      schedule. `ReplanOverdueDialog` relies on this: every day it reschedules off of is
      by definition already overdue/past.
    - **Already-completed tasks are never shifted** by any of these four operations
-     (fixed 2026-07-09; see Session handoff notes — shifting a completed task orphaned
+     (fixed 2026-07-09; see context/todos.md — shifting a completed task orphaned
      its `task_completions` row, keyed by assigned day, silently unmarking it and
      moving it to tomorrow).
 8. Archive: plan moves to `plans/archive/` when ALL tasks done; frees a slot (max 2

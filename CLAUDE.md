@@ -12,10 +12,12 @@ letting either one absorb the other's job.
 
 ## Session start
 **Read `CONTEXT.md` in full at the start of every session, before doing anything else** —
-not just when a task seems to need it. It carries the Session handoff notes (what the last
-session left mid-flight, standing lessons from past bugs, open TODOs) and the business
-rules that aren't derivable from the code alone. Skipping it risks repeating a mistake
-that's already documented there or missing that something is already in progress.
+not just when a task seems to need it. As of the 2026-09-14 split it stays thin (current state,
+rules, a decisions-highlights list, open items with dates, and a Section Index); it points at
+`DECISIONS.md` (business rules, standing lessons) and `context/*.md` (schema/format reference,
+full session-log history) for detail, fetched on demand rather than read end-to-end. Skipping
+CONTEXT.md itself still risks repeating a mistake or missing that something is already in
+progress — that's the part with no substitute.
 
 ## Repo & branches
 - `winui-rebuild` is the local working branch; `master` is the default branch and, as of
@@ -88,23 +90,30 @@ change** before running it. This isn't just good practice here — the harness's
 classifier enforces it and will reject a vague "yes, go ahead."
 
 ## Keeping docs current
-The global rules on doc currency and `CONTEXT.md` compaction apply. Project specifics:
-- **Two documents, different jobs** (split 2026-08-04): `CONTEXT.md` is the read-through handoff —
-  what the app is, the schema, and the session log. `DECISIONS.md` is the lookup register — the 13
-  numbered business rules with their rationale, and the standing lessons. Read `CONTEXT.md` at
-  session start; consult `DECISIONS.md` before changing anything in the areas it covers. Keep them
-  separate: a new business rule or a lesson learned the hard way goes in `DECISIONS.md`, a shipped
-  change goes in `CONTEXT.md`'s session log.
-- Docs to update in the same pass as a shipped fix or feature: `CONTEXT.md`'s Session handoff
-  notes (append tersely — it's an index, not an archive), plus `CHANGELOG.md` (Unreleased) and
-  `MANUAL.md` if the change is user-visible.
+The global rules on doc currency and the `CONTEXT.md` + `context/*.md` split scheme apply
+(`~/.claude/CLAUDE.md` → Keeping knowledge current). Project specifics:
+- **Three registers, different jobs** (`DECISIONS.md` split 2026-08-04; `context/*.md` split
+  2026-09-14): `CONTEXT.md` is the read-through handoff — current state, rules, a
+  decisions-highlights list, dated open items, and a Section Index. `DECISIONS.md` is the lookup
+  register — the 13 numbered business rules with their rationale, and the standing lessons.
+  `context/domain.md` is architecture/schema/format reference; `context/todos.md` is resolved work
+  (done, or decided not to do), dated. Read `CONTEXT.md` at session start; consult `DECISIONS.md`
+  before changing anything in the areas it covers; fetch `context/*.md` on demand by grepping for a
+  header, not read end-to-end. Keep them separate: a new business rule or a lesson learned the hard
+  way goes in `DECISIONS.md`; a shipped fix or feature, once it resolves, goes in
+  `context/todos.md`; an open item stays in `CONTEXT.md` §7 until it resolves.
+- Docs to update in the same pass as a shipped fix or feature: add a dated entry to
+  `context/todos.md` (terse — it's an index, not an archive) and cut the matching item from
+  `CONTEXT.md` §7 if it was tracked there; plus `CHANGELOG.md` (Unreleased) and `MANUAL.md` if the
+  change is user-visible.
 - **`CONTEXT.md`'s compaction threshold is 400 lines**, declared in its own header where the Stop
-  hook reads it. Count with `wc -l`, not PowerShell's `Measure-Object -Line` (it skips blank lines
-  and under-reported this file by ~60). Over threshold means compact **in the same pass**. Also
-  compact after a significant milestone, or when an entry re-explains something git log covers
-  better. Precedent: 852→224, later 771→476, and 535→347 by splitting `DECISIONS.md` out —
-  **when prose won't compress further, the answer is moving reference material to its own file,
-  not deleting facts.**
+  hook reads it (must stay on one line — `Compaction threshold: 400 lines` — for the hook's regex
+  to match). Count with `wc -l`, not PowerShell's `Measure-Object -Line` (it skips blank lines and
+  under-reported this file by ~60). Over threshold means compact **in the same pass**. Since the
+  2026-09-14 split, the file should stay well under 400 by design — bulk content lives in
+  `DECISIONS.md`/`context/*.md`, which are never compacted. If it's approaching 400 again, the
+  first move is checking whether something that grew inline (e.g. §7 Still open) belongs in
+  `context/todos.md` once resolved, not shrinking prose that's still current.
 - Skills this repo has sharpened and should keep sharpening: `windows-app-auditor`,
   `windows-app-tester` — WinUI layout quirks, UIA verification technique, the
   shift-vs-completion-keying bug class.

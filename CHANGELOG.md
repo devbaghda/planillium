@@ -6,6 +6,11 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Fixes**
+- **Reports' Insights panel always said "this week" in its sentences, even when the header above
+  it said This Month or This Year.** The numbers themselves were always correct for whatever
+  period you had selected — only the wording lagged, so a real year's worth of off-plan time could
+  read as a week's. The sentences now say today/this week/this month/this year to match whatever
+  you've selected.
 - **The diary list needed sideways scrolling to reach Edit/Split whenever you searched or turned
   on "All time"** — filtering to a specific day usually fit fine, which is why this was easy to
   miss. Diary columns are tightened so the row fits either way; long values still show their full
