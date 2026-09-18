@@ -1,0 +1,98 @@
+using System.Globalization;
+
+namespace Planillium.App.Services;
+
+/// <summary>
+/// The one place the app's date-key format (used everywhere a date has to
+/// match a DB row — score ledger, task completions, diary rows) is spelled
+/// out. Previously typed by hand 26 times across 8 files; one careless
+/// retyping (e.g. dropping InvariantCulture) would silently stop matching
+/// rows on a non-English-locale Windows install — the exact bug class this
+/// app already shipped once (2026-07-07 audit, OS locale Russian, app
+/// language English). One helper makes that mistake impossible to repeat.
+/// </summary>
+internal static class DateExtensions
+{
+    public static string ToIsoDate(this DateTime d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    public static string ToIsoDate(this DateOnly d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>Same reasoning as ToIsoDate, for the "date + time" format used in ts/
+    /// completed_at/marked_at/updated_at columns — round 4's ToIsoDate helper didn't
+    /// cover this closely related format, which was still hand-typed in 5 separate
+    /// places (round-5 audit finding #16).</summary>
+    public static string ToIsoTimestamp(this DateTime d) => d.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>Time-of-day only (no date), used for time_diary's start_time/end_time
+    /// columns. Same reasoning as ToIsoDate/ToIsoTimestamp — a third persisted-string
+    /// shape that was still hand-typed as "HH:mm" with InvariantCulture in 2 separate
+    /// files (2026-07-14 round-6 audit finding #12). All three currently got the
+    /// InvariantCulture argument right independently, but a shared helper is the
+    /// only thing that makes a future retyping unable to drop it.</summary>
+    public static string ToIsoTimeOfDay(this DateTime d) => d.ToString("HH:mm", CultureInfo.InvariantCulture);
+    public static string ToIsoTimeOfDay(this TimeOnly t) => t.ToString("HH:mm", CultureInfo.InvariantCulture);
+    /// <summary>Same shape again for the TimeSpan-typed clock times ConfigService hands back
+    /// (WorkStartTime/DiaryStartTime and friends) — Settings and Reports both display those,
+    /// and each was hand-typing its own copy of the format string for it (2026-08-04).</summary>
+    public static string ToIsoTimeOfDay(this TimeSpan t) => t.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>Parses the same "HH:mm" shape back — the write side above already had a
+    /// shared helper, but the read side (parsing a user-typed time back into a TimeOnly)
+    /// was still hand-typed with its own CultureInfo.InvariantCulture argument in 6 separate
+    /// places across 3 files, the same "one careless retype loses the culture argument" risk
+    /// this whole class exists to close off (2026-07-24 audit finding #11).</summary>
+    public static bool TryParseTimeOfDay(string s, out TimeOnly t) =>
+        TimeOnly.TryParseExact(s, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out t);
+
+    /// <summary>Human-facing "Tue 15.07" display format — English day names
+    /// regardless of OS locale, same InvariantCulture rule as every other
+    /// persisted/displayed date in this app. Was hand-typed identically in 3
+    /// files (2026-07-14 round-6 audit finding #11); unlike ToIsoDate this
+    /// one isn't a DB key, but the sibling-drift risk is the same.</summary>
+    public static string ToDisplayDate(this DateTime d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
+    public static string ToDisplayDate(this DateOnly d) => d.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>Full weekday name, no year — "Tuesday 15.07." KickoffDialog and
+    /// ReviewDialog each hand-typed this identically; migrated onto this shared
+    /// helper alongside ToDisplayDate/ToDisplayDateWithYear rather than leaving
+    /// three call sites' worth of date formatting with no single named home
+    /// (2026-07-23 audit finding #14).</summary>
+    public static string ToDisplayDateFull(this DateTime d) => d.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>DateOnly counterpart of ToDisplayDateFull — SchedulePage's day-off toggle
+    /// works with a DateOnly and had no matching overload to migrate onto, so it kept
+    /// hand-typing "dddd dd.MM" on its own (2026-07-24 audit finding #12).</summary>
+    public static string ToDisplayDateFull(this DateOnly d) => d.ToString("dddd dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>Numeric-only "15.07.2026," no weekday — the sidebar's "Finishes ..." line
+    /// and the Plans page's "Originally due ..." line both hand-typed this identically
+    /// despite each one's own comment noting they're deliberately meant to stay in sync
+    /// (2026-07-24 audit finding #9) — the same drift risk every other helper in this
+    /// file exists to prevent, on a format shape none of them covered yet.</summary>
+    public static string ToDisplayDateNumeric(this DateOnly d) => d.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>"15.07" — no weekday, no year. The Diary list's date column hand-typed this
+    /// via a plain interpolation (`$"{date:dd.MM}"`), which formats using the *current*
+    /// culture by default rather than InvariantCulture like every other date in this app
+    /// (2026-07-24 audit finding #12). Both format shapes here are numeric-only with a
+    /// literal '.', so the practical blast radius was small, but it's the one date readout
+    /// in the app that wasn't going through this file at all.</summary>
+    public static string ToDisplayDateShort(this DateOnly d) => d.ToString("dd.MM", CultureInfo.InvariantCulture);
+
+    /// <summary>"15.07.2026 14:32" — ReportExport's HTML and CSV "generated ..." lines
+    /// both hand-typed this identically (2026-07-24 audit finding #12), the same
+    /// same-format-two-copies drift risk every other helper in this file exists to
+    /// prevent, just not yet covered on this one shape.</summary>
+    public static string ToDisplayDateTimeStamp(this DateTime d) => d.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>Full weekday name plus year — "Thursday 23.07.2026," TodayPage's header.
+    /// See ToDisplayDateFull's doc comment.</summary>
+    public static string ToDisplayDateWithYear(this DateTime d) => d.ToString("dddd dd.MM.yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>The read-side counterpart of ToIsoDate — every one of this file's other
+    /// helpers covers the write direction, but the reverse ("turn a stored yyyy-MM-dd
+    /// string back into a DateOnly") was still hand-typed 6 times in ReportData.cs alone
+    /// (2026-07-18 audit finding R11-04), the identical drift risk this class exists to
+    /// prevent, just on the leg nothing had covered yet.</summary>
+    public static bool TryParseIsoDate(this string s, out DateOnly d) =>
+        DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d);
+}
