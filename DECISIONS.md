@@ -73,6 +73,22 @@
    a full week back on track after a bad stretch; a `multi_task_bonus_per_extra_task`
    (3 pts, added 2026-07-09) rewards each task completed beyond the first one on the
    same day, on top of the flat per-task rate.
+9a. **`ScoreService.EnsureScoreCaughtUp()` can post a large one-shot jump to the sidebar balance
+    chip (`Database.ScoreBalance()`, a plain `SUM(delta)` over `score_ledger`, no
+    offset/transform), because its lookback (`comeback_lookback_days`, Settings-editable, default
+    7) decides how many past days it's willing to backfill in one pass.** Confirmed 2026-09-16: a
+    single 2026-09-15 09:56:37 batch credited 15 backlogged `daily_score` dates back to
+    2026-07-13 (exact rows and running-balance reconstruction: `context/todos.md`, 09-16 session
+    log), +193 points at once — legitimate bulk credit for real, previously-untallied work, not a
+    scoring bug. That reach (64 days) is only possible if the lookback was far above its default 7
+    at that moment; `config.json`'s file-modified timestamp matches the batch's `ts` to the second,
+    pointing at a transient Settings edit to "Comeback window (days)" as the likely trigger —
+    **not independently proven**, since a single live config file carries no history. When a
+    reported balance swing doesn't reconcile against recent `replan_overdue`/`overdue_accrual`
+    activity, check `score_ledger` for a `daily_score` cluster sharing one `ts` before assuming
+    anything is wrong. Also note the chip can read negative (deep `replan_overdue`/
+    `overdue_accrual` debt) and a quick glance easily drops the minus sign — and can lag the true
+    DB total after a diary-edit recalculation (`CONTEXT.md` §7 item 1, open, unfixed).
 10. **Day-off scoring (added 2026-07-17)**: when EVERY active plan considers a day off
     (recurring exclusion or manual day-off — `ScoreService.AllPlansScoringExempt`; one
     plan off while another still has real work due does NOT trigger this), that day's
@@ -159,6 +175,16 @@ compaction. General versions of several now also live in the global `windows-app
   discarded a correct working-hours edit with no error naming which field blocked it. Split into
   independent phases (2026-08-17), each with its own validate-then-write and its own error
   message; a failure in one phase never blocks a different phase's already-valid write.
+- **A tray-minimized WinUI3 window has no `MainWindowHandle` via .NET's `Process` class** (`H
+  .NotifyIcon`, which Planillium uses for the tray icon, leaves the live process with no visible
+  top-level window) — a UIA search by `ProcessIdProperty` at the automation root's direct children
+  finds nothing. To read its on-screen text live and read-only (2026-09-16, chasing a reported
+  score-chip value), enumerate ALL windows owned by the PID via raw Win32 P/Invoke (`EnumWindows` /
+  `GetWindowThreadProcessId` / `GetWindowText`, PowerShell `Add-Type`) to find the hidden hwnd, then
+  `ShowWindow(SW_RESTORE)` + `SetForegroundWindow` to reveal it before `AutomationElement
+  .FromHandle`/`FindFirst` can see it — and `ShowWindow(SW_MINIMIZE)` afterward to leave the tray
+  state as found. Confirmed the on-screen chip read `-202`, not `202` as reported — the user had
+  dropped the minus sign.
 
 **Safety around real data**
 - Never simulate input (clicks/keystrokes) that would mutate real plan/score data — verify

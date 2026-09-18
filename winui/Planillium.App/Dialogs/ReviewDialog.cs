@@ -199,11 +199,23 @@ public static class ReviewDialog
             using var gapDb = new Database();
             if (tracker.PendingDayGap(gapDb) is { } gap)
             {
+                // Claim the span BEFORE awaiting the user's answer, not after (2026-09-18 fix).
+                // This dialog can sit open for as long as the user takes to answer it, but the
+                // background poll loop keeps ticking every 60s the whole time — if the user's
+                // own "I'm back" input (needed to even open this review) also drops the poll
+                // loop's idle timer below threshold, HandleIdleReturn can independently fire for
+                // the SAME gap while this dialog is still awaiting an answer, see a still-null
+                // _accountedUntil (this used to be set only after ShowAsync returned), and log
+                // its own separate "unaccounted time" row for a stretch this dialog is already
+                // in the middle of resolving. Confirmed live 2026-09-17: a "housework"/off-plan
+                // row (12:32-20:00, via this dialog) and an unanswered "unaccounted time" row
+                // (12:32-19:59, via the poll loop's own HandleIdleReturn ~80s later) both landed
+                // for the same afternoon. Setting the high-water mark up front closes that
+                // window — a crash mid-dialog only costs a missed prompt until restart, not a
+                // false record, since nothing else is written yet.
+                tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));
                 await IdleReturnDialog.ShowAsync(window, gap.Minutes, gap.Start,
                     leadIn: "Some unaccounted time to fill in before today's review —");
-                // The whole gap is now written to the diary (even a skipped
-                // dialog logs it as idle) — stop the poll loop re-asking.
-                tracker.MarkAccountedThrough(gap.Start.AddMinutes(gap.Minutes));
             }
         }
         catch (Exception ex) { Log.Error("ReviewDialog.PendingDayGap", ex); }

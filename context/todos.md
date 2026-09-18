@@ -140,6 +140,84 @@ week/this month/this year); both call sites (weekly export, Reports page) pass t
 verification across all four period tabs is tracked as a resolved-pending-confirmation item — see
 CONTEXT.md §7 if it hasn't been eyeballed yet.
 
+### Session log — 09-16
+
+("yesterday the [sidebar balance chip] showed me 292, today it is 202" — reported as a ~90-point
+drop): not a bug, and not a drop. Read-only investigation only — no code/DB changes. Ruled out in
+order: WAL-visibility mismatch between a direct DB read and the running app (disproven — both read
+the identical live value via a throwaway source-linked console harness, same technique as
+`Planillium.App.Tests.csproj`, built/run/deleted in `winui/ScoreCheck/`); a different installed
+data folder (disproven — live process's exe path resolves via `AppPaths.Root` to this same repo);
+`RescheduleTask` retroactively lowering past days (disproven — completed-task exclusion and the
+`closeGap` past-day guard both hold); the Reports period `ScoreCard` (live Week/Month totals didn't
+match either number). Root cause found only after the user clarified the source was the sidebar
+chip: the live on-screen text (read via the tray-minimized-window UIA technique — `DECISIONS.md`,
+Verification discipline) was actually **`-202`**, not `202` — a dropped minus sign. The chip is
+`Database.ScoreBalance()`, a plain ledger `SUM(delta)`, currently deep negative from accumulated
+`replan_overdue`/`overdue_accrual` penalties (`ai-microsolutions-brand-30`'s heavy reschedule
+chain), from `EnsureScoreCaughtUp`'s 2026-09-15 09:56:37 bulk backfill of 15 previously-uncredited
+`daily_score` days back to 2026-07-13 (`DECISIONS.md` rule 9a) — legitimate credit for already-done
+work, not a scoring bug.
+
+**Follow-up same session, exact ledger reconstruction** (user pushed back asking how/why in
+detail): `score_ledger` read directly, event by event. End of 09-14 (after that day's `-10`
+replan fee): **-360**. The 09-15 09:56:37 batch (15 `daily_score` rows, `Jul13 +34, Jul16 +3,
+Jul20 +7, Jul21 +6, Jul23 +5, Jul30 +18, Jul31 +16, Aug3 +9, Aug4 +6, Aug5 +43, Aug6 +31, Aug14 +0,
+Aug17 +9, Aug20 +4, Sep14 +2` = +193): **-167**. Through the morning of 09-16 (`-15`
+overdue_accrual for 09-15, `-10` replan fee, `-10` today's day score, `+3` a diary-edit
+recalculation of 09-15): **-199**, confirmed as the live DB total by direct re-query. **Never
+independently confirmed**: the user's remembered "-292" for "yesterday" — the closest real
+snapshot either side of it is -360 (before the 09-15 catch-up) or -167 (after); neither matches
+exactly, most likely just an imprecise recollection of the number, not a third data point worth
+chasing further.
+
+**Mechanism for the 64-day-deep sweep**: `EnsureScoreCaughtUp`'s lookback is `comeback_lookback_days`
+(Settings-editable, default 7) — nowhere in the code does a wider, unconditional history scan
+exist (confirmed: `AddLedger` for `daily_score` has exactly one call site,
+`RecomputeDayScoreCore`, invoked only from `CreditDayScoreIfMissing`'s `EnsureScoreCaughtUp` loop
+or single-date `RecalculateDayScore` calls — nothing else can produce a same-second multi-date
+batch). Reaching back to 2026-07-13 requires a ~64-day lookback at that moment, not the
+config's current value of 7. Corroborating but not conclusive: `config.json`'s file-modified
+timestamp (`2026-09-15 09:56:37.37`) matches the ledger batch's `ts` to the same second — strongly
+suggesting the "Comeback window (days)" Settings field was set very high (60+) and saved right
+before this ran, then reset back to 7 afterward. Not proven from a single live file with no
+history; flagged to the user as the likely explanation, not confirmed.
+
+**New real bug found in the process (not fixed — see CONTEXT.md §7 item 1)**: the sidebar chip
+went stale by exactly the `+3` diary-edit recalculation above — screen read `-202` while the DB
+was already `-199`. Traced to `RecalculateDayScore`'s three call sites (`EditDiaryEntryDialog`,
+`SplitDiaryEntryDialog`, `ReportsPage.Diary.MarkSelected`) never calling `RefreshScore()`, unlike
+every other score-changing action. Self-heals on the next unrelated refresh or restart; DB was
+never wrong, only the display.
+
+### Session log — 09-18
+
+**Diary-duplication bug fixed** (screenshot: two overlapping 2026-09-17 12:32-start rows — an
+answered `off_plan`/"housework" row 12:32→20:00 (448 min) and an unanswered `idle`/"unaccounted
+time" placeholder 12:32→19:59 (447 min), diary IDs 9655/9656). Root cause, confirmed from
+`mentor-winui.log`, not speculated: the evening review (`ReviewDialog.Trigger`, 22:59:58,
+window on-screen) opened `IdleReturnDialog` for a ~448-min pending gap via
+`ReconcilePendingGap`/`PendingDayGap`, but only called `tracker.MarkAccountedThrough(...)` — the
+shared guard stopping the background poll loop from re-detecting the same gap — *after* that
+dialog's `await` resolved. The background 60s poll loop (`ActivityTracker.PollOnce`) ticks
+regardless of the UI thread; the same user input needed to answer the review dialog also reset
+the poll loop's own idle timer, so `HandleIdleReturn` fired independently at 23:01:20 for
+substantially the same gap, read `_accountedUntil` as still null, and logged its own placeholder
+(447 min — the 1-min difference is `(int)` truncation on a sub-second `_idleSince` vs. the
+diary's minute-precision last-row-end). Two independent detectors raced for one gap because the
+guard was claimed too late. **Fix**: in `Dialogs/ReviewDialog.cs`'s `ReconcilePendingGap`, moved
+the `MarkAccountedThrough` call to *before* `await IdleReturnDialog.ShowAsync(...)` instead of
+after — claims the high-water mark the instant the gap is detected, not once the user finishes
+answering. Verified: `MarkAccountedThrough` has exactly one call site (checked — no sibling fix
+needed); Debug and Release both build clean (0 warnings/errors); live Release instance
+stopped/rebuilt/relaunched (new PID confirmed running). `dotnet test`: 151/152 — the one failure
+(`ActivityTrackerPendingGapTests.OpenSessionClampsTheGapToItsOwnStart`) is unrelated to this fix
+(untouched file, pre-existing) and is itself time-of-day-dependent: it subtracts up to 180 min
+from `DateTime.Now` without pinning a fixed instant, so run it inside ~03:00 after midnight and
+the shifted timestamp crosses into the previous day, no longer matches today's date, and
+`PendingDayGap` finds no gap. Confirmed by re-running at 2026-09-18 02:29; not fixed here (out of
+scope for this bug), flagged as a real but separate test-suite flake — CONTEXT.md §6 candidate.
+
 ### Resolved-and-closed, one-line pointers (prose in git log)
 
 `MentorOverseer`→`Planillium` rename 07-23; diary-tracking-gap bug 07-21 (`PollOnce` order);

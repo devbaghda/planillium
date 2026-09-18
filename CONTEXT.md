@@ -12,7 +12,7 @@
 > file stays thin — current state, rules, a short decisions-highlights list, open items with dates,
 > and a Section Index. `DECISIONS.md` was **not** absorbed into `context/` — it's a mature,
 > independent register, pre-dating this scheme (split out 2026-08-04 for the identical reason),
-> and moving it would mean auditing every cross-reference for no benefit. Last updated 14 Sep 2026.
+> and moving it would mean auditing every cross-reference for no benefit. Last updated 16 Sep 2026.
 
 ---
 
@@ -34,8 +34,9 @@ Display name, internal rename history and the three legacy-compat exceptions:
 
 Phase: **shipped, in daily live use** (v1.2.0+, public GitHub repo). **The WinUI app
 (`winui/Planillium.App`) is THE app** — full architecture, directory map and tech stack:
-`context/domain.md` — "App architecture" and "Tech stack". Automated test suite: 152/152 passing
-as of the last recorded run (2026-09-04) — re-run before trusting that number stale.
+`context/domain.md` — "App architecture" and "Tech stack". Automated test suite: 151/152 as of
+2026-09-18 — the one failure is a known time-of-day-dependent flake, not a real regression (§7
+item 10).
 
 Data formats and reference: `context/domain.md` — "Plan JSON format", "Database schema", "config.json
 key fields".
@@ -58,6 +59,11 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
   the scratch-`MENTOR_ROOT` technique, WinUI layout traps, prompt/timer/state rules, design
   lessons) — read the relevant rule before changing anything it governs; several record a decision
   the user made after Claude argued the opposite.
+- **A reported sidebar-balance swing is very often not a scoring bug.** Two standing causes to
+  check first: `EnsureScoreCaughtUp` can post a large one-shot bulk credit for backlogged
+  `daily_score` days at any startup (`DECISIONS.md` rule 9a); the chip is a plain `SUM(delta)` and
+  reads negative during a heavy `replan_overdue`/`overdue_accrual` stretch, which a quick glance
+  can easily misread with the minus sign dropped (2026-09-16 session, `context/todos.md`).
 - `context/domain.md` — architecture/schema reference, headers by subject: display name and
   internal rename history · app architecture (+ directory map) · tech stack · Plan JSON format ·
   database schema · config.json key fields.
@@ -103,40 +109,76 @@ Short pointers kept inline (full text in `DECISIONS.md`):
 
 ## 7. Still open
 
-1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
+1. **(opened 2026-09-16) Sidebar balance chip goes stale after a diary-category edit
+   recalculates a past day's score.** `RecalculateDayScore`'s three call sites
+   (`EditDiaryEntryDialog`, `SplitDiaryEntryDialog`, `ReportsPage.Diary.MarkSelected`) never call
+   `MainWindow.RefreshScore()` — unlike every other score-changing action (task completion,
+   reschedule, spend, day-off, midnight rollover), which all do. Confirmed live: chip read `-202`
+   on screen while `score_ledger`'s `SUM(delta)` was already `-199`, three points ahead, after a
+   diary edit. Self-corrects on the next unrelated refresh trigger or app restart — never wrong in
+   the database, only stale on screen. *Rec:* add a `RefreshScore()` call after
+   `TryRecalculateDayScores` at each of the three sites next time diary editing is touched.
+2. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
    cause not investigated — possibly two queued ticks firing close together after timer suspension
    during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.
-2. **(opened 2026-09-01) TickTick widget disappearance — still inconclusive.** Checked every
+3. **(opened 2026-09-01) TickTick widget disappearance — still inconclusive.** Checked every
    TickTick-touching file/Win32 call; Planillium has no shared state with the widget's login. A
    temporary diagnostic (`Log.Info` in `TickTickService.cs`/`TickTickAuth.cs`, marked "temporary,
    remove together") is still live-deployed. *Rec:* waiting on the user to report a timestamp the
    widget next disappears at, to compare against the diagnostic log. Once confirmed or ruled out,
    remove the three temporary calls and rebuild Release.
-3. **(opened 2026-08-14) How the 08-14 archive move happened is unconfirmed** — an archived plan
+4. **(opened 2026-08-14) How the 08-14 archive move happened is unconfirmed** — an archived plan
    at 11/23 tasks (short of the 100% Archive requirement) turned up back in active; moved back, DB
    intact. *Rec:* watch for a recurrence.
-4. **(opened 2026-08-13) The 08:00–11:28 gap on 08-13 never produced a diary row — cause
+5. **(opened 2026-08-13) The 08:00–11:28 gap on 08-13 never produced a diary row — cause
    unconfirmed** (ruled out as the test-data cleanup). *Rec:* revisit if it recurs.
-5. **(opened 2026-08-07, still open as of 08-28) Not yet live-UIA-verified** (clean build + tests
+6. **(opened 2026-08-07, still open as of 08-28) Not yet live-UIA-verified** (clean build + tests
    only): 08-13's narrowed diary columns/Auto scrollbar and Reports DayOffs figure; 08-07's
    `IdleReturnDialog` Category/Tag fields + Mark-tag toolbar row; 08-17's Schedule collapsible
    cards + `EditDiaryEntryDialog` quick-pick chips.
-6. **(opened 2026-08-05) Diary midnight rollover never observed actually happening** — needs the
+7. **(opened 2026-08-05) Diary midnight rollover never observed actually happening** — needs the
    clock to cross midnight with the app sitting on Reports. *Rec:* if Diary still shows yesterday
    some morning, check the assignment at the top of `BuildDiarySection` first.
-7. **(opened 2026-09-04) Insights "this week" fix not yet live-verified by eye** across all four
+8. **(opened 2026-09-04) Insights "this week" fix not yet live-verified by eye** across all four
    period tabs (today/week/month/year) — fix is in, tests pass, Release rebuilt and relaunched;
    pending user confirmation on screen.
-8. **(standing, not a bug) Scoring Settings' 12 inputs are live-checked (present/reachable at both
+9. **(standing, not a bug) Scoring Settings' 12 inputs are live-checked (present/reachable at both
    window extremes) but their values are never edited live** — that writes `config.json` and
    restarts the tracker, so verification stays code-inspection-only by design. Revisit only if
    this verification approach changes.
+10. **(opened 2026-09-18) `ActivityTrackerPendingGapTests.OpenSessionClampsTheGapToItsOwnStart` is
+    time-of-day-dependent, not just DB-shared-state-dependent.** It subtracts up to 180 min from
+    `DateTime.Now` without pinning a fixed instant; running the suite within ~3h after midnight
+    shifts a computed timestamp into the previous day, the inserted diary row no longer matches
+    "today," and `PendingDayGap` reports no gap where the test expects one. Confirmed failing at
+    02:29 on 2026-09-18; unrelated to that day's `ReviewDialog` fix (`context/todos.md`, Session
+    log 09-18). *Rec:* pin a fixed reference instant (e.g. noon) instead of `DateTime.Now` next
+    time this test file is touched.
+11. **(opened 2026-09-18) Agentic-workflow pilot** — running a second Planner→Coder→QA pipeline
+    (`.claude/agents/planillium-{planner,coder,qa}.md`, Sonnet for Planner/QA, Haiku for Coder)
+    alongside the regular single-agent-with-skills workflow, to compare wall-clock time, a
+    token-burn proxy, bugs found, and a clarity/aesthetic score on the *same* feature request built
+    both ways. The agentic side works only inside `winui-agentic/` — a source-only fork of
+    `winui/Planillium.App/` + `.Tests/` made 2026-09-18, excluding `data/`, `config.json`, `plans/`
+    (real personal data), documented in `winui-agentic/PILOT.md`. Contamination rule: the agentic
+    side never reads the regular side's post-fork code/history for the same feature. QA runs with
+    `isolation:"worktree"` (Planillium already has `.git`, confirmed 2026-09-18 — no blocker there)
+    and logs each run to a Dashboard shared with DigiFlow's own pilot:
+    `https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`. There's also a separate animated diagram of
+    how the three agents hand off work: `https://claude.ai/artifact/81B78ayvAVq8g9QxgGADnz`.
+    **First feature queued for this comparison:** a lost-earnings counter (start date
+    2026-12-04, adjustable monthly baseline, sidebar + reports at day/week/month/year) — the
+    user's verbatim request is saved at
+    `winui-agentic/pilot-specs/lost-earnings-counter/REQUEST.md` for `planillium-planner` to read
+    when the fleet is launched (a session must be *started* inside this project's folder for its
+    `.claude/agents/` to be picked up). Not yet built by either workflow as of this writing.
 
 ## 8. Next steps
 
-No standing backlog beyond §7 — the app is shipped and in daily use, not mid-build. Take §7 in the
-order written if picking up idle work; otherwise this file's job is to be current when the next
-real bug report or feature request arrives.
+Next up: run the lost-earnings-counter feature (§7 item 11) through both workflows and compare on
+the shared Dashboard. Otherwise no standing backlog beyond §7 — the app is shipped and in daily
+use, not mid-build. Take the rest of §7 in the order written if picking up idle work; otherwise
+this file's job is to be current when the next real bug report or feature request arrives.
 
 ## 9. Environment notes
 
