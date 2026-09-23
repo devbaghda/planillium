@@ -336,10 +336,13 @@ public sealed class ActivityTracker : IDisposable
     /// close the day out honestly. Null when the day is already accounted for,
     /// when today had no activity at all, or on a rest day.
     /// </summary>
-    public (int Minutes, DateTime Start)? PendingDayGap(Database db)
+    /// <param name="asOf">Overrides "now" for tests (same pattern as
+    /// <see cref="ScoreService.CurrentStreak"/>'s <c>asOf</c>) — real callers never pass this and
+    /// get true wall-clock behavior.</param>
+    public (int Minutes, DateTime Start)? PendingDayGap(Database db, DateTime? asOf = null)
     {
         if (IsRestDayToday()) return null;
-        var now = DateTime.Now;
+        var now = asOf ?? DateTime.Now;
         var diaryStartToday = now.Date + _workStart.ToTimeSpan();
         var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
         var gapEnd = now < diaryEndToday ? now : diaryEndToday;

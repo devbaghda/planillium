@@ -21,9 +21,14 @@ namespace Planillium.App.Tests;
 /// Both are fixed by two clamps inside PendingDayGap itself: an open session caps how far the
 /// gap can extend, and MarkAccountedThrough's own record caps how far back it can start.
 ///
-/// Working hours are set to 00:00-23:59 in every test so "now", whenever the suite happens to
-/// run, always falls inside them — the point under test is the gap arithmetic, not the working-
-/// hours boundary, which ConfigDiaryHoursTests already covers on its own.
+/// Working hours are set to 00:00-23:59 in every test so "now" always falls inside them — the
+/// point under test is the gap arithmetic, not the working-hours boundary, which
+/// ConfigDiaryHoursTests already covers on its own.
+///
+/// "Now" itself is FixedNow() (noon today), not DateTime.Now, passed through PendingDayGap's
+/// asOf override — real DateTime.Now was flaky within ~3h after midnight, where an offset like
+/// -180 minutes crosses into the previous calendar day and trips PendingDayGap's own
+/// same-day-as-today check (confirmed failing 2026-09-18 02:29; see CONTEXT.md/todos.md).
 ///
 /// PendingDayGap's own query (Database.LastDiaryEnd) has no per-test scoping — it's simply "the
 /// latest end_time in the whole table" — and TestRootFixture's one shared SQLite file (see its
@@ -37,6 +42,14 @@ public sealed class ActivityTrackerPendingGapTests
     private static void SetAllDayWorkingHours() =>
         ConfigService.Mutate(cfg =>
             cfg["working_hours"] = new JsonObject { ["start"] = "00:00", ["end"] = "23:59" });
+
+    /// <summary>Fixed reference instant for these tests' "now" — noon today, always. Real
+    /// <c>DateTime.Now</c> was flaky within ~3h after midnight: an offset like -180 minutes
+    /// crosses into the previous calendar day, but <c>PendingDayGap</c> requires the diary row's
+    /// date to match its own (real) "today" (2026-09-18, confirmed failing 02:29). Passed as
+    /// <c>PendingDayGap</c>'s <c>asOf</c> override, decoupling the test's simulated timeline from
+    /// whatever the wall clock happens to read when the suite runs.</summary>
+    private static DateTime FixedNow() => DateTime.Today.AddHours(12);
 
     private static void ClearTodaysDiary(Database db)
     {
@@ -70,11 +83,11 @@ public sealed class ActivityTrackerPendingGapTests
         using var db = new Database();
         ClearTodaysDiary(db);
         var tracker = new ActivityTracker(ConfigService.Root);
-        var now = DateTime.Now;
+        var now = FixedNow();
         var lastEnd = now.AddMinutes(-90);
         AddDiaryRow(db, lastEnd.AddMinutes(-30), lastEnd, DiaryCategory.OnPlan);
 
-        var gap = tracker.PendingDayGap(db);
+        var gap = tracker.PendingDayGap(db, now);
 
         Assert.NotNull(gap);
         Assert.Equal(lastEnd.ToString("HH:mm"), gap!.Value.Start.ToString("HH:mm"));
@@ -90,13 +103,13 @@ public sealed class ActivityTrackerPendingGapTests
         using var db = new Database();
         ClearTodaysDiary(db);
         var tracker = new ActivityTracker(ConfigService.Root);
-        var now = DateTime.Now;
+        var now = FixedNow();
         var lastEnd = now.AddMinutes(-180);
         var openStart = now.AddMinutes(-120);
         AddDiaryRow(db, lastEnd.AddMinutes(-30), lastEnd, DiaryCategory.OnPlan);
         tracker.SimulateOpenSession(openStart, "VS Code", DiaryCategory.OnPlan);
 
-        var gap = tracker.PendingDayGap(db);
+        var gap = tracker.PendingDayGap(db, now);
 
         // Without the clamp this would run all the way to "now" (~180 min) — the open session's
         // own 120 minutes of live, in-progress work would be swept up into the "where were you"
@@ -116,14 +129,14 @@ public sealed class ActivityTrackerPendingGapTests
         using var db = new Database();
         ClearTodaysDiary(db);
         var tracker = new ActivityTracker(ConfigService.Root);
-        var now = DateTime.Now;
+        var now = FixedNow();
         var lastEnd = now.AddMinutes(-60);
         AddDiaryRow(db, lastEnd.AddMinutes(-30), lastEnd, DiaryCategory.OnPlan);
         // The open session picked up right where the last row left off — continuous activity,
         // nothing unaccounted.
         tracker.SimulateOpenSession(lastEnd, "VS Code", DiaryCategory.OnPlan);
 
-        Assert.Null(tracker.PendingDayGap(db));
+        Assert.Null(tracker.PendingDayGap(db, now));
     }
 
     /// <summary>The second bug: once a gap has been accounted for (MarkAccountedThrough, the
@@ -137,16 +150,16 @@ public sealed class ActivityTrackerPendingGapTests
         using var db = new Database();
         ClearTodaysDiary(db);
         var tracker = new ActivityTracker(ConfigService.Root);
-        var now = DateTime.Now;
+        var now = FixedNow();
         var lastEnd = now.AddMinutes(-90);
         AddDiaryRow(db, lastEnd.AddMinutes(-30), lastEnd, DiaryCategory.OnPlan);
 
-        var firstGap = tracker.PendingDayGap(db);
+        var firstGap = tracker.PendingDayGap(db, now);
         Assert.NotNull(firstGap);
         // Mirrors exactly what ReviewDialog.ReconcilePendingGap does after the dialog closes.
         tracker.MarkAccountedThrough(firstGap!.Value.Start.AddMinutes(firstGap.Value.Minutes));
 
-        var secondGap = tracker.PendingDayGap(db);
+        var secondGap = tracker.PendingDayGap(db, now);
 
         Assert.Null(secondGap);
     }
