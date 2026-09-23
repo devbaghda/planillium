@@ -5,6 +5,13 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+**Features**
+- **Lost-earnings counter.** Set a potential monthly income in Settings and Planillium tracks what
+  off-plan time is actually costing you: a running LOST INCOME figure in the sidebar, and an
+  UNEARNED/EXTRA INCOME card on Reports scoped to whichever period you've selected (today/this
+  week/this month/this year), including a per-off-plan-hour rate so the cost reads the same at any
+  zoom level.
+
 **Fixes**
 - **Reports' Insights panel always said "this week" in its sentences, even when the header above
   it said This Month or This Year.** The numbers themselves were always correct for whatever

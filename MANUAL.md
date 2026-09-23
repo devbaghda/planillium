@@ -132,8 +132,14 @@ The Day/Week/Month/Year selector governs everything above the diary: the score c
 table, top distractions, time by app, and the insights. The score card reads "SCORE EARNED —
 THIS WEEK" (or whichever period you've picked) and shows the points that period's activity
 added up to — which is not the same as the BALANCE in the sidebar, since that is a running total
-across all time and also subtracts anything you've spent on entertainment time. The diary section
-at the bottom is separate and always works one day at a time.
+across all time and also subtracts anything you've spent on entertainment time. Underneath it, the
+income card shows the same period's UNEARNED (or EXTRA) INCOME, based on the potential monthly
+income you set in Settings and how much of that period was spent off-plan; it also breaks that
+total down to a per-off-plan-hour rate ("That's €X per off-plan hour"), so the cost reads the same
+whether you're looking at today or the whole year. The rate isn't shown for a period with no
+off-plan time at all — there's nothing to divide by, and a €0,00 there would misread as "off-plan
+time costs nothing" rather than "none happened." The diary section at the bottom is separate and
+always works one day at a time.
 
 The summary table carries the same columns on every period view: tasks done, one column for each
 of the five categories your time is sorted into (on-plan, off-plan, neutral, paid and idle), that

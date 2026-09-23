@@ -127,6 +127,18 @@ Planillium. **User's call: keep the diagnostic running.** **Self-recovered** sho
 own — no Planillium action, no exact recovery time either. Still inconclusive as of the split —
 see CONTEXT.md §7 for the still-open watch item and the diagnostic-removal follow-up.
 
+**Closed 2026-09-22: false alarm, widget now working fine.** User confirmed the disappearances
+stopped recurring — no further correlation ever found against a Planillium API call in the three
+weeks the diagnostic ran, consistent with the original "no shared state" finding above. Per the
+open item's own recommendation ("once confirmed or ruled out, remove the three temporary calls
+and rebuild Release"): removed the six `Log.Info` diagnostic lines and their explanatory comments
+(`TickTickService.cs`'s `TasksDueTodayAsync`/`CompleteTaskAsync`, `TickTickAuth.cs`'s
+`RefreshAsync`) — grepped for "temporary, remove together"/"Temporary diagnostic" first to confirm
+no sibling calls were missed. `dotnet build -p:Platform=x64 -c Release`: 0 warnings/errors. Live
+instance stopped (PID 10864) → rebuilt → relaunched (new PID 17424, confirmed running) —
+`end_of_day_summary_time` (20:00) had already passed, so no risk of skipping that day's
+evening-review popup. CONTEXT.md §7's item removed (was item 2).
+
 ### Session log — 09-04
 
 ("Insights says 'this week' under a THIS YEAR/THIS MONTH header, inconsistent"): real
@@ -183,7 +195,7 @@ suggesting the "Comeback window (days)" Settings field was set very high (60+) a
 before this ran, then reset back to 7 afterward. Not proven from a single live file with no
 history; flagged to the user as the likely explanation, not confirmed.
 
-**New real bug found in the process (not fixed — see CONTEXT.md §7 item 1)**: the sidebar chip
+**New real bug found in the process (fixed 2026-09-22, see Session log below)**: the sidebar chip
 went stale by exactly the `+3` diary-edit recalculation above — screen read `-202` while the DB
 was already `-199`. Traced to `RecalculateDayScore`'s three call sites (`EditDiaryEntryDialog`,
 `SplitDiaryEntryDialog`, `ReportsPage.Diary.MarkSelected`) never calling `RefreshScore()`, unlike
@@ -217,6 +229,117 @@ from `DateTime.Now` without pinning a fixed instant, so run it inside ~03:00 aft
 the shifted timestamp crosses into the previous day, no longer matches today's date, and
 `PendingDayGap` finds no gap. Confirmed by re-running at 2026-09-18 02:29; not fixed here (out of
 scope for this bug), flagged as a real but separate test-suite flake — CONTEXT.md §6 candidate.
+
+### Session log — 09-22
+
+**Sidebar balance chip stale after diary-category edit fixed** (previously CONTEXT.md §7 item 1,
+opened 2026-09-16). Root
+cause: `RecalculateDayScore`'s three call sites — `EditDiaryEntryDialog` (save + delete),
+`SplitDiaryEntryDialog`, `ReportsPage.Diary.MarkSelected` — called
+`ScoreService.TryRecalculateDayScores` to update `score_ledger` but never told the sidebar to
+re-read it, unlike every other score-changing action (task completion, reschedule, spend,
+day-off, midnight rollover), which all call `MainWindow.RefreshScore()`. Never wrong in the
+database, only stale on screen until the next unrelated refresh. **Fix**: added
+`(App.MainWindow as MainWindow)?.RefreshScore();` immediately after each of the four
+`TryRecalculateDayScores` call sites (`EditDiaryEntryDialog.cs` ×2, `SplitDiaryEntryDialog.cs`,
+`ReportsPage.Diary.cs`) — same pattern already used elsewhere in these files
+(`TeachPlanTools.cs`/`ReportsPage.Diary.cs`'s existing `(App.MainWindow as MainWindow)?.` calls).
+Verified: grepped `TryRecalculateDayScores` for all call sites first (5 results: 4 call sites +
+the method definition) so all four got the fix, not just the three CONTEXT.md named — no sibling
+left unfixed. `dotnet build -p:Platform=x64 -c Debug`: 0 warnings/errors. `dotnet test`: 160/160.
+Not live-UI-verified (would require editing/splitting/mass-recategorizing a real diary entry
+against `data/progress.db`) — code-inspection + clean build only, per the real-data rule; folded
+into CONTEXT.md §7 item 4's UIA-verification backlog.
+
+**`ActivityTrackerPendingGapTests` time-of-day flake fixed** (previously CONTEXT.md §7 item 8,
+opened 2026-09-18, confirmed failing 2026-09-18 02:29 — see Session log 09-18 above). Root cause:
+all 4 tests in the file, not just the one that had actually failed, subtracted a fixed number of
+minutes from real `DateTime.Now` to build their "last diary end"/"open session start" timestamps
+with no pinned reference instant — running within ~3h after midnight could shift a computed
+timestamp into the previous calendar day, tripping `PendingDayGap`'s own `lastEnd.Date !=
+now.Date`-shaped same-day guard and making it report no gap where the test expected one. A
+pin-the-test-to-noon-only fix was considered and rejected: `PendingDayGap` would still internally
+call real `DateTime.Now` for `gapEnd`, which could land *earlier* than a synthetic noon-based
+`lastEnd`/`openStart` if the suite happened to run in the morning, silently swapping one flake for
+another. **Fix**: added an optional `DateTime? asOf = null` parameter to
+`ActivityTracker.PendingDayGap` (defaults to real `DateTime.Now` for the one production caller,
+`ReviewDialog.cs`, which never passes it) — same override pattern already established by
+`ScoreService.CurrentStreak(DateOnly? asOf = null)`. Added a `FixedNow()` helper (`DateTime.Today
+.AddHours(12)`) to `ActivityTrackerPendingGapTests.cs` and passed it explicitly as `asOf` at all 5
+`PendingDayGap` call sites across the file's 4 tests, fully decoupling the suite's simulated
+timeline from the real wall clock rather than just narrowing the flake's window. Verified:
+`dotnet build -p:Platform=x64 -c Debug`: 0 warnings/errors. `dotnet test`: 160/160. Not live-rebuilt/
+restarted — the only change reaching the shipped app (`ActivityTracker.cs`) is an added optional
+parameter with a real-clock default, behaviorally inert for the app's one real caller, which never
+passes it; test-only-observable, so the live-verify cycle used for the TickTick and sidebar-chip
+fixes above was judged unnecessary here.
+
+**Live UIA verification pass, 2026-09-22** (previously CONTEXT.md §7 items 4 and 6). Restored the
+live Release window from tray (`ShowWindow`/`SetForegroundWindow` on its hwnd via `Get-Process`
+PID enumeration — `MainWindowHandle` reports 0 while tray-hidden, had to `EnumWindows` by PID to
+find the real "Planillium" window) and read it read-only via `System.Windows.Automation`, hidden
+back to tray afterward. Confirmed live and correct: sidebar "LOST INCOME" chip (-€25 928,71) and
+Reports "UNEARNED INCOME" cards on all four period tabs (Day/Week/Month/Year each showing their
+own period's figure, e.g. "-€90,00 today" vs "-€23 580,00" this year) — closes the lost-earnings
+Rec from the 09-22 entry above. Insights section correctly relabels itself per tab (THIS
+WEEK/MONTH/YEAR/TODAY, each with its own distraction figure) — closes former item 6 outright.
+Reports DayOffs figure ("5 days off marked"), narrowed diary columns + Auto scrollbar, and the
+diary Mark-tag toolbar row (real tag names, not placeholders) all confirmed rendering. Schedule
+page's per-plan cards report `"<plan name>, expanded"` via their `Group` name — collapsible-card
+wiring confirmed live. **Blocked, by design, not by oversight**: invoking an "Edit entry" button to
+open `EditDiaryEntryDialog` (to check its quick-pick chips) was refused by the auto-mode
+classifier itself ("Modify Shared Resources") — simulating a click into a data-editing control is
+exactly what this project's own real-data rule says not to do, so `IdleReturnDialog`
+Category/Tag and `EditDiaryEntryDialog` quick-pick chips stay code-inspection-only; narrowed
+former item 4 to just those two, rather than closing it outright.
+
+**Reports income card: added €/off-plan-hour, 2026-09-22** (user request, same session as the
+lost-earnings-counter feature and its UIA pass above). Derived, not a separate calculation:
+`sum / (offMin / 60.0)`, reusing `IncomeCard`'s existing period `sum` and `ReportData.PeriodStats`'
+existing `OffMin` (already computed once per page load and passed down, no new query). Guarded
+against `offMin == 0` (a period with no off-plan time shows no rate line at all, rather than a
+misleading €0,00). Files touched: `ReportsPage.xaml.cs` (`IncomeCard` now takes `offMin`, adds the
+derived line). `dotnet build -p:Platform=x64 -c Debug`: 0 warnings/errors. `dotnet test`: 160/160.
+Live-UIA-verified across all four period tabs post-relaunch (PID 17424 → 8720): Day -€36,99/h,
+Week -€16,90/h, Month -€28,32/h, Year -€177,36/h, each consistent with that tab's own lost-income
+and off-plan-hours figures. `CHANGELOG.md`/`MANUAL.md` updated — also backfilled the lost-earnings
+feature's own entry in both, since it had shipped earlier this session without either being
+updated at the time.
+
+**Agentic-workflow pilot, lost-earnings-counter, both sides complete — 2026-09-22** (new session,
+started inside `Planillium/` this time, which unblocked the prior session's stuck dispatch —
+see `CONTEXT.md` §7 item 7 for the mechanical blocker). Planner → Coder → QA ran end to end:
+Planner wrote `winui-agentic/pilot-specs/lost-earnings-counter/SPEC.md` from `DECISIONS.md` rule
+14 alone (no regular-side code read); Coder built it into `winui-agentic/Planillium.App/` —
+clean build, 156/156 tests; QA (isolated worktree) verdict **PASS WITH CAVEATS** on all 13 spec
+acceptance criteria, logged to the shared Dashboard. Caveats: Coder's own tests skipped the
+non-retroactive sign-flip regression case (criterion 7) though QA independently confirmed the
+behavior itself is correct; SPEC criterion 10 was unsatisfiable as worded for multi-month ledgers
+(spec-precision issue, not a Coder defect). Cleaned up QA's leftover empty worktree folder +
+unused branch (`worktree-agent-a2e43445a33e4a021`) afterward. **Surfaced, not yet resolved**:
+Planner flagged that `CONTEXT.md` §7 item 7 had accumulated post-fork implementation detail about
+the regular-workflow side beyond what `PILOT.md`'s contamination rule ("CONTEXT.md is shared
+ground") assumed was safe for it to read — asked the user how to handle this before the next
+pilot feature runs (keep post-fork write-ups out of `CONTEXT.md`, vs. narrowing what Planner
+reads); this session's own doc-currency pass added more such detail to §7 in the same tension,
+making the fix more pressing, not less.
+
+### Session log — 09-23
+
+**Agentic-pilot contamination question resolved: narrowed Planner's read access, not just the
+write-side rule.** The 09-22 open question above (CONTEXT.md §7 item 7) came back to the user, who
+chose narrowing reads over continuing to rely on a "don't write implementation detail in
+CONTEXT.md" convention that had already lapsed once, in the same session it was written. Changed:
+`.claude/agents/planillium-planner.md` step 2 no longer tells Planner to read `CONTEXT.md`, and
+explicitly instructs it not to; `winui-agentic/PILOT.md`'s contamination rule now names only
+`DECISIONS.md` and `context/domain.md` as Planner-readable shared ground, with a note explaining
+why `CONTEXT.md` was dropped (narrative handoff doc vs. the other two's stable
+lookup/reference-register shape). `planillium-coder.md`/`planillium-qa.md` checked — neither ever
+instructed reading `CONTEXT.md` (only mention it in their description field, naming where the
+pilot itself is documented), so no change needed there. Logged as a general lesson in
+`DECISIONS.md`'s "Agentic-pilot isolation" standing-lessons entry: prefer narrowing what can be
+read over trusting what won't be written, wherever a boundary actually matters. `CONTEXT.md` §7
+item 7 marked resolved with a pointer here.
 
 ### Resolved-and-closed, one-line pointers (prose in git log)
 

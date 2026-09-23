@@ -88,7 +88,8 @@
     activity, check `score_ledger` for a `daily_score` cluster sharing one `ts` before assuming
     anything is wrong. Also note the chip can read negative (deep `replan_overdue`/
     `overdue_accrual` debt) and a quick glance easily drops the minus sign — and can lag the true
-    DB total after a diary-edit recalculation (`CONTEXT.md` §7 item 1, open, unfixed).
+    DB total after a diary-edit recalculation — fixed 2026-09-22, `context/todos.md` Session
+    log 09-22.
 10. **Day-off scoring (added 2026-07-17)**: when EVERY active plan considers a day off
     (recurring exclusion or manual day-off — `ScoreService.AllPlansScoringExempt`; one
     plan off while another still has real work due does NOT trigger this), that day's
@@ -136,6 +137,38 @@
     (rule 12), not by inflating this number. All three screens read the same value on purpose
     (see the 2026-07-23 DriftDays lesson on two screens showing different-looking numbers for
     the same thing).
+14. **Lost/gained-earnings counter (`income_ledger`/`IncomeService`, added 2026-09-22)** — a EUR
+    sidebar figure for unearned income while unemployed (or gained income once employed), settled
+    over several corrected rounds with the user:
+    - **Daily rate = configured monthly net income ÷ actual calendar days in that specific
+      month** (28–31), never a flat /30 and never annualized — a full month always sums to exactly
+      the configured figure regardless of its length.
+    - **Start date 2025-12-04**, real and backdated — confirmed only after two live corrections
+      (first misheard as forward-dated 2026-12-04, then as 2025-12-04). The running total is
+      backfilled from this date in one pass on first build/run, not started from €0.
+    - **Employment status is a boolean toggle, default OFF (unemployed).** OFF deducts the daily
+      rate each posted day; ON adds it. A toggle flip changes the sign **forward only** — an
+      already-posted historical day keeps whatever sign applied when it posted, never relabeled
+      retroactively. Mechanically free: the ledger only ever posts a fully-closed day
+      (`EnsureIncomeCaughtUp`, mirroring `EnsureScoreCaughtUp`'s catch-up shape), so "status as of
+      end of that day" falls out of the architecture rather than needing a special case.
+    - **`income_ledger` is a global singleton table, `UNIQUE(date)` alone** — not plan-scoped,
+      same shape as `score_ledger`'s `DailyScore` reason (rule set via `sl_reason_date`). One user,
+      one income figure; each row stores its own `employed` value so a later toggle flip can't
+      touch it.
+    - **Posted-balance vs. live-preview split**, reused verbatim from the score system's BALANCE
+      chip vs. Reports' "Today's Score": the sidebar chip (`Database.IncomeBalance`) is
+      posted-days-only and excludes today (not over yet); Reports' day/week/month/year figures
+      (`IncomeService.SumForPeriod`) add today's live, not-yet-posted preview on top, so a period
+      including today isn't stuck showing yesterday's total for ~24h. The two numbers can
+      legitimately differ during the day by design.
+    - Reports text must name the exact timerange ("today," not "this month") and stay
+      sign-consistent ("lost"/"unearned" vs. "gained"/"earned extra") — driven off the *computed
+      period sum's own sign*, never off the raw current toggle value, so a period spanning a
+      toggle flip can't show a number of one sign next to wording implying the other.
+    - Settings' monthly-income field and employment toggle follow the existing
+      independent-per-section save convention (rule set out under `SettingsPage`, §"A settings
+      page split across independent sections..." below).
 
 ---
 
@@ -289,4 +322,25 @@ compaction. General versions of several now also live in the global `windows-app
   doc comment a future session reads.
 - A dedup helper (e.g. `ToIsoDate()`) needs a second pass to check *adjacent* formats (e.g.
   timestamps) weren't left uncovered by the same helper.
+
+**Agentic-pilot isolation**
+- **A living handoff doc can't double as a blind-comparison boundary.** `winui-agentic/PILOT.md`
+  lists `CONTEXT.md` as safe "shared ground" for Planner/Coder/QA to read — true for business
+  rules, false the moment a session logs an implementation write-up of one side's build into it,
+  which is exactly what a handoff doc's normal job is. Caught 2026-09-22 (lost-earnings-counter):
+  a regular-workflow write-up sat in `CONTEXT.md` while Planner was independently speccing the
+  agentic side; Planner noticed and declined to use it, but nothing structural had stopped it.
+  Fix: pilot outcomes are logged only in `context/todos.md`, which isn't on the pilot agents' read
+  list; `CONTEXT.md` and `PILOT.md`'s own "Runs" section carry a bare pointer, never
+  implementation detail.
+- **A "don't write X here" rule needs an enforcement mechanism, not just a memory.** The fix above
+  relies on every future session remembering not to log implementation detail into `CONTEXT.md` —
+  the exact kind of discipline that had already lapsed once, in the same session the rule was
+  written. Hardened 2026-09-23: removed `CONTEXT.md` from Planner's reading list entirely
+  (`.claude/agents/planillium-planner.md` step 2, `PILOT.md`'s contamination rule) rather than
+  trusting the write-side rule alone. Only `DECISIONS.md` and `context/domain.md` remain
+  Planner-readable shared ground — both are structurally lookup/reference registers, not narrative
+  handoff docs, so they can't accumulate session write-ups the way `CONTEXT.md` can. General
+  lesson: where a boundary matters, prefer narrowing what can be read over trusting what won't be
+  written.
 
