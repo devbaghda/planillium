@@ -1,0 +1,263 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace Planillium.App.Services;
+
+/// <summary>
+/// View of the shared config.json. Reads are cached; targeted writes go
+/// through Mutate(), which round-trips the whole file as JSON so keys this
+/// app doesn't know about survive untouched.
+/// </summary>
+public static class ConfigService
+{
+    private static string ConfigPath => Path.Combine(AppPaths.Root, "config.json");
+
+    /// <summary>Load-mutate-save the config; invalidates the read cache.</summary>
+    public static void Mutate(Action<JsonObject> change)
+    {
+        var node = LoadConfigNode();
+        change(node);
+        // JsonFileIO.Indented already carries the TypeInfoResolver copy-from-
+        // .Default workaround (see its own doc comment) — this just adds the
+        // one extra option config.json specifically needs on top.
+        JsonFileIO.WriteAllTextAtomic(ConfigPath, node.ToJsonString(new JsonSerializerOptions(JsonFileIO.Indented)
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }));
+        Invalidate();
+    }
+
+    /// <summary>Same "corrupted file degrades to defaults, doesn't crash" contract as
+    /// PlanStore.LoadActivePlans — a config.json truncated by a crash mid-write from some
+    /// other tool used to let a raw JsonException propagate straight out of Mutate instead
+    /// (audit finding #14). Falling back to an empty object here means the next save just
+    /// rewrites the file cleanly rather than losing the whole app to an unhandled parse
+    /// error over one bad file.</summary>
+    private static JsonObject LoadConfigNode()
+    {
+        if (!File.Exists(ConfigPath)) return new JsonObject();
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(ConfigPath)) as JsonObject ?? new JsonObject();
+        }
+        catch (JsonException ex)
+        {
+            Log.Error("ConfigService.Mutate (config.json corrupted, starting fresh)", ex);
+            return new JsonObject();
+        }
+    }
+
+    // Guards _doc: read from both the UI thread and ActivityTracker's
+    // background poll timer (e.g. ConfigService.UserName inside CheckAlert),
+    // and cleared/rebuilt from the UI thread via Mutate()/Invalidate() —
+    // same class of cross-thread race as ActivityTracker's _dayStateLock,
+    // just for the config cache instead of tracker state.
+    private static readonly object _docLock = new();
+    private static JsonDocument? _doc;
+
+    public static JsonElement Root
+    {
+        get
+        {
+            lock (_docLock)
+            {
+                if (_doc is null)
+                {
+                    var path = Path.Combine(AppPaths.Root, "config.json");
+                    try
+                    {
+                        _doc = File.Exists(path)
+                            ? JsonDocument.Parse(File.ReadAllText(path))
+                            : JsonDocument.Parse("{}");
+                    }
+                    catch (JsonException ex)
+                    {
+                        // This property is read from nearly everywhere (UI thread and
+                        // ActivityTracker's background poll alike) — a corrupted config.json
+                        // used to throw here unguarded, which would have taken down every
+                        // caller in the app instead of just degrading to defaults the way
+                        // PlanStore.LoadActivePlans already does for a bad plan file
+                        // (audit finding #14).
+                        Log.Error("ConfigService.Root (config.json corrupted, using defaults)", ex);
+                        _doc = JsonDocument.Parse("{}");
+                    }
+                }
+                return _doc.RootElement.Clone();
+            }
+        }
+    }
+
+    public static void Invalidate()
+    {
+        lock (_docLock) { _doc?.Dispose(); _doc = null; }
+    }
+
+    public static int ScoringRate(string key, int fallback) =>
+        Root.TryGetProperty("scoring", out var s) &&
+        s.TryGetProperty(key, out var v) && v.TryGetInt32(out var n) ? n : fallback;
+
+    /// <summary>Same lookup, with the default taken from <see cref="ScoringRules"/> instead of
+    /// retyped at the call site — the reason that table exists (see its doc comment). Prefer
+    /// this overload; the one above stays only for a caller with a genuinely local default.</summary>
+    public static int ScoringRate(string key) => ScoringRate(key, ScoringRules.DefaultFor(key));
+
+    /// <summary>Spend rates from config["score"] — same defaults as main.py _score_rates().</summary>
+    public static (double PtsPerMin, double PtsPerUnit, string Symbol) SpendRates()
+    {
+        double ppm = 1.0, ppu = 10.0;
+        var sym = "€";
+        if (Root.TryGetProperty("score", out var s))
+        {
+            if (s.TryGetProperty("points_per_minute", out var a) && a.TryGetDouble(out var d1)) ppm = d1;
+            if (s.TryGetProperty("points_per_currency_unit", out var b) && b.TryGetDouble(out var d2)) ppu = d2;
+            if (s.TryGetProperty("currency_symbol", out var c) && c.GetString() is { Length: > 0 } cs) sym = cs;
+        }
+        return (ppm, ppu, sym);
+    }
+
+    /// <summary>Configured start of the working day ("working_hours.start"), default 08:00.</summary>
+    public static TimeSpan WorkStartTime()
+    {
+        var start = "08:00";
+        if (Root.TryGetProperty("working_hours", out var wh) &&
+            wh.TryGetProperty("start", out var v) && v.GetString() is { Length: > 0 } s) start = s;
+        // InvariantCulture: "start" is always written/validated as HH:mm (SettingsPage's
+        // TryParseExact check) — reading it back with the current culture could silently
+        // fall back to the default on a locale where ':' isn't the time separator
+        // (2026-07-18 audit finding R11-03).
+        return TimeSpan.TryParse(start, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(8, 0, 0);
+    }
+
+    /// <summary>Configured end of the working day ("working_hours.end"), default 20:00.</summary>
+    public static TimeSpan WorkEndTime()
+    {
+        var end = "20:00";
+        if (Root.TryGetProperty("working_hours", out var wh) &&
+            wh.TryGetProperty("end", out var v) && v.GetString() is { Length: > 0 } s) end = s;
+        return TimeSpan.TryParse(end, CultureInfo.InvariantCulture, out var t) ? t : new TimeSpan(20, 0, 0);
+    }
+
+    /// <summary>The window the time diary actually logs activity in — which is simply the
+    /// working day (<see cref="WorkStartTime"/>/<see cref="WorkEndTime"/>).
+    ///
+    /// Kept as a named pair rather than having callers read the work hours directly, so the
+    /// rule lives in one place and the display strings that quote the window read the same
+    /// thing the tracker does. It used to be two hardcoded 06:00/20:00 constants inside
+    /// ActivityTracker with no relation to working hours and no way to reach them, so moving
+    /// the working day to 08:00 still left every morning from 06:00 logged as "unaccounted
+    /// time" (the 2026-08-04 report). It was briefly its own `diary_hours` config block with
+    /// its own Settings pair; the user's call the same day was to merge the two — one pair of
+    /// hours is the whole idea, and a second pair is just another thing to keep in sync. A
+    /// stray `diary_hours` block left in an existing config.json is inert, deliberately: it is
+    /// no longer read at all, rather than quietly overriding the working hours.</summary>
+    public static TimeSpan DiaryStartTime() => WorkStartTime();
+
+    /// <inheritdoc cref="DiaryStartTime"/>
+    public static TimeSpan DiaryEndTime() => WorkEndTime();
+
+    /// <summary>Minutes of off-plan grace before the first reminder alert
+    /// ("reminder_grace_minutes"), default 15 — was previously re-derived independently
+    /// in both ActivityTracker and SettingsPage with its own copy of this same fallback,
+    /// risking the two silently disagreeing if one copy's default ever changed.</summary>
+    public static int ReminderGraceMinutes() =>
+        Root.TryGetProperty("reminder_grace_minutes", out var v) && v.TryGetInt32(out var n) ? n : 15;
+
+    /// <summary>Minutes between repeat reminder alerts ("reminder_interval_minutes"), default 5.</summary>
+    public static int ReminderIntervalMinutes() =>
+        Root.TryGetProperty("reminder_interval_minutes", out var v) && v.TryGetInt32(out var n) ? n : 5;
+
+    /// <summary>Minutes of no input before the user is considered idle
+    /// ("idle_threshold_minutes"), default 10.</summary>
+    public static int IdleThresholdMinutes() =>
+        Root.TryGetProperty("idle_threshold_minutes", out var v) && v.TryGetInt32(out var n) ? n : 10;
+
+    /// <summary>How many days of detailed diary history to keep before it's
+    /// rolled up (Database.DiaryRetentionDays is only the default now —
+    /// this makes it user-configurable, 2026-07-09 audit finding #34).</summary>
+    public static int DiaryRetentionDays() =>
+        Root.TryGetProperty("diary_retention_days", out var v) && v.TryGetInt32(out var n) && n > 0
+            ? n : Database.DiaryRetentionDays;
+
+    /// <summary>Empty until the first-launch NameSetupDialog asks and saves it.</summary>
+    public static string UserName =>
+        Root.TryGetProperty("user_name", out var v) ? v.GetString() ?? "" : "";
+
+    public static string TickTickClientId =>
+        Root.TryGetProperty("ticktick", out var t) &&
+        t.TryGetProperty("client_id", out var v) ? v.GetString() ?? "" : "";
+
+    /// <summary>Configured potential net monthly income in EUR (for the lost-earnings counter),
+    /// default 2700.0.</summary>
+    public static double PotentialMonthlyIncomeEur()
+    {
+        double monthlyIncome = 2700.0;
+        if (Root.TryGetProperty("income", out var inc) &&
+            inc.TryGetProperty("potential_monthly_net_eur", out var v) && v.TryGetDouble(out var d))
+            monthlyIncome = d;
+        return monthlyIncome;
+    }
+
+    /// <summary>Employment status toggle (for the lost-earnings counter), default false.</summary>
+    public static bool IsEmployed()
+    {
+        bool employed = false;
+        if (Root.TryGetProperty("income", out var inc) &&
+            inc.TryGetProperty("employed", out var v))
+        {
+            if (v.ValueKind == System.Text.Json.JsonValueKind.True)
+                employed = true;
+            else if (v.ValueKind == System.Text.Json.JsonValueKind.False)
+                employed = false;
+        }
+        return employed;
+    }
+
+    /// <summary>
+    /// Teaches activity_rules a new keyword for the given category — the
+    /// "remember this" half of manually recategorizing a diary entry, so the
+    /// live tracker classifies matching windows the same way from then on
+    /// (ActivityTracker.Classify does a case-insensitive substring match
+    /// against these same lists). Removed from the other two categories
+    /// first so one keyword never lives in two lists at once, which would
+    /// make classification depend on list-check order instead of intent.
+    /// Returns false (and teaches nothing) for a blank/invalid category, or for a bare
+    /// browser name — that always hosts both on-plan and off-plan content depending on
+    /// the tab, so "Chrome" alone would silently reclassify every kind of browsing as
+    /// whatever category it happened to get taught as (2026-07-28 request: differentiate
+    /// "Chrome - LinkedIn" from "Chrome - Synology" rather than lumping bare "Chrome" into
+    /// one bucket). A compound keyword like "Chrome - LinkedIn" is unaffected — only an
+    /// exact match to the bare browser name itself is refused.
+    /// </summary>
+    public static bool LearnActivityRule(string keyword, string category)
+    {
+        if (category is not (DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)) return false;
+        if (string.IsNullOrWhiteSpace(keyword)) return false;
+        if (AppNames.Browsers.Contains(keyword.Trim())) return false;
+
+        Mutate(node =>
+        {
+            if (node["activity_rules"] is not JsonObject rules)
+                node["activity_rules"] = rules = new JsonObject();
+
+            JsonArray ArrayFor(string cat)
+            {
+                if (rules[cat] is JsonArray existing) return existing;
+                var fresh = new JsonArray();
+                rules[cat] = fresh;
+                return fresh;
+            }
+
+            foreach (var cat in new[] { DiaryCategory.OnPlan, DiaryCategory.OffPlan, DiaryCategory.Neutral })
+            {
+                var arr = ArrayFor(cat);
+                for (var i = arr.Count - 1; i >= 0; i--)
+                    if (arr[i] is JsonValue v && v.TryGetValue<string>(out var s) &&
+                        string.Equals(s, keyword, StringComparison.OrdinalIgnoreCase))
+                        arr.RemoveAt(i);
+            }
+            ArrayFor(category).Add(keyword);
+        });
+        return true;
+    }
+}

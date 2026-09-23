@@ -1,0 +1,27 @@
+<Page
+    x:Class="Planillium.App.Pages.SchedulePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    NavigationCacheMode="Enabled">
+
+    <!-- See PageLayout's own doc comment — HorizontalAlignment="Left" + a Width computed in
+         code, not Center+MaxWidth, which doesn't hold this column at one stable width as each
+         plan's day-card list changes (2026-08-05 request: "fix width on all of the pages —
+         Schedule for example is not fixed for now"). -->
+    <ScrollViewer x:Name="Scroller" Padding="32,24,32,24" SizeChanged="Scroller_SizeChanged">
+        <StackPanel x:Name="ContentColumn" HorizontalAlignment="Left" Spacing="8">
+            <TextBlock Text="Schedule" Style="{StaticResource TitleTextBlockStyle}"/>
+            <TextBlock x:Name="Subtitle"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Margin="0,0,0,12"/>
+            <InfoBar x:Name="SaveErrorBar"
+                     Severity="Error"
+                     IsOpen="False"
+                     IsClosable="True"
+                     Title="Couldn't save that change"
+                     Message="The database was briefly busy — try again in a moment."
+                     Margin="0,0,0,8"/>
+            <StackPanel x:Name="Sections" Spacing="12"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

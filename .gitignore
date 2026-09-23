@@ -25,3 +25,5 @@ release/output/
 .claude/
 winui/**/bin/
 winui/**/obj/
+winui-agentic/**/bin/
+winui-agentic/**/obj/
