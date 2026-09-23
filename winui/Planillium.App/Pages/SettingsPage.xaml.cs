@@ -26,7 +26,7 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        _panels = [GeneralPanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
+        _panels = [GeneralPanel, HoursPanel, IncomePanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
         if (_panels.Length != SectionList.Items.Count)
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
@@ -53,6 +53,7 @@ public sealed partial class SettingsPage : Page
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
             LoadRules();
+            LoadIncome();
             // After LoadRules, not before: the keyword counts are read off the boxes it fills.
             RefreshSummaries();
             _initialising = false;
@@ -123,6 +124,9 @@ public sealed partial class SettingsPage : Page
         SumHours.Text = $"{ConfigService.WorkStartTime().ToIsoTimeOfDay()}–" +
                         $"{ConfigService.WorkEndTime().ToIsoTimeOfDay()} · " +
                         $"review {EodTime()} · idle {ConfigService.IdleThresholdMinutes()}m";
+
+        SumIncome.Text = $"{MainWindow.FormatEur(ConfigService.PotentialMonthlyIncomeEur())}/mo · " +
+                         (ConfigService.IsEmployed() ? "employed" : "unemployed");
 
         // The two rules that describe the shape of the economy best — the full set is one click
         // away, and a 12-value summary would be unreadable at this size.
@@ -271,6 +275,64 @@ public sealed partial class SettingsPage : Page
         IdleOn.Text = Words(cfg, "idle_activity_rules", DiaryCategory.OnPlan);
         IdleOff.Text = Words(cfg, "idle_activity_rules", DiaryCategory.OffPlan);
         IdleNeutral.Text = Words(cfg, "idle_activity_rules", DiaryCategory.Neutral);
+    }
+
+    // ── income (lost/gained-earnings counter, 2026-09-22 request) ────────
+
+    private void LoadIncome()
+    {
+        MonthlyIncomeBox.Value = ConfigService.PotentialMonthlyIncomeEur();
+        EmployedToggle.IsOn = ConfigService.IsEmployed();
+    }
+
+    /// <summary>Independent of SaveRules — same reasoning as SaveHoursAndEod's own doc
+    /// comment: a bad value anywhere else on this page must never block this pair, and vice
+    /// versa. Unlike the hours/EOD save, there's nothing here that can fail validation once
+    /// past the NaN guard (Minimum="0" on the NumberBox already stops a negative from being
+    /// enterable), so this is a single unconditional Mutate rather than a two-outcome
+    /// validate-then-save.</summary>
+    private void SaveIncome()
+    {
+        if (double.IsNaN(MonthlyIncomeBox.Value))
+        {
+            SaveStatus.Text = "Potential monthly income needs a number.";
+            return;
+        }
+        try
+        {
+            ConfigService.Mutate(cfg =>
+            {
+                cfg["income"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["monthly_net_eur"] = MonthlyIncomeBox.Value,
+                    ["employed"] = EmployedToggle.IsOn,
+                };
+            });
+            SaveStatus.Text = "Saved.";
+            RefreshSummaries();
+            // Historical ledger rows are never rewritten (settled decision: a toggle flip
+            // only changes the sign of days posted from now on) — this just lets the sidebar
+            // chip's label/today-preview-driven Reports figures reflect the new toggle/rate
+            // immediately rather than waiting for the next catch-up run.
+            (App.MainWindow as MainWindow)?.RefreshIncome();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.SaveIncome", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't save income settings", ex);
+        }
+    }
+
+    private void Income_ValueChanged(NumberBox sender, Microsoft.UI.Xaml.Controls.NumberBoxValueChangedEventArgs args)
+    {
+        if (_initialising) return;
+        SaveIncome();
+    }
+
+    private void Income_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_initialising) return;
+        SaveIncome();
     }
 
     /// <summary>Fires on LostFocus for every hours/reminders/keyword TextBox and

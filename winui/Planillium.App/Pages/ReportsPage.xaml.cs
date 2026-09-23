@@ -146,6 +146,7 @@ public sealed partial class ReportsPage : Page
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
+            Body.Children.Add(Card(IncomeCard(db, periodName, totals.OffMin)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -235,6 +236,54 @@ public sealed partial class ReportsPage : Page
         card.Children.Add(Dim($"{totals.Done}/{totals.Total} tasks · " +
                               $"{ReportData.FmtHours(totals.OnMin)} on-plan · " +
                               $"{ReportData.FmtHours(totals.OffMin)} off-plan · {dayOffLabel}"));
+        return card;
+    }
+
+    /// <summary>Lost/gained-earnings counter (2026-09-22 request), scoped to the same period
+    /// selector as everything else above the diary. Wording is driven by this period's own
+    /// net sign, not by the current employment toggle directly — a period can straddle a
+    /// toggle flip (posted days keep whatever sign applied when they were posted, per the
+    /// settled non-retroactive rule), so "you've gained €X" while the total for that period
+    /// is still negative would read as contradicting the number right above it.</summary>
+    private static StackPanel IncomeCard(Database db, string periodName, int offMin)
+    {
+        using var income = new IncomeService(db);
+        var sum = income.SumForPeriod(_period);
+        var lost = sum < 0;
+
+        var card = new StackPanel { Spacing = 2 };
+        card.Children.Add(Caption($"{(lost ? "UNEARNED" : "EXTRA")} INCOME — {periodName}"));
+        card.Children.Add(new TextBlock
+        {
+            Text = MainWindow.FormatEur(sum),
+            FontSize = 44,
+            FontWeight = FontWeights.Bold,
+            Foreground = IncomeBrush(sum),
+        });
+        // Matches the exact timerange this card is showing, not a generic "this period" —
+        // the settled decision was explicit that a "today" figure must say "today," not
+        // reuse another period's wording (2026-09-22).
+        var timeWord = _period switch
+        {
+            ReportPeriod.Day => "today",
+            ReportPeriod.Week => "this week",
+            ReportPeriod.Month => "this month",
+            ReportPeriod.Year => "this year",
+            _ => "this period",
+        };
+        var verb = lost ? "lost" : "gained";
+        card.Children.Add(Dim(
+            $"You've {verb} {MainWindow.FormatEur(Math.Abs(sum))} {timeWord}, based on a potential " +
+            $"{MainWindow.FormatEur(ConfigService.PotentialMonthlyIncomeEur())}/month."));
+        // Derived from the two figures already on this card and the off-plan total already on
+        // ScoreCard above it (2026-09-22 request) — not a separate rate lookup, so it can't drift
+        // from what the period actually shows. No off-plan time this period means no rate to show,
+        // not a €0,00/h that would misleadingly read as "off-plan time costs nothing."
+        if (offMin > 0)
+        {
+            var perHour = sum / (offMin / 60.0);
+            card.Children.Add(Dim($"That's {MainWindow.FormatEur(perHour)} per off-plan hour."));
+        }
         return card;
     }
 

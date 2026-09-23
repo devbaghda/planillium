@@ -36,8 +36,9 @@ public sealed partial class MainWindow
             try
             {
                 CatchUpScores();
+                CatchUpIncome();
                 PruneOldDiary();
-                _dq.TryEnqueue(RefreshScore);
+                _dq.TryEnqueue(() => { RefreshScore(); RefreshIncome(); });
             }
             catch (Exception ex)
             {
@@ -58,6 +59,24 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             Log.Error("CatchUpScores (db likely locked — next launch retries)", ex);
+        }
+    }
+
+    /// <summary>Same shape as CatchUpScores, for the lost/gained-earnings ledger
+    /// (IncomeService.EnsureIncomeCaughtUp) — see MainWindow.xaml's IncomeChip comment for
+    /// why this and RefreshScore/RefreshIncome are kept as separate calls rather than one
+    /// merged catch-up, even though they currently always run together.</summary>
+    private static void CatchUpIncome()
+    {
+        try
+        {
+            using var db = new Database();
+            using var income = new IncomeService(db);
+            income.EnsureIncomeCaughtUp();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("CatchUpIncome (db likely locked — next launch retries)", ex);
         }
     }
 
@@ -253,6 +272,7 @@ public sealed partial class MainWindow
             try
             {
                 CatchUpScores();
+                CatchUpIncome();
             }
             catch (Exception ex)
             {
@@ -270,6 +290,7 @@ public sealed partial class MainWindow
         {
             // Sidebar's plan-drift/finish-date readouts are date-dependent too.
             RefreshScore();
+            RefreshIncome();
             var refreshed = true;
             switch (ContentFrame.Content)
             {
@@ -404,6 +425,37 @@ public sealed partial class MainWindow
         }
         RefreshPlanDrift();
     }
+
+    /// <summary>Posted-days-only lifetime total — see IncomeChip's XAML comment for why
+    /// this deliberately excludes today's live preview (Reports shows that instead). Label
+    /// follows the balance's own sign, not the current employment toggle: a balance can
+    /// still read negative for a while after switching to employed, and labelling it "extra
+    /// income" the moment the toggle flips would misdescribe months of already-posted
+    /// unemployed days sitting in that same number.</summary>
+    public void RefreshIncome()
+    {
+        try
+        {
+            using var db = new Database();
+            var balance = db.IncomeBalance();
+            IncomeLabel.Text = balance < 0 ? "LOST INCOME" : "EXTRA INCOME";
+            IncomeValue.Text = FormatEur(balance);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("RefreshIncome", ex);
+            IncomeValue.Text = "—";
+        }
+    }
+
+    /// <summary>"-€1,234.56" / "€1,234.56" — sign kept explicit (matches ScoreValue's plain
+    /// int.ToString(), which already shows its own minus sign) rather than folded into a
+    /// parenthesized-negative accounting format, which reads as an outage in a sidebar chip
+    /// this small. Decimal separator is CurrentCulture, same reasoning as
+    /// ReportData.FmtHours; the € symbol itself is hardcoded, same as ConfigService.
+    /// SpendRates' own default — this figure is EUR regardless of system locale.</summary>
+    internal static string FormatEur(double v) =>
+        (v < 0 ? "-€" : "€") + Math.Abs(v).ToString("N2", CultureInfo.CurrentCulture);
 
     /// <summary>
     /// Short sidebar status block per active plan, mirroring the Plans page's

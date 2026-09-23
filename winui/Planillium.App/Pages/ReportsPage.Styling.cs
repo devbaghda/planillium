@@ -42,6 +42,15 @@ public sealed partial class ReportsPage
             : score < 0 ? "SystemFillColorCriticalBrush"
             : "SystemFillColorCautionBrush"];
 
+    /// <summary>Same three-way split as ScoreBrush, for the lost/gained-earnings figure:
+    /// green while ahead (employed, net positive for the period), red while behind
+    /// (unemployed, net negative), caution only at exactly zero.</summary>
+    private static Brush IncomeBrush(double eur) =>
+        (Brush)Application.Current.Resources[
+            eur > 0 ? "SystemFillColorSuccessBrush"
+            : eur < 0 ? "SystemFillColorCriticalBrush"
+            : "SystemFillColorCautionBrush"];
+
     /// <summary>Thin alias kept so every call site in this file doesn't need renaming —
     /// see CategoryStyle.BrushKey (Services/CategoryStyle.cs) for the actual single
     /// source of truth, now shared with MainWindow.Tracker's tray pill too.</summary>

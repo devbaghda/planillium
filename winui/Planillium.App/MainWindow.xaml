@@ -82,6 +82,24 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                    <Border x:Name="IncomeChip" CornerRadius="8" Padding="14,10"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="2">
+                            <!-- Same BALANCE/preview split as ScoreChip just above: this is the
+                                 posted-days-only running total (Database.IncomeBalance), not
+                                 Reports' day/week/month/year figures, which additionally include
+                                 today's not-yet-posted live preview — the two can legitimately
+                                 differ during the day, by design. -->
+                            <TextBlock x:Name="IncomeLabel" Text="UNEARNED INCOME" FontSize="10" FontWeight="SemiBold"
+                                       CharacterSpacing="50"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock x:Name="IncomeValue" Text="—"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       FontSize="18"/>
+                        </StackPanel>
+                    </Border>
                     <StackPanel x:Name="PlanDriftPanel" Spacing="8"/>
                     <StackPanel Spacing="0" Margin="2,0,0,0">
                         <HyperlinkButton Content="Buy entertainment time"

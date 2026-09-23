@@ -168,6 +168,21 @@ public sealed class Database : IDisposable
             "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
             "  ON score_ledger(reason, date) " +
             $"  WHERE reason IN ('{ScoreReason.DailyScore}', '{ScoreReason.OverdueAccrual}', '{ScoreReason.WeeklyComebackBonus}');" +
+            // Separate from score_ledger on purpose (2026-09-22 request) — EUR opportunity
+            // cost and the accountability point system are different concepts and don't
+            // share a reason/date guard. One row per calendar day (UNIQUE on date alone,
+            // no reason column needed — IncomeService never writes more than one entry per
+            // day), same "insert guarded by a UNIQUE constraint, so a partial catch-up run
+            // just leaves the remainder for next launch" shape as score_ledger's rows.
+            // employed is stored per-row (the sign that actually applied that day) so a
+            // later toggle flip can never retroactively relabel an already-posted day.
+            "CREATE TABLE IF NOT EXISTS income_ledger (" +
+            "  id         INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  ts         TEXT    NOT NULL," +
+            "  date       TEXT    NOT NULL UNIQUE," +
+            "  delta_eur  REAL    NOT NULL," +
+            "  employed   INTEGER NOT NULL" +
+            ");" +
             "CREATE TABLE IF NOT EXISTS time_diary (" +
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  date         TEXT NOT NULL," +
@@ -635,6 +650,19 @@ public sealed class Database : IDisposable
         using var cmd = CreateCommand();
         cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM score_ledger";
         return (long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    /// <summary>Lifetime running total of posted (closed) days only — the sidebar chip's
+    /// number. Deliberately excludes today, which isn't posted until it's over (see
+    /// IncomeService.EnsureIncomeCaughtUp); Reports adds today's live preview on top of
+    /// this same sum for its day/week/month/year figures, mirroring how the score system's
+    /// BALANCE chip and Reports' "Today's Score" preview are two different numbers by
+    /// design.</summary>
+    public double IncomeBalance()
+    {
+        using var cmd = CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(SUM(delta_eur), 0) FROM income_ledger";
+        return Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
     }
 
     public void Dispose() => _conn.Dispose();

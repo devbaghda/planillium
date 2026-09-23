@@ -179,6 +179,24 @@ public static class ConfigService
         Root.TryGetProperty("diary_retention_days", out var v) && v.TryGetInt32(out var n) && n > 0
             ? n : Database.DiaryRetentionDays;
 
+    /// <summary>Potential net monthly income ("income.monthly_net_eur"), default 2700 —
+    /// the figure IncomeService divides by the actual days in a month to get each day's
+    /// lost/gained-earnings delta.</summary>
+    public static double PotentialMonthlyIncomeEur() =>
+        Root.TryGetProperty("income", out var i) &&
+        i.TryGetProperty("monthly_net_eur", out var v) && v.TryGetDouble(out var n) && n > 0
+            ? n : 2700.0;
+
+    /// <summary>Employment status toggle ("income.employed"), default false (unemployed) —
+    /// while false IncomeService deducts the daily rate each day, while true it adds it.
+    /// Only ever read when a day is actually posted (catch-up only ever posts a day once
+    /// it's fully over), so a flip mid-day naturally applies from end-of-day forward — see
+    /// IncomeService.EnsureIncomeCaughtUp.</summary>
+    public static bool IsEmployed() =>
+        Root.TryGetProperty("income", out var i) &&
+        i.TryGetProperty("employed", out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && v.GetBoolean();
+
     /// <summary>Empty until the first-launch NameSetupDialog asks and saves it.</summary>
     public static string UserName =>
         Root.TryGetProperty("user_name", out var v) ? v.GetString() ?? "" : "";

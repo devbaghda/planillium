@@ -108,6 +108,9 @@
     <!-- The one table of scoring keys/defaults/ranges that ScoreService, ConfigService and
          Settings all read from (2026-08-04). -->
     <Compile Include="..\Planillium.App\Services\ScoringRules.cs" Link="App\ScoringRules.cs" />
+    <!-- Lost/gained-earnings counter (2026-09-22). Plain C#, depends only on
+         Database/ConfigService/ReportData, all already linked above. -->
+    <Compile Include="..\Planillium.App\Services\IncomeService.cs" Link="App\IncomeService.cs" />
   </ItemGroup>
 
   <ItemGroup>
