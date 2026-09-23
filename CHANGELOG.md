@@ -10,7 +10,8 @@ going forward; the original Python/Tkinter version is retired.
   off-plan time is actually costing you: a running LOST INCOME figure in the sidebar, and an
   UNEARNED/EXTRA INCOME card on Reports scoped to whichever period you've selected (today/this
   week/this month/this year), including a per-off-plan-hour rate so the cost reads the same at any
-  zoom level.
+  zoom level. Each row in Top Distractions now also shows its own EUR cost next to its hours,
+  using that same per-hour rate.
 
 **Fixes**
 - **Reports' Insights panel always said "this week" in its sentences, even when the header above

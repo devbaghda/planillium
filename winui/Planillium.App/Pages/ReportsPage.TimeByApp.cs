@@ -52,7 +52,7 @@ public sealed partial class ReportsPage
             overlay.Children.Add(track);
             overlay.Children.Add(fill);
             var mins = Dim(perMinuteEur != 0
-                ? $"{ReportData.FmtHours(minutes)} · {MainWindow.FormatEur(minutes * perMinuteEur)}"
+                ? $"{ReportData.FmtHours(minutes)}   ·   {MainWindow.FormatEur(minutes * perMinuteEur)}"
                 : ReportData.FmtHours(minutes));
             Grid.SetColumn(overlay, 1);
             Grid.SetColumn(mins, 2);

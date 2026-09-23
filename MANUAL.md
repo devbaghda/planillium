@@ -138,8 +138,10 @@ income you set in Settings and how much of that period was spent off-plan; it al
 total down to a per-off-plan-hour rate ("That's €X per off-plan hour"), so the cost reads the same
 whether you're looking at today or the whole year. The rate isn't shown for a period with no
 off-plan time at all — there's nothing to divide by, and a €0,00 there would misread as "off-plan
-time costs nothing" rather than "none happened." The diary section at the bottom is separate and
-always works one day at a time.
+time costs nothing" rather than "none happened." Top Distractions carries the same rate down to
+each row, showing that app or site's own EUR cost next to its hours, so a single line-item's share
+of the period's total is visible without doing the division yourself. The diary section at the
+bottom is separate and always works one day at a time.
 
 The summary table carries the same columns on every period view: tasks done, one column for each
 of the five categories your time is sorted into (on-plan, off-plan, neutral, paid and idle), that

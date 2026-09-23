@@ -240,6 +240,19 @@ compaction. General versions of several now also live in the global `windows-app
   SQLite replay *those* over your copy, and the app opens what looks like an empty database with
   no error anywhere. Delete `progress.db*` in the destination first, then copy. Cost 20 minutes
   and one wrong conclusion ("the copy failed") on 2026-08-05.
+- **A copied real database only works for tables that predate the fork it's being fed into.**
+  Running the `winui-agentic` pilot build against a scratch copy of the real `progress.db`
+  (2026-09-23, visually comparing the lost-earnings feature) crashed Reports for every period past
+  Day and left the sidebar's income chip stuck on "—". Cause: both forks independently built their
+  *own* `income_ledger` table after the 2026-09-22 fork point, same table name, different amount
+  column (`delta_eur` in `winui/`, `delta` in `winui-agentic/`) — `CREATE TABLE IF NOT EXISTS`
+  silently no-ops against the real, foreign-shaped table already in the copy, so every query for
+  the missing column throws. Not a pilot bug: the pilot's schema is self-consistent against a
+  database it created itself. Fix for the comparison setup, not the code: `DROP TABLE
+  income_ledger` from the *scratch copy only* before first launch, so each fork recreates it in its
+  own shape and backfills it fresh. General lesson: before feeding a copied live database to any
+  fork built after a pilot's fork point, drop tables either side added independently rather than
+  assuming a shared name means a shared schema.
 - **`git filter-repo` must never run in-place in a repo with other live worktrees attached** —
   it refuses unless the repo looks freshly cloned, and forcing it risks corrupting them via the
   shared object store. Rewrite in an isolated scratch clone (`git init` + `git fetch <path>

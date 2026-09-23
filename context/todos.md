@@ -341,6 +341,27 @@ pilot itself is documented), so no change needed there. Logged as a general less
 read over trusting what won't be written, wherever a boundary actually matters. `CONTEXT.md` §7
 item 7 marked resolved with a pointer here.
 
+**Top Distractions now shows a per-row EUR cost** (commit `3a07ddd`, pushed to `origin/master`).
+Reused the income card's existing per-off-plan-hour rate (period income sum ÷ period off-plan
+minutes) rather than a separate query, applied to each row's own minutes — `ReportsPage.xaml.cs`
+lifts `IncomeService.SumForPeriod` up to `Render()` once and passes it into both the income card
+and `DistractionList`, so the two figures can't drift apart. `CHANGELOG.md`/`MANUAL.md` updated.
+
+**First side-by-side visual comparison of the pilot vs. regular app, same feature (lost-earnings
+counter).** Ran both live at once: regular app as the normal Release instance on real data;
+`winui-agentic` built Debug and pointed at a scratch copy of real data via `MENTOR_ROOT`/
+`MENTOR_INSTANCE_SUFFIX=agentic_compare` (the existing scratch technique, `DECISIONS.md` "Safety
+around real data"), so nothing it does touches the live database. Surfaced a real finding, not a
+pilot code bug: both forks independently added their own `income_ledger` table after the fork
+point with the same name but a different amount column (`delta_eur` vs `delta`) — feeding the
+pilot a copy of the real, `winui`-shaped database made every one of its income queries throw
+`no such column: delta` for Week/Month/Year and left the sidebar chip stuck on "—". Fixed by
+dropping `income_ledger` from the scratch copy only, letting the pilot recreate it in its own
+shape and backfill fresh — not a code change on either side. Logged as a general lesson in
+`DECISIONS.md` ("Safety around real data"): a copied live database only works for tables that
+predate whatever fork it's being fed into. Also fixed in passing: the regular app's Top
+Distractions spacing between hours and the new EUR figure, widened per user request.
+
 ### Resolved-and-closed, one-line pointers (prose in git log)
 
 `MentorOverseer`→`Planillium` rename 07-23; diary-tracking-gap bug 07-21 (`PollOnce` order);
