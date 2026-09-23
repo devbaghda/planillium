@@ -275,6 +275,7 @@ public static class SplitDiaryEntryDialog
             // figure (2026-07-17 request). Best-effort: doesn't turn an otherwise-
             // successful split into a reported failure.
             ScoreService.TryRecalculateDayScores(db, [date], "SplitDiaryEntryDialog.RecalculateScore");
+            (App.MainWindow as MainWindow)?.RefreshScore();
             return true;
         }
         catch (Exception ex)

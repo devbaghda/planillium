@@ -717,6 +717,7 @@ public sealed partial class ReportsPage
             // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
             // re-category into a reported failure.
             ScoreService.TryRecalculateDayScores(db, affectedDates, "ReportsPage.MarkSelected.RecalculateScore");
+            (App.MainWindow as MainWindow)?.RefreshScore();
         }
         catch (Exception ex)
         {

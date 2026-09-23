@@ -148,6 +148,7 @@ public static class EditDiaryEntryDialog
                 db.UpdateDiaryEntry(id, startBox.Text.Trim(), endBox.Text.Trim(),
                     (int)durBox.Value, cat, descBox.Text.Trim() is { Length: > 0 } d ? d : null, chosenTag);
                 ScoreService.TryRecalculateDayScores(db, [date], "EditDiaryEntryDialog.RecalculateScore");
+                (App.MainWindow as MainWindow)?.RefreshScore();
                 return true;
             }
             if (result == ContentDialogResult.Secondary)
@@ -164,6 +165,7 @@ public static class EditDiaryEntryDialog
                 if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;
                 db.DeleteDiaryEntry(id);
                 ScoreService.TryRecalculateDayScores(db, [date], "EditDiaryEntryDialog.RecalculateScore");
+                (App.MainWindow as MainWindow)?.RefreshScore();
                 return true;
             }
         }
