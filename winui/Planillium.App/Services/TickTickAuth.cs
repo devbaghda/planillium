@@ -265,18 +265,11 @@ public static class TickTickAuth
     {
         var refresh = CredentialStore.Read("ticktick_refresh_token");
         if (string.IsNullOrEmpty(refresh) || !IsConfigured) return false;
-        // Temporary diagnostic (2026-09-01, see TickTickService.TasksDueTodayAsync) — a
-        // refresh_token grant is the one call that mutates TickTick's server-side token
-        // state for this account, the most likely candidate if the widget dying really is
-        // tied to Planillium's own API traffic rather than something coincidental. Remove
-        // together with the other diagnostic log lines once this is confirmed or ruled out.
-        Log.Info("TickTickAuth.RefreshAsync: requesting new access token");
         var ok = await TokenRequestAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = refresh,
         }) is not null;
-        Log.Info($"TickTickAuth.RefreshAsync: done, ok={ok}");
         return ok;
     }
 

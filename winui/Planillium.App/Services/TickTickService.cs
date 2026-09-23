@@ -62,12 +62,6 @@ public sealed class TickTickService
     /// <summary>Open personal tasks due today, across all projects.</summary>
     public static async Task<List<TtTask>> TasksDueTodayAsync()
     {
-        // Temporary diagnostic (2026-09-01): user reports TickTick's own floating widget
-        // dying "during sync" since Planillium was introduced. Nothing in this app touches
-        // that widget's window/process directly (checked) — this logs exact call timestamps
-        // so a widget-death can be matched against a real API call instead of guessed at.
-        // Remove once the correlation is confirmed or ruled out.
-        Log.Info("TickTickService.TasksDueTodayAsync: starting pull");
         using var projResp = await SendAsync(HttpMethod.Get, $"{ApiBase}/project");
         projResp.EnsureSuccessStatusCode();
         using var projects = JsonDocument.Parse(await projResp.Content.ReadAsStringAsync());
@@ -96,17 +90,13 @@ public sealed class TickTickService
                     t.TryGetProperty("priority", out var pr) ? pr.GetInt32() : 0));
             }
         }
-        Log.Info($"TickTickService.TasksDueTodayAsync: done, {result.Count} tasks due today");
         return result;
     }
 
     public static async Task CompleteTaskAsync(string projectId, string taskId)
     {
-        // See the diagnostic note on TasksDueTodayAsync above — temporary, remove together.
-        Log.Info($"TickTickService.CompleteTaskAsync: starting, project={projectId} task={taskId}");
         using var resp = await SendAsync(HttpMethod.Post,
             $"{ApiBase}/project/{Uri.EscapeDataString(projectId)}/task/{Uri.EscapeDataString(taskId)}/complete");
         resp.EnsureSuccessStatusCode();
-        Log.Info("TickTickService.CompleteTaskAsync: done");
     }
 }
