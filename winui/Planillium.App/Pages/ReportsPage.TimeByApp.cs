@@ -13,8 +13,15 @@ public sealed partial class ReportsPage
 {
     // ── distractions ─────────────────────────────────────────────────────
 
-    private static StackPanel DistractionList(List<(string Label, int Minutes)> distractions)
+    /// <summary>EUR is the same per-off-plan-minute rate as the income card's "per off-plan
+    /// hour" line above (period's total lost/gained income ÷ period's total off-plan minutes),
+    /// applied to each row's own minutes — not a separate figure, so it can't drift from what
+    /// the card already shows. No off-plan time this period means no rate, same guard as the
+    /// card.</summary>
+    private static StackPanel DistractionList(List<(string Label, int Minutes)> distractions,
+        double periodIncomeSum, int periodOffMin)
     {
+        var perMinuteEur = periodOffMin > 0 ? periodIncomeSum / periodOffMin : 0;
         var maxMin = distractions[0].Minutes;
         var list = new StackPanel { Spacing = 8 };
         foreach (var (label, minutes) in distractions)
@@ -44,7 +51,9 @@ public sealed partial class ReportsPage
             var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
             overlay.Children.Add(track);
             overlay.Children.Add(fill);
-            var mins = Dim(ReportData.FmtHours(minutes));
+            var mins = Dim(perMinuteEur != 0
+                ? $"{ReportData.FmtHours(minutes)} · {MainWindow.FormatEur(minutes * perMinuteEur)}"
+                : ReportData.FmtHours(minutes));
             Grid.SetColumn(overlay, 1);
             Grid.SetColumn(mins, 2);
             row.Children.Add(name);

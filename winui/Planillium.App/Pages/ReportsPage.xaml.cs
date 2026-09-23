@@ -144,9 +144,11 @@ public sealed partial class ReportsPage : Page
             // didn't: the card always showed today, and the insights were always computed from
             // this week regardless of what the selector said.
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
+            using var income = new IncomeService(db);
+            var incomeSum = income.SumForPeriod(_period);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
-            Body.Children.Add(Card(IncomeCard(db, periodName, totals.OffMin)));
+            Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -175,7 +177,7 @@ public sealed partial class ReportsPage : Page
             if (distractions.Count == 0)
                 Body.Children.Add(Dim("No off-plan time logged. Impressive."));
             else
-                Body.Children.Add(Card(DistractionList(distractions)));
+                Body.Children.Add(Card(DistractionList(distractions, incomeSum, totals.OffMin)));
 
             // ── time by app (expandable groups) ───────────────────────────
             Body.Children.Add(Section($"TIME BY APP — {periodName}"));
@@ -245,10 +247,8 @@ public sealed partial class ReportsPage : Page
     /// toggle flip (posted days keep whatever sign applied when they were posted, per the
     /// settled non-retroactive rule), so "you've gained €X" while the total for that period
     /// is still negative would read as contradicting the number right above it.</summary>
-    private static StackPanel IncomeCard(Database db, string periodName, int offMin)
+    private static StackPanel IncomeCard(double sum, string periodName, int offMin)
     {
-        using var income = new IncomeService(db);
-        var sum = income.SumForPeriod(_period);
         var lost = sum < 0;
 
         var card = new StackPanel { Spacing = 2 };
