@@ -147,6 +147,13 @@ public sealed partial class ReportsPage : Page
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
 
+            // Income card for the same period
+            using (var income = new IncomeService(db))
+            {
+                var incomeSum = income.SumForPeriod(_period);
+                Body.Children.Add(Card(IncomeCard(incomeSum, periodName)));
+            }
+
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
             // Scrollable(): these tables are the widest thing on the page (ten columns since

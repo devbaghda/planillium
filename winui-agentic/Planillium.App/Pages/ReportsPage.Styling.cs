@@ -42,6 +42,20 @@ public sealed partial class ReportsPage
             : score < 0 ? "SystemFillColorCriticalBrush"
             : "SystemFillColorCautionBrush"];
 
+    /// <summary>Color for the income total: success for non-negative (gaining or zero),
+    /// caution/critical for negative (losing). Matches the period sum's own sign, not the
+    /// current employment toggle — a period crossing zero gets wording that matches its total.</summary>
+    private static Brush IncomeBrush(double sum) =>
+        (Brush)Application.Current.Resources[
+            sum >= 0 ? "SystemFillColorSuccessBrush"
+            : "SystemFillColorCriticalBrush"];
+
+    /// <summary>Wording for the income period: "lost/unearned" for negative sum,
+    /// "gained/earned extra" for non-negative. Matches the computed period sum's own sign,
+    /// not today's toggle state — a period crossing zero gets wording that matches its total.</summary>
+    private static string IncomeSign(double sum) =>
+        sum < 0 ? "Lost/unearned" : "Gained/earned extra";
+
     /// <summary>Thin alias kept so every call site in this file doesn't need renaming —
     /// see CategoryStyle.BrushKey (Services/CategoryStyle.cs) for the actual single
     /// source of truth, now shared with MainWindow.Tracker's tray pill too.</summary>

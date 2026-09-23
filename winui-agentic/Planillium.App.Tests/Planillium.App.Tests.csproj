@@ -105,6 +105,7 @@
     <Compile Include="..\Planillium.App\Services\StateService.cs" Link="App\StateService.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreReason.cs" Link="App\ScoreReason.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />
+    <Compile Include="..\Planillium.App\Services\IncomeService.cs" Link="App\IncomeService.cs" />
     <!-- The one table of scoring keys/defaults/ranges that ScoreService, ConfigService and
          Settings all read from (2026-08-04). -->
     <Compile Include="..\Planillium.App\Services\ScoringRules.cs" Link="App\ScoringRules.cs" />

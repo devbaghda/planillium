@@ -26,7 +26,7 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        _panels = [GeneralPanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
+        _panels = [GeneralPanel, IncomePanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
         if (_panels.Length != SectionList.Items.Count)
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
@@ -52,6 +52,7 @@ public sealed partial class SettingsPage : Page
             StartupToggle.IsOn = StartupService.IsEnabled;
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
+            LoadIncome();
             LoadRules();
             // After LoadRules, not before: the keyword counts are read off the boxes it fills.
             RefreshSummaries();
@@ -133,6 +134,12 @@ public sealed partial class SettingsPage : Page
                            $"{KeywordCount(RulesNeutral)} neutral";
         SumIdle.Text = $"{KeywordCount(IdleOn)} on-plan · {KeywordCount(IdleOff)} off-plan · " +
                        $"{KeywordCount(IdleNeutral)} neutral";
+
+        var monthlyIncome = ConfigService.PotentialMonthlyIncomeEur();
+        var employed = ConfigService.IsEmployed();
+        SumIncome.Text = $"{monthlyIncome:F2}€ monthly · " +
+                         (employed ? "Employed (earning)" : "Not employed (losing)");
+
         // SumTickTick is deliberately not set here — RefreshTickTickStatus owns every piece of
         // TickTick display state and is already called from all three places it can change.
     }
@@ -164,6 +171,39 @@ public sealed partial class SettingsPage : Page
             // failed — phrased so it doesn't accuse a deliberate pause of being a bug.
             : "Tracking isn't running — resume it from the tray icon, or check " +
               "data/mentor-winui.log if you didn't pause it yourself.";
+    }
+
+    private void LoadIncome()
+    {
+        MonthlyIncomeBox.Value = ConfigService.PotentialMonthlyIncomeEur();
+        EmployedToggle.IsOn = ConfigService.IsEmployed();
+    }
+
+    private void Income_Changed(object sender, object e)
+    {
+        if (_initialising) return;
+        SaveIncome();
+    }
+
+    private void SaveIncome()
+    {
+        try
+        {
+            ConfigService.Mutate(cfg =>
+            {
+                if (cfg["income"] is not System.Text.Json.Nodes.JsonObject income)
+                    cfg["income"] = income = new System.Text.Json.Nodes.JsonObject();
+                income["potential_monthly_net_eur"] = MonthlyIncomeBox.Value;
+                income["employed"] = EmployedToggle.IsOn;
+            });
+            SaveStatus.Text = "Income settings saved.";
+            RefreshSummaries();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.SaveIncome", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't save income settings", ex);
+        }
     }
 
     /// <summary>Creates one input per <see cref="ScoringRules.All"/> entry. Runs from the

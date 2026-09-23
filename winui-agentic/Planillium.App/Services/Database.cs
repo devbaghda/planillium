@@ -168,6 +168,13 @@ public sealed class Database : IDisposable
             "CREATE UNIQUE INDEX IF NOT EXISTS sl_reason_date " +
             "  ON score_ledger(reason, date) " +
             $"  WHERE reason IN ('{ScoreReason.DailyScore}', '{ScoreReason.OverdueAccrual}', '{ScoreReason.WeeklyComebackBonus}');" +
+            "CREATE TABLE IF NOT EXISTS income_ledger (" +
+            "  id       INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  date     TEXT    NOT NULL UNIQUE," +
+            "  delta    REAL    NOT NULL," +
+            "  employed INTEGER NOT NULL," +
+            "  ts       TEXT    NOT NULL" +
+            ");" +
             "CREATE TABLE IF NOT EXISTS time_diary (" +
             "  id           INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  date         TEXT NOT NULL," +
@@ -432,7 +439,7 @@ public sealed class Database : IDisposable
     private static readonly string[] ExportedTables =
     {
         "task_completions", "task_overrides", "plan_days_off", "task_notes",
-        "score_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
+        "score_ledger", "income_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
     };
 
     /// <summary>Total row count across every user-data table — for the "Clear all my
@@ -635,6 +642,13 @@ public sealed class Database : IDisposable
         using var cmd = CreateCommand();
         cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM score_ledger";
         return (long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    public double IncomeBalance()
+    {
+        using var cmd = CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM income_ledger";
+        return Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
     }
 
     public void Dispose() => _conn.Dispose();

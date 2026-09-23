@@ -1,53 +1,66 @@
-# Agentic-workflow pilot — Planillium side
+# Planillium agentic-workflow pilot
 
-This folder is a source-only fork of `winui/Planillium.App/` and `winui/Planillium.App.Tests/`,
-built by the `planillium-planner` → `planillium-coder` → `planillium-qa` pipeline instead of the
-regular single-agent-with-skills workflow, so the two workflows' outcomes can be compared on the
-same feature requests. See `~/.claude/CLAUDE.md` and this project's own `CLAUDE.md`/`CONTEXT.md`
-for the standing rules this pilot inherits; this file is the pilot-specific record.
+Independent duplicate of the WinUI app, built by a three-agent pipeline
+(`.claude/agents/planillium-{planner,coder,qa}.md`: Planner → Coder → QA), compared against the
+same feature built by the regular single-agent-with-skills workflow in `winui/Planillium.App/`
+(the original — shipped, in daily live use, never touched by this pilot).
 
 ## Fork point
 
-Copied **2026-09-18**, from the state of `winui/Planillium.App/` and
-`winui/Planillium.App.Tests/` on disk at that date (`master`/`winui-rebuild`, test suite 151/152 —
-one known time-of-day flake, not a regression). Anything already in this folder from that copy is
-shared ground both sides may read. Anything that changes in `winui/` **after** this date is
-post-fork and off-limits to the agentic side (contamination rule, enforced in each agent's own
-instructions).
+Created **2026-09-22**, from the live state of `winui/Planillium.App/` and
+`winui/Planillium.App.Tests/` at that date — source only, `bin/`/`obj/` excluded. File counts
+verified equal at copy time (91 + 17).
 
-## What was excluded, and why
+**Excluded from the snapshot** (none of it existed under `winui/` to begin with, confirmed by
+search before copying, but stated here for the record): `data/progress.db` and its `-wal`/`-shm`
+siblings, `config.json`, `plans/*.json` — all real personal data, all live one level up at the
+repo root, never under `winui/`. Nothing under this fork should ever read or write those paths;
+each pilot run works against scratch data only (`planillium-qa`'s isolation rule).
 
-- `data/` (the live SQLite DB, `progress.db`) — the user's real, live personal data. Never copied.
-- `config.json` — the user's real settings (working hours, TickTick tokens, thresholds). Never
-  copied; if a spec needs new settings fields, it defines their *schema*, not real values.
-- `plans/` — real personal plan content. Never copied.
-- `bin/`, `obj/` — build output, regenerable, stripped from the copy.
+## Contamination rule
 
-None of the above exists anywhere under `winui-agentic/`. If a feature needs to exercise data or
-settings, the agentic side works against a scratch SQLite file / scratch config created inside
-QA's isolated worktree — never the real files, never the live running app.
+Planner, Coder and QA read only: this folder's own contents, this file, and the feature request
+under `pilot-specs/<slug>/REQUEST.md`. They never read `winui/Planillium.App/`'s current source,
+its git history, or any description of how the regular workflow implemented a given request —
+each side answers the same product brief independently. If either side's file under
+`pilot-specs/` needs to reference something from the regular workflow's decisions (e.g. a shared
+business rule already settled in `DECISIONS.md`), that's fine — `DECISIONS.md` and
+`context/domain.md` are shared ground, not the regular side's implementation.
 
-## Comparison design
+**`CONTEXT.md` is deliberately not on this list, as of 2026-09-23.** It used to be, on the theory
+that it's "shared ground" like the two files above — but unlike them it's a narrative handoff doc,
+not a stable rules/architecture register, and it has already carried a post-fork implementation
+write-up once (see "Pilot write-ups" below). Telling agents "don't write implementation detail
+there" relies on every future session remembering; not granting read access at all doesn't. If a
+spec genuinely needs something that only lives in `CONTEXT.md`, that's a sign that fact belongs in
+`DECISIONS.md` or `context/domain.md` instead — move it there rather than reading `CONTEXT.md`
+directly.
 
-Same feature request goes to both sides:
-- **Regular**: developed as always in `winui/Planillium.App/`, by the normal single-agent-with-
-  skills workflow.
-- **Agentic**: `planillium-planner` writes a spec (never reading the regular side's post-fork
-  diff/history for this feature) → `planillium-coder` implements it here → `planillium-qa` tests it
-  in an isolated worktree and logs a row to the shared pilot Dashboard.
+## Pilot write-ups
 
-## Dashboard
+Outcomes (files touched, build/test results, QA verdicts, caveats) are logged only in
+`context/todos.md`, one level up — never in `CONTEXT.md` or in this file's own "Runs" section
+below. Both of those are on this pilot's allowed-read list, so an implementation write-up placed
+in either becomes the answer key for whichever side hasn't built its version yet. Keep entries
+under "Runs" to a bare pointer (feature name, request path, run date) — nothing about how either
+side actually implemented it. Learned the hard way 2026-09-22, lost-earnings-counter: a
+regular-workflow write-up sat in `CONTEXT.md` while Planner was independently speccing the
+agentic side; Planner noticed and declined to use it, but nothing structural had stopped it.
 
-Results (both projects running this pilot — DigiFlow and Planillium — share one Dashboard) are at:
-**https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr**
+## Comparison basis
 
-One row per run: project, workflow, feature, wall-clock time, a token-burn proxy, bugs found, and a
-1–5 clarity/aesthetic score (QA logs a provisional score; the user's own review is what counts as
-final). Nothing on that page is placeholder data — it only ever shows real logged runs.
+For each feature run through both sides: wall-clock time, a token-burn proxy, bugs found,
+corrections requested (Coder passes that came back from a QA FAIL), interventions (times the
+orchestrating regular-workflow session had to stop and ask the user a decision), and a 1-5
+clarity/aesthetic score — QA logs a provisional score, the user gives the reviewed one. All logged
+to the shared Dashboard: `https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr` (`project:
+"planillium"`, shared with DigiFlow's pilot).
 
-## Do not ship this folder
+**Nothing from this folder ships.** It exists to compare workflows, not to produce code that
+reaches `winui/Planillium.App/`. If a pilot-side implementation turns out better, that's a finding
+to act on deliberately — not something that gets merged silently.
 
-`winui-agentic/` is a comparison exercise, not a release candidate. Nothing from here reaches
-`origin`, a build artifact, or the user's real installed app without the user explicitly reviewing
-and deciding to merge it in — same as the regular workflow's own review bar, but this folder's
-default is "never," not "when ready."
+## Runs
+
+- **lost-earnings-counter** (queued 2026-09-18, request finalized 2026-09-22) — see
+  `pilot-specs/lost-earnings-counter/REQUEST.md`. First feature run through this pilot.

@@ -187,6 +187,32 @@ public static class ConfigService
         Root.TryGetProperty("ticktick", out var t) &&
         t.TryGetProperty("client_id", out var v) ? v.GetString() ?? "" : "";
 
+    /// <summary>Configured potential net monthly income in EUR (for the lost-earnings counter),
+    /// default 2700.0.</summary>
+    public static double PotentialMonthlyIncomeEur()
+    {
+        double monthlyIncome = 2700.0;
+        if (Root.TryGetProperty("income", out var inc) &&
+            inc.TryGetProperty("potential_monthly_net_eur", out var v) && v.TryGetDouble(out var d))
+            monthlyIncome = d;
+        return monthlyIncome;
+    }
+
+    /// <summary>Employment status toggle (for the lost-earnings counter), default false.</summary>
+    public static bool IsEmployed()
+    {
+        bool employed = false;
+        if (Root.TryGetProperty("income", out var inc) &&
+            inc.TryGetProperty("employed", out var v))
+        {
+            if (v.ValueKind == System.Text.Json.JsonValueKind.True)
+                employed = true;
+            else if (v.ValueKind == System.Text.Json.JsonValueKind.False)
+                employed = false;
+        }
+        return employed;
+    }
+
     /// <summary>
     /// Teaches activity_rules a new keyword for the given category — the
     /// "remember this" half of manually recategorizing a diary entry, so the

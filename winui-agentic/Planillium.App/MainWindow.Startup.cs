@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -15,27 +16,27 @@ namespace Planillium.App;
 public sealed partial class MainWindow
 {
     /// <summary>
-    /// CatchUpScores (up to 7 days of scoring math) and PruneOldDiary (a
-    /// rollup INSERT + DELETE) used to run synchronously on the constructor
-    /// before the window ever appeared — real, if usually small, delay
-    /// added directly to how long the app takes to become visible on
-    /// launch (2026-07-09 audit finding #7). Both already open their own
-    /// Database/ScoreService connections (the same per-call-connection
-    /// pattern ActivityTracker's background poll already uses), so running
-    /// them off the UI thread is safe. RefreshScore runs again afterward in
-    /// case catch-up added score for a missed day.
+    /// CatchUpScores (up to 7 days of scoring math), CatchUpIncome (backfill lost-earnings
+    /// counter), and PruneOldDiary (a rollup INSERT + DELETE) used to run synchronously on
+    /// the constructor before the window ever appeared — real, if usually small, delay
+    /// added directly to how long the app takes to become visible on launch (2026-07-09
+    /// audit finding #7). All three already open their own Database/ScoreService/IncomeService
+    /// connections (the same per-call-connection pattern ActivityTracker's background poll
+    /// already uses), so running them off the UI thread is safe. RefreshScore runs again
+    /// afterward in case catch-up added score for a missed day.
     /// </summary>
     private void RunStartupCatchUp()
     {
         _ = Task.Run(() =>
         {
-            // CatchUpScores/PruneOldDiary already guard their own bodies; this wraps the
+            // CatchUpScores/CatchUpIncome/PruneOldDiary already guard their own bodies; this wraps the
             // whole lambda too, for the same reason every other fire-and-forget call site
             // in this app does — an unobserved exception here (e.g. from TryEnqueue itself)
             // would otherwise surface nowhere (2026-07-23 audit finding #20).
             try
             {
                 CatchUpScores();
+                CatchUpIncome();
                 PruneOldDiary();
                 _dq.TryEnqueue(RefreshScore);
             }
@@ -58,6 +59,20 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             Log.Error("CatchUpScores (db likely locked — next launch retries)", ex);
+        }
+    }
+
+    private static void CatchUpIncome()
+    {
+        try
+        {
+            using var db = new Database();
+            using var income = new IncomeService(db);
+            income.EnsureIncomeCaughtUp();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("CatchUpIncome (db likely locked — next launch retries)", ex);
         }
     }
 
@@ -245,18 +260,20 @@ public sealed partial class MainWindow
         // midnight (asleep in the tray, which is the normal way this app lives) never
         // re-runs it, so a day whose review was skipped/interrupted stayed uncredited
         // forever, silently swallowing whatever was completed that day (2026-09-01 user
-        // report — two same-day task completions never showed up in the score). Off the UI
-        // thread for the same reason RunStartupCatchUp is: EnsureScoreCaughtUp can recompute
-        // up to LookbackDays of scoring math, and CheckDayChange runs on the dispatcher.
+        // report — two same-day task completions never showed up in the score). Same applies
+        // to income catch-up. Off the UI thread for the same reason RunStartupCatchUp is:
+        // EnsureScoreCaughtUp can recompute up to LookbackDays of scoring math, and
+        // CheckDayChange runs on the dispatcher.
         _ = Task.Run(() =>
         {
             try
             {
                 CatchUpScores();
+                CatchUpIncome();
             }
             catch (Exception ex)
             {
-                Log.Error("CheckDayChange.CatchUpScores", ex);
+                Log.Error("CheckDayChange.CatchUpScores/CatchUpIncome", ex);
             }
             _dq.TryEnqueue(FinishDayChange);
         });
@@ -402,7 +419,27 @@ public sealed partial class MainWindow
             Log.Error("RefreshScore", ex);
             ScoreValue.Text = "—";
         }
+        RefreshIncome();
         RefreshPlanDrift();
+    }
+
+    private void RefreshIncome()
+    {
+        try
+        {
+            using var db = new Database();
+            var balance = db.IncomeBalance();
+            var brush = balance >= 0
+                ? (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"]
+                : (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
+            IncomeValue.Foreground = brush;
+            IncomeValue.Text = balance.ToString("F2");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("RefreshIncome", ex);
+            IncomeValue.Text = "—";
+        }
     }
 
     /// <summary>

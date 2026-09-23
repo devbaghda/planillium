@@ -82,6 +82,25 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                    <Border x:Name="IncomeChip" CornerRadius="8" Padding="14,10"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="INCOME" FontSize="10" FontWeight="SemiBold"
+                                       CharacterSpacing="50"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Name="IncomeValue" Text="—"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           FontSize="18"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="€" VerticalAlignment="Bottom" Margin="0,0,0,2"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <StackPanel x:Name="PlanDriftPanel" Spacing="8"/>
                     <StackPanel Spacing="0" Margin="2,0,0,0">
                         <HyperlinkButton Content="Buy entertainment time"

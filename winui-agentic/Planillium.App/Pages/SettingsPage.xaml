@@ -100,6 +100,15 @@
                                   Toggled="Startup_Toggled"/>
                 </StackPanel>
 
+                <StackPanel x:Name="IncomePanel" Spacing="16" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Income" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <NumberBox x:Name="MonthlyIncomeBox" Header="Potential net monthly income (€)" Width="260" HorizontalAlignment="Left" Minimum="0" SpinButtonPlacementMode="Compact" ValueChanged="Income_Changed"/>
+                    <ToggleSwitch x:Name="EmployedToggle" Header="Currently employed" Toggled="Income_Changed"/>
+                    <TextBlock Text="The sidebar shows the running total of lost earnings (while unemployed) or gained earnings (while employed), backfilled from 2025-12-04."
+                               TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+
                 <StackPanel x:Name="HoursPanel" Spacing="16" VerticalAlignment="Top" Visibility="Collapsed">
                     <TextBlock Text="Hours &amp; reminders" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <!-- Star columns rather than a horizontal StackPanel, here and in the two
@@ -262,6 +271,14 @@
                     <StackPanel Padding="0,4">
                         <TextBlock Text="General" FontWeight="SemiBold" FontSize="13"/>
                         <TextBlock x:Name="SumGeneral" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Income">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Income" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumIncome" FontSize="11" TextWrapping="Wrap" MaxLines="2"
                                    TextTrimming="CharacterEllipsis"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>
