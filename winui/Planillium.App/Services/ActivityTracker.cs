@@ -55,6 +55,9 @@ public sealed class ActivityTracker : IDisposable
     private DateTime? _idleSince;
     private DateTime? _lastPollAt;
 
+    // UTC offset of the local zone as of the last poll — see CheckClockOffset.
+    private TimeSpan? _lastUtcOffset;
+
     // Lock-protected mirror of _sessionStart, safe to read from the UI thread — PendingDayGap
     // (called from ReviewDialog on the dispatcher, not the poll thread) needs to know whether a
     // session is CURRENTLY open, so it doesn't mistake genuinely-in-progress, not-yet-flushed
@@ -413,6 +416,42 @@ public sealed class ActivityTracker : IDisposable
         lock (_openSessionLock) _openSessionStart = start;
     }
 
+    /// <summary>
+    /// .NET caches TimeZoneInfo.Local for the whole process lifetime, so an app left running
+    /// across a Windows timezone change (travel) or a DST switch keeps stamping the OLD zone's
+    /// clock — 2026-09-29: launched 24 Sep, zone changed 27 Sep, every diary row 2h ahead of the
+    /// taskbar. Each poll drops the cache and compares the UTC offset; on a change, every stored
+    /// local-time value is shifted by the same delta so an open session, the sleep-gap anchor and
+    /// the alert timers stay consistent with the new clock instead of reading the jump as hours of
+    /// sleep (clock forward) or writing rows that end before they start (clock back). Poll thread
+    /// only. The cache reset is process-wide, so the other watchers pick the new zone up too.
+    /// </summary>
+    private void CheckClockOffset()
+    {
+        TimeZoneInfo.ClearCachedData();
+        var offset = TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow);
+        if (_lastUtcOffset is TimeSpan prev && prev != offset)
+        {
+            Log.Info($"ActivityTracker: clock offset changed {prev} -> {offset}, shifting state");
+            ShiftClock(offset - prev);
+        }
+        _lastUtcOffset = offset;
+    }
+
+    /// <summary>Adds <paramref name="delta"/> to every stored local-time value. Internal so the
+    /// test can drive it without a real timezone change.</summary>
+    internal void ShiftClock(TimeSpan delta)
+    {
+        static DateTime? S(DateTime? d, TimeSpan by) => d?.Add(by);
+        _offSince = S(_offSince, delta);
+        _lastAlert = S(_lastAlert, delta);
+        _idleSince = S(_idleSince, delta);
+        _lastPollAt = S(_lastPollAt, delta);
+        SetSession(S(_sessionStart, delta), _sessionApp, _sessionClass);
+        lock (_dayStateLock) { _accountedUntil = S(_accountedUntil, delta); }
+        PaidUntil = S(PaidUntil, delta);
+    }
+
     private void CheckAlert(string cls, SqliteConnection conn)
     {
         var now = DateTime.Now;
@@ -472,6 +511,7 @@ public sealed class ActivityTracker : IDisposable
     /// </summary>
     private void PollOnce()
     {
+        CheckClockOffset();
         var now = DateTime.Now;
 
         // Rest day (a recurring day off): hold no tracking at all. Behave as

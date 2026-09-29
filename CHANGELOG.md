@@ -14,6 +14,11 @@ going forward; the original Python/Tkinter version is retired.
   using that same per-hour rate.
 
 **Fixes**
+- **Diary times ran hours ahead of the real clock after a timezone change while the app stayed
+  open.** Planillium read the timezone once at launch, so after travelling (or a daylight-saving
+  switch) every new diary row kept the old zone's time until the app was restarted. It now notices
+  the change within a minute and moves any in-progress session, idle timer and alert timers with
+  the clock, so nothing is mistaken for a long sleep or written backwards.
 - **Reports' Insights panel always said "this week" in its sentences, even when the header above
   it said This Month or This Year.** The numbers themselves were always correct for whatever
   period you had selected — only the wording lagged, so a real year's worth of off-plan time could

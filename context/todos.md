@@ -362,6 +362,49 @@ shape and backfill fresh — not a code change on either side. Logged as a gener
 predate whatever fork it's being fed into. Also fixed in passing: the regular app's Top
 Distractions spacing between hours and the new EUR figure, widened per user request.
 
+**Pilot UI-parity round: 3 gaps found in the 09-22 visual comparison, fixed to match `winui/`
+exactly** (commit `67eb0c8`, pushed to `origin/master`). The 09-22 comparison above had closed on
+the lost-earnings counter's *logic* being correct on both sides; this round was the user reviewing
+the pilot's *presentation* against the regular app and finding three mismatches QA's
+acceptance-criteria pass had no way to catch: (1) `DistractionList` had no per-row EUR figure at
+all — the 09-22-dated feature above never made it into the pilot's version of this file; (2) the
+sidebar income chip used a static "INCOME" label, raw `.ToString("F2")`, and a separate
+negative-margin "€" TextBlock hack instead of the regular app's dynamic LOST/EXTRA caption +
+single `FormatEur`-formatted value; (3) the Reports page profit/loss card used a bespoke,
+uninformative layout instead of the regular app's descriptive lost/gained sentence and conditional
+per-off-plan-hour line. Fixed directly in the main session (bypassing the Planner/Coder pipeline —
+the request was explicitly "match this specific existing implementation," which a
+contamination-firewalled Coder can't be told to do) across `MainWindow.xaml`,
+`MainWindow.Startup.cs`, `ReportsPage.Income.cs`, `ReportsPage.Styling.cs` (deleted the now-dead
+`IncomeSign` helper), `ReportsPage.TimeByApp.cs` and `ReportsPage.xaml.cs`. This commit is also the
+**first time `winui-agentic/` was committed to git at all** — caught and fixed a `.gitignore` gap
+before staging (`winui/**/bin|obj/` existed, `winui-agentic/**/bin|obj/` didn't, which would have
+committed ~892 build-artifact files into a public repo). Shared pilot Dashboard
+(`https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`) updated: the row's score status moved from
+QA's provisional PASS WITH CAVEATS (clarity 4/5, 0 bugs) to user-reviewed (clarity 5/5, 3 bugs —
+found by the human review, not QA), with the three findings and this commit recorded.
+
+### Session log — 09-29
+
+**Stale-timezone diary bug (2026-09-29).** Report: Diary times ahead of the taskbar clock. Root
+cause: the app was launched 24 Sep in UTC+4; Windows switched to UTC+2 on 27 Sep 18:21; .NET caches
+`TimeZoneInfo.Local` per process, so `DateTime.Now` stayed +2h for the whole run (28 Sep rows,
+29 Sep rows; 28 Sep tracking also stopped at real 18:00 because the app thought it was 20:00 — that
+2h is unrecoverable). Fix: `ActivityTracker.CheckClockOffset` (called first in `PollOnce`) clears
+the tz cache each poll, and on an offset change `ShiftClock` shifts every stored local time
+(`_sessionStart`, `_lastPollAt`, `_idleSince`, `_offSince`, `_lastAlert`, `_accountedUntil`,
+`PaidUntil`) — a bare cache refresh would have read the jump as sleep (forward) or written rows
+ending before they start (back). Same change in `winui-agentic/`. Test:
+`ShiftClockMovesTheOpenSessionWithTheClock` (161/161). Data (user-confirmed, table `time_diary`):
+backup `data/backup/progress-2026-09-29-pre-tzshift.db`; 28 Sep rows from 11:13 and 29 Sep rows
+10231–10270 moved −2h; placeholder 10260 → 06:00–09:49; 28 Sep morning rows 10105–10107 (user-filled
+06:00–11:13) clipped at 09:13 (10107 → 09:06–09:13). Script: session scratchpad `tzfix.py`.
+Closed same day: row 10271 shifted to 11:44-11:48 (user-authorised), Release exe relaunched 12:05
+`--minimized`; log timestamps confirmed matching the taskbar clock. The stopped stretch 11:48-12:05
+was logged by the app as the usual "unaccounted time" placeholder. Unrecoverable: 28 Sep real
+18:00-20:00. Left as-is: id 10097 (28 Sep, 09:11-09:10) has end before start, an old artefact of the
+wake-up row (1 min, harmless).
+
 ### Resolved-and-closed, one-line pointers (prose in git log)
 
 `MentorOverseer`→`Planillium` rename 07-23; diary-tracking-gap bug 07-21 (`PollOnce` order);

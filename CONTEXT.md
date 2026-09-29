@@ -61,7 +61,9 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
   the scratch-`MENTOR_ROOT` technique, WinUI layout traps, prompt/timer/state rules, design
   lessons, agentic-pilot isolation) — read the relevant rule before changing anything it governs;
   several record a decision
-  the user made after Claude argued the opposite.
+  the user made after Claude argued the opposite. Includes the 2026-09-24 rule that a
+  regular-workflow build must write its own Dashboard row on close-out, not leave it to the
+  agentic side or a later recall pass.
 - **A reported sidebar-balance swing is very often not a scoring bug.** Two standing causes to
   check first: `EnsureScoreCaughtUp` can post a large one-shot bulk credit for backlogged
   `daily_score` days at any startup (`DECISIONS.md` rule 9a); the chip is a plain `SUM(delta)` and
@@ -156,6 +158,13 @@ Short pointers kept inline (full text in `DECISIONS.md`):
     Dashboard.** Full outcome (files touched, build/test results, QA's per-criterion verdict,
     caveats) deliberately lives only in `context/todos.md` (session log, 09-22 entries), **not**
     here — see "Pilot write-ups" in §5 below for why this changed mid-pilot.
+    **2026-09-23: `winui-agentic/` committed to git for the first time** (commit `67eb0c8`,
+    `.gitignore` extended to cover its `bin`/`obj` first) — it existed on disk only until now. Same
+    commit fixed 3 UI-parity gaps a human visual comparison found (QA's pass had missed them, since
+    they were presentation, not acceptance-criteria, defects): per-distraction EUR figure missing,
+    sidebar income styling, Reports profit/loss card. Fixed directly, outside the Planner/Coder
+    pipeline, to exactly match `winui/`'s implementation — full detail in `context/todos.md`
+    (09-23 entries); Dashboard updated to user-reviewed/5, 3 bugs (found by human review, not QA).
     **Resolved 2026-09-23**: Planner's read access to `CONTEXT.md` removed outright (not just
     "don't write implementation detail here") — `.claude/agents/planillium-planner.md` step 2 and
     `winui-agentic/PILOT.md`'s contamination rule now both name only `DECISIONS.md` and
@@ -163,6 +172,10 @@ Short pointers kept inline (full text in `DECISIONS.md`):
     no further action needed unless a future spec claims it needs something only `CONTEXT.md`
     carries, in which case that fact should move to `DECISIONS.md`/`context/domain.md`, not reopen
     Planner's read access.
+    **Resolved 2026-09-24**: the regular-workflow side's `runs` row for lost-earnings-counter was
+    missing from the Dashboard — root cause was that writing to it was never a step in the regular
+    workflow's own close-out, only in the agentic pipeline's (`DECISIONS.md`, Agentic-pilot
+    isolation). Backfilled via `recall`; standing rule now added so it doesn't recur.
 
 ## 8. Next steps
 

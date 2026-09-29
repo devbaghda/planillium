@@ -179,6 +179,12 @@ compaction. General versions of several now also live in the global `windows-app
 `windows-app-tester` skills._
 
 **Verification discipline**
+- **A long-running .NET process caches the timezone (`TimeZoneInfo.Local`) at first use and never
+  refreshes it.** Left running across a Windows timezone change or DST switch, every `DateTime.Now`
+  is wrong by the offset until restart (2026-09-29: 2h-ahead diary rows). `ActivityTracker` now
+  clears the cache each poll and shifts its stored local times by the offset change — a bare cache
+  refresh is not enough, it turns the jump into a fake sleep gap or backwards rows. Any new
+  long-lived local-`DateTime` state must be added to `ActivityTracker.ShiftClock`.
 - **Re-run the exact check that flagged something, after fixing it** — don't trust that it looks
   right. A build regression (`ReportsPage.xaml.cs:369`) survived three sessions as an assumed
   "pre-existing harmless warning" because nobody re-ran a clean `/warnaserror` build.
@@ -261,6 +267,16 @@ compaction. General versions of several now also live in the global `windows-app
   clones differ in line endings), push from there, reset the real working copy after. Also:
   `--replace-text` only rewrites blob content — a separate `--replace-message` pass is needed to
   get a string out of "history" in the sense a user means it.
+- **A `.gitignore` rule scoped to one source tree doesn't cover a sibling tree with the same
+  shape.** `winui/**/bin|obj/` existed; when `winui-agentic/` (a full source-only fork of
+  `winui/`) was committed to git for the first time (2026-09-23), nothing excluded
+  `winui-agentic/**/bin|obj/` — a bare `git add winui-agentic/` would have staged ~892
+  build-artifact files (DLLs, PDBs, test-platform binaries) into a public repo. Caught by checking
+  `git status --untracked-files=all` before staging, not by any warning. General form of the
+  "check every sibling" rule above, applied to repo config rather than code: before first-time
+  committing a new sibling of an existing tree, check whether every `.gitignore`/CI/build rule
+  scoped to the original was actually written to also match the new one, rather than assuming a
+  glob like `winui/**/` was meant to be, or already is, general.
 
 **WinUI / layout**
 - **A `Border` with a non-zero `CornerRadius` corner-clips its content to its own *arranged*
@@ -356,4 +372,15 @@ compaction. General versions of several now also live in the global `windows-app
   handoff docs, so they can't accumulate session write-ups the way `CONTEXT.md` can. General
   lesson: where a boundary matters, prefer narrowing what can be read over trusting what won't be
   written.
+- **The Dashboard write is a step in the agentic pipeline's own routine — nothing calls it on the
+  regular-workflow side.** Confirmed 2026-09-24 (recall, lost-earnings-counter): the regular build
+  (session `15712360...`, 2026-09-22) finished with its own closing checklist updating only
+  `CONTEXT.md`/`DECISIONS.md` — the Dashboard row never got written, not because anyone forgot on
+  the day, but because no step in the regular workflow's completion routine ever calls
+  `ArtifactData` on it; only the agentic pipeline's own review step does. The Dashboard silently
+  showed agentic-only data for two days before this was noticed. Fix: **a regular-workflow session
+  that finishes building a feature also queued for pilot comparison must write its own `runs` row
+  to the Dashboard (`https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`, collection `runs`,
+  `workflow: "regular"`) as part of its own close-out, the same turn it updates `CONTEXT.md`/
+  `DECISIONS.md` — not left for the agentic side or a later recall pass to backfill.**
 

@@ -120,6 +120,28 @@ public sealed class ActivityTrackerPendingGapTests
             $"Expected ~60 minutes (up to the open session's start, not to now), got {gap.Value.Minutes}");
     }
 
+    /// <summary>2026-09-29: a timezone change while the app runs shifts the clock under an open
+    /// session (ActivityTracker.CheckClockOffset → ShiftClock). The open session's start must move
+    /// with it — otherwise the jump reads as an unaccounted gap (clock forward) or a session that
+    /// starts after "now" (clock back).</summary>
+    [Fact]
+    public void ShiftClockMovesTheOpenSessionWithTheClock()
+    {
+        SetAllDayWorkingHours();
+        using var db = new Database();
+        ClearTodaysDiary(db);
+        var tracker = new ActivityTracker(ConfigService.Root);
+        var now = FixedNow();
+        var lastEnd = now.AddMinutes(-180);
+        AddDiaryRow(db, lastEnd.AddMinutes(-30), lastEnd, DiaryCategory.OnPlan);
+        tracker.SimulateOpenSession(now.AddMinutes(-120), "VS Code", DiaryCategory.OnPlan);
+        Assert.NotNull(tracker.PendingDayGap(db, now));        // 60 min before the shift
+
+        tracker.ShiftClock(TimeSpan.FromMinutes(-60));         // open session now starts at lastEnd
+
+        Assert.Null(tracker.PendingDayGap(db, now));
+    }
+
     /// <summary>An open session that starts before the last diary row's end (the ordinary case —
     /// no trailing gap at all right now) must report no gap, not a negative one.</summary>
     [Fact]
