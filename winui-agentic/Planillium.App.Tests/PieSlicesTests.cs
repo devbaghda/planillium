@@ -300,4 +300,32 @@ public class PieSlicesTests
         Assert.True(slices[0].IsDrillable);
         Assert.False(slices[1].IsDrillable);
     }
+
+    /// <summary>Edge case 2: Merged "Other (N apps)" slice is drillable — preserves the merged apps so drill-down is possible.</summary>
+    [Fact]
+    public void MergedOtherSliceIsDrillable()
+    {
+        var items = new List<(string, ReportData.AppUsage)>();
+        for (var i = 1; i <= 8; i++)
+        {
+            items.Add(($"App{i}", new ReportData.AppUsage
+            {
+                Total = 100 - (i - 1) * 10,
+                On = 100 - (i - 1) * 10,
+                Off = 0, Neutral = 0, Paid = 0, Idle = 0
+            }));
+        }
+
+        var totalMinutes = items.Sum(x => x.Item2.Total);
+        var slices = PieSlices.BuildSlices(items, totalMinutes);
+
+        // Find the "Other" slice
+        var otherSlice = slices.FirstOrDefault(s => s.Name.Contains("Other"));
+        Assert.NotNull(otherSlice);
+        Assert.Equal("Other (2 apps)", otherSlice!.Name);
+
+        // The "Other" slice must be drillable (previously it was not drillable when multiple items were merged).
+        // Now it preserves Subs so users can drill into the merged apps.
+        Assert.True(otherSlice.IsDrillable, "Merged 'Other (N apps)' slice must be drillable");
+    }
 }

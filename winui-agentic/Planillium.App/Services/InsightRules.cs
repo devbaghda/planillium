@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Planillium.App.Services;
 
 /// <summary>
@@ -9,9 +7,8 @@ namespace Planillium.App.Services;
 /// </summary>
 public static class InsightRules
 {
-    /// <summary>Format a euro amount as "€X.XX" or "-€X.XX".</summary>
-    internal static string FormatEur(double v) =>
-        (v < 0 ? "-€" : "€") + Math.Abs(v).ToString("N2", CultureInfo.CurrentCulture);
+    /// <summary>Format a euro amount as "€X.XX" or "-€X.XX". Shared single implementation.</summary>
+    internal static string FormatEur(double v) => EurFormatter.Format(v);
 
     /// <summary>
     /// Generate insight suggestions for a report period. <paramref name="period"/> picks the

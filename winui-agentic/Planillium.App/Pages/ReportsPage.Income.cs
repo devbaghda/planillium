@@ -11,8 +11,7 @@ public sealed partial class ReportsPage
     /// When sum is 0, returns positive (no loss/gain to colour it).</summary>
     private static double SignedHourValue(double incomeSum)
     {
-        var hourValue = IncomeService.HourValueEur();
-        return incomeSum < 0 ? -hourValue : hourValue;
+        return SignHelper.SignedHourValue(incomeSum, IncomeService.HourValueEur());
     }
 
     private static StackPanel IncomeCard(double net, double credit, string periodName, int offMin)
@@ -41,7 +40,7 @@ public sealed partial class ReportsPage
         }
         else if (roundedNet > 0)
         {
-            caption = "EXTRA INCOME";
+            caption = $"EXTRA INCOME — {periodName}";
             var timeWord = _period switch
             {
                 ReportPeriod.Day => "today",

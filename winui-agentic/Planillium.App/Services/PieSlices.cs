@@ -80,6 +80,22 @@ public static class PieSlices
                 ? slicesToMerge[0].Name  // Single leftover shown as itself, not merged
                 : $"Other ({slicesToMerge.Count} apps)";
 
+            // For the merged "Other" slice, preserve the sub-items so it can be drilled into.
+            // Convert the merged list into a Subs dictionary (sub-name => usage).
+            SortedDictionary<string, ReportData.AppUsage>? otherSubs;
+            if (slicesToMerge.Count > 1)
+            {
+                otherSubs = new SortedDictionary<string, ReportData.AppUsage>();
+                foreach (var (name, usage) in slicesToMerge)
+                {
+                    otherSubs[name] = usage;
+                }
+            }
+            else
+            {
+                otherSubs = slicesToMerge[0].Usage.Subs;
+            }
+
             var otherUsage = new ReportData.AppUsage
             {
                 Total = otherTotal,
@@ -88,7 +104,7 @@ public static class PieSlices
                 Neutral = otherNeutral,
                 Paid = otherPaid,
                 Idle = otherIdle,
-                Subs = slicesToMerge.Count == 1 ? slicesToMerge[0].Usage.Subs : null,  // Only drillable if single leftover
+                Subs = otherSubs,  // Drillable for both single leftover and merged group
             };
 
             result.Add(new Slice(

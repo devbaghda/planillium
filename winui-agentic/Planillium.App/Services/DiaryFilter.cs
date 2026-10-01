@@ -62,4 +62,27 @@ public static class DiaryFilter
         }
         return pruned;
     }
+
+    /// <summary>
+    /// Determines whether two option lists are the same set of values.
+    /// Used to decide whether to rebuild a checkbox list or just update IsChecked on existing checkboxes.
+    /// Compares values using the provided StringComparer.
+    /// </summary>
+    /// <param name="current">The currently displayed option list.</param>
+    /// <param name="newOptions">The newly computed option list.</param>
+    /// <param name="cmp">StringComparer for comparison (OrdinalIgnoreCase for app/page, Ordinal for category/tag).</param>
+    /// <returns>True if both lists contain the same set of values, false otherwise.</returns>
+    public static bool SameOptionSet(IReadOnlyList<string> current, IReadOnlyList<string> newOptions, StringComparer cmp)
+    {
+        if (current.Count != newOptions.Count)
+            return false;
+
+        var newSet = new HashSet<string>(newOptions, cmp);
+        foreach (var opt in current)
+        {
+            if (!newSet.Contains(opt, cmp))
+                return false;
+        }
+        return true;
+    }
 }

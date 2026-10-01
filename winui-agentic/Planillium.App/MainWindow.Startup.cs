@@ -452,10 +452,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>"-€1,234.56" / "€1,234.56" — sign kept explicit, decimal separator is
-    /// CurrentCulture, € hardcoded regardless of system locale. Mirrors winui's own
-    /// MainWindow.FormatEur so both apps' currency figures read the same way.</summary>
-    internal static string FormatEur(double v) =>
-        (v < 0 ? "-€" : "€") + Math.Abs(v).ToString("N2", CultureInfo.CurrentCulture);
+    /// CurrentCulture, € hardcoded regardless of system locale. Delegates to the shared
+    /// EurFormatter.Format so both the app and insights logic use the same formatter.</summary>
+    internal static string FormatEur(double v) => EurFormatter.Format(v);
 
     /// <summary>
     /// Short sidebar status block per active plan, mirroring the Plans page's

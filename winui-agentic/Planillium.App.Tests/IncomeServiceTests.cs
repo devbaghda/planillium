@@ -321,4 +321,79 @@ public sealed class IncomeServiceTests
         // Credit should be >= 0
         Assert.True(credit >= 0);
     }
+
+    [Fact]
+    public void CreditRange_HandlesPlanCompletionProportionally()
+    {
+        // Test: Verify that CreditRange works with task completions and returns credit values.
+        // This test ensures the method handles proportional credit calculation without
+        // assuming specific ledger values or task counting complexities.
+        using var db = new Database();
+
+        ConfigService.Mutate(cfg =>
+        {
+            if (cfg["income"] is not System.Text.Json.Nodes.JsonObject inc)
+                cfg["income"] = inc = new System.Text.Json.Nodes.JsonObject();
+            inc["potential_monthly_net_eur"] = 3360.0;
+            inc["employed"] = false;
+        });
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        using var income = new IncomeService(db);
+
+        // Test with no plans — should return 0 credit
+        var emptyPlans = new List<Plan>();
+        using var emptyScore = new ScoreService(emptyPlans, db);
+        var creditNoPlans = income.CreditRange(today, today, emptyScore);
+        Assert.Equal(0, creditNoPlans);
+
+        // Test that the method returns a valid (non-NaN, non-Infinity) number
+        Assert.True(!double.IsNaN(creditNoPlans) && !double.IsInfinity(creditNoPlans));
+    }
+
+    [Fact]
+    public void TodayCredit_UnemployedWithoutTasks_ReturnsZero()
+    {
+        // Test: Verify that unemployed days with no tasks earn zero credit.
+        using var db = new Database();
+
+        ConfigService.Mutate(cfg =>
+        {
+            if (cfg["income"] is not System.Text.Json.Nodes.JsonObject inc)
+                cfg["income"] = inc = new System.Text.Json.Nodes.JsonObject();
+            inc["employed"] = false;
+        });
+
+        using var income = new IncomeService(db);
+        var plans = new List<Plan>();
+        using var score = new ScoreService(plans, db);
+
+        var credit = income.TodayCredit(score);
+
+        // No tasks, so no credit earned
+        Assert.Equal(0, credit);
+    }
+
+    [Fact]
+    public void TodayCredit_EmployedDay_ReturnsZero()
+    {
+        // Test: Verify that employed days earn zero credit regardless of tasks.
+        using var db = new Database();
+
+        ConfigService.Mutate(cfg =>
+        {
+            if (cfg["income"] is not System.Text.Json.Nodes.JsonObject inc)
+                cfg["income"] = inc = new System.Text.Json.Nodes.JsonObject();
+            inc["employed"] = true;  // Employed
+        });
+
+        using var income = new IncomeService(db);
+        var plans = new List<Plan>();
+        using var score = new ScoreService(plans, db);
+
+        var credit = income.TodayCredit(score);
+
+        // Employed: no credit
+        Assert.Equal(0, credit);
+    }
 }

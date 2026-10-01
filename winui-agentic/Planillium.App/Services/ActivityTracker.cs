@@ -198,12 +198,18 @@ public sealed class ActivityTracker : IDisposable
             var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
             var end = now < diaryEndToday ? now : diaryEndToday;
 
+            // If the session started yesterday but we're flushing today, clamp the session start
+            // to the start of today's work hours — consistent with how HandleIdleReturn clamps
+            // idleStart to diaryStartToday when it crosses the midnight boundary.
+            var diaryStartToday = now.Date + _workStart.ToTimeSpan();
+            var start = ss < diaryStartToday ? diaryStartToday : ss;
+
             // Mirror HandleOutsideDiaryHours logic: don't write a row if end <= start
-            if (end <= ss)
+            if (end <= start)
                 return;
 
             using var conn = AppPaths.OpenConnection();
-            DiaryWriter.LogSession(conn, ss, end, _sessionClass!, _sessionApp);
+            DiaryWriter.LogSession(conn, start, end, _sessionClass!, _sessionApp);
             SetSession(null, null, null);
         }
         catch (Exception ex)
@@ -547,7 +553,7 @@ public sealed class ActivityTracker : IDisposable
     /// require re-reading all the others (round-4 audit finding: this used
     /// to be one ~130-line function tangling all five together).
     /// </summary>
-    private void PollOnce()
+    internal void PollOnce()
     {
         lock (_pollLock)
         {

@@ -21,8 +21,9 @@ public sealed partial class ReportsPage
     private static StackPanel DistractionList(List<(string Label, int Minutes)> distractions,
         double periodIncomeSum)
     {
-        var hourValue = IncomeService.HourValueEur();
-        var signedHourValue = periodIncomeSum < 0 ? -hourValue : hourValue;
+        // Note: SignedHourValue is defined in ReportsPage.Income.cs and uses IncomeService.HourValueEur()
+        // to apply the appropriate sign based on the period income sum.
+        var signedHourValue = SignedHourValue(periodIncomeSum);
         var perMinuteEur = signedHourValue / 60.0;
         var maxMin = distractions[0].Minutes;
         var list = new StackPanel { Spacing = 8 };
@@ -39,7 +40,8 @@ public sealed partial class ReportsPage
 
             // Proportional bar fill: inner Grid with two weighted columns (filled ratio and empty ratio)
             // so the fill never exceeds the track width, even on narrow windows.
-            var ratio = minutes / Math.Max(maxMin, 1.0);
+            // Clamp ratio to a minimum visible sliver (~0.02 = ~2%) so tiny rows still show a visible bar.
+            var ratio = Math.Max(0.02, minutes / Math.Max(maxMin, 1.0));
             var track = new Border
             {
                 Height = 8,
@@ -122,6 +124,30 @@ public sealed partial class ReportsPage
         if (slices.Count == 0)
             return panel;
 
+        // For drilled levels, get the parent app's usage to compute "(no detail)" slice
+        ReportData.AppUsage? parentAppUsage = null;
+        if (ReportsPage._appDrillPath.Count > 0)
+        {
+            var parentAppName = ReportsPage._appDrillPath.Last();
+            // Re-traverse from breakdown to find the parent app at the previous level
+            var prevLevel = breakdown;
+            for (int i = 0; i < ReportsPage._appDrillPath.Count - 1; i++)
+            {
+                var appName = ReportsPage._appDrillPath[i];
+                var app = prevLevel.FirstOrDefault(x => x.App == appName);
+                if (app.Usage?.Subs != null)
+                {
+                    prevLevel = app.Usage.Subs
+                        .OrderByDescending(kv => kv.Value.Total)
+                        .Select(kv => (kv.Key, kv.Value))
+                        .ToList();
+                }
+            }
+            // Now find the parent app in prevLevel
+            var parentApp = prevLevel.FirstOrDefault(x => x.App == parentAppName);
+            parentAppUsage = parentApp.Usage;
+        }
+
         // ── breadcrumb & back button ──────────────────────────────────────
         var breadcrumbPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var breadcrumbText = "All apps";
@@ -148,20 +174,25 @@ public sealed partial class ReportsPage
             {
                 if (ReportsPage._appDrillPath.Count > 0)
                 {
+                    // Save the parent app name that we're about to pop from the path
+                    var parentAppName = ReportsPage._appDrillPath[ReportsPage._appDrillPath.Count - 1];
                     ReportsPage._appDrillPath.RemoveAt(ReportsPage._appDrillPath.Count - 1);
                     Render();
-                }
-            };
-            backBtn.KeyDown += (_, e) =>
-            {
-                if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
-                {
-                    if (ReportsPage._appDrillPath.Count > 0)
+
+                    // After re-render, restore focus to the row for the parent app we just came back from
+                    if (ReportsPage._appDrillPieList != null)
                     {
-                        ReportsPage._appDrillPath.RemoveAt(ReportsPage._appDrillPath.Count - 1);
-                        Render();
+                        foreach (var child in ReportsPage._appDrillPieList.Children.OfType<Grid>())
+                        {
+                            // Each pie row has Name in column 1; compare it with parentAppName
+                            if (child.Children.ElementAtOrDefault(1) is TextBlock nameBlock &&
+                                nameBlock.Text == parentAppName)
+                            {
+                                child.Focus(FocusState.Keyboard);
+                                break;
+                            }
+                        }
                     }
-                    e.Handled = true;
                 }
             };
             breadcrumbPanel.Children.Add(backBtn);
@@ -203,6 +234,15 @@ public sealed partial class ReportsPage
                         RadiusY = pieRadius,
                     },
                 };
+                // Add click handler if drillable (same drill as list row)
+                if (slice.IsDrillable)
+                {
+                    wedge.Tapped += (_, _) =>
+                    {
+                        ReportsPage._appDrillPath.Add(slice.Name);
+                        Render();
+                    };
+                }
                 canvas.Children.Add(wedge);
             }
             else
@@ -248,6 +288,15 @@ public sealed partial class ReportsPage
                     StrokeThickness = 2,
                     Data = geo,
                 };
+                // Add click handler if drillable (same drill as list row)
+                if (slice.IsDrillable)
+                {
+                    wedge.Tapped += (_, _) =>
+                    {
+                        ReportsPage._appDrillPath.Add(slice.Name);
+                        Render();
+                    };
+                }
 
                 canvas.Children.Add(wedge);
             }
@@ -258,37 +307,34 @@ public sealed partial class ReportsPage
         // ── list rows ─────────────────────────────────────────────────────
         var list = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Top };
 
-        // Add list rows for each slice
-        AddPieListRows(list, slices, currentLevel, levelTotal);
+        // Add list rows for each slice and the "(no detail)" slice if at a drilled level
+        AddPieListRows(list, slices, parentAppUsage);
 
         piePath.Children.Add(list);
         panel.Children.Add(piePath);
 
+        // Store reference to the list so Back button can restore focus to the parent row
+        _appDrillPieList = list;
+
         return panel;
     }
 
-    /// <summary>Helper to add list rows for pie slices, including (no detail) if needed.</summary>
-    private void AddPieListRows(StackPanel list, List<PieSlices.Slice> slices,
-        List<(string Name, ReportData.AppUsage Usage)> currentLevel, int levelTotal)
+    /// <summary>Helper to add list rows for pie slices, including (no detail) if needed at sub-levels.</summary>
+    private void AddPieListRows(StackPanel list, List<PieSlices.Slice> slices, ReportData.AppUsage? parentAppUsage)
     {
         foreach (var slice in slices)
         {
             AddPieListRow(list, slice);
         }
 
-        // Check if we need to add (no detail) slice
-        if (ReportsPage._appDrillPath.Count > 0)
+        // Add "(no detail)" slice if we're at a drilled level and there's unaccounted time
+        if (parentAppUsage != null && parentAppUsage.Subs != null)
         {
-            var appName = ReportsPage._appDrillPath.Last();
-            var app = currentLevel.FirstOrDefault(x => x.Name == appName);
-            if (app.Usage != null && app.Usage.Subs != null)
+            var sumOfSubs = parentAppUsage.Subs.Sum(x => x.Value.Total);
+            var noDetail = PieSlices.NoDetailSlice(parentAppUsage.Total, sumOfSubs);
+            if (noDetail != null)
             {
-                var sumOfSubs = app.Usage.Subs.Sum(x => x.Value.Total);
-                var noDetail = PieSlices.NoDetailSlice(app.Usage.Total, sumOfSubs);
-                if (noDetail != null)
-                {
-                    AddPieListRow(list, noDetail);
-                }
+                AddPieListRow(list, noDetail);
             }
         }
     }
@@ -302,8 +348,8 @@ public sealed partial class ReportsPage
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HoursColumnWidth) });  // Hours
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });  // Percentage
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // Bar
-        if (slice.IsDrillable)
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChevronColumnWidth) });
+        // Always reserve the chevron column (even if empty for non-drillable rows) so all bars end at the same x
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChevronColumnWidth) });
 
         // Color swatch
         var brushKey = CategoryBrushKey(slice.DominantCategory);
@@ -388,7 +434,7 @@ public sealed partial class ReportsPage
         Grid.SetColumn(overlay, 4);
         row.Children.Add(overlay);
 
-        // Chevron if drillable
+        // Chevron column (present on every row; empty for non-drillable rows, so all bars end at the same x)
         if (slice.IsDrillable)
         {
             row.IsTabStop = true;
@@ -417,6 +463,13 @@ public sealed partial class ReportsPage
                     e.Handled = true;
                 }
             };
+        }
+        else
+        {
+            // Non-drillable row: add empty container to maintain alignment with drillable rows
+            var placeholder = new Border();
+            Grid.SetColumn(placeholder, 5);
+            row.Children.Add(placeholder);
         }
 
         list.Children.Add(row);

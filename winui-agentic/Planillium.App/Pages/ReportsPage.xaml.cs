@@ -27,6 +27,10 @@ public sealed partial class ReportsPage : Page
     // Reset to empty on period switch; held in place during dialog closes, etc.
     internal static List<string> _appDrillPath = [];
 
+    // Reference to the pie list so the Back button can restore focus to the parent row (2026-10-01).
+    // Set when AppBreakdownPie() builds the list; cleared when drill path changes or the page is not rendered.
+    private static StackPanel? _appDrillPieList;
+
     private static readonly (string Label, ReportPeriod Period)[] PeriodOpts =
     {
         ("Day", ReportPeriod.Day), ("Week", ReportPeriod.Week),

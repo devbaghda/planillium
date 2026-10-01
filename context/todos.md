@@ -442,3 +442,18 @@ read-time, proportional); diary filters multi-select (`MultiPicker`); Time by Ap
 build + code inspection only (no live clicking of real data) — visual review by user pending.
 `ReportExport.Suggestions` isn't linkable into the test assembly (reaches WinUI), so its change
 has no unit test.
+
+### 2026-10-01 — eight-item batch, agentic pilot side (winui-agentic/)
+
+Coder built all 8 from SPECs; QA (worktree, cdf0640) verdicts: PASS idle-dialog-date; PASS WITH
+CAVEATS planillium-use-not-absence, diary-multiselect-filters, insights-eur-and-ratio,
+plan-completion-earned-credit, distraction-alignment, hour-value-correction; **FAIL time-by-app-pie**
+(wedges not clickable, "Other" not drillable, hours didn't reconcile, Back double-pop, misaligned
+chevron column). QA found 0-6 bugs per feature; all UI judged by code inspection only. Two Coder
+correction passes fixed every finding (first pass skipped the diary and absence items; second pass
+did them). Build 0 warnings, 239 tests pass — **not re-QA'd**. Known weak spot: the plan-credit
+tests are still smoke-level (no seeded 3-of-4 case). Corrections count on Dashboard: 1 per feature,
+2 for diary (single-select ComboBoxes first). Interventions 2 per feature = batch total (hour-value
+question, local-commit question). Regular rows logged live, no QA run. Still to do: user visual
+review of both apps; consider a re-QA of the pie.
+

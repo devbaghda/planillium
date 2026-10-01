@@ -105,8 +105,12 @@
     <!-- Linked for InsightRules.Suggestions, the pure static insight generation logic that
          powers both the Reports page and HTML export (2026-10-01 insights-eur-and-ratio). -->
     <Compile Include="..\Planillium.App\Services\InsightRules.cs" Link="App\InsightRules.cs" />
+    <!-- Linked for EurFormatter.Format, the shared EUR formatter used by InsightRules and MainWindow. -->
+    <Compile Include="..\Planillium.App\Services\EurFormatter.cs" Link="App\EurFormatter.cs" />
     <!-- Linked for DiaryFilter helpers, the pure logic for multi-select diary filtering (2026-10-01). -->
     <Compile Include="..\Planillium.App\Services\DiaryFilter.cs" Link="App\DiaryFilter.cs" />
+    <!-- Linked for SignHelper, the pure logic for sign-based hour value calculations (2026-10-01). -->
+    <Compile Include="..\Planillium.App\Services\SignHelper.cs" Link="App\SignHelper.cs" />
     <Compile Include="..\Planillium.App\Services\StateService.cs" Link="App\StateService.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreReason.cs" Link="App\ScoreReason.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />

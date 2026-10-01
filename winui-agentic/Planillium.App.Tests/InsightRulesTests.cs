@@ -98,6 +98,21 @@ public sealed class InsightRulesTests
     }
 
     [Fact]
+    public void RatioInsightJustAbove40PercentFires()
+    {
+        // Ratio = 41/(100) = 0.41 = 41%, just above 40% threshold
+        var hints = InsightRules.Suggestions(
+            on: 100, off: 41, neutral: 0,
+            distractions: new List<(string, int)>(),
+            hourValueEur: 10.0,
+            period: ReportPeriod.Day);
+
+        var ratioHint = hints.FirstOrDefault(h => h.Contains("40%"));
+        Assert.NotNull(ratioHint);
+        Assert.Contains("Off-plan time is over 40%", ratioHint);
+    }
+
+    [Fact]
     public void RatioInsightAt50PercentFires()
     {
         var hints = InsightRules.Suggestions(

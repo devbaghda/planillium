@@ -78,6 +78,11 @@ public sealed partial class ReportsPage
     private const string AllPages = "All pages";
     private const string AllTags = "All tags";
 
+    // Track the previous app and page option sets to decide whether to rebuild checkbox lists
+    // (2026-10-01): if the options haven't changed, only update IsChecked to preserve scroll/focus.
+    private static List<string> _previousAppsInView = new();
+    private static List<string> _previousPagesInView = new();
+
     // The debounce timer itself is created once and reused across renders
     // (NavigationCacheMode="Enabled" reuses this page instance, and
     // BuildDiarySection runs on every Render — page nav, period switch, diary
@@ -319,6 +324,38 @@ public sealed partial class ReportsPage
             }
         }
 
+        void SyncAppCheckboxes()
+        {
+            // Re-sync checked state for app checkboxes (list is fixed, only state changes)
+            if (appBtn.Flyout is Flyout { Content: ScrollViewer scroller } &&
+                scroller.Content is StackPanel stack)
+            {
+                foreach (var child in stack.Children.OfType<CheckBox>())
+                {
+                    if (child.Tag is string appValue)
+                    {
+                        child.IsChecked = _diaryAppFilter.Contains(appValue, StringComparer.OrdinalIgnoreCase);
+                    }
+                }
+            }
+        }
+
+        void SyncPageCheckboxes()
+        {
+            // Re-sync checked state for page checkboxes (list is fixed, only state changes)
+            if (pageBtn.Flyout is Flyout { Content: ScrollViewer scroller } &&
+                scroller.Content is StackPanel stack)
+            {
+                foreach (var child in stack.Children.OfType<CheckBox>())
+                {
+                    if (child.Tag is string pageValue)
+                    {
+                        child.IsChecked = _diaryPageFilter.Contains(pageValue, StringComparer.OrdinalIgnoreCase);
+                    }
+                }
+            }
+        }
+
         void RenderDiaryResults()
         {
             diaryResults.Children.Clear();
@@ -379,7 +416,12 @@ public sealed partial class ReportsPage
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
             _diaryAppFilter = DiaryFilter.PruneToAvailable(_diaryAppFilter, appsInView);
-            RebuildAppCheckboxList(appFlyoutContent, appsInView);
+            // Only rebuild if the option set changed; otherwise just sync IsChecked to preserve scroll/focus
+            if (DiaryFilter.SameOptionSet(_previousAppsInView, appsInView, StringComparer.OrdinalIgnoreCase))
+                SyncAppCheckboxes();
+            else
+                RebuildAppCheckboxList(appFlyoutContent, appsInView);
+            _previousAppsInView = appsInView;
 
             var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
@@ -388,7 +430,12 @@ public sealed partial class ReportsPage
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
             _diaryPageFilter = DiaryFilter.PruneToAvailable(_diaryPageFilter, pagesInView);
-            RebuildPageCheckboxList(pageFlyoutContent, pagesInView);
+            // Only rebuild if the option set changed; otherwise just sync IsChecked to preserve scroll/focus
+            if (DiaryFilter.SameOptionSet(_previousPagesInView, pagesInView, StringComparer.OrdinalIgnoreCase))
+                SyncPageCheckboxes();
+            else
+                RebuildPageCheckboxList(pageFlyoutContent, pagesInView);
+            _previousPagesInView = pagesInView;
 
             // Update all button texts and sync checkbox states for fixed filters (category/tag)
             // re-sync means updating IsChecked and button text

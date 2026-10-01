@@ -130,4 +130,60 @@ public sealed class DiaryFilterTests
         Assert.True(result.Contains("Chrome"));
         Assert.True(result.Contains("Firefox"));
     }
+
+    [Fact]
+    public void SameOptionSet_IdenticalLists_ReturnsTrue()
+    {
+        var current = new List<string> { "Chrome", "Firefox", "Safari" };
+        var newOptions = new List<string> { "Chrome", "Firefox", "Safari" };
+        Assert.True(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SameOptionSet_DifferentOrder_ReturnsTrue()
+    {
+        var current = new List<string> { "Chrome", "Firefox", "Safari" };
+        var newOptions = new List<string> { "Safari", "Chrome", "Firefox" };
+        Assert.True(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SameOptionSet_DifferentCount_ReturnsFalse()
+    {
+        var current = new List<string> { "Chrome", "Firefox" };
+        var newOptions = new List<string> { "Chrome", "Firefox", "Safari" };
+        Assert.False(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SameOptionSet_DifferentValues_ReturnsFalse()
+    {
+        var current = new List<string> { "Chrome", "Firefox" };
+        var newOptions = new List<string> { "Chrome", "Safari" };
+        Assert.False(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SameOptionSet_CaseInsensitive()
+    {
+        var current = new List<string> { "Chrome", "Firefox" };
+        var newOptions = new List<string> { "chrome", "firefox" };
+        Assert.True(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SameOptionSet_CaseSensitive()
+    {
+        var current = new List<string> { "Chrome", "Firefox" };
+        var newOptions = new List<string> { "chrome", "firefox" };
+        Assert.False(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void SameOptionSet_Empty()
+    {
+        var current = new List<string>();
+        var newOptions = new List<string>();
+        Assert.True(DiaryFilter.SameOptionSet(current, newOptions, StringComparer.Ordinal));
+    }
 }

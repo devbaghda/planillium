@@ -111,10 +111,11 @@ public sealed class ActivityTrackerFlushOnStopTests
     /// <summary>
     /// Test (b): After flushing an open session, a new tracker seeded with
     /// LastDiaryEnd as _lastPollAt should NOT enter the sleep-gap path. The
-    /// spec's arithmetic: `sleepS = (now - last).TotalSeconds - 60`, which
-    /// should be small (< idle threshold) because "last" is now very recent.
-    /// This verifies that the next Poll after the flush does not re-treat the
-    /// in-session work as absence.
+    /// fix ensures that when FlushSessionIfOpen writes the final row, the new
+    /// tracker's first Poll sees a recent _lastPollAt (the flushed row's end time),
+    /// making sleepS = (now - lastDiaryEnd) - 60 small (< idle threshold) and never
+    /// triggering the sleep-gap handler. This test verifies that the first Poll
+    /// after the flush does not re-treat the in-session work as absence.
     /// </summary>
     [Fact]
     public void AfterFlushNewTrackerDoesNotEnterSleepGapPath()
@@ -139,15 +140,16 @@ public sealed class ActivityTrackerFlushOnStopTests
         var tracker2 = new ActivityTracker(ConfigService.Root);
         tracker2.Start(lastDiaryEnd);
 
-        // The new tracker should have _lastPollAt = lastDiaryEnd
-        // Verify via the sleep-gap arithmetic: sleepS = (now - lastDiaryEnd) - 60
-        // With lastDiaryEnd very recent (< 5 seconds ago), sleepS should be small (< idle threshold)
-        var newNow = DateTime.Now;
-        var gapSeconds = (newNow - lastDiaryEnd).TotalSeconds - 60;
-        var idleThreshold = ConfigService.IdleThresholdMinutes() * 60;
-        Assert.True(gapSeconds < idleThreshold,
-            $"Gap {gapSeconds:F0}s should be less than idle threshold {idleThreshold}s, " +
-            $"so no sleep-gap would trigger");
+        // Clear the diary again and have tracker2 Poll — it should NOT write a sleep-gap row
+        // because _lastPollAt is recent enough that the sleep-gap logic doesn't trigger
+        ClearTodaysDiary(db);
+        tracker2.PollOnce();
+
+        // After Poll, there should be either 0 rows (if idle) or exactly 1 (continuation of activity),
+        // but NOT a synthetic "sleep gap" row that re-logs the time already flushed above
+        var rowCount = CountTodaysDiaryRows(db);
+        Assert.True(rowCount <= 1,
+            $"Poll should write 0 or 1 row (continuing activity or idle), not {rowCount} (which would suggest a sleep-gap was triggered)");
 
         tracker2.Stop();
     }
@@ -231,5 +233,36 @@ public sealed class ActivityTrackerFlushOnStopTests
         tracker.FlushSessionIfOpen();
         var rowCount = CountTodaysDiaryRows(db);
         Assert.Equal(1, rowCount);
+    }
+
+    /// <summary>
+    /// Test cross-date case: a session that started yesterday and is flushed today
+    /// should have its start clamped to today's work start time, not span midnight.
+    /// </summary>
+    [Fact]
+    public void FlushSessionStartingYesterdayClampedToTodayStart()
+    {
+        SetWorkingHours("08:00", "17:00");
+        using var db = new Database();
+        ClearTodaysDiary(db);
+        var tracker = new ActivityTracker(ConfigService.Root);
+
+        // Create a session that started yesterday at 16:00
+        var yesterday = DateTime.Today.AddDays(-1);
+        var sessionStart = yesterday + new TimeSpan(16, 0, 0);
+        var today = DateTime.Today;
+        var workStart = today + new TimeSpan(8, 0, 0);
+
+        // Simulate opening the session yesterday
+        tracker.SimulateOpenSession(sessionStart, "VS Code", DiaryCategory.OnPlan);
+
+        // Flush today (now is definitely after workStart, so after diary window opens)
+        tracker.FlushSessionIfOpen();
+
+        // The written row should start at today's workStart (08:00), not yesterday at 16:00
+        var row = GetTodaysDiaryRow(db);
+        Assert.NotNull(row);
+        Assert.Equal(workStart.ToString("HH:mm"), row!.Value.start.ToString("HH:mm"));
+        Assert.Equal(today.ToIsoDate(), row.Value.start.ToString("yyyy-MM-dd"));
     }
 }
