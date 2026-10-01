@@ -8,6 +8,9 @@ namespace Planillium.App.Services;
 /// </summary>
 public sealed class IncomeService : IDisposable
 {
+    /// <summary>Working hours per month: 21 days × 8 h. User decision 2026-10-01.</summary>
+    public const int WorkingHoursPerMonth = 168;
+
     private readonly Database _db;
 
     public IncomeService(Database db)
@@ -19,6 +22,11 @@ public sealed class IncomeService : IDisposable
     // the Database it was constructed with. Every call site disposes its
     // own Database separately, so this is never the last reference standing.
     public void Dispose() { }
+
+    /// <summary>Fixed hourly rate derived from monthly income: potential monthly EUR divided by
+    /// working hours per month (168). Constant per config; used for per-row EUR in distraction list
+    /// and the income card's per-hour line.</summary>
+    public static double HourValueEur() => ConfigService.PotentialMonthlyIncomeEur() / WorkingHoursPerMonth;
 
     /// <summary>Daily share of the configured potential monthly income. Computed fresh each
     /// time to respond to config changes, but applied only to past days that haven't posted yet.</summary>
@@ -97,7 +105,104 @@ public sealed class IncomeService : IDisposable
         return ConfigService.IsEmployed() ? dailyRate : -dailyRate;
     }
 
-    /// <summary>Sum of posted income for a reporting period, plus today's live preview.</summary>
+    /// <summary>Calculate total credit earned from completed tasks over a range of dates.
+    /// Credit applies only to unemployed days (employed=0) and is based on the ratio of
+    /// tasks completed to tasks due. Requires a populated ScoreService with active plans.</summary>
+    public double CreditRange(DateOnly from, DateOnly to, ScoreService score)
+    {
+        double credit = 0;
+        for (var d = from; d <= to; d = d.AddDays(1))
+        {
+            var (total, done) = score.DayTaskCounts(d);
+            if (total <= 0) continue;
+
+            // Get the ledger row for this day to check employed flag and delta
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT delta, employed FROM income_ledger WHERE date = $d";
+            cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd"));
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                var employed = Convert.ToInt32(reader["employed"]);
+                if (employed == 0) // Only credit unemployed days
+                {
+                    var delta = Convert.ToDouble(reader["delta"]);
+                    // delta is negative for unemployed days, so credit = -delta * (done/total)
+                    credit += -delta * (double)done / total;
+                }
+            }
+        }
+        return credit;
+    }
+
+    /// <summary>Today's earned credit from completed tasks, if unemployed. Zero if employed or no tasks due.</summary>
+    public double TodayCredit(ScoreService score)
+    {
+        if (ConfigService.IsEmployed()) return 0;
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var (total, done) = score.DayTaskCounts(today);
+        if (total <= 0) return 0;
+
+        var dailyRate = DailyRate(today);
+        // For today, credit = dailyRate * (done/total), since we don't have a ledger row yet
+        return dailyRate * (double)done / total;
+    }
+
+    /// <summary>Sidebar balance: sum of posted income plus credit for all closed days
+    /// (through yesterday only, not including today's preview).</summary>
+    public double PostedBalanceWithCredit(ScoreService score)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var yesterday = today.AddDays(-1);
+
+        // Get the posted sum for all days through yesterday
+        var posted = SumPostedRange(DateOnly.FromDateTime(DateTime.Today.AddYears(-100)), yesterday);
+
+        // Find the first posted date to start credit calculation from
+        DateOnly creditFrom;
+        using (var cmd = _db.CreateCommand())
+        {
+            cmd.CommandText = "SELECT MIN(date) FROM income_ledger";
+            var minDateStr = cmd.ExecuteScalar() as string;
+            if (string.IsNullOrEmpty(minDateStr))
+                return posted; // No ledger entries yet
+            creditFrom = DateOnly.ParseExact(minDateStr, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        // Calculate credit for closed days through yesterday only
+        var credit = CreditRange(creditFrom, yesterday, score);
+        return posted + credit;
+    }
+
+    /// <summary>Sum of posted income for a reporting period, plus today's live preview and credit.</summary>
+    public (double Net, double Credit) SumForPeriodWithCredit(ReportPeriod period, ScoreService score)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var periodStart = ReportData.PeriodStart(period, today);
+        var yesterday = today.AddDays(-1);
+
+        double posted = 0;
+        double credit = 0;
+
+        // Sum posted deltas through yesterday
+        if (periodStart < today)
+            posted = SumPostedRange(periodStart, yesterday);
+
+        // Calculate credit for the period
+        var creditStart = periodStart < today ? periodStart : today;
+        var creditEnd = yesterday;
+        if (creditStart <= creditEnd)
+            credit = CreditRange(creditStart, creditEnd, score);
+
+        // Add today's preview (posted) and today's credit
+        var todayPreview = TodayPreview();
+        var todayCredit = TodayCredit(score);
+
+        return (posted + todayPreview + credit + todayCredit, credit + todayCredit);
+    }
+
+    /// <summary>Sum of posted income for a reporting period, plus today's live preview (backwards compatible).</summary>
     public double SumForPeriod(ReportPeriod period)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);

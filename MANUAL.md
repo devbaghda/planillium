@@ -118,7 +118,7 @@ This creates a fuller picture of how time is actually spent.
 
 Tracking rests on your recurring days off. On any weekday you've excluded from your plan, nothing is written to the diary and no focus nudges appear — the tracker treats the whole day as time off.
 
-If you step away from the computer, the app asks "where have you been?" when you return, at any time of day. And if you finish and stop before your configured end-of-day, the evening review asks about that unaccounted stretch before it closes the day, so time you spent away is still recorded rather than left blank.
+If you step away from the computer, the app asks "where have you been?" when you return, at any time of day, naming the date and the times you were away. And if you finish and stop before your configured end-of-day, the evening review asks about that unaccounted stretch before it closes the day, so time you spent away is still recorded rather than left blank.
 
 The morning "start your day" prompt and the "where have you been?" prompt only open directly inside the app window when that window is actually visible. If it's hidden in the tray (or minimized), you'll get a tray notification instead — click it to open the app and answer.
 
@@ -134,13 +134,12 @@ THIS WEEK" (or whichever period you've picked) and shows the points that period'
 added up to — which is not the same as the BALANCE in the sidebar, since that is a running total
 across all time and also subtracts anything you've spent on entertainment time. Underneath it, the
 income card shows the same period's UNEARNED (or EXTRA) INCOME, based on the potential monthly
-income you set in Settings and how much of that period was spent off-plan; it also breaks that
-total down to a per-off-plan-hour rate ("That's €X per off-plan hour"), so the cost reads the same
-whether you're looking at today or the whole year. The rate isn't shown for a period with no
-off-plan time at all — there's nothing to divide by, and a €0,00 there would misread as "off-plan
-time costs nothing" rather than "none happened." Top Distractions carries the same rate down to
-each row, showing that app or site's own EUR cost next to its hours, so a single line-item's share
-of the period's total is visible without doing the division yourself. The diary section at the
+income you set in Settings. Finishing plan tasks earns money back: on a day you're counted as losing
+income, the share of that day's planned tasks you completed (3 of 4 = 75%) is credited against it.
+The card also values one hour of work (monthly income ÷ 168 h, so about €16 at €2,700) and shows
+what your off-plan hours that period came to at that value. The line isn't shown for a period with
+no off-plan time at all. Top Distractions shows the same per-hour value on each row: that app or
+site's hours and its EUR cost, in two aligned columns. The diary section at the
 bottom is separate and always works one day at a time.
 
 The summary table carries the same columns on every period view: tasks done, one column for each
@@ -161,9 +160,9 @@ can differ from its total by 0,1: the total is the exact one.
 On a narrow window the table scrolls sideways inside its card rather than losing its last columns.
 The exported HTML and CSV reports carry the same columns in the same order as the screen.
 
-The "time by app" breakdown shows your three biggest time sinks by default, with a "Show more" link to reveal the full list.
+Time by app is a pie: one slice per app (the eight biggest, the rest folded into "Other"). Click a slice, or its name in the list beside it, to turn it into a pie of what is inside it — an app's pages, or the apps inside "Other" — and use "← Back" to return.
 
-The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained. If you leave the page open on today's diary across midnight, it rolls onto the new day by itself; if you'd navigated to a specific past day, it stays there.
+The diary's Category, App, Page and Tag filters are tick-lists: tick several to see them together (the button shows what is ticked), and "Clear filters" unticks everything. The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained. If you leave the page open on today's diary across midnight, it rolls onto the new day by itself; if you'd navigated to a specific past day, it stays there.
 
 The diary list itself only loads a batch of entries at a time (40 up front, 50 more each time you
 click "Show more") rather than the whole matching history at once, so a long search or a busy day

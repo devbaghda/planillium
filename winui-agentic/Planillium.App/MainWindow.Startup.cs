@@ -427,10 +427,22 @@ public sealed partial class MainWindow
     {
         try
         {
+            var plans = PlanStore.LoadActivePlans();
             using var db = new Database();
-            var balance = db.IncomeBalance();
-            IncomeLabel.Text = balance < 0 ? "LOST INCOME" : "EXTRA INCOME";
-            IncomeValue.Text = FormatEur(balance);
+            using var score = new ScoreService(plans, db);
+            using var income = new IncomeService(db);
+            var balance = income.PostedBalanceWithCredit(score);
+            var roundedBalance = Math.Round(balance, 2);
+
+            // Determine label based on rounded balance
+            if (roundedBalance < 0)
+                IncomeLabel.Text = "LOST INCOME";
+            else if (roundedBalance > 0)
+                IncomeLabel.Text = "EXTRA INCOME";
+            else
+                IncomeLabel.Text = "INCOME BALANCE";
+
+            IncomeValue.Text = FormatEur(roundedBalance);
         }
         catch (Exception ex)
         {

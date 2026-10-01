@@ -18,7 +18,7 @@ public static class ReportExport
     /// pulled out so the method below is purely "format this data as HTML," not a mix
     /// of DB queries and string templating in one 90-line function (audit finding #5).</summary>
     private sealed record WeekReportData(
-        List<ReportData.DayStat> Stats, int WeekOn, int WeekOff,
+        List<ReportData.DayStat> Stats, int WeekOn, int WeekOff, int WeekNeutral,
         List<(string Label, int Minutes)> Distractions,
         List<(string App, ReportData.AppUsage Usage)> Breakdown,
         List<string> Hints);
@@ -37,10 +37,12 @@ public static class ReportExport
         var stats = ReportData.WeekStats(db.Conn, score);
         var weekOn = stats.Sum(s => s.OnMin);
         var weekOff = stats.Sum(s => s.OffMin);
+        var weekNeutral = stats.Sum(s => s.Minutes.Neutral);
         var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn, score);
         var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn, score);
-        var hints = Suggestions(weekOn, weekOff, distractions, ReportPeriod.Week);
-        return new WeekReportData(stats, weekOn, weekOff, distractions, breakdown, hints);
+        var hourValue = IncomeService.HourValueEur();
+        var hints = Suggestions(weekOn, weekOff, weekNeutral, distractions, hourValue, ReportPeriod.Week);
+        return new WeekReportData(stats, weekOn, weekOff, weekNeutral, distractions, breakdown, hints);
     }
 
     /// <summary>Writes data/report.html and opens it in the browser. Returns the path.</summary>
@@ -50,7 +52,7 @@ public static class ReportExport
         using var db = new Database();
         using var score = new ScoreService(plans, db);
         var data = GatherWeekReportData(db, score);
-        var (stats, _, _, distractions, breakdown, hints) = data;
+        var (stats, _, _, _, distractions, breakdown, hints) = data;
 
         var dayRows = new StringBuilder();
         foreach (var s in stats)
@@ -229,33 +231,11 @@ public static class ReportExport
             f.Contains(',') || f.Contains('"') || f.Contains('\n')
                 ? "\"" + f.Replace("\"", "\"\"") + "\"" : f));
 
-    /// <summary>Also rendered on the Reports page as INSIGHTS. <paramref name="period"/> picks the
-    /// phrase ("today"/"this week"/"this month"/"this year") — the Reports page reuses this for
-    /// every period selector value, so the wording has to track it instead of being fixed to the
-    /// weekly-export case this was originally written for (2026-09-04, "insights said 'this week'
-    /// under a THIS YEAR header").</summary>
-    public static List<string> Suggestions(int on, int off,
-        List<(string Label, int Minutes)> distractions, ReportPeriod period = ReportPeriod.Week)
+    /// <summary>Also rendered on the Reports page as INSIGHTS. Delegates to <see cref="InsightRules"/>
+    /// for the actual logic (which is tested independently), while this method handles the formatting.</summary>
+    public static List<string> Suggestions(int on, int off, int neutral,
+        List<(string Label, int Minutes)> distractions, double hourValueEur, ReportPeriod period = ReportPeriod.Week)
     {
-        var phrase = ReportData.PeriodName(period).ToLowerInvariant();
-        var hints = new List<string>();
-        // Durations through ReportData.FmtHours like everything else on Reports (2026-08-05) —
-        // these two sentences formatted their own, so the insights kept saying "23h 56m" and
-        // "1436 min" while the table above them had moved to decimal hours.
-        if (off > 120)
-            hints.Add($"You spent {ReportData.FmtHours(off)} off-plan {phrase}. " +
-                      "Try blocking distracting apps during working hours.");
-        if (on > 0 && (double)off / Math.Max(on, 1) > 0.4)
-            hints.Add("Off-plan time is over 40% of your productive time. " +
-                      "Your goal needs tighter focus blocks.");
-        if (distractions.Count > 0)
-        {
-            var top = distractions[0];
-            hints.Add($"'{top.Label}' is your biggest distraction — " +
-                      $"{ReportData.FmtHours(top.Minutes)} off-plan {phrase}.");
-        }
-        if (hints.Count == 0)
-            hints.Add($"No major distraction patterns detected {phrase}. Keep going!");
-        return hints;
+        return InsightRules.Suggestions(on, off, neutral, distractions, hourValueEur, period);
     }
 }

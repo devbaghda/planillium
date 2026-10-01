@@ -26,10 +26,10 @@ public sealed partial class MainWindow
     /// user resumes from the tray themselves.</summary>
     public void RestartTracker()
     {
-        Tracker?.Stop();
+        var resumeFrom = Tracker?.StopForRestart();
         Tracker = null;
         if (_trackingPaused) return;
-        StartTracker();
+        StartTracker(resumeFrom);
     }
 
     /// <summary>
@@ -65,7 +65,10 @@ public sealed partial class MainWindow
         }
     }
 
-    private void StartTracker()
+    /// <param name="resumeFrom">Last poll time of the tracker being replaced, when this is an
+    /// in-app restart — beats the last diary row's end as the "last seen" seed, which lags real
+    /// time and made a Settings save look like an absence (2026-10-01).</param>
+    private void StartTracker(DateTime? resumeFrom = null)
     {
         // Always start — the tracker itself pauses per-poll whenever the
         // Python app is running, whichever order the two were launched in.
@@ -96,7 +99,7 @@ public sealed partial class MainWindow
                 lastDiaryEnd = db.LastDiaryEnd();
             }
             catch (Exception ex) { Log.Error("StartTracker.LastDiaryEnd", ex); }
-            Tracker.Start(lastDiaryEnd);
+            Tracker.Start(resumeFrom ?? lastDiaryEnd);
         }
         catch (Exception ex)
         {

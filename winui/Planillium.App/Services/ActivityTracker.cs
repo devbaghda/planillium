@@ -184,6 +184,34 @@ public sealed class ActivityTracker : IDisposable
 
     public void Dispose() => Stop();
 
+    /// <summary>
+    /// Stops this tracker for an in-app restart (Settings save, diary re-categorize) and
+    /// returns where its replacement should resume "last seen" from. 2026-10-01: restarts used
+    /// to seed the new tracker from the last diary row's end, which lags real time by however
+    /// long the open session has been running — so the very next poll read that lag as a sleep
+    /// gap and showed "Welcome back, you were away N min" to someone actively using the app.
+    /// The open session is closed at the last poll (the same way HandleSleepGap closes it) so
+    /// no activity is lost, and the last poll time is returned. Returns null when the tracker
+    /// was mid-idle: a real absence is pending, and the caller's diary-end seed is what makes
+    /// the replacement ask about it.
+    /// </summary>
+    public DateTime? StopForRestart()
+    {
+        Stop();
+        var last = _lastPollAt;
+        if (_sessionStart is DateTime ss && _sessionApp != null && last is DateTime lp && lp > ss)
+        {
+            try
+            {
+                using var conn = AppPaths.OpenConnection();
+                DiaryWriter.LogSession(conn, ss, lp, _sessionClass!, _sessionApp);
+            }
+            catch (Exception ex) { Log.Error("ActivityTracker.StopForRestart", ex); }
+        }
+        SetSession(null, null, null);
+        return _idleNotified ? null : last;
+    }
+
     // ── classification (delegated to ActivityClassifier) ─────────────────
 
     public string Classify(string title) => _classifier.Classify(title);

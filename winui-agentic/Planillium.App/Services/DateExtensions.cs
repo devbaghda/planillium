@@ -95,4 +95,25 @@ internal static class DateExtensions
     /// prevent, just on the leg nothing had covered yet.</summary>
     public static bool TryParseIsoDate(this string s, out DateOnly d) =>
         DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d);
+
+    /// <summary>Formats an absence span (start and end time) for the "Welcome back" dialog.
+    /// Same date: "Thu 01.10, 10:30–10:36" (date + comma + times with en dash).
+    /// Crosses midnight: "Wed 30.09 23:50 – Thu 01.10 00:05" (both dates + times, spaced en dash).
+    /// Used in IdleReturnDialog.ShowAsync to show when the absence occurred, unambiguous across
+    /// midnight boundaries. InvariantCulture only, matching every other date/time display shape
+    /// in this file.</summary>
+    public static string ToDisplayAbsenceSpan(this DateTime start, DateTime end)
+    {
+        const string enDash = "–"; // U+2013 en dash
+        if (start.Date == end.Date)
+        {
+            // Same date: "Thu 01.10, 10:30–10:36"
+            return $"{start.ToDisplayDate()}, {start.ToIsoTimeOfDay()}{enDash}{end.ToIsoTimeOfDay()}";
+        }
+        else
+        {
+            // Different dates: "Wed 30.09 23:50 – Thu 01.10 00:05"
+            return $"{start.ToDisplayDate()} {start.ToIsoTimeOfDay()} {enDash} {end.ToDisplayDate()} {end.ToIsoTimeOfDay()}";
+        }
+    }
 }

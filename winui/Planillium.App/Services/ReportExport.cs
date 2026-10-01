@@ -39,7 +39,9 @@ public static class ReportExport
         var weekOff = stats.Sum(s => s.OffMin);
         var distractions = ReportData.TopDistractions(ReportPeriod.Week, db.Conn, score);
         var breakdown = ReportData.AppBreakdown(ReportPeriod.Week, db.Conn, score);
-        var hints = Suggestions(weekOn, weekOff, distractions, ReportPeriod.Week);
+        var weekNeutral = stats.Sum(s => s.Minutes.Neutral);
+        var hints = Suggestions(weekOn, weekOff, weekNeutral, distractions, ReportPeriod.Week,
+            IncomeService.HourValueEur());
         return new WeekReportData(stats, weekOn, weekOff, distractions, breakdown, hints);
     }
 
@@ -234,25 +236,32 @@ public static class ReportExport
     /// every period selector value, so the wording has to track it instead of being fixed to the
     /// weekly-export case this was originally written for (2026-09-04, "insights said 'this week'
     /// under a THIS YEAR header").</summary>
-    public static List<string> Suggestions(int on, int off,
-        List<(string Label, int Minutes)> distractions, ReportPeriod period = ReportPeriod.Week)
+    public static List<string> Suggestions(int on, int off, int neutral,
+        List<(string Label, int Minutes)> distractions, ReportPeriod period = ReportPeriod.Week,
+        double hourValueEur = 0)
     {
         var phrase = ReportData.PeriodName(period).ToLowerInvariant();
         var hints = new List<string>();
         // Durations through ReportData.FmtHours like everything else on Reports (2026-08-05) —
         // these two sentences formatted their own, so the insights kept saying "23h 56m" and
         // "1436 min" while the table above them had moved to decimal hours.
+        // EUR beside hours (2026-10-01 request), at the same one-hour value as Top Distractions.
+        string Eur(int min) => hourValueEur > 0
+            ? $" (≈ {MainWindow.FormatEur(min / 60.0 * hourValueEur)})" : "";
         if (off > 120)
-            hints.Add($"You spent {ReportData.FmtHours(off)} off-plan {phrase}. " +
+            hints.Add($"You spent {ReportData.FmtHours(off)}{Eur(off)} off-plan {phrase}. " +
                       "Try blocking distracting apps during working hours.");
-        if (on > 0 && (double)off / Math.Max(on, 1) > 0.4)
-            hints.Add("Off-plan time is over 40% of your productive time. " +
+        // Ratio is against on-plan + neutral time (2026-10-01 request), not on-plan alone.
+        var workish = on + neutral;
+        if (workish > 0 && (double)off / workish > 0.4)
+            hints.Add($"Off-plan time is {100.0 * off / workish:0}% of your on-plan + neutral time " +
+                      "(over 40%). " +
                       "Your goal needs tighter focus blocks.");
         if (distractions.Count > 0)
         {
             var top = distractions[0];
             hints.Add($"'{top.Label}' is your biggest distraction — " +
-                      $"{ReportData.FmtHours(top.Minutes)} off-plan {phrase}.");
+                      $"{ReportData.FmtHours(top.Minutes)}{Eur(top.Minutes)} off-plan {phrase}.");
         }
         if (hints.Count == 0)
             hints.Add($"No major distraction patterns detected {phrase}. Keep going!");

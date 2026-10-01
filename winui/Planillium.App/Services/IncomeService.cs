@@ -34,6 +34,45 @@ public sealed class IncomeService : IDisposable
     public static double DailyRate(DateOnly d) =>
         ConfigService.PotentialMonthlyIncomeEur() / DateTime.DaysInMonth(d.Year, d.Month);
 
+    /// <summary>Working hours in a month for valuing one hour of work: 21 days × 8 h
+    /// (user decision 2026-10-01). Off-plan hours are priced at this, not at "period lost
+    /// income ÷ off-plan minutes", which charged every calendar day (weekends, nights)
+    /// against the few off-plan hours and inflated the rate several-fold.</summary>
+    public const double WorkingHoursPerMonth = 168;
+
+    /// <summary>What one hour of work is worth: configured monthly net ÷ 168 h.</summary>
+    public static double HourValueEur() =>
+        ConfigService.PotentialMonthlyIncomeEur() / WorkingHoursPerMonth;
+
+    /// <summary>Earned-money credit for plan tasks done (user decision 2026-10-01): on each
+    /// unemployed day, done ÷ total of that day's plan tasks × that day's rate is added back
+    /// to the lost figure. Computed at read time from completions, not written to the ledger,
+    /// so it also covers already-posted days without rewriting any stored row. Employed days
+    /// already add the full rate, so they get no credit. Today counts live (unless employed);
+    /// <paramref name="from"/> is inclusive.</summary>
+    public double CreditForRange(ScoreService score, DateOnly from, bool includeToday = true)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (from < StartDate) from = StartDate;
+        var unemployedDays = new HashSet<DateOnly>();
+        using (var cmd = _db.CreateCommand())
+        {
+            cmd.CommandText = "SELECT date FROM income_ledger WHERE date >= $from AND employed=0";
+            cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) unemployedDays.Add(DateOnly.Parse(r.GetString(0)));
+        }
+        if (includeToday && !ConfigService.IsEmployed() && today >= from) unemployedDays.Add(today);
+
+        double credit = 0;
+        foreach (var d in unemployedDays)
+        {
+            var (total, done) = score.DayTaskCounts(d);
+            if (total > 0) credit += DailyRate(d) * done / total;
+        }
+        return credit;
+    }
+
     private bool LedgerHasDate(DateOnly d)
     {
         using var cmd = _db.CreateCommand();
@@ -129,10 +168,15 @@ public sealed class IncomeService : IDisposable
     /// window (Day/Week/Month/Year, same calendar-window convention as
     /// ReportData.PeriodStart, not a rolling lookback) plus today's live preview, since
     /// every period Reports offers includes today.</summary>
-    public double SumForPeriod(ReportPeriod period)
+    public double SumForPeriod(ReportPeriod period, ScoreService score)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var periodStart = ReportData.PeriodStart(period, today);
-        return SumPostedRange(periodStart) + TodayPreview();
+        return SumPostedRange(periodStart) + TodayPreview() + CreditForRange(score, periodStart);
     }
+
+    /// <summary>Sidebar figure: posted days plus the earned credit on them (today excluded,
+    /// like the ledger sum itself).</summary>
+    public double Balance(ScoreService score) =>
+        _db.IncomeBalance() + CreditForRange(score, StartDate, includeToday: false);
 }

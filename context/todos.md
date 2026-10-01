@@ -427,3 +427,18 @@ complexity of a transactional rewrite for the risk it carries.
 
 **~150-230MB memory footprint** — accepted: mostly `NavigationCacheMode="Enabled"` + WinUI3
 baseline, no leak found — leave as-is.
+
+### 2026-10-01 — eight-item batch, regular workflow side (winui/)
+
+Away dialog shows the date (`DateTime.ToDisplaySpan`); working-in-Planillium-counted-as-absence fixed at its
+root — `RestartTracker` seeded the new tracker from the last diary row, so the first poll saw a
+fake sleep gap; `ActivityTracker.StopForRestart()` now flushes the open session and hands back
+the last poll time (a residual race with a poll in flight remains — worst case one stale gap
+prompt). EUR rate = monthly ÷ 168 h (`IncomeService.HourValueEur`, DECISIONS rule 14); Top
+Distractions columns fixed-width; Insights EUR and ratio vs. on+neutral (`ReportExport.Suggestions`,
+also feeds the weekly HTML export); plan-completion credit (`IncomeService.CreditForRange`,
+read-time, proportional); diary filters multi-select (`MultiPicker`); Time by App pie
+(`ReportsPage.TimeByAppPie.cs`). Build 0 warnings/0 errors, 165 tests pass. UI items verified by
+build + code inspection only (no live clicking of real data) — visual review by user pending.
+`ReportExport.Suggestions` isn't linkable into the test assembly (reaches WinUI), so its change
+has no unit test.

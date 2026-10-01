@@ -145,7 +145,7 @@ public sealed partial class ReportsPage : Page
             // this week regardless of what the selector said.
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
             using var income = new IncomeService(db);
-            var incomeSum = income.SumForPeriod(_period);
+            var incomeSum = income.SumForPeriod(_period, score);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
             Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin)));
@@ -177,7 +177,7 @@ public sealed partial class ReportsPage : Page
             if (distractions.Count == 0)
                 Body.Children.Add(Dim("No off-plan time logged. Impressive."));
             else
-                Body.Children.Add(Card(DistractionList(distractions, incomeSum, totals.OffMin)));
+                Body.Children.Add(Card(DistractionList(distractions)));
 
             // ── time by app (expandable groups) ───────────────────────────
             Body.Children.Add(Section($"TIME BY APP — {periodName}"));
@@ -189,10 +189,6 @@ public sealed partial class ReportsPage : Page
                 Body.Children.Add(Dim("No activity logged yet."));
             else
             {
-                // The bars below are colored with no other label — without
-                // this, the only way to know what a color means is to
-                // already know it (2026-07-09 audit finding #18).
-                Body.Children.Add(TimeByAppLegend());
                 Body.Children.Add(Card(AppBreakdownPanel(breakdown)));
             }
 
@@ -281,8 +277,12 @@ public sealed partial class ReportsPage : Page
         // not a €0,00/h that would misleadingly read as "off-plan time costs nothing."
         if (offMin > 0)
         {
-            var perHour = sum / (offMin / 60.0);
-            card.Children.Add(Dim($"That's {MainWindow.FormatEur(perHour)} per off-plan hour."));
+            var hv = IncomeService.HourValueEur();
+            card.Children.Add(Dim(
+                $"One hour of work is valued at {MainWindow.FormatEur(hv)} " +
+                $"(monthly ÷ {IncomeService.WorkingHoursPerMonth:0} h); " +
+                $"your {ReportData.FmtHours(offMin)} off-plan {timeWord} ≈ " +
+                $"{MainWindow.FormatEur(offMin / 60.0 * hv)}."));
         }
         return card;
     }
@@ -294,8 +294,8 @@ public sealed partial class ReportsPage : Page
         ScoreService score)
     {
         var hints = ReportExport.Suggestions(
-            totals.OnMin, totals.OffMin,
-            ReportData.TopDistractions(_period, conn, score), _period);
+            totals.OnMin, totals.OffMin, totals.NeutralMin,
+            ReportData.TopDistractions(_period, conn, score), _period, IncomeService.HourValueEur());
         var hintPanel = new StackPanel { Spacing = 6 };
         foreach (var hint in hints)
         {

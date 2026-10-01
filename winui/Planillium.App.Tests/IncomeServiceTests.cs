@@ -180,7 +180,7 @@ public sealed class IncomeServiceTests
         using var svc = new IncomeService(db);
         svc.EnsureIncomeCaughtUp();
 
-        Assert.Equal(IncomeService.TodayPreview(), svc.SumForPeriod(ReportPeriod.Day), precision: 6);
+        Assert.Equal(IncomeService.TodayPreview(), svc.SumForPeriod(ReportPeriod.Day, new ScoreService(new List<Planillium.App.Models.Plan>(), db)), precision: 6);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class IncomeServiceTests
         svc.EnsureIncomeCaughtUp();
 
         Assert.Equal(svc.SumPostedRange(IncomeService.StartDate), db.IncomeBalance(), precision: 6);
-        Assert.NotEqual(db.IncomeBalance(), svc.SumForPeriod(ReportPeriod.Year), precision: 6);
+        Assert.NotEqual(db.IncomeBalance(), svc.SumForPeriod(ReportPeriod.Year, new ScoreService(new List<Planillium.App.Models.Plan>(), db)), precision: 6);
     }
 
     [Fact]
@@ -219,5 +219,24 @@ public sealed class IncomeServiceTests
         var second = svc.SumPostedRange(IncomeService.StartDate);
 
         Assert.Equal(first, second, precision: 6);
+    }
+
+    [Fact]
+    public void HourValue_IsMonthlyOver168()
+    {
+        SetIncomeConfig(monthlyEur: 2700, employed: false);
+        Assert.Equal(2700 / 168.0, IncomeService.HourValueEur(), precision: 6);
+    }
+
+    [Fact]
+    public void NoPlanTasks_MeansNoCredit()
+    {
+        using var db = new Database();
+        ClearIncomeLedger();
+        SetIncomeConfig(monthlyEur: 3000, employed: false);
+        using var svc = new IncomeService(db);
+        svc.EnsureIncomeCaughtUp();
+        using var score = new ScoreService(new List<Planillium.App.Models.Plan>(), db);
+        Assert.Equal(0, svc.CreditForRange(score, IncomeService.StartDate), precision: 6);
     }
 }

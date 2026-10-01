@@ -122,6 +122,11 @@ Short pointers kept inline (full text in `DECISIONS.md`):
 
 ## 7. Still open
 
+0. **(opened 2026-10-01) Eight-item batch, both workflows.** Regular side (`winui/`) done and
+   documented (see `context/todos.md` 2026-10-01); awaiting user's visual review of pie, diary
+   multi-select filters and Top Distractions columns. Agentic side (`winui-agentic/`): specs
+   written under `pilot-specs/`; Coders/QA run in sequence — outcomes go only in `context/todos.md`.
+   Uncommitted, unpushed.
 1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
    cause not investigated — possibly two queued ticks firing close together after timer suspension
    during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.

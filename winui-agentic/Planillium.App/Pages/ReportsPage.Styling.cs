@@ -27,6 +27,19 @@ public sealed partial class ReportsPage
     /// <inheritdoc cref="LabelColumnWidth"/>
     internal const double ColumnGap = 12;
 
+    /// <summary>Fixed width of the hours column in Top Distractions and Time by App rows,
+    /// right-aligned. Fits "123,4 h" at FontSize 13 with margin (approximately 64 dip).</summary>
+    internal const double HoursColumnWidth = 64;
+
+    /// <summary>Fixed width of the EUR column in Top Distractions rows, right-aligned.
+    /// Fits "-€12 345,67" / "-€12,345.67" (longest realistic string) at FontSize 13
+    /// (approximately 104 dip).</summary>
+    internal const double EurColumnWidth = 104;
+
+    /// <summary>Fixed width of the chevron column in Time by App rows (present on every row,
+    /// even non-expandable ones, so all bars end at the same x). Approximately 24 dip.</summary>
+    internal const double ChevronColumnWidth = 24;
+
     /// <summary>How far a sub-row under Time by App is indented from its parent app row. Its own
     /// label column is <see cref="LabelColumnWidth"/> minus this, so the indent moves the label
     /// without moving the bar off the shared axis.</summary>

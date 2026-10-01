@@ -68,6 +68,14 @@ public sealed class ActivityTracker : IDisposable
     private readonly object _openSessionLock = new();
     private DateTime? _openSessionStart;
 
+    // Mutual-exclusion lock between PollOnce and Stop, held for the duration
+    // of the entire poll so Stop (UI thread) never races PollOnce (poll thread)
+    // over _sessionStart, _sessionApp, _sessionClass and related state. This is
+    // the one place Stop touches poll-thread state, so it needs protection.
+    // PollOnce holds it for at most one DB operation chain; Stop holds it only
+    // to flush the open session if any before releasing.
+    private readonly object _pollLock = new();
+
     // Rest-day status and the evening-review gap-sweep high-water mark are
     // no longer poll-thread-only: ReviewDialog reads/writes both directly
     // from the UI thread (PendingDayGap/MarkAccountedThrough), concurrently
@@ -175,9 +183,42 @@ public sealed class ActivityTracker : IDisposable
         }, null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
     }
 
+    /// <summary>Internal method to flush the open session to the diary when Stop is called.
+    /// Respects working hours — writes nothing past _workEnd, and nothing if the clamped
+    /// end <= start. Tests can call this to exercise flush logic with a controlled DB.
+    /// Called from Stop() while holding _pollLock. Must never throw.</summary>
+    internal void FlushSessionIfOpen()
+    {
+        if (_sessionStart is not DateTime ss || _sessionApp == null || _idleNotified)
+            return;
+
+        try
+        {
+            var now = DateTime.Now;
+            var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
+            var end = now < diaryEndToday ? now : diaryEndToday;
+
+            // Mirror HandleOutsideDiaryHours logic: don't write a row if end <= start
+            if (end <= ss)
+                return;
+
+            using var conn = AppPaths.OpenConnection();
+            DiaryWriter.LogSession(conn, ss, end, _sessionClass!, _sessionApp);
+            SetSession(null, null, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ActivityTracker.FlushSessionIfOpen", ex);
+        }
+    }
+
     public void Stop()
     {
         Running = false;
+        lock (_pollLock)
+        {
+            FlushSessionIfOpen();
+        }
         _timer?.Dispose();
         _timer = null;
     }
@@ -508,67 +549,70 @@ public sealed class ActivityTracker : IDisposable
     /// </summary>
     private void PollOnce()
     {
-        CheckClockOffset();
-        var now = DateTime.Now;
-
-        // Rest day (a recurring day off): hold no tracking at all. Behave as
-        // if fully outside the tracked hours — drop any open session without
-        // logging it (that time is the user's own), clear alert/idle state so
-        // nothing fires, and show a "Day off" pill. Nothing is written to the
-        // diary, so days off stay blank instead of full of idle rows.
-        if (IsRestDayToday())
+        lock (_pollLock)
         {
-            SetSession(null, null, null);
-            _offSince = null; _lastAlert = null;
-            _idleNotified = false; _idleSince = null;
+            CheckClockOffset();
+            var now = DateTime.Now;
+
+            // Rest day (a recurring day off): hold no tracking at all. Behave as
+            // if fully outside the tracked hours — drop any open session without
+            // logging it (that time is the user's own), clear alert/idle state so
+            // nothing fires, and show a "Day off" pill. Nothing is written to the
+            // diary, so days off stay blank instead of full of idle rows.
+            if (IsRestDayToday())
+            {
+                SetSession(null, null, null);
+                _offSince = null; _lastAlert = null;
+                _idleNotified = false; _idleSince = null;
+                _lastPollAt = now;
+                _currentClass = DiaryCategory.DayOff; _currentWindow = "";
+                OnStatus?.Invoke(DiaryCategory.DayOff, "");
+                return;
+            }
+
+            var title = ActiveWindowTitle();
+            var idleS = IdleSeconds();
+            var cls = EffectiveClass(Classify(title));
+            var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
+            var idleThresholdSec = _idleThresholdMin * 60;
+
+            using var conn = AppPaths.OpenConnection();
+
+            // Order matters here (2026-07-21 fix, confirmed via the 2026-07-20 diagnostics below):
+            // HandleSleepGap must run BEFORE HandleSessionLock. Both can set _idleSince/_idleNotified
+            // for the same poll, but HandleSleepGap anchors to `last` (the true last-known-good poll
+            // time, however long ago that was), while HandleSessionLock anchors to `now` (whenever
+            // this poll happens to be running, which can be far later than the actual lock — e.g. if
+            // Windows throttled this app's background timer for hours while it sat hidden in the
+            // tray, or the WM_WTSSESSION_CHANGE message itself was queued during sleep). With the old
+            // order, a poll that resumes after a long gap AND has a pending lock notification let
+            // HandleSessionLock go first, stamping _idleSince = now and _idleNotified = true — which
+            // then made HandleSleepGap's own `|| _idleNotified` guard skip it entirely one line later
+            // in the very same call, silently discarding the real gap. Confirmed live: 2026-07-21,
+            // tracking picked up at 10:35 instead of the configured 06:00 diary start, with
+            // HandleSessionLock's line logging idleSince=now and the immediately-following
+            // HandleIdleReturn logging a zero-length idleStart==idleEnd — and no HandleSleepGap line
+            // at all despite the process having been running continuously since the previous evening.
+            // Running HandleSleepGap first means it claims the gap (correctly, using `last`) before
+            // HandleSessionLock gets a chance to overwrite it with the much-less-accurate `now`; if
+            // there's no sleep gap, HandleSleepGap is a no-op and HandleSessionLock runs exactly as
+            // before.
+            HandleSleepGap(conn, now, idleThresholdSec);
+            HandleSessionLock(conn, now);
             _lastPollAt = now;
-            _currentClass = DiaryCategory.DayOff; _currentWindow = "";
-            OnStatus?.Invoke(DiaryCategory.DayOff, "");
-            return;
+
+            _currentWindow = title;
+            _currentClass = cls;
+            CheckAlert(cls, conn);
+            OnStatus?.Invoke(cls, title);
+
+            if (_idleNotified && idleS < idleThresholdSec)
+                HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS);
+            else if (InWorkingHours())
+                HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec);
+            else if (_sessionStart is DateTime open && _sessionApp != null)
+                HandleOutsideDiaryHours(conn, now, diaryEndToday, open);
         }
-
-        var title = ActiveWindowTitle();
-        var idleS = IdleSeconds();
-        var cls = EffectiveClass(Classify(title));
-        var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
-        var idleThresholdSec = _idleThresholdMin * 60;
-
-        using var conn = AppPaths.OpenConnection();
-
-        // Order matters here (2026-07-21 fix, confirmed via the 2026-07-20 diagnostics below):
-        // HandleSleepGap must run BEFORE HandleSessionLock. Both can set _idleSince/_idleNotified
-        // for the same poll, but HandleSleepGap anchors to `last` (the true last-known-good poll
-        // time, however long ago that was), while HandleSessionLock anchors to `now` (whenever
-        // this poll happens to be running, which can be far later than the actual lock — e.g. if
-        // Windows throttled this app's background timer for hours while it sat hidden in the
-        // tray, or the WM_WTSSESSION_CHANGE message itself was queued during sleep). With the old
-        // order, a poll that resumes after a long gap AND has a pending lock notification let
-        // HandleSessionLock go first, stamping _idleSince = now and _idleNotified = true — which
-        // then made HandleSleepGap's own `|| _idleNotified` guard skip it entirely one line later
-        // in the very same call, silently discarding the real gap. Confirmed live: 2026-07-21,
-        // tracking picked up at 10:35 instead of the configured 06:00 diary start, with
-        // HandleSessionLock's line logging idleSince=now and the immediately-following
-        // HandleIdleReturn logging a zero-length idleStart==idleEnd — and no HandleSleepGap line
-        // at all despite the process having been running continuously since the previous evening.
-        // Running HandleSleepGap first means it claims the gap (correctly, using `last`) before
-        // HandleSessionLock gets a chance to overwrite it with the much-less-accurate `now`; if
-        // there's no sleep gap, HandleSleepGap is a no-op and HandleSessionLock runs exactly as
-        // before.
-        HandleSleepGap(conn, now, idleThresholdSec);
-        HandleSessionLock(conn, now);
-        _lastPollAt = now;
-
-        _currentWindow = title;
-        _currentClass = cls;
-        CheckAlert(cls, conn);
-        OnStatus?.Invoke(cls, title);
-
-        if (_idleNotified && idleS < idleThresholdSec)
-            HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS);
-        else if (InWorkingHours())
-            HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec);
-        else if (_sessionStart is DateTime open && _sessionApp != null)
-            HandleOutsideDiaryHours(conn, now, diaryEndToday, open);
     }
 
     /// <summary>Windows session lock/unlock (Win+L, screen-saver): close out

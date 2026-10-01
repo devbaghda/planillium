@@ -109,7 +109,7 @@ public static class IdleReturnDialog
         var idleEnd = idleStart.AddMinutes(idleMinutes);
         root.Children.Add(new TextBlock
         {
-            Text = $"You were away {idleMinutes} min ({idleStart.ToIsoTimeOfDay()}–{idleEnd.ToIsoTimeOfDay()}). What was it, roughly?",
+            Text = $"You were away {idleMinutes} min ({idleStart.ToDisplayAbsenceSpan(idleEnd)}). What was it, roughly?",
             TextWrapping = TextWrapping.Wrap,
         });
 

@@ -78,6 +78,14 @@ internal static class DateExtensions
     /// in the app that wasn't going through this file at all.</summary>
     public static string ToDisplayDateShort(this DateOnly d) => d.ToString("dd.MM", CultureInfo.InvariantCulture);
 
+    /// <summary>The span of an absence for the "Welcome back" dialog: "Thu 01.10, 10:30–10:36"
+    /// on one day, "Wed 30.09 23:50 – Thu 01.10 00:05" when it crosses midnight, so the date is
+    /// never ambiguous (2026-10-01 request — the dialog used to show times only).</summary>
+    public static string ToDisplaySpan(this DateTime start, DateTime end) =>
+        start.Date == end.Date
+            ? $"{start.ToDisplayDate()}, {start.ToIsoTimeOfDay()}–{end.ToIsoTimeOfDay()}"
+            : $"{start.ToDisplayDate()} {start.ToIsoTimeOfDay()} – {end.ToDisplayDate()} {end.ToIsoTimeOfDay()}";
+
     /// <summary>"15.07.2026 14:32" — ReportExport's HTML and CSV "generated ..." lines
     /// both hand-typed this identically (2026-07-24 audit finding #12), the same
     /// same-format-two-copies drift risk every other helper in this file exists to

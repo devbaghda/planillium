@@ -169,6 +169,19 @@
     - Settings' monthly-income field and employment toggle follow the existing
       independent-per-section save convention (rule set out under `SettingsPage`, §"A settings
       page split across independent sections..." below).
+    - **Hour value = monthly net ÷ 168 h (21 days × 8 h), ≈ €16/h at €2,700** (user decision
+      2026-10-01). Every EUR-per-hour figure (Top Distractions rows, the Reports income card's
+      off-plan line, Insights) uses it. The earlier rate — period lost income ÷ off-plan minutes —
+      spread every calendar day (nights, weekends) over the few off-plan hours and priced an hour
+      at several times its value (37.3 h read as −€5,353).
+    - **Plan completion earns money back (user decision 2026-10-01): proportional.** On each
+      unemployed day, tasks done ÷ tasks planned (`ScoreService.DayTaskCounts`) × that day's rate
+      is added back to the lost figure (3 of 4 done → 75% of the day's rate). Computed at read time
+      (`IncomeService.CreditForRange`), never written to `income_ledger`, so it also covers
+      already-posted days without rewriting a stored row. A day with no planned tasks earns no
+      credit; employed days get none (they already add the full rate); today counts live in the
+      Reports figure but not in the sidebar chip (posted days only, as before). Tasks count on the
+      day they were assigned, so a late completion credits its assigned day.
 
 ---
 

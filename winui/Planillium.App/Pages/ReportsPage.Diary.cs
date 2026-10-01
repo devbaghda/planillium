@@ -36,12 +36,13 @@ public sealed partial class ReportsPage
     // AppNames.Group/Sub respectively (the same values the row's own App/Page columns show —
     // e.g. app="Chrome", page="GitHub", or app="Telegram", page="Liza Ponomarenko"). Same
     // survives-navigation treatment as _diarySearch/_diaryDate.
-    private static string? _diaryCategoryFilter;
-    private static string? _diaryAppFilter;
-    private static string? _diaryPageFilter;
+    // 2026-10-01: each filter is now a SET of chosen values (multi-select); empty = no filter.
+    private static readonly HashSet<string> _diaryCategoryFilter = new();
+    private static readonly HashSet<string> _diaryAppFilter = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> _diaryPageFilter = new(StringComparer.OrdinalIgnoreCase);
     // The DiaryTag axis (2026-08-06) — same null-means-no-filter, survives-navigation
     // treatment as the three filters above.
-    private static string? _diaryTagFilter;
+    private static readonly HashSet<string> _diaryTagFilter = new();
 
     // 2026-07-23 request: filters/search normally scope to whichever single day the date
     // nav/picker is showing; this widens that scope to the full retention window (same range
@@ -61,13 +62,6 @@ public sealed partial class ReportsPage
     private static int _diaryRowsShown = DefaultDiaryRowsShown;
     private static string _diaryRowsShownScopeKey = "";
 
-    // The three filter ComboBoxes' "no filter" placeholder items — shared between
-    // BuildDiaryFilterRow (which seeds them) and RenderDiaryResults (which rebuilds the
-    // app/page lists on every call) so the two can't drift apart from each other.
-    private const string AllCategories = "All categories";
-    private const string AllApps = "All apps";
-    private const string AllPages = "All pages";
-    private const string AllTags = "All tags";
 
     // The debounce timer itself is created once and reused across renders
     // (NavigationCacheMode="Enabled" reuses this page instance, and
@@ -225,15 +219,13 @@ public sealed partial class ReportsPage
             // faceted-search shape — so a filter only ever offers choices that can actually
             // produce a result under the filters already applied.
             bool MatchesCategory(ReportData.DiaryEntry e) =>
-                _diaryCategoryFilter is not { } cat || e.Cat == cat;
+                _diaryCategoryFilter.Count == 0 || _diaryCategoryFilter.Contains(e.Cat);
             bool MatchesApp(ReportData.DiaryEntry e) =>
-                _diaryAppFilter is not { } app ||
-                string.Equals(AppNames.Group(e.Window), app, StringComparison.OrdinalIgnoreCase);
+                _diaryAppFilter.Count == 0 || _diaryAppFilter.Contains(AppNames.Group(e.Window));
             bool MatchesPage(ReportData.DiaryEntry e) =>
-                _diaryPageFilter is not { } page ||
-                string.Equals(AppNames.Sub(e.Window) ?? "", page, StringComparison.OrdinalIgnoreCase);
+                _diaryPageFilter.Count == 0 || _diaryPageFilter.Contains(AppNames.Sub(e.Window) ?? "");
             bool MatchesTag(ReportData.DiaryEntry e) =>
-                _diaryTagFilter is not { } tag || e.Tag == tag;
+                _diaryTagFilter.Count == 0 || (e.Tag is { } tag && _diaryTagFilter.Contains(tag));
             bool MatchesSearch(ReportData.DiaryEntry e) =>
                 !searching ||
                 AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -246,36 +238,22 @@ public sealed partial class ReportsPage
                 .Select(e => AppNames.Group(e.Window))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
-            appBox.Items.Clear();
-            appBox.Items.Add(AllApps);
-            foreach (var a in appsInView) appBox.Items.Add(a);
-            var matchedApp = _diaryAppFilter is { } wantApp
-                ? appsInView.FirstOrDefault(a => string.Equals(a, wantApp, StringComparison.OrdinalIgnoreCase))
-                : null;
-            appBox.SelectedItem = matchedApp ?? AllApps;
-            _diaryAppFilter = matchedApp; // drops a filter whose app no longer appears in view
+            // drops filters whose app no longer appears in view
+            _diaryAppFilter.RemoveWhere(x => !appsInView.Contains(x, StringComparer.OrdinalIgnoreCase));
+            appBox.SetOptions(appsInView.Select(x => (x, x)));
 
             var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
                 .Where(p => p is { Length: > 0 })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
-            pageBox.Items.Clear();
-            pageBox.Items.Add(AllPages);
-            foreach (var p in pagesInView) pageBox.Items.Add(p);
-            var matchedPage = _diaryPageFilter is { } wantPage
-                ? pagesInView.FirstOrDefault(p => string.Equals(p, wantPage, StringComparison.OrdinalIgnoreCase))
-                : null;
-            pageBox.SelectedItem = matchedPage ?? AllPages;
-            _diaryPageFilter = matchedPage; // drops a filter whose page no longer appears in view
+            // drops filters whose page no longer appears in view
+            _diaryPageFilter.RemoveWhere(x => !pagesInView.Contains(x, StringComparer.OrdinalIgnoreCase));
+            pageBox.SetOptions(pagesInView.Select(x => (x!, x!)));
 
-            categoryBox.SelectedItem = _diaryCategoryFilter is { } wantCat
-                ? DiaryCategory.EditableOptions.FirstOrDefault(o => o.Value == wantCat).Label ?? AllCategories
-                : AllCategories;
-            // Fixed option list, same as categoryBox — never rebuilt from what's in view.
-            tagBox.SelectedItem = _diaryTagFilter is { } wantTag
-                ? DiaryTag.LabelOf(wantTag) ?? AllTags
-                : AllTags;
+            // Fixed option lists for category and tag — never rebuilt from what's in view.
+            categoryBox.SetOptions(DiaryCategory.EditableOptions.Select(o => (o.Value, o.Label)));
+            tagBox.SetOptions(DiaryTag.Options.Select(o => (o.Value, o.Label)));
             allTimeBox.IsChecked = _diaryAllTime;
             syncingFilters = false;
 
@@ -284,8 +262,8 @@ public sealed partial class ReportsPage
             // each other, since both read from the same single definition of each filter.
             var filteredList = rows.Where(e =>
                 MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e)).ToList();
-            var filtersActive = _diaryCategoryFilter != null || _diaryAppFilter != null ||
-                _diaryPageFilter != null || _diaryTagFilter != null;
+            var filtersActive = _diaryCategoryFilter.Count > 0 || _diaryAppFilter.Count > 0 ||
+                _diaryPageFilter.Count > 0 || _diaryTagFilter.Count > 0;
 
             var totalMin = filteredList.Sum(e => e.Dur);
             subtotalText.Text = filteredList.Count == 0
@@ -324,8 +302,9 @@ public sealed partial class ReportsPage
             // A genuine scope change (different day/search/filters/all-time) starts the reveal
             // count fresh; the periodic live-refresh timer re-running this same method with an
             // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
-            var scopeKey = string.Join('|', _diaryDate, q, _diaryCategoryFilter, _diaryAppFilter,
-                _diaryPageFilter, _diaryTagFilter, _diaryAllTime);
+            static string Key(HashSet<string> f) => string.Join(',', f.OrderBy(x => x, StringComparer.Ordinal));
+            var scopeKey = string.Join('|', _diaryDate, q, Key(_diaryCategoryFilter), Key(_diaryAppFilter),
+                Key(_diaryPageFilter), Key(_diaryTagFilter), _diaryAllTime);
             if (scopeKey != _diaryRowsShownScopeKey)
             {
                 _diaryRowsShown = DefaultDiaryRowsShown;
@@ -347,38 +326,8 @@ public sealed partial class ReportsPage
         }
         RenderDiaryResults();
 
-        categoryBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = categoryBox.SelectedItem as string;
-            _diaryCategoryFilter = chosen is null or AllCategories
-                ? null
-                : DiaryCategory.EditableOptions.FirstOrDefault(o => o.Label == chosen).Value;
-            RenderDiaryResults();
-        };
-        appBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = appBox.SelectedItem as string;
-            _diaryAppFilter = chosen is null or AllApps ? null : chosen;
-            RenderDiaryResults();
-        };
-        pageBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = pageBox.SelectedItem as string;
-            _diaryPageFilter = chosen is null or AllPages ? null : chosen;
-            RenderDiaryResults();
-        };
-        tagBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = tagBox.SelectedItem as string;
-            _diaryTagFilter = chosen is null or AllTags
-                ? null
-                : DiaryTag.Options.FirstOrDefault(o => o.Label == chosen).Value;
-            RenderDiaryResults();
-        };
+        foreach (var box in new[] { categoryBox, appBox, pageBox, tagBox })
+            box.Changed = () => { if (!syncingFilters) RenderDiaryResults(); };
         // Unlike the category/app/page boxes, this needs a full Render() (not just
         // RenderDiaryResults()) — it changes wideMode, which DiaryHeader() also reads to decide
         // the "TIME DIARY · ALL TIME" caption and whether the date-nav arrows/picker are
@@ -387,10 +336,10 @@ public sealed partial class ReportsPage
         allTimeBox.Unchecked += (_, _) => { if (!syncingFilters) { _diaryAllTime = false; Render(); } };
         clearFiltersBtn.Click += (_, _) =>
         {
-            _diaryCategoryFilter = null;
-            _diaryAppFilter = null;
-            _diaryPageFilter = null;
-            _diaryTagFilter = null;
+            _diaryCategoryFilter.Clear();
+            _diaryAppFilter.Clear();
+            _diaryPageFilter.Clear();
+            _diaryTagFilter.Clear();
             _diaryAllTime = false;
             // The search box sits directly above this button and reads as part of the same
             // filter row — leaving it untouched made "Clear filters" look broken when a typed
@@ -492,26 +441,15 @@ public sealed partial class ReportsPage
     /// diaryResults/subtotalText/lastRows) re-syncs these boxes' items/selection on every
     /// call; this method only constructs them, seeded with whatever filter state already
     /// persisted from before.</summary>
-    private (ComboBox CategoryBox, ComboBox AppBox, ComboBox PageBox, ComboBox TagBox,
+    private (MultiPicker CategoryBox, MultiPicker AppBox, MultiPicker PageBox, MultiPicker TagBox,
         CheckBox AllTimeBox, Button ClearFiltersBtn) BuildDiaryFilterRow()
     {
-        var categoryBox = new ComboBox { PlaceholderText = "Category", MinWidth = 140 };
-        categoryBox.Items.Add(AllCategories);
-        foreach (var (label, _) in DiaryCategory.EditableOptions) categoryBox.Items.Add(label);
-        AutomationProperties.SetName(categoryBox, "Filter diary by category");
-
-        var appBox = new ComboBox { PlaceholderText = "App", MinWidth = 150 };
-        AutomationProperties.SetName(appBox, "Filter diary by app");
-
-        var pageBox = new ComboBox { PlaceholderText = "Page", MinWidth = 180 };
-        AutomationProperties.SetName(pageBox, "Filter diary by page");
-
+        var categoryBox = new MultiPicker("Category", _diaryCategoryFilter, 140, "Filter diary by category");
+        var appBox = new MultiPicker("App", _diaryAppFilter, 150, "Filter diary by app");
+        var pageBox = new MultiPicker("Page", _diaryPageFilter, 180, "Filter diary by page");
         // The DiaryTag axis (2026-08-06) — fixed option list like Category (not rebuilt from
         // what's in view like App/Page, which are open-ended value sets).
-        var tagBox = new ComboBox { PlaceholderText = "Tag", MinWidth = 140 };
-        tagBox.Items.Add(AllTags);
-        foreach (var (label, _) in DiaryTag.Options) tagBox.Items.Add(label);
-        AutomationProperties.SetName(tagBox, "Filter diary by tag");
+        var tagBox = new MultiPicker("Tag", _diaryTagFilter, 140, "Filter diary by tag");
 
         var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
         AutomationProperties.SetName(allTimeBox,
@@ -525,10 +463,10 @@ public sealed partial class ReportsPage
             Orientation = Orientation.Horizontal,
             Spacing = 8,
         };
-        filterRow.Children.Add(categoryBox);
-        filterRow.Children.Add(appBox);
-        filterRow.Children.Add(pageBox);
-        filterRow.Children.Add(tagBox);
+        filterRow.Children.Add(categoryBox.Button);
+        filterRow.Children.Add(appBox.Button);
+        filterRow.Children.Add(pageBox.Button);
+        filterRow.Children.Add(tagBox.Button);
         filterRow.Children.Add(allTimeBox);
         filterRow.Children.Add(clearFiltersBtn);
         // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)

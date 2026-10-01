@@ -31,17 +31,26 @@ public sealed partial class ReportsPage
     // Diary search text, same survives-navigation treatment.
     private static string _diarySearch = "";
 
-    // Column filters (2026-07-22 request, app/page split 2026-07-23) — independent of the
-    // free-text search above and combinable with it: null means "no filter." App/page match
-    // AppNames.Group/Sub respectively (the same values the row's own App/Page columns show —
+    // Column filters (2026-07-22 request, app/page split 2026-07-23; multi-select 2026-10-01) —
+    // independent of the free-text search above and combinable with it: empty set means "no filter."
+    // App/page match AppNames.Group/Sub respectively (the same values the row's own App/Page columns show —
     // e.g. app="Chrome", page="GitHub", or app="Telegram", page="Liza Ponomarenko"). Same
     // survives-navigation treatment as _diarySearch/_diaryDate.
-    private static string? _diaryCategoryFilter;
-    private static string? _diaryAppFilter;
-    private static string? _diaryPageFilter;
-    // The DiaryTag axis (2026-08-06) — same null-means-no-filter, survives-navigation
+    // Category/tag use Ordinal; app/page use OrdinalIgnoreCase for case-insensitive matching.
+    private static HashSet<string> _diaryCategoryFilter;
+    private static HashSet<string> _diaryAppFilter;
+    private static HashSet<string> _diaryPageFilter;
+    // The DiaryTag axis (2026-08-06) — same empty-set-means-no-filter, survives-navigation
     // treatment as the three filters above.
-    private static string? _diaryTagFilter;
+    private static HashSet<string> _diaryTagFilter;
+
+    static ReportsPage()
+    {
+        _diaryCategoryFilter = new(StringComparer.Ordinal);
+        _diaryAppFilter = new(StringComparer.OrdinalIgnoreCase);
+        _diaryPageFilter = new(StringComparer.OrdinalIgnoreCase);
+        _diaryTagFilter = new(StringComparer.Ordinal);
+    }
 
     // 2026-07-23 request: filters/search normally scope to whichever single day the date
     // nav/picker is showing; this widens that scope to the full retention window (same range
@@ -142,7 +151,7 @@ public sealed partial class ReportsPage
             Body.Children.Add(ReflectionCallout(reflection));
 
         var searchBox = BuildDiarySearchBox();
-        var (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
+        var (categoryBtn, appBtn, pageBtn, tagBtn, allTimeBox, clearFiltersBtn, categoryFlyoutContent, tagFlyoutContent, appFlyoutContent, pageFlyoutContent) = BuildDiaryFilterRow();
 
         // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
         // below, right along with the list itself.
@@ -171,6 +180,51 @@ public sealed partial class ReportsPage
         // it, syncing the box would immediately re-trigger select-all/none.
         var syncingSelectAll = false;
 
+        void BuildCategoryCheckboxList(StackPanel stack)
+        {
+            stack.Children.Clear();
+            var clearBtn = new HyperlinkButton { Content = "Clear", Margin = new Thickness(0, 0, 0, 4) };
+            clearBtn.Click += (_, _) => { _diaryCategoryFilter.Clear(); RenderDiaryResults(); };
+            stack.Children.Add(clearBtn);
+
+            foreach (var (label, value) in DiaryCategory.EditableOptions)
+            {
+                var chk = new CheckBox
+                {
+                    Content = label,
+                    IsChecked = _diaryCategoryFilter.Contains(value),
+                    Tag = value,
+                };
+                AutomationProperties.SetName(chk, label);
+                chk.Checked += (_, _) => { if (!syncingFilters) { _diaryCategoryFilter.Add(value); RenderDiaryResults(); } };
+                chk.Unchecked += (_, _) => { if (!syncingFilters) { _diaryCategoryFilter.Remove(value); RenderDiaryResults(); } };
+                stack.Children.Add(chk);
+            }
+        }
+
+        void BuildTagCheckboxList(StackPanel stack)
+        {
+            stack.Children.Clear();
+            var clearBtn = new HyperlinkButton { Content = "Clear", Margin = new Thickness(0, 0, 0, 4) };
+            clearBtn.Click += (_, _) => { _diaryTagFilter.Clear(); RenderDiaryResults(); };
+            stack.Children.Add(clearBtn);
+
+            foreach (var (label, value) in DiaryTag.Options)
+            {
+                var chk = new CheckBox
+                {
+                    Content = label,
+                    IsChecked = value != null && _diaryTagFilter.Contains(value),
+                    Tag = value,
+                };
+                AutomationProperties.SetName(chk, label);
+                var capturedValue = value;
+                chk.Checked += (_, _) => { if (!syncingFilters && capturedValue != null) { _diaryTagFilter.Add(capturedValue); RenderDiaryResults(); } };
+                chk.Unchecked += (_, _) => { if (!syncingFilters && capturedValue != null) { _diaryTagFilter.Remove(capturedValue); RenderDiaryResults(); } };
+                stack.Children.Add(chk);
+            }
+        }
+
         void UpdateMarkToolbar()
         {
             var n = selectedIds.Count;
@@ -185,6 +239,84 @@ public sealed partial class ReportsPage
                 : n == lastRows.Count ? true
                 : null;
             syncingSelectAll = false;
+        }
+
+        void RebuildAppCheckboxList(StackPanel stack, List<string> appsInView)
+        {
+            stack.Children.Clear();
+            var clearBtn = new HyperlinkButton { Content = "Clear", Margin = new Thickness(0, 0, 0, 4) };
+            clearBtn.Click += (_, _) => { _diaryAppFilter.Clear(); RenderDiaryResults(); };
+            stack.Children.Add(clearBtn);
+
+            foreach (var app in appsInView)
+            {
+                var chk = new CheckBox
+                {
+                    Content = app,
+                    IsChecked = _diaryAppFilter.Contains(app, StringComparer.OrdinalIgnoreCase),
+                    Tag = app,
+                };
+                AutomationProperties.SetName(chk, app);
+                var capturedApp = app;
+                chk.Checked += (_, _) => { if (!syncingFilters) { _diaryAppFilter.Add(capturedApp); RenderDiaryResults(); } };
+                chk.Unchecked += (_, _) => { if (!syncingFilters) { _diaryAppFilter.Remove(capturedApp); RenderDiaryResults(); } };
+                stack.Children.Add(chk);
+            }
+        }
+
+        void RebuildPageCheckboxList(StackPanel stack, List<string> pagesInView)
+        {
+            stack.Children.Clear();
+            var clearBtn = new HyperlinkButton { Content = "Clear", Margin = new Thickness(0, 0, 0, 4) };
+            clearBtn.Click += (_, _) => { _diaryPageFilter.Clear(); RenderDiaryResults(); };
+            stack.Children.Add(clearBtn);
+
+            foreach (var page in pagesInView)
+            {
+                var chk = new CheckBox
+                {
+                    Content = page,
+                    IsChecked = _diaryPageFilter.Contains(page, StringComparer.OrdinalIgnoreCase),
+                    Tag = page,
+                };
+                AutomationProperties.SetName(chk, page);
+                var capturedPage = page;
+                chk.Checked += (_, _) => { if (!syncingFilters) { _diaryPageFilter.Add(capturedPage); RenderDiaryResults(); } };
+                chk.Unchecked += (_, _) => { if (!syncingFilters) { _diaryPageFilter.Remove(capturedPage); RenderDiaryResults(); } };
+                stack.Children.Add(chk);
+            }
+        }
+
+        void SyncCategoryCheckboxes()
+        {
+            // Re-sync checked state for category checkboxes (list is fixed, only state changes)
+            if (categoryBtn.Flyout is Flyout { Content: ScrollViewer scroller } &&
+                scroller.Content is StackPanel stack)
+            {
+                foreach (var child in stack.Children.OfType<CheckBox>())
+                {
+                    if (child.Tag is string catValue)
+                    {
+                        child.IsChecked = _diaryCategoryFilter.Contains(catValue);
+                    }
+                }
+            }
+        }
+
+        void SyncTagCheckboxes()
+        {
+            // Re-sync checked state for tag checkboxes (list is fixed, only state changes)
+            if (tagBtn.Flyout is Flyout { Content: ScrollViewer scroller } &&
+                scroller.Content is StackPanel stack)
+            {
+                foreach (var child in stack.Children.OfType<CheckBox>())
+                {
+                    if (child.Tag is string tagValue)
+                    {
+                        child.IsChecked = _diaryTagFilter.Contains(tagValue);
+                    }
+                }
+            }
         }
 
         void RenderDiaryResults()
@@ -225,15 +357,13 @@ public sealed partial class ReportsPage
             // faceted-search shape — so a filter only ever offers choices that can actually
             // produce a result under the filters already applied.
             bool MatchesCategory(ReportData.DiaryEntry e) =>
-                _diaryCategoryFilter is not { } cat || e.Cat == cat;
+                DiaryFilter.Matches(_diaryCategoryFilter, e.Cat, StringComparer.Ordinal);
             bool MatchesApp(ReportData.DiaryEntry e) =>
-                _diaryAppFilter is not { } app ||
-                string.Equals(AppNames.Group(e.Window), app, StringComparison.OrdinalIgnoreCase);
+                DiaryFilter.Matches(_diaryAppFilter, AppNames.Group(e.Window), StringComparer.OrdinalIgnoreCase);
             bool MatchesPage(ReportData.DiaryEntry e) =>
-                _diaryPageFilter is not { } page ||
-                string.Equals(AppNames.Sub(e.Window) ?? "", page, StringComparison.OrdinalIgnoreCase);
+                DiaryFilter.Matches(_diaryPageFilter, AppNames.Sub(e.Window), StringComparer.OrdinalIgnoreCase);
             bool MatchesTag(ReportData.DiaryEntry e) =>
-                _diaryTagFilter is not { } tag || e.Tag == tag;
+                DiaryFilter.Matches(_diaryTagFilter, e.Tag, StringComparer.Ordinal);
             bool MatchesSearch(ReportData.DiaryEntry e) =>
                 !searching ||
                 AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -242,40 +372,54 @@ public sealed partial class ReportsPage
                 (DiaryTag.LabelOf(e.Tag) is { } tagLabel && tagLabel.Contains(q, StringComparison.OrdinalIgnoreCase));
 
             syncingFilters = true;
+
+            // Rebuild app/page flyout checkbox lists from what's actually in the current scope
             var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Group(e.Window))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
-            appBox.Items.Clear();
-            appBox.Items.Add(AllApps);
-            foreach (var a in appsInView) appBox.Items.Add(a);
-            var matchedApp = _diaryAppFilter is { } wantApp
-                ? appsInView.FirstOrDefault(a => string.Equals(a, wantApp, StringComparison.OrdinalIgnoreCase))
-                : null;
-            appBox.SelectedItem = matchedApp ?? AllApps;
-            _diaryAppFilter = matchedApp; // drops a filter whose app no longer appears in view
+            _diaryAppFilter = DiaryFilter.PruneToAvailable(_diaryAppFilter, appsInView);
+            RebuildAppCheckboxList(appFlyoutContent, appsInView);
 
             var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
                 .Where(p => p is { Length: > 0 })
+                .Cast<string>()  // Explicit cast to clarify nullability for compiler
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
-            pageBox.Items.Clear();
-            pageBox.Items.Add(AllPages);
-            foreach (var p in pagesInView) pageBox.Items.Add(p);
-            var matchedPage = _diaryPageFilter is { } wantPage
-                ? pagesInView.FirstOrDefault(p => string.Equals(p, wantPage, StringComparison.OrdinalIgnoreCase))
-                : null;
-            pageBox.SelectedItem = matchedPage ?? AllPages;
-            _diaryPageFilter = matchedPage; // drops a filter whose page no longer appears in view
+            _diaryPageFilter = DiaryFilter.PruneToAvailable(_diaryPageFilter, pagesInView);
+            RebuildPageCheckboxList(pageFlyoutContent, pagesInView);
 
-            categoryBox.SelectedItem = _diaryCategoryFilter is { } wantCat
-                ? DiaryCategory.EditableOptions.FirstOrDefault(o => o.Value == wantCat).Label ?? AllCategories
-                : AllCategories;
-            // Fixed option list, same as categoryBox — never rebuilt from what's in view.
-            tagBox.SelectedItem = _diaryTagFilter is { } wantTag
-                ? DiaryTag.LabelOf(wantTag) ?? AllTags
-                : AllTags;
+            // Update all button texts and sync checkbox states for fixed filters (category/tag)
+            // re-sync means updating IsChecked and button text
+            var categoryLabels = DiaryCategory.EditableOptions
+                .Where(o => _diaryCategoryFilter.Contains(o.Value))
+                .Select(o => o.Label)
+                .ToList();
+            categoryBtn.Content = DiaryFilter.ButtonLabel(AllCategories, categoryLabels);
+            SyncCategoryCheckboxes();
+
+            var appLabels = appsInView
+                .Where(a => _diaryAppFilter.Contains(a, StringComparer.OrdinalIgnoreCase))
+                .Cast<string>()
+                .ToList();
+            appBtn.Content = DiaryFilter.ButtonLabel(AllApps, appLabels);
+
+            var pageLabels = pagesInView
+                .Where(p => _diaryPageFilter.Contains(p, StringComparer.OrdinalIgnoreCase))
+                .Cast<string>()
+                .ToList();
+            pageBtn.Content = DiaryFilter.ButtonLabel(AllPages, pageLabels);
+
+            var tagLabels = DiaryTag.Options
+                .Where(o => o.Value != null && _diaryTagFilter.Contains(o.Value))
+                .Select(o => o.Label)
+                .Where(l => l != null)
+                .Cast<string>()
+                .ToList();
+            tagBtn.Content = DiaryFilter.ButtonLabel(AllTags, tagLabels);
+            SyncTagCheckboxes();
+
             allTimeBox.IsChecked = _diaryAllTime;
             syncingFilters = false;
 
@@ -284,8 +428,8 @@ public sealed partial class ReportsPage
             // each other, since both read from the same single definition of each filter.
             var filteredList = rows.Where(e =>
                 MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e)).ToList();
-            var filtersActive = _diaryCategoryFilter != null || _diaryAppFilter != null ||
-                _diaryPageFilter != null || _diaryTagFilter != null;
+            var filtersActive = _diaryCategoryFilter.Count > 0 || _diaryAppFilter.Count > 0 ||
+                _diaryPageFilter.Count > 0 || _diaryTagFilter.Count > 0;
 
             var totalMin = filteredList.Sum(e => e.Dur);
             subtotalText.Text = filteredList.Count == 0
@@ -324,8 +468,11 @@ public sealed partial class ReportsPage
             // A genuine scope change (different day/search/filters/all-time) starts the reveal
             // count fresh; the periodic live-refresh timer re-running this same method with an
             // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
-            var scopeKey = string.Join('|', _diaryDate, q, _diaryCategoryFilter, _diaryAppFilter,
-                _diaryPageFilter, _diaryTagFilter, _diaryAllTime);
+            var catStr = string.Join(",", _diaryCategoryFilter.OrderBy(x => x, StringComparer.Ordinal));
+            var appStr = string.Join(",", _diaryAppFilter.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+            var pageStr = string.Join(",", _diaryPageFilter.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+            var tagStr = string.Join(",", _diaryTagFilter.OrderBy(x => x, StringComparer.Ordinal));
+            var scopeKey = string.Join('|', _diaryDate, q, catStr, appStr, pageStr, tagStr, _diaryAllTime);
             if (scopeKey != _diaryRowsShownScopeKey)
             {
                 _diaryRowsShown = DefaultDiaryRowsShown;
@@ -345,40 +492,13 @@ public sealed partial class ReportsPage
             diaryCard.MinWidth = DiaryCardWidth;
             diaryResults.Children.Add(diaryCard);
         }
+
+        // Build checkbox lists for category/tag filters (now that RenderDiaryResults is defined)
+        BuildCategoryCheckboxList(categoryFlyoutContent);
+        BuildTagCheckboxList(tagFlyoutContent);
+
         RenderDiaryResults();
 
-        categoryBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = categoryBox.SelectedItem as string;
-            _diaryCategoryFilter = chosen is null or AllCategories
-                ? null
-                : DiaryCategory.EditableOptions.FirstOrDefault(o => o.Label == chosen).Value;
-            RenderDiaryResults();
-        };
-        appBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = appBox.SelectedItem as string;
-            _diaryAppFilter = chosen is null or AllApps ? null : chosen;
-            RenderDiaryResults();
-        };
-        pageBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = pageBox.SelectedItem as string;
-            _diaryPageFilter = chosen is null or AllPages ? null : chosen;
-            RenderDiaryResults();
-        };
-        tagBox.SelectionChanged += (_, _) =>
-        {
-            if (syncingFilters) return;
-            var chosen = tagBox.SelectedItem as string;
-            _diaryTagFilter = chosen is null or AllTags
-                ? null
-                : DiaryTag.Options.FirstOrDefault(o => o.Label == chosen).Value;
-            RenderDiaryResults();
-        };
         // Unlike the category/app/page boxes, this needs a full Render() (not just
         // RenderDiaryResults()) — it changes wideMode, which DiaryHeader() also reads to decide
         // the "TIME DIARY · ALL TIME" caption and whether the date-nav arrows/picker are
@@ -387,10 +507,10 @@ public sealed partial class ReportsPage
         allTimeBox.Unchecked += (_, _) => { if (!syncingFilters) { _diaryAllTime = false; Render(); } };
         clearFiltersBtn.Click += (_, _) =>
         {
-            _diaryCategoryFilter = null;
-            _diaryAppFilter = null;
-            _diaryPageFilter = null;
-            _diaryTagFilter = null;
+            _diaryCategoryFilter.Clear();
+            _diaryAppFilter.Clear();
+            _diaryPageFilter.Clear();
+            _diaryTagFilter.Clear();
             _diaryAllTime = false;
             // The search box sits directly above this button and reads as part of the same
             // filter row — leaving it untouched made "Clear filters" look broken when a typed
@@ -488,30 +608,46 @@ public sealed partial class ReportsPage
     /// <summary>The category/app/page/tag filter row plus "All time" checkbox and "Clear
     /// filters" button, in their own horizontally-scrollable row — split out of
     /// BuildDiarySection for the same reason as BuildDiarySearchBox above.
-    /// RenderDiaryResults (which stays in BuildDiarySection, since it also touches
-    /// diaryResults/subtotalText/lastRows) re-syncs these boxes' items/selection on every
-    /// call; this method only constructs them, seeded with whatever filter state already
-    /// persisted from before.</summary>
-    private (ComboBox CategoryBox, ComboBox AppBox, ComboBox PageBox, ComboBox TagBox,
-        CheckBox AllTimeBox, Button ClearFiltersBtn) BuildDiaryFilterRow()
+    /// This method builds the controls once with fixed option lists for category/tag;
+    /// RenderDiaryResults rebuilds app/page checkbox lists and re-syncs all checked states
+    /// and button text on every call.</summary>
+    private (Button CategoryBtn, Button AppBtn, Button PageBtn, Button TagBtn,
+        CheckBox AllTimeBox, Button ClearFiltersBtn,
+        StackPanel CategoryFlyoutContent, StackPanel TagFlyoutContent,
+        StackPanel AppFlyoutContent, StackPanel PageFlyoutContent) BuildDiaryFilterRow()
     {
-        var categoryBox = new ComboBox { PlaceholderText = "Category", MinWidth = 140 };
-        categoryBox.Items.Add(AllCategories);
-        foreach (var (label, _) in DiaryCategory.EditableOptions) categoryBox.Items.Add(label);
-        AutomationProperties.SetName(categoryBox, "Filter diary by category");
+        // Helper to create a filter button with a scrollable flyout of checkboxes
+        (Button, StackPanel) CreateFilterButton(string allLabel, string automationName, double minWidth)
+        {
+            var btn = new Button
+            {
+                Content = allLabel,
+                MinWidth = minWidth,
+                Padding = new Thickness(8, 4, 8, 4),
+            };
+            AutomationProperties.SetName(btn, automationName);
 
-        var appBox = new ComboBox { PlaceholderText = "App", MinWidth = 150 };
-        AutomationProperties.SetName(appBox, "Filter diary by app");
+            var flyoutStack = new StackPanel { Spacing = 4 };
+            var flyoutScroller = new ScrollViewer
+            {
+                MaxHeight = 320,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = flyoutStack,
+            };
 
-        var pageBox = new ComboBox { PlaceholderText = "Page", MinWidth = 180 };
-        AutomationProperties.SetName(pageBox, "Filter diary by page");
+            var flyout = new Flyout { Content = flyoutScroller };
+            btn.Flyout = flyout;
 
-        // The DiaryTag axis (2026-08-06) — fixed option list like Category (not rebuilt from
-        // what's in view like App/Page, which are open-ended value sets).
-        var tagBox = new ComboBox { PlaceholderText = "Tag", MinWidth = 140 };
-        tagBox.Items.Add(AllTags);
-        foreach (var (label, _) in DiaryTag.Options) tagBox.Items.Add(label);
-        AutomationProperties.SetName(tagBox, "Filter diary by tag");
+            return (btn, flyoutStack);
+        }
+
+        var (categoryBtn, categoryStack) = CreateFilterButton(AllCategories, "Filter diary by category", 140);
+        var (appBtn, appStack) = CreateFilterButton(AllApps, "Filter diary by app", 150);
+        var (pageBtn, pageStack) = CreateFilterButton(AllPages, "Filter diary by page", 180);
+        var (tagBtn, tagStack) = CreateFilterButton(AllTags, "Filter diary by tag", 140);
+
+        // Category/tag lists are built in BuildDiarySection as local functions
+        // so they can access syncingFilters and RenderDiaryResults
 
         var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
         AutomationProperties.SetName(allTimeBox,
@@ -525,10 +661,10 @@ public sealed partial class ReportsPage
             Orientation = Orientation.Horizontal,
             Spacing = 8,
         };
-        filterRow.Children.Add(categoryBox);
-        filterRow.Children.Add(appBox);
-        filterRow.Children.Add(pageBox);
-        filterRow.Children.Add(tagBox);
+        filterRow.Children.Add(categoryBtn);
+        filterRow.Children.Add(appBtn);
+        filterRow.Children.Add(pageBtn);
+        filterRow.Children.Add(tagBtn);
         filterRow.Children.Add(allTimeBox);
         filterRow.Children.Add(clearFiltersBtn);
         // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
@@ -545,7 +681,7 @@ public sealed partial class ReportsPage
             Content = filterRow,
         });
 
-        return (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn);
+        return (categoryBtn, appBtn, pageBtn, tagBtn, allTimeBox, clearFiltersBtn, categoryStack, tagStack, appStack, pageStack);
     }
 
     /// <summary>The "select all / mark on-plan / off-plan / neutral" bulk-action toolbar —

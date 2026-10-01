@@ -6,6 +6,16 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Features**
+- **Time by app is now a pie.** One slice per app (the eight biggest, the rest folded into "Other");
+  click a slice or its name to turn it into a pie of what's inside — the pages of that app, or the
+  apps inside "Other" — with a Back link.
+- **Diary filters are multi-select.** Category, App, Page and Tag are now tick-lists, so you can
+  show e.g. Chrome and Telegram together. The button names what's ticked.
+- **Insights show EUR next to hours**, and the off-plan ratio is now measured against on-plan +
+  neutral time (it used to be on-plan only).
+- **Plan tasks earn money back.** On days you're counted as losing income, finishing plan tasks
+  credits that day's rate in proportion (3 of 4 done → 75%). Applies to the sidebar figure and
+  every Reports period, history included.
 - **Lost-earnings counter.** Set a potential monthly income in Settings and Planillium tracks what
   off-plan time is actually costing you: a running LOST INCOME figure in the sidebar, and an
   UNEARNED/EXTRA INCOME card on Reports scoped to whichever period you've selected (today/this
@@ -14,6 +24,14 @@ going forward; the original Python/Tkinter version is retired.
   using that same per-hour rate.
 
 **Fixes**
+- **Euro figures were several times too high.** An hour of work is now valued at your monthly income
+  ÷ 168 h (≈ €16 at €2,700) instead of spreading every calendar day over the off-plan hours.
+  Top Distractions and the income card use it.
+- **Top Distractions columns line up.** Hours and EUR now sit in fixed, right-aligned columns.
+- **The "you were away" dialog shows the date** as well as the times (both dates if it crossed midnight).
+- **Working in Planillium could be logged as an absence.** Saving Settings or re-categorising a diary
+  row restarted the activity tracker from the last saved diary row, so the next check saw a fake
+  gap and asked "where were you?". It now resumes from the last real check.
 - **Diary times ran hours ahead of the real clock after a timezone change while the app stayed
   open.** Planillium read the timezone once at launch, so after travelling (or a daylight-saving
   switch) every new diary row kept the old zone's time until the app was restarted. It now notices

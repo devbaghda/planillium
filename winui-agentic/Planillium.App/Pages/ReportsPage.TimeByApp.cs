@@ -3,24 +3,27 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using Planillium.App.Services;
 
 namespace Planillium.App.Pages;
 
-// Top-distractions list and the "time by app" expandable bar breakdown —
+// Top-distractions list and the "time by app" pie chart with drill-down —
 // see ReportsPage.xaml.cs for the file split.
 public sealed partial class ReportsPage
 {
     // ── distractions ─────────────────────────────────────────────────────
 
-    /// <summary>EUR is the same per-off-plan-minute rate as the income card's "per off-plan
-    /// hour" line above (period's total lost/gained income ÷ period's total off-plan minutes),
-    /// applied to each row's own minutes. No off-plan time this period means no rate, same
-    /// guard as the card.</summary>
+    /// <summary>EUR is derived from the fixed hourly rate (IncomeService.HourValueEur()),
+    /// signed per the period's income sum, applied to each row's own minutes. When hourly
+    /// rate is 0, the EUR column is empty but still reserved.</summary>
     private static StackPanel DistractionList(List<(string Label, int Minutes)> distractions,
-        double periodIncomeSum, int periodOffMin)
+        double periodIncomeSum)
     {
-        var perMinuteEur = periodOffMin > 0 ? periodIncomeSum / periodOffMin : 0;
+        var hourValue = IncomeService.HourValueEur();
+        var signedHourValue = periodIncomeSum < 0 ? -hourValue : hourValue;
+        var perMinuteEur = signedHourValue / 60.0;
         var maxMin = distractions[0].Minutes;
         var list = new StackPanel { Spacing = 8 };
         foreach (var (label, minutes) in distractions)
@@ -30,8 +33,13 @@ public sealed partial class ReportsPage
             // tables — so every bar and every first figure on this page starts at one x.
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelColumnWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HoursColumnWidth) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(EurColumnWidth) });
             var name = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis };
+
+            // Proportional bar fill: inner Grid with two weighted columns (filled ratio and empty ratio)
+            // so the fill never exceeds the track width, even on narrow windows.
+            var ratio = minutes / Math.Max(maxMin, 1.0);
             var track = new Border
             {
                 Height = 8,
@@ -43,155 +51,375 @@ public sealed partial class ReportsPage
             {
                 Height = 8,
                 CornerRadius = new CornerRadius(4),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Width = Math.Max(8, 300.0 * minutes / Math.Max(maxMin, 1)),
                 Background = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
             };
+            var fillGrid = new Grid();
+            fillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ratio, GridUnitType.Star) });
+            fillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1 - ratio, GridUnitType.Star) });
+            Grid.SetColumn(fill, 0);
+            fillGrid.Children.Add(fill);
             var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
             overlay.Children.Add(track);
-            overlay.Children.Add(fill);
-            var mins = Dim(perMinuteEur != 0
-                ? $"{ReportData.FmtHours(minutes)}   ·   {MainWindow.FormatEur(minutes * perMinuteEur)}"
-                : ReportData.FmtHours(minutes));
+            overlay.Children.Add(fillGrid);
+
+            var hours = Dim(ReportData.FmtHours(minutes));
+            hours.HorizontalAlignment = HorizontalAlignment.Right;
+            hours.TextAlignment = TextAlignment.Right;
+            hours.VerticalAlignment = VerticalAlignment.Center;
+
+            var eur = Dim(perMinuteEur != 0 ? MainWindow.FormatEur(minutes * perMinuteEur) : "");
+            eur.HorizontalAlignment = HorizontalAlignment.Right;
+            eur.TextAlignment = TextAlignment.Right;
+            eur.VerticalAlignment = VerticalAlignment.Center;
+
             Grid.SetColumn(overlay, 1);
-            Grid.SetColumn(mins, 2);
+            Grid.SetColumn(hours, 2);
+            Grid.SetColumn(eur, 3);
             row.Children.Add(name);
             row.Children.Add(overlay);
-            row.Children.Add(mins);
+            row.Children.Add(hours);
+            row.Children.Add(eur);
             list.Children.Add(row);
         }
         return list;
     }
 
-    // ── time by app ──────────────────────────────────────────────────────
+    // ── time by app (pie chart with drill-down) ──────────────────────────
 
-    /// <summary>Number of top apps shown before "Show more" is needed.</summary>
-    private const int DefaultAppsShown = 3;
-
-    private static StackPanel AppBreakdownPanel(List<(string App, ReportData.AppUsage Usage)> breakdown)
+    /// <summary>Pie chart with drill-down to sub-items. Returns a panel with breadcrumb, pie, and list.
+    /// The drill path is held in the page's static _appDrillPath field (reset on period switch).</summary>
+    private StackPanel AppBreakdownPie(List<(string App, ReportData.AppUsage Usage)> breakdown)
     {
-        var maxTotal = Math.Max(breakdown[0].Usage.Total, 1);
-        var panel = new StackPanel { Spacing = 4 };
+        var panel = new StackPanel { Spacing = 12 };
 
-        // Everything past the top few apps goes into this collapsed container,
-        // revealed by the "Show more" button below. Default view stays short —
-        // the three biggest time sinks — with the full list one click away.
-        // Its rows are NOT built until that first click (see below) — with
-        // limit:100 upstream, eagerly building every app's row (plus up to 10
-        // sub-rows each) on every single Render() meant constructing upwards
-        // of a thousand WinUI elements nobody would ever scroll to, on every
-        // page nav/period switch/dialog close (found while investigating a
-        // 2026-07-21 "Reports takes too long to load" report).
-        var overflow = new StackPanel { Spacing = 4, Visibility = Visibility.Collapsed };
-        var overflowBuilt = false;
-
-        void AddAppRow(StackPanel target, string app, ReportData.AppUsage usage)
+        // Drill down to the current level based on the stored drill path
+        var currentLevel = breakdown;
+        var levelName = "All apps";
+        foreach (var appName in ReportsPage._appDrillPath)
         {
-            var subs = usage.Subs?
+            var app = currentLevel.FirstOrDefault(x => x.App == appName);
+            if (app.Usage == null || app.Usage.Subs == null || app.Usage.Subs.Count == 0)
+            {
+                // Path is invalid, reset to root
+                ReportsPage._appDrillPath.Clear();
+                currentLevel = breakdown;
+                levelName = "All apps";
+                break;
+            }
+            currentLevel = app.Usage.Subs
                 .OrderByDescending(kv => kv.Value.Total)
-                .Take(10).ToList() ?? new();
+                .Select(kv => (kv.Key, kv.Value))
+                .ToList();
+            levelName = appName;
+        }
 
-            // Every top-level row — app or standalone entry (idle, or anything
-            // classified by its own description) — gets identical margin, so
-            // rows never look like a child of whichever app happened to render
-            // just above them. A native Expander draws its own card chrome
-            // with a different effective inset than a plain row, which is what
-            // caused that; a manual click-to-expand row avoids it entirely.
-            var header = AppUsageRow(app, usage, maxTotal, bold: true, expandable: subs.Count > 0);
-            header.Margin = new Thickness(0, 6, 0, 6);
+        var levelTotal = currentLevel.Sum(x => x.Usage.Total);
+        if (levelTotal == 0)
+            return panel;  // No data at this level
 
-            if (subs.Count == 0)
+        // Build slices using the pure logic service
+        var slices = PieSlices.BuildSlices(currentLevel, levelTotal);
+        if (slices.Count == 0)
+            return panel;
+
+        // ── breadcrumb & back button ──────────────────────────────────────
+        var breadcrumbPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var breadcrumbText = "All apps";
+        if (ReportsPage._appDrillPath.Count > 0)
+            breadcrumbText = "All apps › " + string.Join(" › ", ReportsPage._appDrillPath);
+
+        breadcrumbPanel.Children.Add(new TextBlock
+        {
+            Text = breadcrumbText,
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+
+        if (ReportsPage._appDrillPath.Count > 0)
+        {
+            var backBtn = new HyperlinkButton
             {
-                target.Children.Add(header);
-                return;
-            }
-
-            var subPanel = new StackPanel
-            {
-                Spacing = 4,
-                Margin = new Thickness(SubRowIndent, 4, 0, 8),
-                Visibility = Visibility.Collapsed,
+                Content = "← Back",
+                Padding = new Thickness(0),
+                Margin = new Thickness(8, 0, 0, 0),
             };
-            foreach (var (sub, su) in subs)
-                subPanel.Children.Add(AppUsageRow(sub, su, maxTotal, bold: false));
-
-            var chevron = (FontIcon)header.Children.Last();
-            header.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-
-            // A plain Tapped-only Grid is mouse-only: unreachable by Tab and
-            // silent to a screen reader (no indication it's interactive, or
-            // of its current state). IsTabStop + a Space/Enter handler makes
-            // it keyboard-operable; the accessible name is kept in sync with
-            // the visible expand/collapse state on every toggle.
-            header.IsTabStop = true;
-            // WinUI has no attached property to change a plain Grid's reported
-            // control type to "button" short of a custom AutomationPeer
-            // subclass — HelpText is the lightest honest way to tell Narrator
-            // users Enter/Space does something, since the peer still reports
-            // as a generic group/pane.
-            AutomationProperties.SetHelpText(header,
-                "Press Enter or Space to expand or collapse.");
-            void SetExpandedState(bool expanded)
+            AutomationProperties.SetName(backBtn, "Back to previous level");
+            backBtn.Click += (_, _) =>
             {
-                AutomationProperties.SetName(header,
-                    $"{app}, {(expanded ? "expanded" : "collapsed")}");
-            }
-            SetExpandedState(false);
-            void Toggle()
-            {
-                var expanded = subPanel.Visibility == Visibility.Visible;
-                subPanel.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
-                chevron.Glyph = expanded ? "" : "";
-                SetExpandedState(!expanded);
-            }
-            header.Tapped += (_, _) => Toggle();
-            header.KeyDown += (_, e) =>
+                if (ReportsPage._appDrillPath.Count > 0)
+                {
+                    ReportsPage._appDrillPath.RemoveAt(ReportsPage._appDrillPath.Count - 1);
+                    Render();
+                }
+            };
+            backBtn.KeyDown += (_, e) =>
             {
                 if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
                 {
-                    Toggle();
+                    if (ReportsPage._appDrillPath.Count > 0)
+                    {
+                        ReportsPage._appDrillPath.RemoveAt(ReportsPage._appDrillPath.Count - 1);
+                        Render();
+                    }
                     e.Handled = true;
                 }
             };
-
-            target.Children.Add(header);
-            target.Children.Add(subPanel);
+            breadcrumbPanel.Children.Add(backBtn);
         }
+        panel.Children.Add(breadcrumbPanel);
 
-        for (var i = 0; i < Math.Min(DefaultAppsShown, breakdown.Count); i++)
-            AddAppRow(panel, breakdown[i].App, breakdown[i].Usage);
+        // ── pie chart ─────────────────────────────────────────────────────
+        const double pieRadius = 110;  // Radius in device-independent pixels
+        const double pieSize = pieRadius * 2;
+        const double pieCenterX = pieRadius;
+        const double pieCenterY = pieRadius;
 
-        if (breakdown.Count > DefaultAppsShown)
+        var piePath = new StackPanel { Spacing = 16, Orientation = Orientation.Horizontal };
+
+        // Canvas for pie wedges
+        var canvas = new Canvas { Width = pieSize, Height = pieSize, Margin = new Thickness(0, 0, 16, 0) };
+
+        // Check if this is a full circle (single 100% slice)
+        var isFullCircle = slices.Count == 1 && Math.Abs(slices[0].SweepAngle - 360.0) < 0.01;
+
+        foreach (var slice in slices)
         {
-            panel.Children.Add(overflow);
-            var hidden = breakdown.Count - DefaultAppsShown;
-            var moreLabel = $"Show {hidden} more app{(hidden == 1 ? "" : "s")}";
-            var moreBtn = new HyperlinkButton
+            var brushKey = CategoryBrushKey(slice.DominantCategory);
+            var fill = (Brush)Application.Current.Resources[brushKey];
+            var stroke = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
+
+            if (isFullCircle)
             {
-                Content = moreLabel,
-                Margin = new Thickness(0, 4, 0, 0),
-            };
-            // Same explicit expand/collapse state signal as the per-app rows above
-            // (SetExpandedState), rather than relying only on the visible Content text
-            // changing (audit finding #27).
-            AutomationProperties.SetName(moreBtn, $"{moreLabel}, collapsed");
-            moreBtn.Click += (_, _) =>
-            {
-                if (!overflowBuilt)
+                // Full circle: use EllipseGeometry
+                var wedge = new Microsoft.UI.Xaml.Shapes.Path
                 {
-                    for (var i = DefaultAppsShown; i < breakdown.Count; i++)
-                        AddAppRow(overflow, breakdown[i].App, breakdown[i].Usage);
-                    overflowBuilt = true;
-                }
-                var showing = overflow.Visibility == Visibility.Visible;
-                overflow.Visibility = showing ? Visibility.Collapsed : Visibility.Visible;
-                moreBtn.Content = showing ? moreLabel : "Show fewer";
-                AutomationProperties.SetName(moreBtn,
-                    showing ? $"{moreLabel}, collapsed" : $"Show fewer apps, expanded");
-            };
-            panel.Children.Add(moreBtn);
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 2,
+                    Data = new EllipseGeometry
+                    {
+                        Center = new Windows.Foundation.Point(pieCenterX, pieCenterY),
+                        RadiusX = pieRadius,
+                        RadiusY = pieRadius,
+                    },
+                };
+                canvas.Children.Add(wedge);
+            }
+            else
+            {
+                // Partial slice: arc from center
+                var startRad = slice.StartAngle * Math.PI / 180.0;
+                var sweepRad = slice.SweepAngle * Math.PI / 180.0;
+                var endRad = startRad + sweepRad;
+
+                // Arc endpoints (convert from top-clockwise to standard math coords)
+                var startX = pieCenterX + pieRadius * Math.Sin(startRad);
+                var startY = pieCenterY - pieRadius * Math.Cos(startRad);
+                var endX = pieCenterX + pieRadius * Math.Sin(endRad);
+                var endY = pieCenterY - pieRadius * Math.Cos(endRad);
+
+                // Build path geometry: center -> start -> arc -> end -> center
+                var geo = new Microsoft.UI.Xaml.Media.PathGeometry();
+                var figure = new Microsoft.UI.Xaml.Media.PathFigure { StartPoint = new Windows.Foundation.Point(pieCenterX, pieCenterY) };
+
+                // Line to arc start
+                figure.Segments.Add(new Microsoft.UI.Xaml.Media.LineSegment { Point = new Windows.Foundation.Point(startX, startY) });
+
+                // Arc
+                var isLargeArc = slice.SweepAngle > 180;
+                figure.Segments.Add(new Microsoft.UI.Xaml.Media.ArcSegment
+                {
+                    Point = new Windows.Foundation.Point(endX, endY),
+                    Size = new Windows.Foundation.Size(pieRadius, pieRadius),
+                    RotationAngle = 0,
+                    IsLargeArc = isLargeArc,
+                    SweepDirection = SweepDirection.Clockwise,
+                });
+
+                // Line back to center
+                figure.Segments.Add(new Microsoft.UI.Xaml.Media.LineSegment { Point = new Windows.Foundation.Point(pieCenterX, pieCenterY) });
+
+                geo.Figures.Add(figure);
+
+                var wedge = new Microsoft.UI.Xaml.Shapes.Path
+                {
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 2,
+                    Data = geo,
+                };
+
+                canvas.Children.Add(wedge);
+            }
         }
+
+        piePath.Children.Add(canvas);
+
+        // ── list rows ─────────────────────────────────────────────────────
+        var list = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Top };
+
+        // Add list rows for each slice
+        AddPieListRows(list, slices, currentLevel, levelTotal);
+
+        piePath.Children.Add(list);
+        panel.Children.Add(piePath);
+
         return panel;
+    }
+
+    /// <summary>Helper to add list rows for pie slices, including (no detail) if needed.</summary>
+    private void AddPieListRows(StackPanel list, List<PieSlices.Slice> slices,
+        List<(string Name, ReportData.AppUsage Usage)> currentLevel, int levelTotal)
+    {
+        foreach (var slice in slices)
+        {
+            AddPieListRow(list, slice);
+        }
+
+        // Check if we need to add (no detail) slice
+        if (ReportsPage._appDrillPath.Count > 0)
+        {
+            var appName = ReportsPage._appDrillPath.Last();
+            var app = currentLevel.FirstOrDefault(x => x.Name == appName);
+            if (app.Usage != null && app.Usage.Subs != null)
+            {
+                var sumOfSubs = app.Usage.Subs.Sum(x => x.Value.Total);
+                var noDetail = PieSlices.NoDetailSlice(app.Usage.Total, sumOfSubs);
+                if (noDetail != null)
+                {
+                    AddPieListRow(list, noDetail);
+                }
+            }
+        }
+    }
+
+    /// <summary>Add a single list row for a pie slice.</summary>
+    private void AddPieListRow(StackPanel list, PieSlices.Slice slice)
+    {
+        var row = new Grid { ColumnSpacing = ColumnGap, Margin = new Thickness(0, 4, 0, 4) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });  // Color swatch
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // Name
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HoursColumnWidth) });  // Hours
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });  // Percentage
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // Bar
+        if (slice.IsDrillable)
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChevronColumnWidth) });
+
+        // Color swatch
+        var brushKey = CategoryBrushKey(slice.DominantCategory);
+        var swatch = new Border
+        {
+            Width = 8,
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
+            Background = (Brush)Application.Current.Resources[brushKey],
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(swatch, 0);
+        row.Children.Add(swatch);
+
+        // Name + accessibility
+        var categoryBreakdown = $"{ReportData.FmtHours(slice.On)} on-plan, " +
+                               $"{ReportData.FmtHours(slice.Off)} off-plan, " +
+                               $"{ReportData.FmtHours(slice.Neutral)} neutral, " +
+                               $"{ReportData.FmtHours(slice.Paid)} paid, " +
+                               $"{ReportData.FmtHours(slice.Idle)} idle";
+        var name = new TextBlock
+        {
+            Text = slice.Name,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        AutomationProperties.SetName(row, $"{slice.Name}, {ReportData.FmtHours(slice.Total)}, " +
+            $"{slice.Percentage:F1}%, {categoryBreakdown}" +
+            (slice.IsDrillable ? ", opens breakdown" : ""));
+        Grid.SetColumn(name, 1);
+        row.Children.Add(name);
+
+        // Hours
+        var hours = Dim(ReportData.FmtHours(slice.Total));
+        hours.HorizontalAlignment = HorizontalAlignment.Right;
+        hours.TextAlignment = TextAlignment.Right;
+        hours.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(hours, 2);
+        row.Children.Add(hours);
+
+        // Percentage
+        var pct = Dim($"{slice.Percentage:F1}%");
+        pct.HorizontalAlignment = HorizontalAlignment.Right;
+        pct.TextAlignment = TextAlignment.Right;
+        pct.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(pct, 3);
+        row.Children.Add(pct);
+
+        // Stacked category bar
+        const double barWidth = 80.0;
+        var segments = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Height = 8,
+        };
+        foreach (var (category, _, minutesOf) in StackedCategories)
+        {
+            var mins = minutesOf(new ReportData.AppUsage
+            {
+                On = slice.On, Off = slice.Off, Neutral = slice.Neutral, Paid = slice.Paid, Idle = slice.Idle
+            });
+            var w = barWidth * mins / Math.Max(slice.Total, 1);
+            if (w >= 1)
+                segments.Children.Add(new Border
+                {
+                    Width = w,
+                    Height = 8,
+                    Background = (Brush)Application.Current.Resources[CategoryBrushKey(category)],
+                });
+        }
+        var track = new Border
+        {
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
+            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+        };
+        var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        overlay.Children.Add(track);
+        overlay.Children.Add(segments);
+        Grid.SetColumn(overlay, 4);
+        row.Children.Add(overlay);
+
+        // Chevron if drillable
+        if (slice.IsDrillable)
+        {
+            row.IsTabStop = true;
+            var chevron = new FontIcon
+            {
+                Glyph = "",
+                FontSize = 12,
+                Margin = new Thickness(4, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            };
+            Grid.SetColumn(chevron, 5);
+            row.Children.Add(chevron);
+
+            row.Tapped += (_, _) =>
+            {
+                ReportsPage._appDrillPath.Add(slice.Name);
+                Render();
+            };
+            row.KeyDown += (_, e) =>
+            {
+                if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
+                {
+                    ReportsPage._appDrillPath.Add(slice.Name);
+                    Render();
+                    e.Handled = true;
+                }
+            };
+        }
+
+        list.Children.Add(row);
     }
 
     /// <summary>The five categories AppUsageRow stacks into a bar, in display order, with
@@ -217,8 +445,8 @@ public sealed partial class ReportsPage
             "No AppUsage field for this diary category."),
     };
 
-    /// <summary>Color key for AppUsageRow's stacked bars — reads from
-    /// StackedCategories, so this can never drift from what the bars
+    /// <summary>Color key for pie slices and stacked bars — reads from
+    /// StackedCategories, so this can never drift from what the visuals
     /// actually use.</summary>
     private static StackPanel TimeByAppLegend()
     {
@@ -243,86 +471,6 @@ public sealed partial class ReportsPage
                 Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             });
             row.Children.Add(item);
-        }
-        return row;
-    }
-
-    /// <summary>Name + stacked on/off/neutral bar + total minutes.</summary>
-    private static Grid AppUsageRow(string name, ReportData.AppUsage u, int maxTotal, bool bold,
-        bool expandable = false)
-    {
-        var row = new Grid { ColumnSpacing = ColumnGap };
-        // A sub-row is indented by SubRowIndent, so its label column gives that back — otherwise
-        // the indent pushes its bar off the shared axis, which is what used to happen (sub-rows
-        // started their bars 18px right of their own parent's, measured 2026-08-05).
-        row.ColumnDefinitions.Add(new ColumnDefinition
-        { Width = new GridLength(bold ? LabelColumnWidth : LabelColumnWidth - SubRowIndent) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (expandable)
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var label = new TextBlock
-        {
-            Text = name,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        if (!bold)
-            label.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
-        row.Children.Add(label);
-
-        const double barWidth = 260.0;
-        var track = new Border
-        {
-            Height = 8,
-            CornerRadius = new CornerRadius(4),
-            VerticalAlignment = VerticalAlignment.Center,
-            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
-        };
-        var segments = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-            Height = 8,
-        };
-        foreach (var (category, _, minutesOf) in StackedCategories)
-        {
-            var mins = minutesOf(u);
-            var w = barWidth * mins / maxTotal;
-            if (w >= 1)
-                segments.Children.Add(new Border
-                {
-                    Width = w,
-                    Height = 8,
-                    Background = (Brush)Application.Current.Resources[CategoryBrushKey(category)],
-                });
-        }
-        var overlay = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        overlay.Children.Add(track);
-        overlay.Children.Add(segments);
-        Grid.SetColumn(overlay, 1);
-        row.Children.Add(overlay);
-
-        var total = Dim(ReportData.FmtHours(u.Total));
-        total.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(total, 2);
-        row.Children.Add(total);
-
-        if (expandable)
-        {
-            var chevron = new FontIcon
-            {
-                Glyph = "",
-                FontSize = 12,
-                Margin = new Thickness(4, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            };
-            Grid.SetColumn(chevron, 3);
-            row.Children.Add(chevron);
         }
         return row;
     }

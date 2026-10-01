@@ -1,0 +1,10 @@
+# Planillium App — Changelog
+
+## Unreleased
+
+- Feature: Reports page diary filters now accept multiple values per filter (category, app, page, tag). Within one filter, rows match any selected value (OR); across filters, conditions are AND-ed as before (e.g., Category {A} + Tag {X,Y} shows rows of category A with either tag X or Y). Empty selection on a filter means "no filter." Faceting is preserved: app/page option lists narrow by other active filters.
+- Fix: Top Distractions and Time by App rows now use fixed-width columns for hours and EUR (Distractions only). All bars start and end at the same horizontal position, figures' right edges align per column, and bar fill is proportional to track width so it never overflows on narrow windows.
+- Fix: working inside Planillium no longer logs as absence when tracker restarts (Settings save, diary re-categorisation, teaching rules). Stop() now flushes open sessions to the diary, so time spent in-app is preserved instead of being lost and re-detected as a "Welcome back" gap on the next poll.
+- Feature: Reports page shows a consistent hourly cost for off-plan time across all sections. Per-hour value is now derived from configured monthly income (168 working hours per month: 21 days × 8 h), applied uniformly to both the income card's breakdown line and the Top Distractions list. Fixes an earlier over-inflation from dividing by only the off-plan hours in the displayed period.
+- Feature: Insights now show EUR equivalents alongside off-plan hour figures (e.g. "5 h (€80.36)"), using the same hourly value as the income card. Off-plan time ratio now includes neutral minutes in its denominator (on-plan + neutral time) instead of on-plan only, providing a more accurate representation of distraction severity.
+

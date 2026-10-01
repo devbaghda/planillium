@@ -437,7 +437,9 @@ public sealed partial class MainWindow
         try
         {
             using var db = new Database();
-            var balance = db.IncomeBalance();
+            using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
+            using var income = new IncomeService(db);
+            var balance = income.Balance(score);
             IncomeLabel.Text = balance < 0 ? "LOST INCOME" : "EXTRA INCOME";
             IncomeValue.Text = FormatEur(balance);
         }

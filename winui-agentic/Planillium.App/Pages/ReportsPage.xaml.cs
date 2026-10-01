@@ -23,6 +23,10 @@ public sealed partial class ReportsPage : Page
     // Survives navigation: come back to Reports and it's still on your period.
     private static ReportPeriod _period = ReportPeriod.Week;
 
+    // Drill path for the "time by app" pie chart (list of app names, empty = root level).
+    // Reset to empty on period switch; held in place during dialog closes, etc.
+    internal static List<string> _appDrillPath = [];
+
     private static readonly (string Label, ReportPeriod Period)[] PeriodOpts =
     {
         ("Day", ReportPeriod.Day), ("Week", ReportPeriod.Week),
@@ -116,6 +120,7 @@ public sealed partial class ReportsPage : Page
             if (PeriodBar.SelectedItem is RadioButton { Tag: ReportPeriod p })
             {
                 _period = p;
+                _appDrillPath.Clear();  // Reset pie drill path on period change
                 Render();
             }
         };
@@ -146,10 +151,10 @@ public sealed partial class ReportsPage : Page
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
 
             using var income = new IncomeService(db);
-            var incomeSum = income.SumForPeriod(_period);
+            var (incomeNet, incomeCredit) = income.SumForPeriodWithCredit(_period, score);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
-            Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin)));
+            Body.Children.Add(Card(IncomeCard(incomeNet, incomeCredit, periodName, totals.OffMin)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -178,23 +183,23 @@ public sealed partial class ReportsPage : Page
             if (distractions.Count == 0)
                 Body.Children.Add(Dim("No off-plan time logged. Impressive."));
             else
-                Body.Children.Add(Card(DistractionList(distractions, incomeSum, totals.OffMin)));
+                Body.Children.Add(Card(DistractionList(distractions, incomeNet)));
 
-            // ── time by app (expandable groups) ───────────────────────────
+            // ── time by app (pie chart with drill-down) ──────────────────
             Body.Children.Add(Section($"TIME BY APP — {periodName}"));
-            // Top 3 show by default; the rest sit behind "Show more", so pull a
-            // generous slice rather than the default handful — the point of the
-            // expander is to reveal the full picture on demand.
+            // Pie chart showing app usage with drill-down to sub-items (tabs, etc.)
+            // for apps that have sub-item breakdowns.
             var breakdown = ReportData.AppBreakdown(_period, db.Conn, score, limit: 100);
             if (breakdown.Count == 0)
                 Body.Children.Add(Dim("No activity logged yet."));
             else
             {
-                // The bars below are colored with no other label — without
-                // this, the only way to know what a color means is to
-                // already know it (2026-07-09 audit finding #18).
+                // The legend shows category colours and their meaning
+                // (on-plan, off-plan, neutral, paid, idle) — without it,
+                // the only way to know what a colour means is to already
+                // know it (2026-07-09 audit finding #18).
                 Body.Children.Add(TimeByAppLegend());
-                Body.Children.Add(Card(AppBreakdownPanel(breakdown)));
+                Body.Children.Add(Card(AppBreakdownPie(breakdown)));
             }
 
             Body.Children.Add(Section($"INSIGHTS — {periodName}"));
@@ -248,9 +253,10 @@ public sealed partial class ReportsPage : Page
     private static StackPanel InsightsPanel(ReportData.PeriodTotals totals, SqliteConnection conn,
         ScoreService score)
     {
+        var hourValue = IncomeService.HourValueEur();
         var hints = ReportExport.Suggestions(
-            totals.OnMin, totals.OffMin,
-            ReportData.TopDistractions(_period, conn, score), _period);
+            totals.OnMin, totals.OffMin, totals.NeutralMin,
+            ReportData.TopDistractions(_period, conn, score), hourValue, _period);
         var hintPanel = new StackPanel { Spacing = 6 };
         foreach (var hint in hints)
         {

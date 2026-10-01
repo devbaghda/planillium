@@ -205,7 +205,7 @@ public static class ReportData
     /// additional card for it"). Score is the sum of each day's own score — <b>points earned in
     /// the period</b>, which is a different figure from the sidebar's running balance, since that
     /// also nets off entertainment purchases.</summary>
-    public sealed record PeriodTotals(int Score, int Done, int Total, int OnMin, int OffMin, int DayOffs);
+    public sealed record PeriodTotals(int Score, int Done, int Total, int OnMin, int OffMin, int DayOffs, int NeutralMin = 0);
 
     /// <summary>
     /// Per-date on/off-plan minutes across [from, today], from both sources: raw `time_diary`,
@@ -285,7 +285,7 @@ public static class ReportData
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var periodStart = PeriodStart(period, today);
-        int scoreSum = 0, done = 0, total = 0, onSum = 0, offSum = 0;
+        int scoreSum = 0, done = 0, total = 0, onSum = 0, offSum = 0, neutralSum = 0;
         // The same sequence the tables below the card fold — see DailyRows for the two day-off
         // rules that used to be restated at each of these call sites.
         foreach (var r in DailyRows(conn, score, periodStart))
@@ -295,9 +295,10 @@ public static class ReportData
             done += r.Done;
             onSum += r.Minutes.On;
             offSum += r.Minutes.Off;
+            neutralSum += r.Minutes.Neutral;
         }
         var dayOffs = score.ManuallyMarkedDaysOff(periodStart, today).Count;
-        return new PeriodTotals(scoreSum, done, total, onSum, offSum, dayOffs);
+        return new PeriodTotals(scoreSum, done, total, onSum, offSum, dayOffs, neutralSum);
     }
 
     private static string MonthLabel(string yyyyMm) =>
