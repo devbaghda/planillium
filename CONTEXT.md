@@ -124,7 +124,9 @@ Short pointers kept inline (full text in `DECISIONS.md`):
 
 0. **(opened 2026-10-01) Eight-item batch, both workflows — awaiting user's visual review** of
    pie, diary multi-select filters, Top Distractions columns and the away dialog, in both apps.
-   Details and QA outcomes: `context/todos.md` 2026-10-01. Local commits only, unpushed.
+   Details and QA outcomes: `context/todos.md` 2026-10-01. Local commits only, unpushed (cdf0640, 45e51c9).
+   Regular Release build relaunched 2026-10-01; run only ONE of regular/agentic at a time — both use the
+   same real `data/progress.db`, so two trackers would double-log the diary.
 1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
    cause not investigated — possibly two queued ticks firing close together after timer suspension
    during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.
