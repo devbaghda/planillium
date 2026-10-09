@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: Plans page cards no longer squeeze the plan name into a narrow column. The name, meta line, due line and progress bar take the full card width (name up to two lines), and the action buttons sit on their own row beneath, wrapping to a second line on narrow windows. Same buttons, labels, order and behaviour.
+- Feature: "Replace remaining tasks…" on each active plan (Plans page). Paste Claude's revised remaining tasks; unfinished tasks are replaced from the day after the last ticked task (day 1 if none is ticked; not clamped to today, so a far-behind plan's new tasks show as overdue), ticked tasks are kept untouched, and a preview shows the removed/added counts and the new finish date before anything is written.
 - Feature: Reports page diary filters now accept multiple values per filter (category, app, page, tag). Within one filter, rows match any selected value (OR); across filters, conditions are AND-ed as before (e.g., Category {A} + Tag {X,Y} shows rows of category A with either tag X or Y). Empty selection on a filter means "no filter." Faceting is preserved: app/page option lists narrow by other active filters.
 - Fix: Top Distractions and Time by App rows now use fixed-width columns for hours and EUR (Distractions only). All bars start and end at the same horizontal position, figures' right edges align per column, and bar fill is proportional to track width so it never overflows on narrow windows.
 - Fix: working inside Planillium no longer logs as absence when tracker restarts (Settings save, diary re-categorisation, teaching rules). Stop() now flushes open sessions to the diary, so time spent in-app is preserved instead of being lost and re-detected as a "Welcome back" gap on the next poll.

@@ -129,13 +129,16 @@ public sealed partial class PlansPage : Page
     private Border PlanCard(Plan plan, int done, int total, bool complete,
         DateOnly originalEndDate, int driftDays, int progressDay)
     {
-        var grid = new Grid { Padding = new Thickness(18, 14, 18, 14), ColumnSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Layout (2026-10-09 redesign): the text block gets the card's full width on top; the
+        // actions sit in their own row beneath it. Three everyday actions stay visible, the rest
+        // live under "More". A single horizontal row of six buttons used to crush the plan name
+        // to one word per line.
+        var grid = new Grid { Padding = new Thickness(18, 14, 18, 14), RowSpacing = 12 };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        Grid.SetRow(actions, 1);
+        var more = new MenuFlyout();
 
         var left = new StackPanel { Spacing = 4 };
         left.Children.Add(new TextBlock
@@ -186,21 +189,18 @@ public sealed partial class PlansPage : Page
 
         if (plan.Briefing != null)
         {
-            var briefing = new Button { Content = "📋 Briefing", VerticalAlignment = VerticalAlignment.Center };
-            // With up to 2 active plans shown side by side, their per-card buttons used to
-            // sound identical to a screen reader ("Briefing, button" twice in a row) with no
-            // spoken cue for which plan each one acts on (2026-07-24 audit finding #5).
+            var briefing = new MenuFlyoutItem { Text = "Briefing" };
+            // Per-card actions must say which plan they act on (2026-07-24 audit finding #5).
             AutomationProperties.SetName(briefing, $"Briefing: {plan.Name}");
             briefing.Click += async (_, _) => await BriefingDialog.ShowAsync(XamlRoot, plan);
-            Grid.SetColumn(briefing, 1);
-            grid.Children.Add(briefing);
+            more.Items.Add(briefing);
         }
 
         // "task" everywhere else in the app (Today/Schedule/Reports); this
         // used to say "step" here and in the dialog title, while the
         // dialog's own field was already headered "Task" three lines below
         // it (2026-07-09 audit finding #32).
-        var addStep = new Button { Content = "+ Add task", VerticalAlignment = VerticalAlignment.Center };
+        var addStep = new Button { Content = "+ Add task" };
         AutomationProperties.SetName(addStep, $"Add task: {plan.Name}");
         addStep.Click += async (_, _) =>
         {
@@ -216,10 +216,30 @@ public sealed partial class PlansPage : Page
                 SaveErrorBar.IsOpen = true;
             }
         };
-        Grid.SetColumn(addStep, 2);
-        grid.Children.Add(addStep);
+        actions.Children.Add(addStep);
 
-        var excludeDays = new Button { Content = "Excluded days…", VerticalAlignment = VerticalAlignment.Center };
+        var replaceRest = new Button { Content = "Replace remaining…" };
+        ToolTipService.SetToolTip(replaceRest,
+            "Keep the tasks you've done; replace everything else with a new list from Claude");
+        AutomationProperties.SetName(replaceRest, $"Replace remaining tasks: {plan.Name}");
+        replaceRest.IsEnabled = !complete;
+        replaceRest.Click += async (_, _) =>
+        {
+            var ok = await ReplaceRemainingDialog.ShowAsync(XamlRoot, plan);
+            if (ok == true)
+            {
+                Render();
+                (App.MainWindow as MainWindow)?.RefreshScore();
+            }
+            else if (ok == false)
+            {
+                Render();
+                SaveErrorBar.IsOpen = true;
+            }
+        };
+        actions.Children.Add(replaceRest);
+
+        var excludeDays = new MenuFlyoutItem { Text = "Excluded days…" };
         AutomationProperties.SetName(excludeDays, $"Excluded days: {plan.Name}");
         excludeDays.Click += async (_, _) =>
         {
@@ -229,21 +249,18 @@ public sealed partial class PlansPage : Page
                 (App.MainWindow as MainWindow)?.RefreshScore();
             }
         };
-        Grid.SetColumn(excludeDays, 3);
-        grid.Children.Add(excludeDays);
+        more.Items.Add(excludeDays);
 
         var archive = new Button
         {
             Content = complete ? "Archive ✓" : "Archive",
             IsEnabled = complete,
-            VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTipService.SetToolTip(archive,
             complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
         AutomationProperties.SetName(archive, $"Archive: {plan.Name}");
         archive.Click += async (_, _) => await ArchiveAsync(plan);
-        Grid.SetColumn(archive, 4);
-        grid.Children.Add(archive);
+        actions.Children.Add(archive);
 
         // Only shown when the plan file actually has a "tools" entry somewhere — covers a
         // plan whose tools were added (or edited) some way other than a fresh "Add Plan"
@@ -253,14 +270,18 @@ public sealed partial class PlansPage : Page
         var tools = PlanStore.DistinctTools(plan);
         if (tools.Count > 0)
         {
-            var teach = new Button { Content = "Teach on-plan apps…", VerticalAlignment = VerticalAlignment.Center };
+            var teach = new MenuFlyoutItem { Text = "Teach on-plan apps…" };
             ToolTipService.SetToolTip(teach,
                 "Add this plan's tools list to your on-plan activity keywords (Settings > ACTIVITY KEYWORDS)");
             AutomationProperties.SetName(teach, $"Teach on-plan apps: {plan.Name}");
             teach.Click += async (_, _) => await TeachPlanTools.RunAsync(XamlRoot, tools);
-            Grid.SetColumn(teach, 5);
-            grid.Children.Add(teach);
+            more.Items.Add(teach);
         }
+
+        var moreBtn = new Button { Content = "More ▾", Flyout = more };
+        AutomationProperties.SetName(moreBtn, $"More actions: {plan.Name}");
+        actions.Children.Add(moreBtn);
+        grid.Children.Add(actions);
 
         return new Border
         {

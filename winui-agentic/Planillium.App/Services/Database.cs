@@ -568,6 +568,37 @@ public sealed class Database : IDisposable
         return result;
     }
 
+    /// <summary>Clears stale rows for tasks a "Replace remaining tasks" removed from a plan:
+    /// their task_overrides rows (which would otherwise relocate a new task reusing the same
+    /// title — a phantom shift) and their not-completed task_completions rows. Completed rows,
+    /// score_ledger, time_diary and task_notes are deliberately left alone. Runs in one
+    /// transaction, so either all of it or none of it lands.</summary>
+    public void DeleteRemovedTaskRows(string planId, IEnumerable<string> taskTexts)
+    {
+        var texts = taskTexts.ToList();
+        RunInTransaction(() =>
+        {
+            foreach (var text in texts)
+            {
+                using (var overrides = CreateCommand())
+                {
+                    overrides.CommandText = "DELETE FROM task_overrides WHERE plan_id=$pid AND task_text=$text";
+                    overrides.Parameters.AddWithValue("$pid", planId);
+                    overrides.Parameters.AddWithValue("$text", text);
+                    overrides.ExecuteNonQuery();
+                }
+                using (var incomplete = CreateCommand())
+                {
+                    incomplete.CommandText =
+                        "DELETE FROM task_completions WHERE plan_id=$pid AND task_text=$text AND completed=0";
+                    incomplete.Parameters.AddWithValue("$pid", planId);
+                    incomplete.Parameters.AddWithValue("$text", text);
+                    incomplete.ExecuteNonQuery();
+                }
+            }
+        });
+    }
+
     /// <summary>Same UPDATE as main.py's _edit_diary_entry Save, plus the tag column
     /// (2026-08-06). tag has no default — deliberately forces every call site to be explicit
     /// about what happens to it, rather than a default silently clearing an existing tag on

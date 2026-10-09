@@ -1,3 +1,6 @@
+> **Copied from the regular workflow's `DECISIONS.md` on 2026-10-01 (lines through "Standing lessons", excluding the regular side's pilot-orchestration section).**
+> From this date the two files evolve independently — this copy is edited only by the agentic workflow, never from the regular side. User decisions that apply here are written in by the orchestrator.
+
 # Planillium — Decisions & Standing Lessons
 
 > **Lookup register, not a read-through.** `CONTEXT.md` is the file to read start to finish every
@@ -169,10 +172,6 @@
     - Settings' monthly-income field and employment toggle follow the existing
       independent-per-section save convention (rule set out under `SettingsPage`, §"A settings
       page split across independent sections..." below).
-    - **Payable tags (user decision 2026-10-01):** diary time tagged with a payable tag (shipped:
-      Studioshoo, 1600 EUR/month net; more addable in Settings) is paid work, valued at that tag's
-      monthly ÷ 168 h. Counted twice on purpose: added into the income figure (offsetting the loss)
-      and shown as its own Earnings block in Reports. Read-time from the diary, never in the ledger.
     - **Hour value = monthly net ÷ 168 h (21 days × 8 h), ≈ €16/h at €2,700** (user decision
       2026-10-01). Every EUR-per-hour figure (Top Distractions rows, the Reports income card's
       off-plan line, Insights) uses it. The earlier rate — period lost income ÷ off-plan minutes —
@@ -186,16 +185,14 @@
       credit; employed days get none (they already add the full rate); today counts live in the
       Reports figure but not in the sidebar chip (posted days only, as before). Tasks count on the
       day they were assigned, so a late completion credits its assigned day.
-
-
-15. **Replace remaining tasks: new tasks start right after the last done task** (user decision
-    2026-10-09; day 1 if none is done). Done tasks (ticked complete) never move; everything else is
-    replaced. **Not clamped to today**: Claude proposed `max(last done + 1, today's plan day)` so a
-    far-behind plan would not show its whole new list as overdue; the user chose the literal rule
-    and reaffirmed. Consequence stated once: such a plan's new tasks land in the past and read as
-    overdue. `total_days` is rewritten to the last new day, so "Day X of Y", "Finishes" and drift
-    follow (drift restarts at 0). Removed tasks' `task_overrides` are deleted in the same
-    transaction as the file write. A new title equal to a done title is rejected.
+15. **"Replace remaining tasks…" start day (user decision 2026-10-09, reaffirmed after the user was
+    warned of the consequence)**: replacement tasks start on **(assigned day of the last ticked
+    task) + 1**, or **day 1 when no task is ticked**. The start is **not** clamped to today's plan
+    day. Consequence: on a plan that is far behind, the new tasks start at the next day after the
+    old backlog and show as overdue straight away. The earlier rule `max(last done + 1, today's
+    plan day)` is withdrawn; this supersedes it in `pilot-specs/replace-remaining-tasks/` and in the
+    code (`PlanReplacement.Assess`). Ticked tasks, their days and their score history are unchanged
+    by this rule, as before.
 
 ---
 
@@ -334,16 +331,14 @@ compaction. General versions of several now also live in the global `windows-app
   turn. Note `ScrollPattern.SetScrollPercent` was a silent no-op on this app's ScrollViewer, so
   don't read "nothing moved" as "nothing to scroll" — check `VerticallyScrollable`/`VerticalViewSize`
   first (2026-08-05).
-- **Adding a control to a row of `Auto` columns beside a `Star` column takes the width from the
-  `Star` column — check the row at real width before showing it.** "Replace remaining…" was added as
-  a 4th–6th button beside the Plans-page card text and crushed the plan name to one word per line
-  and clipped the meta/due/progress lines (user: "terrible design solution", 2026-10-09). Rule: a
-  card's text gets the full width; actions go in their own row, with rarely-used ones under a
-  "More" menu. Before any change that adds a control to a shared row/card, read each text element's
-  UIA `BoundingRectangle` (or a `PrintWindow` capture) at the default **and** narrowest window width
-  — a clean build proves nothing about layout. Sibling sweep: any other row of ≥4 Auto-width
-  buttons (check each page's card/toolbar builders). Swept 2026-10-09: Today rows have ≤3 Auto
-  columns, Schedule rows ≤2 — no other offender.
+- **Adding a control to a shared row of `Auto` columns beside a `*` column takes width from the text.**
+  The star column is what absorbs the squeeze, so the text wraps one word per line while the buttons keep
+  their width. A card's text must keep full width, with its actions on their own row beneath (2026-10-09,
+  Plans page card: name clipped to one word per line at 900 DIP). Wrapping flow for the actions:
+  `Controls/WrapFlowPanel.cs`.
+- **Layout changes must be verified by UIA `BoundingRectangle` at the default and the narrowest window
+  width.** A clean build proves nothing about layout: the 2026-10-09 card bug compiled and passed every
+  test. Check that every control rect sits inside its card Border with the padding inset.
 - `CopyFromScreen`/GDI `BitBlt` doesn't capture WinUI3 Mica/DirectComposition content — use
   `PrintWindow` with `PW_RENDERFULLCONTENT` (flag `2`). For exact layout comparisons, UIA
   `BoundingRectangle` beats pixel-diffing.
@@ -389,35 +384,5 @@ compaction. General versions of several now also live in the global `windows-app
 - A dedup helper (e.g. `ToIsoDate()`) needs a second pass to check *adjacent* formats (e.g.
   timestamps) weren't left uncovered by the same helper.
 
-**Agentic-pilot isolation** — *superseded 2026-10-01: documents are now fully split between the two workflows (`winui-agentic/` has its own copies), so the shared-ground/read-list problem below no longer exists; the Dashboard row is now written by the orchestrator for both sides after a QA run. Kept for history.*
-- **A living handoff doc can't double as a blind-comparison boundary.** `winui-agentic/PILOT.md`
-  lists `CONTEXT.md` as safe "shared ground" for Planner/Coder/QA to read — true for business
-  rules, false the moment a session logs an implementation write-up of one side's build into it,
-  which is exactly what a handoff doc's normal job is. Caught 2026-09-22 (lost-earnings-counter):
-  a regular-workflow write-up sat in `CONTEXT.md` while Planner was independently speccing the
-  agentic side; Planner noticed and declined to use it, but nothing structural had stopped it.
-  Fix: pilot outcomes are logged only in `context/todos.md`, which isn't on the pilot agents' read
-  list; `CONTEXT.md` and `PILOT.md`'s own "Runs" section carry a bare pointer, never
-  implementation detail.
-- **A "don't write X here" rule needs an enforcement mechanism, not just a memory.** The fix above
-  relies on every future session remembering not to log implementation detail into `CONTEXT.md` —
-  the exact kind of discipline that had already lapsed once, in the same session the rule was
-  written. Hardened 2026-09-23: removed `CONTEXT.md` from Planner's reading list entirely
-  (`.claude/agents/planillium-planner.md` step 2, `PILOT.md`'s contamination rule) rather than
-  trusting the write-side rule alone. Only `DECISIONS.md` and `context/domain.md` remain
-  Planner-readable shared ground — both are structurally lookup/reference registers, not narrative
-  handoff docs, so they can't accumulate session write-ups the way `CONTEXT.md` can. General
-  lesson: where a boundary matters, prefer narrowing what can be read over trusting what won't be
-  written.
-- **The Dashboard write is a step in the agentic pipeline's own routine — nothing calls it on the
-  regular-workflow side.** Confirmed 2026-09-24 (recall, lost-earnings-counter): the regular build
-  (session `15712360...`, 2026-09-22) finished with its own closing checklist updating only
-  `CONTEXT.md`/`DECISIONS.md` — the Dashboard row never got written, not because anyone forgot on
-  the day, but because no step in the regular workflow's completion routine ever calls
-  `ArtifactData` on it; only the agentic pipeline's own review step does. The Dashboard silently
-  showed agentic-only data for two days before this was noticed. Fix: **a regular-workflow session
-  that finishes building a feature also queued for pilot comparison must write its own `runs` row
-  to the Dashboard (`https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`, collection `runs`,
-  `workflow: "regular"`) as part of its own close-out, the same turn it updates `CONTEXT.md`/
-  `DECISIONS.md` — not left for the agentic side or a later recall pass to backfill.**
 
+- **(2026-10-02) Check SQL column names against the real schema, not the fork's own table definition.** The agentic income code shipped with a column (`delta`) that exists nowhere in the live DB; its own tests passed because they built a fresh DB from the same wrong definition. Compare against `data/progress.db`'s actual schema (read-only) when touching any query.

@@ -457,3 +457,43 @@ tests are still smoke-level (no seeded 3-of-4 case). Corrections count on Dashbo
 question, local-commit question). Regular rows logged live, no QA run. Still to do: user visual
 review of both apps; consider a re-QA of the pie.
 
+### 2026-10-01 — alignment and salary default (both workflows)
+
+Time-by-app pie legend now always reserves the chevron slot (16 px column,
+`ReportsPage.TimeByAppPie.cs`), so hours/% line up. Agentic list (`ReportsPage.TimeByApp.cs`) already
+reserved its chevron column — unchanged. Potential monthly income default 2700 → 2925
+(2700 x 13 / 12) in both `ConfigService.cs`; the real `config.json` has no income key, so the
+default is what runs — no config edit made. Not retroactive: days already posted keep their old
+delta (DECISIONS rule 14). Builds 0 warnings; 165 / 239 tests pass. Visual check by user pending.
+
+### 2026-10-01 — payable tags (both workflows)
+
+Payable tags: `PaidTags` (`Services/PaidTags.cs`, config key `paid_tags`; absent = Studioshoo at
+1600 EUR/month). Earnings = diary minutes with the tag x monthly ÷ 168 h (21 x 8, user rule) —
+read-time from `time_diary` (`IncomeService.PaidEarnings`), so re-pricing a tag re-prices history.
+Added into the income figure (Reports period sum, sidebar balance — regular: through yesterday) AND shown
+as its own "Earnings from paid work" Reports card (user decision: offset + separate block). Settings →
+Income: edit each tag's monthly rate, remove, add a new one; a new name also becomes a diary tag
+(`DiaryTag.Options` now reads the list on every access). Removing a custom tag leaves old diary rows
+with an unrecognised tag (shown as "—"). Builds 0 warnings; 169 / 243 tests pass. Not QA'd, UI by
+build + code inspection only; user visual review pending. Agentic Settings does not refresh the
+sidebar chip on save (same as its other income fields).
+
+
+### 2026-10-09 — Replace remaining tasks, regular workflow side (winui/)
+Plans page → "Replace remaining…": keeps ticked-complete tasks, replaces everything else with a pasted
+Claude JSON (prompt generated in-dialog with the done list + a "what should change" box), preview then
+confirm. New tasks start right after the last done task (day 1 if none) -- NOT clamped to today (user decision, see below); `total_days` is rewritten to the
+last new day so Day X of Y, "Finishes", and drift all follow (drift restarts at 0). Removed tasks'
+`task_overrides` are deleted in the same transaction as the file write; `task_notes` left alone.
+Code: `Services/PlanRemainder.cs`, `PlanStore.ReplaceRemainingTasks`, `Dialogs/ReplaceRemainingDialog.cs`.
+Tests 182/182. Release build 0 warnings. **Not QA'd yet** (QA worktree needs the work committed).
+Start-day decision (user, 2026-10-09): I proposed clamping to today (a 56-day-late plan would otherwise score its whole new list as overdue); user chose the literal "right after the last done task". Implemented in full; consequence stated once: a far-behind plan's new list lands in the past and shows overdue.
+
+### 2026-10-09 — Plans page card layout fix, regular side (winui/)
+User: "terrible design solution, fix it" — adding "Replace remaining…" to the single button row beside the
+plan text crushed the name to one word per line and clipped the meta/due/progress lines. `PlanCard`
+(`Pages/PlansPage.xaml.cs`) now gives the text the full width, with Add task / Replace remaining… /
+Archive in a row beneath and Briefing / Excluded days… / Teach on-plan apps… under a "More ▾" menu.
+Release build 0 warnings; user reviewed live and approved. Lesson: `DECISIONS.md` → Standing lessons →
+WinUI / layout. Layout not UIA-measured at 900 DIP (user eyeballed it).

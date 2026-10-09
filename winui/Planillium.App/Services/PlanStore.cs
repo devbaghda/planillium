@@ -223,4 +223,60 @@ public static class PlanStore
 
         JsonFileIO.WriteAllTextAtomic(path, node.ToJsonString(JsonFileIO.Indented));
     }
+
+    /// <summary>
+    /// Replace remaining tasks (2026-10-09): removes every task whose title isn't in
+    /// <c>change.KeptTexts</c> (the done ones), drops phases that end up empty, appends the new
+    /// phases (renumbered after the surviving ones) and, if the file carries a total_days,
+    /// raises/lowers it to the last task's day so "Day X of Y" stays honest. Same surgical
+    /// JsonNode patch as AddTask so unmodelled fields survive. The overrides delete and the file
+    /// write share one transaction, with the file written last: a failure before it rolls the DB
+    /// back, so the two can't disagree.
+    /// </summary>
+    public static void ReplaceRemainingTasks(string planId, PlanRemainder.Change change, Database db)
+    {
+        var path = PlanFilePath(planId);
+        var node = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
+            ?? throw new InvalidOperationException($"Plan file for '{planId}' isn't a JSON object.");
+        var phases = node["phases"] as JsonArray
+            ?? throw new InvalidOperationException($"Plan '{planId}' has no phases.");
+
+        var kept = new JsonArray();
+        var maxPhase = 0;
+        var lastDay = 0;
+        foreach (var p in phases.ToList())
+        {
+            if (p is not JsonObject phase) continue;
+            if (phase["tasks"] is JsonArray ts)
+            {
+                foreach (var t in ts.ToList())
+                {
+                    var text = (t as JsonObject)?["task"]?.GetValue<string>();
+                    if (text == null || !change.KeptTexts.Contains(text)) ts.Remove(t);
+                    else if ((t as JsonObject)?["day"] is JsonValue dv && dv.TryGetValue<int>(out var d))
+                        lastDay = Math.Max(lastDay, d);
+                }
+                if (ts.Count == 0) continue;
+            }
+            else continue;
+            if (phase["phase"] is JsonValue pv && pv.TryGetValue<int>(out var pn)) maxPhase = Math.Max(maxPhase, pn);
+            phases.Remove(p);
+            kept.Add(p);
+        }
+        phases.Clear();
+        foreach (var p in kept.ToList()) { kept.Remove(p); phases.Add(p); }
+        foreach (var np in change.NewPhases)
+        {
+            np["phase"] = ++maxPhase;
+            phases.Add(np.DeepClone());
+        }
+        lastDay = Math.Max(lastDay, change.LastNewDay);
+        if (node["total_days"] != null) node["total_days"] = lastDay;
+
+        db.RunInTransaction(() =>
+        {
+            db.DeleteOverrides(planId, change.RemovedTexts);
+            JsonFileIO.WriteAllTextAtomic(path, node.ToJsonString(JsonFileIO.Indented));
+        });
+    }
 }

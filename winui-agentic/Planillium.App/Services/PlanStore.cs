@@ -186,6 +186,18 @@ public static class PlanStore
         JsonFileIO.WriteAllTextAtomic(path, node.ToJsonString(JsonFileIO.Indented));
     }
 
+    /// <summary>The raw JSON object of an active plan file, for surgical patches that must keep
+    /// fields the Plan model doesn't carry (PlanReplacement.Apply). Same parse as
+    /// SetExcludedWeekdays uses.</summary>
+    public static JsonObject ReadActivePlanObject(string planId) =>
+        JsonNode.Parse(File.ReadAllText(PlanFilePath(planId))) as JsonObject
+            ?? throw new InvalidOperationException($"Plan file for '{planId}' isn't a JSON object.");
+
+    /// <summary>Atomic write of a patched raw plan object back to plans/active, same write as
+    /// SetExcludedWeekdays and AddTask.</summary>
+    public static void WriteActivePlanObject(string planId, JsonObject node) =>
+        JsonFileIO.WriteAllTextAtomic(PlanFilePath(planId), node.ToJsonString(JsonFileIO.Indented));
+
     /// <summary>Every distinct "tools" entry across a plan's tasks, case-insensitively
     /// deduplicated — what AddPlanDialog teaches to config.json's activity_rules.on_plan
     /// list right after import (see PlanTask.Tools' own doc comment for why).</summary>

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Planillium.App.Controls;
 using Planillium.App.Dialogs;
 using Planillium.App.Models;
 using Planillium.App.Services;
@@ -129,19 +130,24 @@ public sealed partial class PlansPage : Page
     private Border PlanCard(Plan plan, int done, int total, bool complete,
         DateOnly originalEndDate, int driftDays, int progressDay)
     {
-        var grid = new Grid { Padding = new Thickness(18, 14, 18, 14), ColumnSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Stacked vertically: the text block takes the full card width on row 0, and the
+        // action buttons wrap on row 1 (spec plans-card-layout). Padding is on the Border.
+        var stack = new StackPanel { Spacing = 0 };
+        var actions = new WrapFlowPanel
+        {
+            HorizontalSpacing = 8,
+            VerticalSpacing = 8,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
 
         var left = new StackPanel { Spacing = 4 };
         left.Children.Add(new TextBlock
         {
             Text = plan.Name,
             Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
+            TextWrapping = TextWrapping.Wrap,
+            MaxLines = 2,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         });
         var metaLine = $"Day {progressDay} of {plan.TotalDaysComputed} · {done}/{total} tasks done";
         if (plan.ExcludedWeekdays.Count > 0)
@@ -155,6 +161,7 @@ public sealed partial class PlansPage : Page
             Text = metaLine,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
         });
 
         // Originally-due date is fixed the moment the plan is created — it
@@ -175,6 +182,7 @@ public sealed partial class PlansPage : Page
             Foreground = (Brush)Application.Current.Resources[
                 driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"],
             FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
         });
         var bar = new ProgressBar
         {
@@ -182,7 +190,7 @@ public sealed partial class PlansPage : Page
             Margin = new Thickness(0, 6, 0, 0),
         };
         left.Children.Add(bar);
-        grid.Children.Add(left);
+        stack.Children.Add(left);
 
         if (plan.Briefing != null)
         {
@@ -192,8 +200,7 @@ public sealed partial class PlansPage : Page
             // spoken cue for which plan each one acts on (2026-07-24 audit finding #5).
             AutomationProperties.SetName(briefing, $"Briefing: {plan.Name}");
             briefing.Click += async (_, _) => await BriefingDialog.ShowAsync(XamlRoot, plan);
-            Grid.SetColumn(briefing, 1);
-            grid.Children.Add(briefing);
+            actions.Children.Add(briefing);
         }
 
         // "task" everywhere else in the app (Today/Schedule/Reports); this
@@ -216,8 +223,23 @@ public sealed partial class PlansPage : Page
                 SaveErrorBar.IsOpen = true;
             }
         };
-        Grid.SetColumn(addStep, 2);
-        grid.Children.Add(addStep);
+        actions.Children.Add(addStep);
+
+        // Keeps every ticked task and swaps the rest for a list pasted from Claude
+        // (spec replace-remaining-tasks). Sits between "+ Add task" and "Excluded days…".
+        var replaceRemaining = new Button { Content = "Replace remaining tasks…", VerticalAlignment = VerticalAlignment.Center };
+        ToolTipService.SetToolTip(replaceRemaining,
+            "Keep the ticked tasks and replace all the others with a new list from Claude");
+        AutomationProperties.SetName(replaceRemaining, $"Replace remaining tasks: {plan.Name}");
+        replaceRemaining.Click += async (_, _) =>
+        {
+            if (await ReplaceRemainingDialog.ShowAsync(XamlRoot, plan.Id))
+            {
+                Render();
+                (App.MainWindow as MainWindow)?.RefreshScore();
+            }
+        };
+        actions.Children.Add(replaceRemaining);
 
         var excludeDays = new Button { Content = "Excluded days…", VerticalAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(excludeDays, $"Excluded days: {plan.Name}");
@@ -229,8 +251,7 @@ public sealed partial class PlansPage : Page
                 (App.MainWindow as MainWindow)?.RefreshScore();
             }
         };
-        Grid.SetColumn(excludeDays, 3);
-        grid.Children.Add(excludeDays);
+        actions.Children.Add(excludeDays);
 
         var archive = new Button
         {
@@ -242,8 +263,7 @@ public sealed partial class PlansPage : Page
             complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
         AutomationProperties.SetName(archive, $"Archive: {plan.Name}");
         archive.Click += async (_, _) => await ArchiveAsync(plan);
-        Grid.SetColumn(archive, 4);
-        grid.Children.Add(archive);
+        actions.Children.Add(archive);
 
         // Only shown when the plan file actually has a "tools" entry somewhere — covers a
         // plan whose tools were added (or edited) some way other than a fresh "Add Plan"
@@ -258,9 +278,10 @@ public sealed partial class PlansPage : Page
                 "Add this plan's tools list to your on-plan activity keywords (Settings > ACTIVITY KEYWORDS)");
             AutomationProperties.SetName(teach, $"Teach on-plan apps: {plan.Name}");
             teach.Click += async (_, _) => await TeachPlanTools.RunAsync(XamlRoot, tools);
-            Grid.SetColumn(teach, 5);
-            grid.Children.Add(teach);
+            actions.Children.Add(teach);
         }
+
+        stack.Children.Add(actions);
 
         return new Border
         {
@@ -268,7 +289,9 @@ public sealed partial class PlansPage : Page
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
-            Child = grid,
+            Padding = new Thickness(18, 14, 18, 14),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = stack,
         };
     }
 

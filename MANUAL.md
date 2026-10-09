@@ -32,6 +32,12 @@ turning you away — it shows up under "Queued ideas" on the Plans page, where y
 the moment a slot frees up (or delete it if it's no longer worth pursuing). Finishing and
 archiving a plan also offers to start one of your queued ideas right there.
 
+**Changing the rest of a plan.** "Replace remaining…" on a plan's card keeps everything you've
+already ticked done and replaces all other tasks with a new list: say what should change, copy the
+prompt into claude.ai, paste the reply back, check the preview, confirm. The new tasks start after
+your last done task (even if that day is already past, in which case they show as overdue), and the finish date and "late from plan" figure restart
+from the new list.
+
 Each plan can include:
 
 - a title,
@@ -140,7 +146,7 @@ The card also values one hour of work (monthly income ÷ 168 h, so about €16 a
 what your off-plan hours that period came to at that value. The line isn't shown for a period with
 no off-plan time at all. Top Distractions shows the same per-hour value on each row: that app or
 site's hours and its EUR cost, in two aligned columns. The diary section at the
-bottom is separate and always works one day at a time.
+bottom is separate and always works one day at a time. Below the income card, an Earnings block shows what your paid work came to: time tagged with a payable tag (Studioshoo by default, 1,600 €/month) at its monthly rate ÷ 168 h. The same amount is already counted in the income figure above. Add or change payable tags in Settings → Income.
 
 The summary table carries the same columns on every period view: tasks done, one column for each
 of the five categories your time is sorted into (on-plan, off-plan, neutral, paid and idle), that

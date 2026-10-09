@@ -99,6 +99,9 @@
     <Compile Include="..\Planillium.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\Planillium.App\Services\NotificationCenter.cs" Link="App\NotificationCenter.cs" />
     <Compile Include="..\Planillium.App\Services\PlanStore.cs" Link="App\PlanStore.cs" />
+    <!-- Linked for PlanReplacement (spec replace-remaining-tasks): the pure paste-parsing, preview
+         and plan-file/DB apply logic behind "Replace remaining tasks…". Plain C#, no WinUI types. -->
+    <Compile Include="..\Planillium.App\Services\PlanReplacement.cs" Link="App\PlanReplacement.cs" />
     <!-- Linked for ReportData.PeriodStats, the period aggregation behind Reports' score card
          and insights (2026-08-04). Pulls in AppNames/CategoryStyle-free plain C# only. -->
     <Compile Include="..\Planillium.App\Services\ReportData.cs" Link="App\ReportData.cs" />

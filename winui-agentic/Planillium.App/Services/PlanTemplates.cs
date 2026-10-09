@@ -182,6 +182,59 @@ other things too. Leave "tools" as an empty list for a task that's genuinely not
 any particular app (e.g. a phone call or an in-person errand).
 """;
 
+    /// <summary>Replace-remaining prompt (spec replace-remaining-tasks): Claude rewrites only the
+    /// unfinished part of a plan, and is told which tasks are fixed so it does not repeat them.
+    /// Placeholders are filled by <see cref="ReplaceRemainder"/> via string.Replace.</summary>
+    public const string ReplaceRemainderTemplate = """
+I'm revising my plan "{plan_name}" in my personal tracking app. Some of its tasks are already
+ticked complete, and those stay exactly as they are. Rewrite only the remaining work. Do not
+include the ticked tasks below, and do not repeat them under a new title.
+
+Ticked tasks (fixed, do not repeat):
+{done_list}
+
+Give me the remaining tasks as a single JSON code block (```json ... ```), with nothing else
+inside the fence. Number the days of the new tasks starting from day {start_day}, and keep
+whatever spacing between days makes sense for the work. Every task title must be unique and must
+not match any ticked task above. Match this shape:
+
+{
+  "name": "{plan_name}",
+  "phases": [
+    {
+      "name": "Phase name",
+      "tasks": [
+        {
+          "day": {start_day},
+          "task": "Short task title",
+          "detail": "Concrete instructions: exactly what to do, for how long, and what 'done' looks like.",
+          "mentor_note": "Why this matters right now, the mistake beginners make at this exact step, and what doing it right looks like.",
+          "category": "one word, for example practice or review",
+          "duration_min": 60,
+          "tools": ["The specific apps/tools/websites needed to actually do this task"]
+        }
+      ]
+    }
+  ]
+}
+
+For "tools", list only real, precise app or website names I'll have open for that task, and use
+an empty list where no particular app is needed.
+""";
+
+    /// <summary>Fills <see cref="ReplaceRemainderTemplate"/> for one plan. With no ticked tasks the
+    /// list reads "(none yet)".</summary>
+    public static string ReplaceRemainder(string planName, IReadOnlyList<PlanReplacement.DoneTask> done, int startDay)
+    {
+        var doneList = done.Count == 0
+            ? "(none yet)"
+            : string.Join("\n", done.Select(d => $"Day {d.AssignedDay}: {d.Title}"));
+        return ReplaceRemainderTemplate
+            .Replace("{plan_name}", planName)
+            .Replace("{done_list}", doneList)
+            .Replace("{start_day}", startDay.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     public const string Reformat = """
 I already have a plan for "{subject}" that I wrote myself. I want you to
 reformat it into a specific JSON structure so I can import it straight into

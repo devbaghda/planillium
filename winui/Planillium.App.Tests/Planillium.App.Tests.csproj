@@ -99,6 +99,7 @@
     <Compile Include="..\Planillium.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\Planillium.App\Services\NotificationCenter.cs" Link="App\NotificationCenter.cs" />
     <Compile Include="..\Planillium.App\Services\PlanStore.cs" Link="App\PlanStore.cs" />
+    <Compile Include="..\Planillium.App\Services\PlanRemainder.cs" Link="App\PlanRemainder.cs" />
     <!-- Linked for ReportData.PeriodStats, the period aggregation behind Reports' score card
          and insights (2026-08-04). Pulls in AppNames/CategoryStyle-free plain C# only. -->
     <Compile Include="..\Planillium.App\Services\ReportData.cs" Link="App\ReportData.cs" />

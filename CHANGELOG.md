@@ -6,6 +6,8 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Features**
+- **Replace remaining tasks.** On a plan's card, "Replace remaining…" keeps every task you've ticked done and swaps the rest for a new list from Claude (copy the prompt, paste the reply, preview, confirm). The plan's finish date, Day X of Y and the sidebar "late from plan" figure all follow the new length.
+- **Payable tags.** Time tagged Studioshoo (or any payable tag you add in Settings → Income) counts as paid work at its monthly rate ÷ 168 h. It reduces the unearned-income figure and has its own Earnings block in Reports.
 - **Time by app is now a pie.** One slice per app (the eight biggest, the rest folded into "Other");
   click a slice or its name to turn it into a pie of what's inside — the pages of that app, or the
   apps inside "Other" — with a Back link.
@@ -24,6 +26,7 @@ going forward; the original Python/Tkinter version is retired.
   using that same per-hour rate.
 
 **Fixes**
+- **Plans page cards no longer crowd the plan name.** The plan text now has the full card width; "Briefing", "Excluded days…" and "Teach on-plan apps…" moved under a "More" menu beside "+ Add task", "Replace remaining…" and "Archive".
 - **Euro figures were several times too high.** An hour of work is now valued at your monthly income
   ÷ 168 h (≈ €16 at €2,700) instead of spreading every calendar day over the off-plan hours.
   Top Distractions and the income card use it.

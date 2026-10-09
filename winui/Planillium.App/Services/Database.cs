@@ -576,6 +576,21 @@ public sealed class Database : IDisposable
         return result;
     }
 
+    /// <summary>Drops the reschedule/move overrides of tasks that no longer exist in a plan
+    /// (Replace remaining tasks, 2026-10-09) — otherwise a new task reusing a removed task's
+    /// title would silently inherit its old assigned day.</summary>
+    public void DeleteOverrides(string planId, IEnumerable<string> taskTexts)
+    {
+        foreach (var text in taskTexts)
+        {
+            using var cmd = CreateCommand();
+            cmd.CommandText = "DELETE FROM task_overrides WHERE plan_id=$pid AND task_text=$text";
+            cmd.Parameters.AddWithValue("$pid", planId);
+            cmd.Parameters.AddWithValue("$text", text);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     /// <summary>Same UPDATE as main.py's _edit_diary_entry Save, plus the tag column
     /// (2026-08-06). tag has no default — deliberately forces every call site to be explicit
     /// about what happens to it, rather than a default silently clearing an existing tag on

@@ -12,7 +12,7 @@
 > file stays thin — current state, rules, a short decisions-highlights list, open items with dates,
 > and a Section Index. `DECISIONS.md` was **not** absorbed into `context/` — it's a mature,
 > independent register, pre-dating this scheme (split out 2026-08-04 for the identical reason),
-> and moving it would mean auditing every cross-reference for no benefit. Last updated 23 Sep 2026.
+> and moving it would mean auditing every cross-reference for no benefit. Last updated 1 Oct 2026.
 
 ---
 
@@ -34,8 +34,8 @@ Display name, internal rename history and the three legacy-compat exceptions:
 
 Phase: **shipped, in daily live use** (v1.2.0+, public GitHub repo). **The WinUI app
 (`winui/Planillium.App`) is THE app** — full architecture, directory map and tech stack:
-`context/domain.md` — "App architecture" and "Tech stack". Automated test suite: 160/160 as of
-2026-09-22, stable at any time of day — `ActivityTrackerPendingGapTests`' former
+`context/domain.md` — "App architecture" and "Tech stack". Automated test suite: 169/169 as of
+2026-10-01 (agentic side 243), stable at any time of day — `ActivityTrackerPendingGapTests`' former
 time-of-day-dependent flake (previously time-of-day-dependent within ~3h of midnight) is fixed,
 not just unlucky-not-to-hit; see `context/todos.md` Session log 09-22.
 
@@ -92,19 +92,13 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
 - **Check every sibling** before calling a fix complete — grep for the shape, not just the
   reported call site. Origin story and what it produced as a global rule: `CLAUDE.md` →
   "Regression-prevention lesson".
-- **Pilot write-ups never go in `CONTEXT.md` or `PILOT.md`.** Both are on the agentic-pilot
-  Planner/Coder/QA's allowed-read list (`winui-agentic/PILOT.md`'s contamination rule), so an
-  implementation write-up placed there becomes the answer key for whichever side hasn't built its
-  version yet. Log outcomes only in `context/todos.md` (not on that read list) and leave a bare
-  one-line pointer here. Learned the hard way 2026-09-22: a same-session write-up of the
-  regular-workflow side's implementation sat in `CONTEXT.md` while Planner was independently
-  speccing the agentic side — Planner noticed and declined to use it, but nothing structural had
-  stopped it.
-
-## 6. Key decisions and standing lessons — highlights
-
-Short pointers kept inline (full text in `DECISIONS.md`):
-
+- **Two parallel workflows, fully separate documents (default from 2026-10-01).** Every feature
+  runs both the regular build (this folder's docs) and the agentic pipeline (`winui-agentic/`, with
+  its own `CONTEXT.md`/`DECISIONS.md`/`context/`). Method, rules and metrics:
+  `~/.claude/reference/feature-workflow.md`. Never write one side's implementation notes into the
+  other's docs; user decisions are recorded into each side's docs individually by the orchestrator.
+  *(Supersedes the 2026-09-22 "pilot write-ups never go in CONTEXT.md" rule: the leak it guarded
+  against is now impossible because the agentic side no longer reads this file.)*
 - **One pair of working hours governs both the off-plan nag and the diary tracking window** —
   merging a second `diary_hours` block back into one was a deliberate 2026-08-04 simplification;
   a `diary_hours` block in an existing config.json is now inert.
@@ -122,11 +116,20 @@ Short pointers kept inline (full text in `DECISIONS.md`):
 
 ## 7. Still open
 
-0. **(opened 2026-10-01) Eight-item batch, both workflows — awaiting user's visual review** of
+0. **(opened 2026-10-01) Eight-item batch, both workflows — regular app visuals OK'd by user 2026-10-02; agentic app review in progress (fixes logged in its own docs)** of
    pie, diary multi-select filters, Top Distractions columns and the away dialog, in both apps.
    Details and QA outcomes: `context/todos.md` 2026-10-01. Local commits only, unpushed (cdf0640, 45e51c9).
-   Regular Release build relaunched 2026-10-01; run only ONE of regular/agentic at a time — both use the
+   Also awaiting review, same day, **uncommitted** (both apps): pie-legend alignment fix (chevron slot
+   always reserved), previous-salary default 2700 -> 2925, and **payable tags** (Studioshoo 1600/month,
+   addable in Settings -> Income; earnings offset the income figure and have their own Reports card) --
+   `context/todos.md` 2026-10-01, `DECISIONS.md` rule 14. None QA'd; built directly, not through the
+   agentic pipeline. Regular Release build relaunched; run only ONE of regular/agentic at a time -- both use the
    same real `data/progress.db`, so two trackers would double-log the diary.
+0a. **(opened 2026-10-09) "Replace remaining tasks" — built on both sides, NOT QA'd, uncommitted.**
+   Request/acceptance in `pilot-specs/replace-remaining-tasks/` (regular) and
+   `winui-agentic/pilot-specs/replace-remaining-tasks/` (agentic SPEC there too). Regular tests 182/182,
+   agentic 253/253, both Release builds clean. Start day = right after last done task, NOT clamped to today (user decision 2026-10-09, over my objection); commit+push approved 2026-10-09. Card-layout fix for the new button done and user-approved on both sides 2026-10-09. Then: QA both sides (one after the other), dashboard rows, `DECISIONS.md` entry if (1) is confirmed.
+   Details: `context/todos.md` 2026-10-09.
 1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
    cause not investigated — possibly two queued ticks firing close together after timer suspension
    during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.
@@ -150,37 +153,15 @@ Short pointers kept inline (full text in `DECISIONS.md`):
    window extremes) but their values are never edited live** — that writes `config.json` and
    restarts the tracker, so verification stays code-inspection-only by design. Revisit only if
    this verification approach changes.
-7. **(opened 2026-09-18, fork created 2026-09-22) Agentic-workflow pilot — now actually running.**
-    `winui-agentic/Planillium.App/` + `.Tests/` exist: a source-only copy of `winui/`'s same two
-    folders at the 2026-09-22 fork point (91+17 files, count-verified against the original,
-    `bin`/`obj` excluded; no `data/`/`config.json`/`plans/` existed under `winui/` to begin with, so
-    nothing needed excluding beyond that). `winui-agentic/PILOT.md` documents the fork point and
-    the contamination rule; `.claude/agents/planillium-{planner,coder,qa}.md` are the pipeline
-    (Sonnet Planner/QA, Haiku Coder). Dashboard (shared with DigiFlow's pilot):
-    `https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`. Handoff diagram:
-    `https://claude.ai/artifact/81B78ayvAVq8g9QxgGADnz`.
-    **First feature, lost-earnings counter — both sides done, 2026-09-22, compared on the
-    Dashboard.** Full outcome (files touched, build/test results, QA's per-criterion verdict,
-    caveats) deliberately lives only in `context/todos.md` (session log, 09-22 entries), **not**
-    here — see "Pilot write-ups" in §5 below for why this changed mid-pilot.
-    **2026-09-23: `winui-agentic/` committed to git for the first time** (commit `67eb0c8`,
-    `.gitignore` extended to cover its `bin`/`obj` first) — it existed on disk only until now. Same
-    commit fixed 3 UI-parity gaps a human visual comparison found (QA's pass had missed them, since
-    they were presentation, not acceptance-criteria, defects): per-distraction EUR figure missing,
-    sidebar income styling, Reports profit/loss card. Fixed directly, outside the Planner/Coder
-    pipeline, to exactly match `winui/`'s implementation — full detail in `context/todos.md`
-    (09-23 entries); Dashboard updated to user-reviewed/5, 3 bugs (found by human review, not QA).
-    **Resolved 2026-09-23**: Planner's read access to `CONTEXT.md` removed outright (not just
-    "don't write implementation detail here") — `.claude/agents/planillium-planner.md` step 2 and
-    `winui-agentic/PILOT.md`'s contamination rule now both name only `DECISIONS.md` and
-    `context/domain.md` as shared ground. *Rec:* next pilot feature follows this from the start;
-    no further action needed unless a future spec claims it needs something only `CONTEXT.md`
-    carries, in which case that fact should move to `DECISIONS.md`/`context/domain.md`, not reopen
-    Planner's read access.
-    **Resolved 2026-09-24**: the regular-workflow side's `runs` row for lost-earnings-counter was
-    missing from the Dashboard — root cause was that writing to it was never a step in the regular
-    workflow's own close-out, only in the agentic pipeline's (`DECISIONS.md`, Agentic-pilot
-    isolation). Backfilled via `recall`; standing rule now added so it doesn't recur.
+7. **(opened 2026-09-18, fork 2026-09-22; restructured 2026-10-01) Two-workflow pilot — running.**
+    `winui-agentic/` is the agentic twin (source forked 2026-09-22; documents split 2026-10-01 —
+    own CONTEXT/DECISIONS/context, see `winui-agentic/PILOT.md`). Agents:
+    `.claude/agents/planillium-{designer,planner,coder,qa}.md` — Designer+Planner write one joint
+    SPEC, Coder implements, **one QA agent tests both sides** against the same `ACCEPTANCE.md`.
+    Close-out for every feature, both sides: QA run → orchestrator logs a Dashboard row
+    (`https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`) with tokens from
+    `MASTERMIND/src/pilot_metrics/pilot_metrics.py`. Handoff diagram:
+    `https://claude.ai/artifact/81B78ayvAVq8g9QxgGADnz`. Past outcomes: `context/todos.md`.
 
 ## 8. Next steps
 
