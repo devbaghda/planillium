@@ -215,8 +215,7 @@ public sealed partial class ReportsPage
 
         foreach (var slice in slices)
         {
-            var brushKey = CategoryBrushKey(slice.DominantCategory);
-            var fill = (Brush)Application.Current.Resources[brushKey];
+            var fill = SliceBrush(slices, slice);
             var stroke = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
 
             if (isFullCircle)
@@ -324,7 +323,7 @@ public sealed partial class ReportsPage
     {
         foreach (var slice in slices)
         {
-            AddPieListRow(list, slice);
+            AddPieListRow(list, slice, SliceBrush(slices, slice));
         }
 
         // Add "(no detail)" slice if we're at a drilled level and there's unaccounted time
@@ -334,31 +333,30 @@ public sealed partial class ReportsPage
             var noDetail = PieSlices.NoDetailSlice(parentAppUsage.Total, sumOfSubs);
             if (noDetail != null)
             {
-                AddPieListRow(list, noDetail);
+                AddPieListRow(list, noDetail, SliceBrush(slices, noDetail));
             }
         }
     }
 
     /// <summary>Add a single list row for a pie slice.</summary>
-    private void AddPieListRow(StackPanel list, PieSlices.Slice slice)
+    private void AddPieListRow(StackPanel list, PieSlices.Slice slice, Brush fill)
     {
         var row = new Grid { ColumnSpacing = ColumnGap, Margin = new Thickness(0, 4, 0, 4) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });  // Color swatch
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // Name
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });  // Name
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HoursColumnWidth) });  // Hours
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });  // Percentage
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // Bar
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });  // Bar
         // Always reserve the chevron column (even if empty for non-drillable rows) so all bars end at the same x
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChevronColumnWidth) });
 
         // Color swatch
-        var brushKey = CategoryBrushKey(slice.DominantCategory);
         var swatch = new Border
         {
             Width = 8,
             Height = 8,
             CornerRadius = new CornerRadius(4),
-            Background = (Brush)Application.Current.Resources[brushKey],
+            Background = fill,
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(swatch, 0);
@@ -497,6 +495,19 @@ public sealed partial class ReportsPage
         _ => throw new ArgumentOutOfRangeException(nameof(category), category,
             "No AppUsage field for this diary category."),
     };
+
+    /// <summary>Fill for one pie slice: the hue stays the slice's dominant category (so the legend
+    /// still means something), but each further slice of the same category is stepped lighter so
+    /// neighbouring wedges are told apart. Slices not in the list (e.g. "(no detail)") get the base shade.</summary>
+    private static Brush SliceBrush(List<PieSlices.Slice> slices, PieSlices.Slice slice)
+    {
+        var baseBrush = (SolidColorBrush)Application.Current.Resources[CategoryBrushKey(slice.DominantCategory)];
+        var idx = slices.IndexOf(slice);
+        var rank = 0;
+        for (var i = 0; i < idx; i++)
+            if (slices[i].DominantCategory == slice.DominantCategory) rank++;
+        return new SolidColorBrush(baseBrush.Color) { Opacity = Math.Max(0.35, 1.0 - 0.18 * rank) };
+    }
 
     /// <summary>Color key for pie slices and stacked bars — reads from
     /// StackedCategories, so this can never drift from what the visuals

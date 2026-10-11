@@ -158,7 +158,9 @@ public sealed partial class ReportsPage : Page
             var (incomeNet, incomeCredit) = income.SumForPeriodWithCredit(_period, score);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
-            Body.Children.Add(Card(IncomeCard(incomeNet, incomeCredit, periodName, totals.OffMin)));
+            var earnings = income.PaidEarningsForPeriod(_period);
+            Body.Children.Add(Card(IncomeCard(incomeNet, incomeCredit, periodName, totals.OffMin, earnings.Sum(e => e.Eur))));
+            Body.Children.Add(Card(EarningsCard(earnings, periodName)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));

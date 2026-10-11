@@ -75,7 +75,7 @@ public sealed class IncomeService : IDisposable
 
                 using var cmd = _db.CreateCommand();
                 cmd.CommandText =
-                    "INSERT INTO income_ledger (date, delta, employed, ts) " +
+                    "INSERT INTO income_ledger (date, delta_eur, employed, ts) " +
                     "VALUES ($d, $delta, $e, $ts)";
                 cmd.Parameters.AddWithValue("$d", dateStr);
                 cmd.Parameters.AddWithValue("$delta", delta);
@@ -90,7 +90,7 @@ public sealed class IncomeService : IDisposable
     public double SumPostedRange(DateOnly from, DateOnly to)
     {
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM income_ledger WHERE date >= $from AND date <= $to";
+        cmd.CommandText = "SELECT COALESCE(SUM(delta_eur), 0) FROM income_ledger WHERE date >= $from AND date <= $to";
         cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd"));
         return Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
@@ -118,7 +118,7 @@ public sealed class IncomeService : IDisposable
 
             // Get the ledger row for this day to check employed flag and delta
             using var cmd = _db.CreateCommand();
-            cmd.CommandText = "SELECT delta, employed FROM income_ledger WHERE date = $d";
+            cmd.CommandText = "SELECT delta_eur, employed FROM income_ledger WHERE date = $d";
             cmd.Parameters.AddWithValue("$d", d.ToString("yyyy-MM-dd"));
             using var reader = cmd.ExecuteReader();
             if (reader.Read())
@@ -126,7 +126,7 @@ public sealed class IncomeService : IDisposable
                 var employed = Convert.ToInt32(reader["employed"]);
                 if (employed == 0) // Only credit unemployed days
                 {
-                    var delta = Convert.ToDouble(reader["delta"]);
+                    var delta = Convert.ToDouble(reader["delta_eur"]);
                     // delta is negative for unemployed days, so credit = -delta * (done/total)
                     credit += -delta * (double)done / total;
                 }
@@ -166,13 +166,51 @@ public sealed class IncomeService : IDisposable
             cmd.CommandText = "SELECT MIN(date) FROM income_ledger";
             var minDateStr = cmd.ExecuteScalar() as string;
             if (string.IsNullOrEmpty(minDateStr))
-                return posted; // No ledger entries yet
+                return posted + PaidEarnings(LedgerStart, yesterday).Sum(e => e.Eur); // No ledger entries yet
             creditFrom = DateOnly.ParseExact(minDateStr, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         // Calculate credit for closed days through yesterday only
         var credit = CreditRange(creditFrom, yesterday, score);
-        return posted + credit;
+        return posted + credit + PaidEarnings(LedgerStart, yesterday).Sum(e => e.Eur);
+    }
+
+    private static readonly DateOnly LedgerStart = new(2025, 12, 4);
+
+    /// <summary>One payable tag's share of a period: diary minutes carrying that tag × its hourly value.</summary>
+    public sealed record PaidEarning(PaidTag Tag, int Minutes)
+    {
+        public double Eur => Minutes / 60.0 * Tag.HourlyEur;
+    }
+
+    /// <summary>Earnings from payable-tagged diary time, <paramref name="from"/>..<paramref name="to"/>
+    /// inclusive (user decision 2026-10-01). Computed at read time from the diary, like the
+    /// plan-completion credit, so editing a rate re-prices history consistently and no ledger row
+    /// is rewritten. Tags with no time in the range are omitted.</summary>
+    public List<PaidEarning> PaidEarnings(DateOnly from, DateOnly to)
+    {
+        var result = new List<PaidEarning>();
+        if (from < LedgerStart) from = LedgerStart;
+        if (from > to) return result;
+        foreach (var tag in PaidTags.All())
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT COALESCE(SUM(duration_min), 0) FROM time_diary " +
+                              "WHERE tag=$t AND date >= $from AND date <= $to";
+            cmd.Parameters.AddWithValue("$t", tag.Value);
+            cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+            var min = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+            if (min > 0) result.Add(new PaidEarning(tag, min));
+        }
+        return result;
+    }
+
+    /// <summary>Earnings for the period Reports is showing, today included.</summary>
+    public List<PaidEarning> PaidEarningsForPeriod(ReportPeriod period)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return PaidEarnings(ReportData.PeriodStart(period, today), today);
     }
 
     /// <summary>Sum of posted income for a reporting period, plus today's live preview and credit.</summary>
@@ -199,7 +237,8 @@ public sealed class IncomeService : IDisposable
         var todayPreview = TodayPreview();
         var todayCredit = TodayCredit(score);
 
-        return (posted + todayPreview + credit + todayCredit, credit + todayCredit);
+        var paid = PaidEarnings(periodStart, today).Sum(e => e.Eur);
+        return (posted + todayPreview + credit + todayCredit + paid, credit + todayCredit);
     }
 
     /// <summary>Sum of posted income for a reporting period, plus today's live preview (backwards compatible).</summary>

@@ -283,6 +283,74 @@ public sealed partial class SettingsPage : Page
     {
         MonthlyIncomeBox.Value = ConfigService.PotentialMonthlyIncomeEur();
         EmployedToggle.IsOn = ConfigService.IsEmployed();
+        RenderPaidTags();
+    }
+
+    /// <summary>One row per payable tag: editable monthly rate, its hourly value, remove. Rebuilt
+    /// after add/remove so the list always matches what config.json now holds.</summary>
+    private void RenderPaidTags()
+    {
+        PaidTagsHost.Children.Clear();
+        foreach (var tag in PaidTags.All())
+        {
+            var t = tag;
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var rate = new NumberBox
+            {
+                Header = $"{t.Label} — monthly net (€)", Value = t.MonthlyEur, Minimum = 0, Width = 240,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+            };
+            var hourly = new TextBlock
+            {
+                Text = $"= {MainWindow.FormatEur(t.HourlyEur)}/h",
+                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6),
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            };
+            rate.ValueChanged += (_, _) =>
+            {
+                if (double.IsNaN(rate.Value)) return;
+                hourly.Text = $"= {MainWindow.FormatEur(rate.Value / IncomeService.WorkingHoursPerMonth)}/h";
+                if (_initialising) return;
+                SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
+            };
+            var remove = new Button { Content = "Remove", VerticalAlignment = VerticalAlignment.Bottom };
+            remove.Click += (_, _) => SavePaidTags(PaidTags.All().Where(p => p.Value != t.Value), rerender: true);
+            row.Children.Add(rate); row.Children.Add(hourly); row.Children.Add(remove);
+            PaidTagsHost.Children.Add(row);
+        }
+        if (PaidTagsHost.Children.Count == 0)
+            PaidTagsHost.Children.Add(new TextBlock { Text = "No payable tags.", FontSize = 12 });
+    }
+
+    private void SavePaidTags(IEnumerable<PaidTag> tags, bool rerender)
+    {
+        try
+        {
+            PaidTags.Save(tags.ToList());
+            SaveStatus.Text = "Saved.";
+            if (rerender) RenderPaidTags();
+            (App.MainWindow as MainWindow)?.RefreshIncome();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.SavePaidTags", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't save payable tags", ex);
+        }
+    }
+
+    private void AddPaidTag_Click(object sender, RoutedEventArgs e)
+    {
+        var label = (NewPaidTagName.Text ?? "").Trim();
+        var slug = PaidTags.Slug(label);
+        if (slug.Length == 0) { SaveStatus.Text = "Give the new tag a name (letters or digits)."; return; }
+        if (double.IsNaN(NewPaidTagRate.Value)) { SaveStatus.Text = "Monthly net needs a number."; return; }
+        var all = PaidTags.All().ToList();
+        if (all.Any(p => p.Value == slug)) { SaveStatus.Text = $"\"{label}\" is already a payable tag."; return; }
+        // A name matching a built-in tag (e.g. Selfdev) simply makes that tag payable.
+        var builtIn = Array.Find(DiaryTag.Options, o => o.Value == slug);
+        all.Add(new PaidTag(slug, builtIn.Label ?? label, NewPaidTagRate.Value));
+        SavePaidTags(all, rerender: true);
+        NewPaidTagName.Text = ""; NewPaidTagRate.Value = 0;
     }
 
     /// <summary>Independent of SaveRules — same reasoning as SaveHoursAndEod's own doc

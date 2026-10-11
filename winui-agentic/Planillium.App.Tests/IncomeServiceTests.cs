@@ -84,7 +84,7 @@ public sealed class IncomeServiceTests
         var monthEnd = new DateOnly(2026, 1, 31).ToString("yyyy-MM-dd");
 
         using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT SUM(delta) FROM income_ledger WHERE date >= $start AND date <= $end";
+        cmd.CommandText = "SELECT SUM(delta_eur) FROM income_ledger WHERE date >= $start AND date <= $end";
         cmd.Parameters.AddWithValue("$start", monthStart);
         cmd.Parameters.AddWithValue("$end", monthEnd);
         var monthSum = Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
@@ -124,11 +124,11 @@ public sealed class IncomeServiceTests
 
         using var cmd = db.CreateCommand();
         // Get a February delta (28 days in 2026)
-        cmd.CommandText = "SELECT delta FROM income_ledger WHERE date LIKE '2026-02-%' LIMIT 1";
+        cmd.CommandText = "SELECT delta_eur FROM income_ledger WHERE date LIKE '2026-02-%' LIMIT 1";
         var febDelta = Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
 
         // Get a March delta (31 days in 2026)
-        cmd.CommandText = "SELECT delta FROM income_ledger WHERE date LIKE '2026-03-%' LIMIT 1";
+        cmd.CommandText = "SELECT delta_eur FROM income_ledger WHERE date LIKE '2026-03-%' LIMIT 1";
         var marDelta = Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
 
         Assert.True(febDelta > marDelta,

@@ -10,6 +10,8 @@ letting either one absorb the other's job.
 > `~/.claude/CLAUDE.md` and load automatically alongside this file. Everything below is what's
 > specific to Planillium.
 
+@CONTEXT.md
+
 ## Session start
 **Read `CONTEXT.md` in full at the start of every session, before doing anything else** —
 not just when a task seems to need it. As of the 2026-09-14 split it stays thin (current state,

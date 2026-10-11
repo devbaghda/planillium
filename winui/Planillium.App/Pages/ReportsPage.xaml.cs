@@ -146,9 +146,11 @@ public sealed partial class ReportsPage : Page
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
             using var income = new IncomeService(db);
             var incomeSum = income.SumForPeriod(_period, score);
+            var earnings = income.PaidEarningsForPeriod(_period);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
-            Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin)));
+            Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin, earnings.Sum(e => e.Eur))));
+            Body.Children.Add(Card(EarningsCard(earnings, periodName)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -243,7 +245,7 @@ public sealed partial class ReportsPage : Page
     /// toggle flip (posted days keep whatever sign applied when they were posted, per the
     /// settled non-retroactive rule), so "you've gained €X" while the total for that period
     /// is still negative would read as contradicting the number right above it.</summary>
-    private static StackPanel IncomeCard(double sum, string periodName, int offMin)
+    private static StackPanel IncomeCard(double sum, string periodName, int offMin, double earned)
     {
         var lost = sum < 0;
 
@@ -271,6 +273,8 @@ public sealed partial class ReportsPage : Page
         card.Children.Add(Dim(
             $"You've {verb} {MainWindow.FormatEur(Math.Abs(sum))} {timeWord}, based on a potential " +
             $"{MainWindow.FormatEur(ConfigService.PotentialMonthlyIncomeEur())}/month."));
+        if (earned > 0)
+            card.Children.Add(Dim($"Includes {MainWindow.FormatEur(earned)} earned from paid work {timeWord}."));
         // Derived from the two figures already on this card and the off-plan total already on
         // ScoreCard above it (2026-09-22 request) — not a separate rate lookup, so it can't drift
         // from what the period actually shows. No off-plan time this period means no rate to show,
@@ -284,6 +288,30 @@ public sealed partial class ReportsPage : Page
                 $"your {ReportData.FmtHours(offMin)} off-plan {timeWord} ≈ " +
                 $"{MainWindow.FormatEur(offMin / 60.0 * hv)}."));
         }
+        return card;
+    }
+
+    /// <summary>Paid-work earnings for the period (payable-tagged diary time × each tag's hourly
+    /// value, user decision 2026-10-01). Also counted inside the income figure above; shown
+    /// separately so the money actually earned is visible on its own.</summary>
+    private static StackPanel EarningsCard(List<IncomeService.PaidEarning> earnings, string periodName)
+    {
+        var total = earnings.Sum(e => e.Eur);
+        var card = new StackPanel { Spacing = 2 };
+        card.Children.Add(Caption($"EARNINGS FROM PAID WORK — {periodName}"));
+        card.Children.Add(new TextBlock
+        {
+            Text = MainWindow.FormatEur(total),
+            FontSize = 44,
+            FontWeight = FontWeights.Bold,
+            Foreground = IncomeBrush(total),
+        });
+        if (earnings.Count == 0)
+            card.Children.Add(Dim("No time tagged with a payable tag in this period. Set payable tags and rates in Settings → Income."));
+        foreach (var e in earnings)
+            card.Children.Add(Dim(
+                $"{e.Tag.Label}: {ReportData.FmtHours(e.Minutes)} × {MainWindow.FormatEur(e.Tag.HourlyEur)}/h " +
+                $"(monthly {MainWindow.FormatEur(e.Tag.MonthlyEur)} ÷ {IncomeService.WorkingHoursPerMonth:0} h) = {MainWindow.FormatEur(e.Eur)}"));
         return card;
     }
 

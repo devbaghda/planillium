@@ -12,7 +12,7 @@
 > file stays thin — current state, rules, a short decisions-highlights list, open items with dates,
 > and a Section Index. `DECISIONS.md` was **not** absorbed into `context/` — it's a mature,
 > independent register, pre-dating this scheme (split out 2026-08-04 for the identical reason),
-> and moving it would mean auditing every cross-reference for no benefit. Last updated 1 Oct 2026.
+> and moving it would mean auditing every cross-reference for no benefit. Last updated 10 Oct 2026.
 
 ---
 
@@ -118,18 +118,21 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
 
 0. **(opened 2026-10-01) Eight-item batch, both workflows — regular app visuals OK'd by user 2026-10-02; agentic app review in progress (fixes logged in its own docs)** of
    pie, diary multi-select filters, Top Distractions columns and the away dialog, in both apps.
-   Details and QA outcomes: `context/todos.md` 2026-10-01. Local commits only, unpushed (cdf0640, 45e51c9).
+   Details and QA outcomes: `context/todos.md` 2026-10-01. Pushed 2026-10-09 with 44f6f19 (cdf0640, 45e51c9).
    Also awaiting review, same day, **uncommitted** (both apps): pie-legend alignment fix (chevron slot
    always reserved), previous-salary default 2700 -> 2925, and **payable tags** (Studioshoo 1600/month,
    addable in Settings -> Income; earnings offset the income figure and have their own Reports card) --
    `context/todos.md` 2026-10-01, `DECISIONS.md` rule 14. None QA'd; built directly, not through the
    agentic pipeline. Regular Release build relaunched; run only ONE of regular/agentic at a time -- both use the
    same real `data/progress.db`, so two trackers would double-log the diary.
-0a. **(opened 2026-10-09) "Replace remaining tasks" — built on both sides, NOT QA'd, uncommitted.**
-   Request/acceptance in `pilot-specs/replace-remaining-tasks/` (regular) and
-   `winui-agentic/pilot-specs/replace-remaining-tasks/` (agentic SPEC there too). Regular tests 182/182,
-   agentic 253/253, both Release builds clean. Start day = right after last done task, NOT clamped to today (user decision 2026-10-09, over my objection); commit+push approved 2026-10-09. Card-layout fix for the new button done and user-approved on both sides 2026-10-09. Then: QA both sides (one after the other), dashboard rows, `DECISIONS.md` entry if (1) is confirmed.
-   Details: `context/todos.md` 2026-10-09.
+0a. **(opened 2026-10-09) "Replace remaining tasks" + Plans-card layout fix -- built, QA'd (both PASS WITH CAVEATS, 0 QA defects), committed 44f6f19 and pushed to origin/master 2026-10-09 (this also pushed the earlier eight-item-batch commits cdf0640/45e51c9).**
+   Dashboard rows logged for both sides (tokens/time null: sides were interleaved). Start day = right after last done
+   task, not clamped to today (user decision, `DECISIONS.md` rule 15). Card layout: regular = text full width + Add task /
+   Replace remaining / Archive row + "More" menu; agentic = wrapping button row (separate design on purpose; nothing
+   from one side goes to the other). **Still for the user to check live** (QA couldn't drive the UI): card at 900 DIP
+   width, Cancel leaves plan unchanged, all-done refusal, preview finish dates -- in both apps, one app at a time.
+   Currently NO app instance running. **Left uncommitted on purpose:** the payable-tags code (item 0), plus `CLAUDE.md`
+   and `winui-agentic/PILOT.md` edits not from this work. Details: `context/todos.md` 2026-10-09.
 1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
    cause not investigated — possibly two queued ticks firing close together after timer suspension
    during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.

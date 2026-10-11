@@ -188,10 +188,10 @@ public static class ConfigService
         t.TryGetProperty("client_id", out var v) ? v.GetString() ?? "" : "";
 
     /// <summary>Configured potential net monthly income in EUR (for the lost-earnings counter),
-    /// default 2700.0.</summary>
+    /// default 2925.0 (2700 x 13 months / 12).</summary>
     public static double PotentialMonthlyIncomeEur()
     {
-        double monthlyIncome = 2700.0;
+        double monthlyIncome = 2925.0;
         if (Root.TryGetProperty("income", out var inc) &&
             inc.TryGetProperty("potential_monthly_net_eur", out var v) && v.TryGetDouble(out var d))
             monthlyIncome = d;

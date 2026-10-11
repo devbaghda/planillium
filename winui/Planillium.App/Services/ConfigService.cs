@@ -179,13 +179,13 @@ public static class ConfigService
         Root.TryGetProperty("diary_retention_days", out var v) && v.TryGetInt32(out var n) && n > 0
             ? n : Database.DiaryRetentionDays;
 
-    /// <summary>Potential net monthly income ("income.monthly_net_eur"), default 2700 —
+    /// <summary>Potential net monthly income ("income.monthly_net_eur"), default 2925 (2700 x 13 months / 12) —
     /// the figure IncomeService divides by the actual days in a month to get each day's
     /// lost/gained-earnings delta.</summary>
     public static double PotentialMonthlyIncomeEur() =>
         Root.TryGetProperty("income", out var i) &&
         i.TryGetProperty("monthly_net_eur", out var v) && v.TryGetDouble(out var n) && n > 0
-            ? n : 2700.0;
+            ? n : 2925.0;
 
     /// <summary>Employment status toggle ("income.employed"), default false (unemployed) —
     /// while false IncomeService deducts the daily rate each day, while true it adds it.

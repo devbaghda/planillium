@@ -171,7 +171,7 @@ public sealed class Database : IDisposable
             "CREATE TABLE IF NOT EXISTS income_ledger (" +
             "  id       INTEGER PRIMARY KEY AUTOINCREMENT," +
             "  date     TEXT    NOT NULL UNIQUE," +
-            "  delta    REAL    NOT NULL," +
+            "  delta_eur REAL    NOT NULL," +
             "  employed INTEGER NOT NULL," +
             "  ts       TEXT    NOT NULL" +
             ");" +
@@ -678,7 +678,7 @@ public sealed class Database : IDisposable
     public double IncomeBalance()
     {
         using var cmd = CreateCommand();
-        cmd.CommandText = "SELECT COALESCE(SUM(delta), 0) FROM income_ledger";
+        cmd.CommandText = "SELECT COALESCE(SUM(delta_eur), 0) FROM income_ledger";
         return Convert.ToDouble(cmd.ExecuteScalar() ?? 0.0);
     }
 

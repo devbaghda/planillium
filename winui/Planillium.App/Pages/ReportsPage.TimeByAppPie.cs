@@ -103,6 +103,8 @@ public sealed partial class ReportsPage
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+                // Always reserve the chevron slot so hours/% line up whether or not the row drills down.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
                 var swatch = new Border
                 {
                     Width = 10, Height = 10, CornerRadius = new CornerRadius(2),
@@ -142,7 +144,6 @@ public sealed partial class ReportsPage
                         Glyph = "", FontSize = 12, VerticalAlignment = VerticalAlignment.Center,
                         Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                     };
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     Grid.SetColumn(chevron, 4);
                     row.Children.Add(chevron);
                 }

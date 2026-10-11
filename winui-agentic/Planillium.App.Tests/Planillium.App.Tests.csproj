@@ -95,6 +95,7 @@
     <!-- The second, independent diary classification axis (2026-08-06) — DiaryTagTests.cs
          and ReportData.DiaryEntry.Tag both need this linked the same way DiaryCategory is. -->
     <Compile Include="..\Planillium.App\Services\DiaryTag.cs" Link="App\DiaryTag.cs" />
+    <Compile Include="..\Planillium.App\Services\PaidTags.cs" Link="App\PaidTags.cs" />
     <Compile Include="..\Planillium.App\Services\JsonFileIO.cs" Link="App\JsonFileIO.cs" />
     <Compile Include="..\Planillium.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\Planillium.App\Services\NotificationCenter.cs" Link="App\NotificationCenter.cs" />

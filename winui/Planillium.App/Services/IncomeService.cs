@@ -172,11 +172,49 @@ public sealed class IncomeService : IDisposable
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var periodStart = ReportData.PeriodStart(period, today);
-        return SumPostedRange(periodStart) + TodayPreview() + CreditForRange(score, periodStart);
+        return SumPostedRange(periodStart) + TodayPreview() + CreditForRange(score, periodStart)
+               + PaidEarnings(periodStart, today).Sum(e => e.Eur);
     }
 
-    /// <summary>Sidebar figure: posted days plus the earned credit on them (today excluded,
-    /// like the ledger sum itself).</summary>
+    /// <summary>One payable tag's share of a period: diary minutes carrying that tag × its hourly value.</summary>
+    public sealed record PaidEarning(PaidTag Tag, int Minutes)
+    {
+        public double Eur => Minutes / 60.0 * Tag.HourlyEur;
+    }
+
+    /// <summary>Earnings from payable-tagged diary time, <paramref name="from"/>..<paramref name="to"/>
+    /// inclusive (user decision 2026-10-01). Computed at read time from the diary, like the
+    /// plan-completion credit, so editing a tag or a rate re-prices history consistently and no
+    /// ledger row is rewritten. Tags with no time in the range are omitted.</summary>
+    public List<PaidEarning> PaidEarnings(DateOnly from, DateOnly to)
+    {
+        var result = new List<PaidEarning>();
+        if (from < StartDate) from = StartDate;
+        if (from > to) return result;
+        foreach (var tag in PaidTags.All())
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT COALESCE(SUM(duration_min), 0) FROM time_diary " +
+                              "WHERE tag=$t AND date >= $from AND date <= $to";
+            cmd.Parameters.AddWithValue("$t", tag.Value);
+            cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
+            cmd.Parameters.AddWithValue("$to", to.ToIsoDate());
+            var min = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+            if (min > 0) result.Add(new PaidEarning(tag, min));
+        }
+        return result;
+    }
+
+    /// <summary>Earnings for the period Reports is showing, today included.</summary>
+    public List<PaidEarning> PaidEarningsForPeriod(ReportPeriod period)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return PaidEarnings(ReportData.PeriodStart(period, today), today);
+    }
+
+    /// <summary>Sidebar figure: posted days plus the earned credit and paid-tag earnings on
+    /// them (today excluded, like the ledger sum itself).</summary>
     public double Balance(ScoreService score) =>
-        _db.IncomeBalance() + CreditForRange(score, StartDate, includeToday: false);
+        _db.IncomeBalance() + CreditForRange(score, StartDate, includeToday: false)
+        + PaidEarnings(StartDate, DateOnly.FromDateTime(DateTime.Today).AddDays(-1)).Sum(e => e.Eur);
 }

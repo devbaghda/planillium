@@ -29,17 +29,26 @@ public static class DiaryTag
     public const string SelfDev = "selfdev";
     public const string Procrastination = "procrastination";
 
-    /// <summary>The five taggable values, with their display labels, in the order every tag
+    /// <summary>The taggable values, with their display labels, in the order every tag
     /// dropdown (Edit, Split, the diary filter row) shows them — one shared list so a future
     /// sixth tag can't be added to a dropdown and forgotten in another, the same drift
     /// DiaryCategory.EditableOptions/ReportOrder already guards against for categories. Labels
     /// are the user's own words, title-cased for the dropdown (a capitalization convention
     /// every other option in this app already follows) — not respelled or split into words.</summary>
-    public static readonly (string Label, string Value)[] Options =
+    private static readonly (string Label, string Value)[] BuiltIn =
     {
         ("Routine", Routine), ("Documents", Documents), ("Studioshoo", StudioShoo),
         ("Selfdev", SelfDev), ("Procrastination", Procrastination),
     };
+
+    /// <summary>The built-in tags plus any payable tag the user added in Settings
+    /// (<see cref="PaidTags"/>), re-read on every access so a new tag shows up in the next dropdown
+    /// opened without a restart. Callers must not cache the array across user actions.</summary>
+    public static (string Label, string Value)[] Options =>
+        BuiltIn.Concat(PaidTags.All()
+                .Where(p => Array.FindIndex(BuiltIn, b => b.Value == p.Value) < 0)
+                .Select(p => (p.Label, p.Value)))
+            .ToArray();
 
     /// <summary>Value → label, or null for an unrecognised/legacy value — used wherever a raw
     /// column value needs to become display text (the diary row's details column, search
