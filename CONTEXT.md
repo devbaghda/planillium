@@ -33,7 +33,7 @@ Display name, internal rename history and the three legacy-compat exceptions:
 ## 2. Current state
 
 Phase: **shipped, in daily live use** (v1.2.0+, public GitHub repo). **The WinUI app
-(`winui/Planillium.App`) is THE app** — full architecture, directory map and tech stack:
+(`regular/winui/Planillium.App`) is THE app** — full architecture, directory map and tech stack:
 `context/domain.md` — "App architecture" and "Tech stack". Automated test suite: 169/169 as of
 2026-10-01 (agentic side 243), stable at any time of day — `ActivityTrackerPendingGapTests`' former
 time-of-day-dependent flake (previously time-of-day-dependent within ~3h of midnight) is fixed,
@@ -48,7 +48,10 @@ Directory map: `context/domain.md` — "App architecture". Quick orientation: `C
 file) · `CLAUDE.md` how to work here · `DECISIONS.md` business rules + standing lessons ·
 `context/` domain reference + session/todo history, never compacted · `config.json` shared
 settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` the live SQLite DB ·
-`release/` Inno Setup pipeline · `winui/Planillium.App/` the WinUI 3 / .NET 8 source.
+`release/` Inno Setup pipeline · `regular/winui/Planillium.App/` the WinUI 3 / .NET 8 source.
+**Layout (restructured 2026-10-11):** project root holds shared things (`data/`, `config.json`,
+`plans/`, `release/`, `media/`, `context/`, docs); `regular/` is the regular-workflow build
+(`winui/`, `pilot-specs/`); `agentic/` is the agentic twin (`winui-agentic/`).
 
 ## 4. Section index
 
@@ -93,7 +96,7 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
   reported call site. Origin story and what it produced as a global rule: `CLAUDE.md` →
   "Regression-prevention lesson".
 - **Two parallel workflows, fully separate documents (default from 2026-10-01).** Every feature
-  runs both the regular build (this folder's docs) and the agentic pipeline (`winui-agentic/`, with
+  runs both the regular build (this folder's docs) and the agentic pipeline (`agentic/winui-agentic/`, with
   its own `CONTEXT.md`/`DECISIONS.md`/`context/`). Method, rules and metrics:
   `~/.claude/reference/feature-workflow.md`. Never write one side's implementation notes into the
   other's docs; user decisions are recorded into each side's docs individually by the orchestrator.
@@ -132,7 +135,7 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
    from one side goes to the other). **Still for the user to check live** (QA couldn't drive the UI): card at 900 DIP
    width, Cancel leaves plan unchanged, all-done refusal, preview finish dates -- in both apps, one app at a time.
    Currently NO app instance running. **Left uncommitted on purpose:** the payable-tags code (item 0), plus `CLAUDE.md`
-   and `winui-agentic/PILOT.md` edits not from this work. Details: `context/todos.md` 2026-10-09.
+   and `agentic/winui-agentic/PILOT.md` edits not from this work. Details: `context/todos.md` 2026-10-09.
 1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
    cause not investigated — possibly two queued ticks firing close together after timer suspension
    during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.
@@ -157,8 +160,8 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
    restarts the tracker, so verification stays code-inspection-only by design. Revisit only if
    this verification approach changes.
 7. **(opened 2026-09-18, fork 2026-09-22; restructured 2026-10-01) Two-workflow pilot — running.**
-    `winui-agentic/` is the agentic twin (source forked 2026-09-22; documents split 2026-10-01 —
-    own CONTEXT/DECISIONS/context, see `winui-agentic/PILOT.md`). Agents:
+    `agentic/winui-agentic/` is the agentic twin (source forked 2026-09-22; documents split 2026-10-01 —
+    own CONTEXT/DECISIONS/context, see `agentic/winui-agentic/PILOT.md`). Agents:
     `.claude/agents/planillium-{designer,planner,coder,qa}.md` — Designer+Planner write one joint
     SPEC, Coder implements, **one QA agent tests both sides** against the same `ACCEPTANCE.md`.
     Close-out for every feature, both sides: QA run → orchestrator logs a Dashboard row

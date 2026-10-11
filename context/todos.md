@@ -158,7 +158,7 @@ CONTEXT.md §7 if it hasn't been eyeballed yet.
 drop): not a bug, and not a drop. Read-only investigation only — no code/DB changes. Ruled out in
 order: WAL-visibility mismatch between a direct DB read and the running app (disproven — both read
 the identical live value via a throwaway source-linked console harness, same technique as
-`Planillium.App.Tests.csproj`, built/run/deleted in `winui/ScoreCheck/`); a different installed
+`Planillium.App.Tests.csproj`, built/run/deleted in `regular/winui/ScoreCheck/`); a different installed
 data folder (disproven — live process's exe path resolves via `AppPaths.Root` to this same repo);
 `RescheduleTask` retroactively lowering past days (disproven — completed-task exclusion and the
 `closeGap` past-day guard both hold); the Reports period `ScoreCard` (live Week/Month totals didn't
@@ -309,8 +309,8 @@ updated at the time.
 **Agentic-workflow pilot, lost-earnings-counter, both sides complete — 2026-09-22** (new session,
 started inside `Planillium/` this time, which unblocked the prior session's stuck dispatch —
 see `CONTEXT.md` §7 item 7 for the mechanical blocker). Planner → Coder → QA ran end to end:
-Planner wrote `winui-agentic/pilot-specs/lost-earnings-counter/SPEC.md` from `DECISIONS.md` rule
-14 alone (no regular-side code read); Coder built it into `winui-agentic/Planillium.App/` —
+Planner wrote `agentic/winui-agentic/pilot-specs/lost-earnings-counter/SPEC.md` from `DECISIONS.md` rule
+14 alone (no regular-side code read); Coder built it into `agentic/winui-agentic/Planillium.App/` —
 clean build, 156/156 tests; QA (isolated worktree) verdict **PASS WITH CAVEATS** on all 13 spec
 acceptance criteria, logged to the shared Dashboard. Caveats: Coder's own tests skipped the
 non-retroactive sign-flip regression case (criterion 7) though QA independently confirmed the
@@ -331,7 +331,7 @@ write-side rule.** The 09-22 open question above (CONTEXT.md §7 item 7) came ba
 chose narrowing reads over continuing to rely on a "don't write implementation detail in
 CONTEXT.md" convention that had already lapsed once, in the same session it was written. Changed:
 `.claude/agents/planillium-planner.md` step 2 no longer tells Planner to read `CONTEXT.md`, and
-explicitly instructs it not to; `winui-agentic/PILOT.md`'s contamination rule now names only
+explicitly instructs it not to; `agentic/winui-agentic/PILOT.md`'s contamination rule now names only
 `DECISIONS.md` and `context/domain.md` as Planner-readable shared ground, with a note explaining
 why `CONTEXT.md` was dropped (narrative handoff doc vs. the other two's stable
 lookup/reference-register shape). `planillium-coder.md`/`planillium-qa.md` checked — neither ever
@@ -349,7 +349,7 @@ and `DistractionList`, so the two figures can't drift apart. `CHANGELOG.md`/`MAN
 
 **First side-by-side visual comparison of the pilot vs. regular app, same feature (lost-earnings
 counter).** Ran both live at once: regular app as the normal Release instance on real data;
-`winui-agentic` built Debug and pointed at a scratch copy of real data via `MENTOR_ROOT`/
+`agentic/winui-agentic` built Debug and pointed at a scratch copy of real data via `MENTOR_ROOT`/
 `MENTOR_INSTANCE_SUFFIX=agentic_compare` (the existing scratch technique, `DECISIONS.md` "Safety
 around real data"), so nothing it does touches the live database. Surfaced a real finding, not a
 pilot code bug: both forks independently added their own `income_ledger` table after the fork
@@ -362,7 +362,7 @@ shape and backfill fresh — not a code change on either side. Logged as a gener
 predate whatever fork it's being fed into. Also fixed in passing: the regular app's Top
 Distractions spacing between hours and the new EUR figure, widened per user request.
 
-**Pilot UI-parity round: 3 gaps found in the 09-22 visual comparison, fixed to match `winui/`
+**Pilot UI-parity round: 3 gaps found in the 09-22 visual comparison, fixed to match `regular/winui/`
 exactly** (commit `67eb0c8`, pushed to `origin/master`). The 09-22 comparison above had closed on
 the lost-earnings counter's *logic* being correct on both sides; this round was the user reviewing
 the pilot's *presentation* against the regular app and finding three mismatches QA's
@@ -377,8 +377,8 @@ the request was explicitly "match this specific existing implementation," which 
 contamination-firewalled Coder can't be told to do) across `MainWindow.xaml`,
 `MainWindow.Startup.cs`, `ReportsPage.Income.cs`, `ReportsPage.Styling.cs` (deleted the now-dead
 `IncomeSign` helper), `ReportsPage.TimeByApp.cs` and `ReportsPage.xaml.cs`. This commit is also the
-**first time `winui-agentic/` was committed to git at all** — caught and fixed a `.gitignore` gap
-before staging (`winui/**/bin|obj/` existed, `winui-agentic/**/bin|obj/` didn't, which would have
+**first time `agentic/winui-agentic/` was committed to git at all** — caught and fixed a `.gitignore` gap
+before staging (`regular/winui/**/bin|obj/` existed, `agentic/winui-agentic/**/bin|obj/` didn't, which would have
 committed ~892 build-artifact files into a public repo). Shared pilot Dashboard
 (`https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`) updated: the row's score status moved from
 QA's provisional PASS WITH CAVEATS (clarity 4/5, 0 bugs) to user-reviewed (clarity 5/5, 3 bugs —
@@ -394,7 +394,7 @@ cause: the app was launched 24 Sep in UTC+4; Windows switched to UTC+2 on 27 Sep
 the tz cache each poll, and on an offset change `ShiftClock` shifts every stored local time
 (`_sessionStart`, `_lastPollAt`, `_idleSince`, `_offSince`, `_lastAlert`, `_accountedUntil`,
 `PaidUntil`) — a bare cache refresh would have read the jump as sleep (forward) or written rows
-ending before they start (back). Same change in `winui-agentic/`. Test:
+ending before they start (back). Same change in `agentic/winui-agentic/`. Test:
 `ShiftClockMovesTheOpenSessionWithTheClock` (161/161). Data (user-confirmed, table `time_diary`):
 backup `data/backup/progress-2026-09-29-pre-tzshift.db`; 28 Sep rows from 11:13 and 29 Sep rows
 10231–10270 moved −2h; placeholder 10260 → 06:00–09:49; 28 Sep morning rows 10105–10107 (user-filled
@@ -428,7 +428,7 @@ complexity of a transactional rewrite for the risk it carries.
 **~150-230MB memory footprint** — accepted: mostly `NavigationCacheMode="Enabled"` + WinUI3
 baseline, no leak found — leave as-is.
 
-### 2026-10-01 — eight-item batch, regular workflow side (winui/)
+### 2026-10-01 — eight-item batch, regular workflow side (regular/winui/)
 
 Away dialog shows the date (`DateTime.ToDisplaySpan`); working-in-Planillium-counted-as-absence fixed at its
 root — `RestartTracker` seeded the new tracker from the last diary row, so the first poll saw a
@@ -443,7 +443,7 @@ build + code inspection only (no live clicking of real data) — visual review b
 `ReportExport.Suggestions` isn't linkable into the test assembly (reaches WinUI), so its change
 has no unit test.
 
-### 2026-10-01 — eight-item batch, agentic pilot side (winui-agentic/)
+### 2026-10-01 — eight-item batch, agentic pilot side (agentic/winui-agentic/)
 
 Coder built all 8 from SPECs; QA (worktree, cdf0640) verdicts: PASS idle-dialog-date; PASS WITH
 CAVEATS planillium-use-not-absence, diary-multiselect-filters, insights-eur-and-ratio,
@@ -480,7 +480,7 @@ build + code inspection only; user visual review pending. Agentic Settings does 
 sidebar chip on save (same as its other income fields).
 
 
-### 2026-10-09 — Replace remaining tasks, regular workflow side (winui/)
+### 2026-10-09 — Replace remaining tasks, regular workflow side (regular/winui/)
 Plans page → "Replace remaining…": keeps ticked-complete tasks, replaces everything else with a pasted
 Claude JSON (prompt generated in-dialog with the done list + a "what should change" box), preview then
 confirm. New tasks start right after the last done task (day 1 if none) -- NOT clamped to today (user decision, see below); `total_days` is rewritten to the
@@ -490,7 +490,7 @@ Code: `Services/PlanRemainder.cs`, `PlanStore.ReplaceRemainingTasks`, `Dialogs/R
 Tests 182/182. Release build 0 warnings. **Not QA'd yet** (QA worktree needs the work committed).
 Start-day decision (user, 2026-10-09): I proposed clamping to today (a 56-day-late plan would otherwise score its whole new list as overdue); user chose the literal "right after the last done task". Implemented in full; consequence stated once: a far-behind plan's new list lands in the past and shows overdue.
 
-### 2026-10-09 — Plans page card layout fix, regular side (winui/)
+### 2026-10-09 — Plans page card layout fix, regular side (regular/winui/)
 User: "terrible design solution, fix it" — adding "Replace remaining…" to the single button row beside the
 plan text crushed the name to one word per line and clipped the meta/due/progress lines. `PlanCard`
 (`Pages/PlansPage.xaml.cs`) now gives the text the full width, with Add task / Replace remaining… /

@@ -47,7 +47,7 @@ progress — that's the part with no substitute.
   list` shows only this checkout) — don't assume they're still out there without checking first.
 
 ## Build & verify
-- `dotnet build -p:Platform=x64 -c Debug` (or `-c Release`) from `winui/Planillium.App/` —
+- `dotnet build -p:Platform=x64 -c Debug` (or `-c Release`) from `regular/winui/Planillium.App/` —
   no Visual Studio needed.
 - The user's live instance normally runs the **Release** exe
   (`bin\x64\Release\net8.0-windows10.0.19041.0\Planillium.App.exe`), not Debug. Before calling a
@@ -57,7 +57,7 @@ progress — that's the part with no substitute.
   `end_of_day_summary_time` before stopping the live instance — stopping it early can skip that
   day's evening-review popup entirely. Then stop → rebuild Release → relaunch → bring to
   foreground.
-- `dotnet test` from `winui/Planillium.App.Tests/` runs the automated suite (added
+- `dotnet test` from `regular/winui/Planillium.App.Tests/` runs the automated suite (added
   2026-07-09, covers `ScoreService`'s schedule-shifting logic — the one area that's changed
   repeatedly with a real regression that shipped). **It is a source-file link, not a
   `ProjectReference`** to `Planillium.App` — that project's `UseWinUI=true` pulls in

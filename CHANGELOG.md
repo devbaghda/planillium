@@ -1,6 +1,6 @@
 # Changelog
 
-Newest first. This tracks the WinUI app (`winui/Planillium.App`) — the one app
+Newest first. This tracks the WinUI app (`regular/winui/Planillium.App`) — the one app
 going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
