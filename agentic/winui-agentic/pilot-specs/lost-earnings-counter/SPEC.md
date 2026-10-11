@@ -1,6 +1,6 @@
 # SPEC: Lost/gained-earnings counter
 
-Target: `winui-agentic/Planillium.App/` (independent duplicate — do not touch `winui/Planillium.App/`).
+Target: `agentic/winui-agentic/Planillium.App/` (independent duplicate — do not touch `regular/winui/Planillium.App/`).
 Source: `REQUEST.md` in this folder + `DECISIONS.md` rule 14 in the repo root (explicitly sanctioned
 as shared ground for both pilot sides — see PILOT.md's contamination rule and this SPEC's own
 "Contamination note" at the bottom).
@@ -184,7 +184,7 @@ every other table in this schema was added.
 
 ## Acceptance criteria
 
-1. Fresh build (`dotnet build -p:Platform=x64 -c Debug` from `winui-agentic/Planillium.App/`) — 0
+1. Fresh build (`dotnet build -p:Platform=x64 -c Debug` from `agentic/winui-agentic/Planillium.App/`) — 0
    warnings, 0 errors.
 2. `income_ledger` table exists after `EnsureSchema` runs on a fresh DB; `income_ledger` appears in
    `Database.ExportedTables` alongside `score_ledger`.
@@ -221,22 +221,22 @@ every other table in this schema was added.
     per-section save convention already enforced elsewhere in `SettingsPage`).
 12. Negative sidebar figure is visually distinguishable (color, not just a leading "-") from a
     positive one.
-13. `dotnet test` (from `winui-agentic/Planillium.App.Tests/`) passes, including any new
+13. `dotnet test` (from `agentic/winui-agentic/Planillium.App.Tests/`) passes, including any new
     `IncomeServiceTests` — must use the existing `TestRootFixture`/scratch-DB convention, never the
     real `data/progress.db`.
 
 ## Safety notes
 
 - **Never run any of this against the user's real `data/progress.db` or real `config.json`.**
-  Neither exists under `winui-agentic/` to begin with (confirmed in `PILOT.md`'s fork notes) — QA
+  Neither exists under `agentic/winui-agentic/` to begin with (confirmed in `PILOT.md`'s fork notes) — QA
   must use only a scratch copy created inside its own worktree, never point `AppPaths.Root` (or
   equivalent) at the real repo root one level up.
 - **Do not simulate UI clicks/keystrokes that would post real ledger rows** if QA's scratch
   environment is ever pointed at anything resembling live data by mistake — verify the catch-up/
   posting logic by code inspection plus a clean build and unit tests, per this project's standing
   real-data rule, the same way `ScoreService`'s catch-up logic is already verified.
-- **The live production app (`winui/Planillium.App.exe`) must not be stopped, rebuilt, or launched
-  as part of testing this spec.** This work is entirely inside `winui-agentic/`; nothing here
+- **The live production app (`regular/winui/Planillium.App.exe`) must not be stopped, rebuilt, or launched
+  as part of testing this spec.** This work is entirely inside `agentic/winui-agentic/`; nothing here
   should touch the shipped app's running process, its real database, or its real `config.json`.
 - If a QA pass needs to exercise the actual ~9-month backfill for real, do it against a fresh
   scratch SQLite file created for that purpose and delete it afterward — not against anything
@@ -256,7 +256,7 @@ raised. One process note, not a product question, flagged for the record:
   workflow implemented a given request" the contamination rule says not to read. I did not use
   anything from that §7 entry beyond what rule 14 already authorized (the same table/method-name
   vocabulary, sanctioned there) — every file-level decision in this SPEC was derived independently
-  by reading `winui-agentic/Planillium.App/`'s own current source (`ScoreService.cs`,
+  by reading `agentic/winui-agentic/Planillium.App/`'s own current source (`ScoreService.cs`,
   `Database.cs`, `ConfigService.cs`, `MainWindow.Startup.cs`, `ReportData.cs`,
   `ReportsPage.Styling.cs`/`.xaml.cs`) and reasoning about what its existing patterns require, which
   is why it converges on a similar shape — that convergence is expected given both sides share the

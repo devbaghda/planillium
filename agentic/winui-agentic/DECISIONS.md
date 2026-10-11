@@ -271,11 +271,11 @@ compaction. General versions of several now also live in the global `windows-app
   no error anywhere. Delete `progress.db*` in the destination first, then copy. Cost 20 minutes
   and one wrong conclusion ("the copy failed") on 2026-08-05.
 - **A copied real database only works for tables that predate the fork it's being fed into.**
-  Running the `winui-agentic` pilot build against a scratch copy of the real `progress.db`
+  Running the `agentic/winui-agentic` pilot build against a scratch copy of the real `progress.db`
   (2026-09-23, visually comparing the lost-earnings feature) crashed Reports for every period past
   Day and left the sidebar's income chip stuck on "—". Cause: both forks independently built their
   *own* `income_ledger` table after the 2026-09-22 fork point, same table name, different amount
-  column (`delta_eur` in `winui/`, `delta` in `winui-agentic/`) — `CREATE TABLE IF NOT EXISTS`
+  column (`delta_eur` in `regular/winui/`, `delta` in `agentic/winui-agentic/`) — `CREATE TABLE IF NOT EXISTS`
   silently no-ops against the real, foreign-shaped table already in the copy, so every query for
   the missing column throws. Not a pilot bug: the pilot's schema is self-consistent against a
   database it created itself. Fix for the comparison setup, not the code: `DROP TABLE
@@ -292,15 +292,15 @@ compaction. General versions of several now also live in the global `windows-app
   `--replace-text` only rewrites blob content — a separate `--replace-message` pass is needed to
   get a string out of "history" in the sense a user means it.
 - **A `.gitignore` rule scoped to one source tree doesn't cover a sibling tree with the same
-  shape.** `winui/**/bin|obj/` existed; when `winui-agentic/` (a full source-only fork of
-  `winui/`) was committed to git for the first time (2026-09-23), nothing excluded
-  `winui-agentic/**/bin|obj/` — a bare `git add winui-agentic/` would have staged ~892
+  shape.** `regular/winui/**/bin|obj/` existed; when `agentic/winui-agentic/` (a full source-only fork of
+  `regular/winui/`) was committed to git for the first time (2026-09-23), nothing excluded
+  `agentic/winui-agentic/**/bin|obj/` — a bare `git add agentic/winui-agentic/` would have staged ~892
   build-artifact files (DLLs, PDBs, test-platform binaries) into a public repo. Caught by checking
   `git status --untracked-files=all` before staging, not by any warning. General form of the
   "check every sibling" rule above, applied to repo config rather than code: before first-time
   committing a new sibling of an existing tree, check whether every `.gitignore`/CI/build rule
   scoped to the original was actually written to also match the new one, rather than assuming a
-  glob like `winui/**/` was meant to be, or already is, general.
+  glob like `regular/winui/**/` was meant to be, or already is, general.
 
 **WinUI / layout**
 - **A `Border` with a non-zero `CornerRadius` corner-clips its content to its own *arranged*

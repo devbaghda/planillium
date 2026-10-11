@@ -1,5 +1,5 @@
 > **Copied from the regular workflow's `context/domain.md` on 2026-10-01.** Independent from this date: edited only by the agentic workflow.
-> Note: paths in the architecture map refer to `winui/` — in this twin the equivalent folder is `winui-agentic/`.
+> Note: paths in the architecture map refer to `regular/winui/` — in this twin the equivalent folder is `agentic/winui-agentic/`.
 
 <!--
   Facts not derivable from code alone at a glance — architecture reference, schema, and format
@@ -22,7 +22,7 @@ Mentor-Overseer). The repo folder, GitHub repo, and C# namespace were all still 
 for a while after the display-name rename — kept that way deliberately at first (internal,
 invisible to users) — but the user confirmed wanting a full internal rename too now that the app
 is public, done 2026-07-23: project folders/csproj files are
-`winui/Planillium.App`/`winui/Planillium.App.Tests`, the C# namespace is `Planillium.App`
+`regular/winui/Planillium.App`/`regular/winui/Planillium.App.Tests`, the C# namespace is `Planillium.App`
 throughout.
 
 **Three deliberate exceptions**, all legacy-compatibility values that must keep referencing *old*
@@ -36,7 +36,7 @@ name(s) for existing-install migration/cleanup: `AppInfo.LegacyStartupRegistryVa
 ## App architecture — the WinUI app is THE app
 _2026-09-14_
 
-`winui/Planillium.App` started as a Python/Tkinter app (`main.py`), was fully rebuilt in WinUI
+`regular/winui/Planillium.App` started as a Python/Tkinter app (`main.py`), was fully rebuilt in WinUI
 3/.NET 8 over 2026-07-06/07, and the Python source was removed from the repo on 2026-07-08 once
 the WinUI app had shipped everything it did (still recoverable from git history/tags if ever
 needed). See "Project history (pre-WinUI, Python/Tkinter era)" in `context/todos.md` for what that
@@ -62,14 +62,14 @@ Planillium/
 │   └── mentor-winui.log    ← app log
 ├── release/                ← Inno Setup installer pipeline (release.ps1, app.iss) — see
 │                              the windows-app-releaser skill for how to cut a build
-└── winui/Planillium.App/  ← WinUI 3 / .NET 8 source — see "Tech stack" below
+└── regular/winui/Planillium.App/  ← WinUI 3 / .NET 8 source — see "Tech stack" below
 ```
 
 ## Tech stack
 _2026-09-14_
 
 - **Framework:** WinUI 3 / .NET 8 (`net8.0-windows10.0.19041.0`), Windows App SDK 1.8.260529003
-- **Build:** `dotnet build -p:Platform=x64 -c Release` from `winui/Planillium.App/` —
+- **Build:** `dotnet build -p:Platform=x64 -c Release` from `regular/winui/Planillium.App/` —
   no Visual Studio required. Unpackaged, self-contained (`WindowsPackageType=None`,
   `WindowsAppSDKSelfContained=true`), no admin rights needed.
 - **Database:** SQLite via `Microsoft.Data.Sqlite`

@@ -96,7 +96,7 @@ reschedule override; pasted replacement JSON contains 5 tasks.
 - Never run against the real `data/progress.db`, root `config.json`, `plans/active/*.json`, or the live app instance. Use a scratch `MENTOR_ROOT` in the worktree with a fixture plan file and scratch DB (see `DECISIONS.md` standing lessons, scratch-`MENTOR_ROOT` technique).
 - This feature rewrites plan files and deletes DB rows, so it must only ever be exercised on scratch copies; confirm `AppPaths` resolves to the scratch root before clicking Confirm.
 - Tests must use the `PLANILLIUM_TESTS` define / scratch paths so `dotnet test -c Release` cannot hit real data.
-- Do not touch `winui/` or the regular side's documents.
+- Do not touch `regular/winui/` or the regular side's documents.
 - Only one of the two apps should run at a time, and neither against real data.
 
 ## Open question

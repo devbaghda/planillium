@@ -30,11 +30,11 @@ Rejected:
 - Change `DailyRate`/ledger to working-day basis: explicitly out of scope; the card total stays.
 
 ## Exact files to change
-- `winui-agentic/Planillium.App/Services/IncomeService.cs`: add `WorkingHoursPerMonth` const and static `HourValueEur()`.
-- `winui-agentic/Planillium.App/Pages/ReportsPage.Income.cs`: `IncomeCard` per-hour line = signed `HourValueEur()` (not `sum / (offMin/60)`); keep the `offMin > 0` guard.
-- `winui-agentic/Planillium.App/Pages/ReportsPage.TimeByApp.cs`: `DistractionList` uses `HourValueEur()/60 x minutes` (signed); drop the `periodOffMin`-based rate; update the doc comment. Signature may drop `periodOffMin` (keep `periodIncomeSum` for sign); update the call at `ReportsPage.xaml.cs:181`.
-- `winui-agentic/Planillium.App/Pages/ReportsPage.xaml.cs`: only the `DistractionList(...)` call-site if the signature changes.
-- `winui-agentic/Planillium.App.Tests/IncomeServiceTests.cs` (or a new sibling test file linking the same sources): tests below.
+- `agentic/winui-agentic/Planillium.App/Services/IncomeService.cs`: add `WorkingHoursPerMonth` const and static `HourValueEur()`.
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.Income.cs`: `IncomeCard` per-hour line = signed `HourValueEur()` (not `sum / (offMin/60)`); keep the `offMin > 0` guard.
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.TimeByApp.cs`: `DistractionList` uses `HourValueEur()/60 x minutes` (signed); drop the `periodOffMin`-based rate; update the doc comment. Signature may drop `periodOffMin` (keep `periodIncomeSum` for sign); update the call at `ReportsPage.xaml.cs:181`.
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.xaml.cs`: only the `DistractionList(...)` call-site if the signature changes.
+- `agentic/winui-agentic/Planillium.App.Tests/IncomeServiceTests.cs` (or a new sibling test file linking the same sources): tests below.
 - Docs, same pass: `MANUAL.md` income/per-off-plan-hour paragraph (root MANUAL.md line ~136 describes the old per-hour breakdown; update the agentic copy if one exists in the fork, otherwise note it in the handback), `CHANGELOG.md` Unreleased, `DECISIONS.md` rule 14 gets a line recording 168 h/month hour value (do not renumber).
 - No SQLite schema change, no migration, no `config.json` change.
 
@@ -55,9 +55,9 @@ Rejected:
 4. For any period, the card's per-hour figure equals (row EUR / row hours) for every distraction row within rounding.
 5. Changing `potential_monthly_net_eur` to 3360 in a scratch config gives exactly 20.00/h on both.
 6. The card's headline total, "based on a potential ..." line, and sidebar income chip are byte-for-byte unchanged vs. before for the same data.
-7. Unit tests: `HourValueEur` at 2700 and 3360; sign helper for sum <0, >0, ==0; passing `dotnet test` from `winui-agentic/Planillium.App.Tests/`.
-8. `dotnet build -p:Platform=x64 -c Debug` (and Release) from `winui-agentic/Planillium.App/` clean, `/warnaserror` clean; no remaining references to a `sum / offMin`-derived rate (grep `perMinuteEur`, `perHour`).
-9. No file under `Planillium.App/` references `winui/Planillium.App/`; no schema/config/migration diff.
+7. Unit tests: `HourValueEur` at 2700 and 3360; sign helper for sum <0, >0, ==0; passing `dotnet test` from `agentic/winui-agentic/Planillium.App.Tests/`.
+8. `dotnet build -p:Platform=x64 -c Debug` (and Release) from `agentic/winui-agentic/Planillium.App/` clean, `/warnaserror` clean; no remaining references to a `sum / offMin`-derived rate (grep `perMinuteEur`, `perHour`).
+9. No file under `Planillium.App/` references `regular/winui/Planillium.App/`; no schema/config/migration diff.
 
 ## Open question
 Sign when the period income sum is exactly 0: spec picks positive. Product owner may prefer
@@ -68,4 +68,4 @@ where the figure is 0 anyway), so the default stands unless the owner objects.
 - QA works only on scratch copies in its worktree: scratch `data/progress.db` and scratch `config.json`; never the real `data/`, real `config.json`, or the live running instance. Do not kill/relaunch the user's running Planillium.App.exe.
 - Change monthly income only in the scratch config.
 - Do not write to `income_ledger` outside the app's own code in the real DB; verify display math by unit tests and code inspection, not by mutating real data.
-- Do not read or compare against `winui/Planillium.App/` (pilot contamination rule).
+- Do not read or compare against `regular/winui/Planillium.App/` (pilot contamination rule).

@@ -36,7 +36,7 @@ standing lessons: `DECISIONS.md`.
 - **`data/progress.db` and `config.json` (at the repo root, outside this folder) are the user's real
   data.** Never read, write or run anything against them or the live app. Verify against a scratch
   database inside a worktree.
-- **Never touch `winui/` (the regular app) or the regular workflow's documents** — read or write.
+- **Never touch `regular/winui/` (the regular app) or the regular workflow's documents** — read or write.
 - The repo is public: no secrets, no personal data.
 - Check every sibling of a fix: grep for the shape, not just the reported call site.
 

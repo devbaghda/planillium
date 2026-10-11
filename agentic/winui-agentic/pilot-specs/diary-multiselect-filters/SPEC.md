@@ -129,7 +129,7 @@ Rejected alternatives:
   user runs.
 - Do not click "Mark on-plan/off-plan/neutral", "Mark <tag>", Edit or Split on any real database. If a UI run is wanted, seed a scratch
   `progress.db` with a handful of fabricated diary rows (varied categories/tags/apps/pages, a null tag, a null page) and point the
-  app's data path at the scratch folder, per `winui-agentic/PILOT.md`. Otherwise verify by unit tests, build and code
+  app's data path at the scratch folder, per `agentic/winui-agentic/PILOT.md`. Otherwise verify by unit tests, build and code
   inspection (read-only UIA at most).
 - Filter state is in-memory only; no persisted setting is introduced, so nothing in `config.json` should change.
   If it does, that is a defect.

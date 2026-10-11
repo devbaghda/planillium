@@ -39,12 +39,12 @@ Rejected alternatives:
 - **Two-row Grid with fixed button columns**: cannot wrap, so clips at 900 DIP.
 
 ## Exact files to change
-- `winui-agentic/Planillium.App/Pages/PlansPage.xaml.cs` - `PlanCard`: replace the 7-column Grid with a 2-row layout
+- `agentic/winui-agentic/Planillium.App/Pages/PlansPage.xaml.cs` - `PlanCard`: replace the 7-column Grid with a 2-row layout
   (text row, wrapping action row); add wrap/MaxLines properties to the text blocks; remove `Grid.SetColumn` use.
-- (Only if option (a) is chosen) one small new file under `winui-agentic/Planillium.App/` for the wrap panel class
+- (Only if option (a) is chosen) one small new file under `agentic/winui-agentic/Planillium.App/` for the wrap panel class
   (e.g. `Controls/WrapPanel.cs`, or a private nested class in `PlansPage.xaml.cs`). Must be reusable-neutral, no styling.
-- `winui-agentic/Planillium.App.Tests/` - no new unit tests required (pure UI layout); existing suite must still pass.
-- `winui-agentic/CHANGELOG.md` (Unreleased) - one user-visible line. `winui-agentic/context/todos.md` - dated entry.
+- `agentic/winui-agentic/Planillium.App.Tests/` - no new unit tests required (pure UI layout); existing suite must still pass.
+- `agentic/winui-agentic/CHANGELOG.md` (Unreleased) - one user-visible line. `agentic/winui-agentic/context/todos.md` - dated entry.
 - No settings schema, SQLite migration, service or view-model change. `PlansPage.xaml` unchanged (`ActiveList` stays).
 
 ## Edge cases
@@ -78,7 +78,7 @@ Added by Planner (mine, not in ACCEPTANCE.md):
 - QA runs only against a scratch `MENTOR_ROOT` copy in its worktree (DECISIONS.md "Safety around real data"); never the real `data/progress.db`, real `config.json`, or the live running app. Do not run the agentic and regular apps at the same time against the same data.
 - Do not click Archive, Add task, Replace remaining, or Excluded days confirm buttons on real data. On scratch data, opening the dialogs and cancelling is enough to prove reachability; Archive needs a scratch complete plan.
 - Seed the long-name plan and the many-excluded-days plan only in the scratch plans folder.
-- Do not touch `winui/` or any regular-side document.
+- Do not touch `regular/winui/` or any regular-side document.
 
 ## Open question
 None. (Wrapping container choice is left to the Coder within the stated preference order.)
@@ -87,7 +87,7 @@ None. (Wrapping container choice is left to the Coder within the stated preferen
 
 ## Design
 
-Skill used: `ui-ux-pro-max` (WinUI/Layout and Accessibility rules) plus `ui-design-rules.md`. This is a layout-only
+Skill used: `ui-ux-pro-max` (regular/winui/Layout and Accessibility rules) plus `ui-design-rules.md`. This is a layout-only
 repair of an existing card, so the look of the rest of the app is the reference, not a new style. Not a
 placeholder visual layer: nothing new is styled.
 

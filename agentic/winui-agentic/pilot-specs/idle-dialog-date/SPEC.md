@@ -31,11 +31,11 @@ Rejected:
   already warns about, and an inline version could not be unit-tested without WinUI.
 
 ## Exact files to change
-- `winui-agentic/Planillium.App/Services/DateExtensions.cs` — add the span helper (with a doc comment).
-- `winui-agentic/Planillium.App/Dialogs/IdleReturnDialog.cs` — line ~112: replace the
+- `agentic/winui-agentic/Planillium.App/Services/DateExtensions.cs` — add the span helper (with a doc comment).
+- `agentic/winui-agentic/Planillium.App/Dialogs/IdleReturnDialog.cs` — line ~112: replace the
   `({idleStart.ToIsoTimeOfDay()}–{idleEnd.ToIsoTimeOfDay()})` interpolation with the helper
   (`idleEnd` already computed at line 109).
-- `winui-agentic/Planillium.App.Tests/` — new test file (e.g. `AbsenceSpanFormatTests.cs`) covering
+- `agentic/winui-agentic/Planillium.App.Tests/` — new test file (e.g. `AbsenceSpanFormatTests.cs`) covering
   the helper. If the test project does not already link `DateExtensions.cs`, add a
   `<Compile Include="..\Planillium.App\Services\DateExtensions.cs" Link="App\DateExtensions.cs" />`
   to its csproj (source-file link, NOT a ProjectReference — see project CLAUDE.md). Check first;
@@ -64,9 +64,9 @@ Rejected:
   width; the longer two-date text must wrap, not clip.
 
 ## Acceptance criteria (mechanical)
-1. `dotnet build -p:Platform=x64 -c Debug` from `winui-agentic/Planillium.App/` succeeds with no
+1. `dotnet build -p:Platform=x64 -c Debug` from `agentic/winui-agentic/Planillium.App/` succeeds with no
    new warnings.
-2. `dotnet test` from `winui-agentic/Planillium.App.Tests/` passes, including new tests asserting
+2. `dotnet test` from `agentic/winui-agentic/Planillium.App.Tests/` passes, including new tests asserting
    exactly (using 2026-10-01 as Thu):
    - start 2026-10-01 10:30, end 10:36 -> `Thu 01.10, 10:30–10:36`
    - start 2026-09-30 23:50, end 2026-10-01 00:05 -> `Wed 30.09 23:50 – Thu 01.10 00:05`
@@ -90,7 +90,7 @@ Rejected:
 - Do not click "Log it"/"Skip" in any instance bound to real data (these write diary rows).
   Preferred verification is the unit tests plus code inspection plus a clean build; any visual
   check must run on a scratch data directory.
-- Do not edit `winui/Planillium.App/` (the original) in any way.
+- Do not edit `regular/winui/Planillium.App/` (the original) in any way.
 
 ## Open question
 None. (Year omission and weekday inclusion follow existing convention; if the user wants the year,

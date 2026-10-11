@@ -59,8 +59,8 @@ Rejected alternatives:
   and this would mask real absence with Planillium in front.
 
 ## Exact files to change
-- `winui-agentic/Planillium.App/Services/ActivityTracker.cs` - `_pollLock`, wrap `PollOnce` body, flush in `Stop()`.
-- `winui-agentic/Planillium.App.Tests/ActivityTrackerFlushOnStopTests.cs` (new) - tests below (link/Compile
+- `agentic/winui-agentic/Planillium.App/Services/ActivityTracker.cs` - `_pollLock`, wrap `PollOnce` body, flush in `Stop()`.
+- `agentic/winui-agentic/Planillium.App.Tests/ActivityTrackerFlushOnStopTests.cs` (new) - tests below (link/Compile
   rules per `CLAUDE.md`; follow `ActivityTrackerPendingGapTests.cs` and `TestRootFixture.cs`).
 - No XAML, no config.json key, no SQLite schema change, no migration.
 - Docs in the same pass: `context/todos.md` entry is the orchestrator's job per workflow; add `CHANGELOG.md`
@@ -87,8 +87,8 @@ Rejected alternatives:
   an arbitrary old row; behaviour class unchanged (see Open question).
 
 ## Acceptance criteria (mechanical)
-1. `dotnet build -p:Platform=x64 -c Debug` from `winui-agentic/Planillium.App/` succeeds with no new warnings.
-2. `dotnet test` from `winui-agentic/Planillium.App.Tests/` passes, including new tests:
+1. `dotnet build -p:Platform=x64 -c Debug` from `agentic/winui-agentic/Planillium.App/` succeeds with no new warnings.
+2. `dotnet test` from `agentic/winui-agentic/Planillium.App.Tests/` passes, including new tests:
    a. Open a session via `SimulateOpenSession` at T-90 min, call the flush/Stop path against a scratch DB: exactly
       one `time_diary` row, start = session start, end ~now, category/window as the session's.
    b. After that flush, a new tracker seeded with `LastDiaryEnd` as `_lastPollAt` does NOT enter the sleep-gap path
@@ -110,7 +110,7 @@ Rejected alternatives:
   scratch DB/config via `TestRootFixture` / a temp root in the QA worktree only.
 - Do not simulate clicks in the live app (Settings Save would trigger RestartTracker and write diary rows).
 - The only DB writes are through app code into scratch copies; no manual SQL against real tables.
-- `winui/Planillium.App/` (original side) must not be read or touched.
+- `regular/winui/Planillium.App/` (original side) must not be read or touched.
 
 ## Open question
 - Tray Pause/Resume: should time between Pause and Resume be treated as "absence" (prompted on resume, as now,

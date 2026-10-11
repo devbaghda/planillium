@@ -58,25 +58,25 @@ valid, else falls back to root.
 
 ## Exact files to change
 
-- `winui-agentic/Planillium.App/Services/PieSlices.cs` (new): pure, UI-free logic. Takes a list of
+- `agentic/winui-agentic/Planillium.App/Services/PieSlices.cs` (new): pure, UI-free logic. Takes a list of
   (name, AppUsage-like minutes + per-category minutes + drillable flag) and returns slices: top-N plus
   "Other" merge, under-3% rule, per-slice fraction, start/sweep angles, dominant category, and
   the "(no detail)" remainder slice. No WinUI types, so it is unit-testable.
-- `winui-agentic/Planillium.App/Pages/ReportsPage.TimeByApp.cs`: replace `AppBreakdownPanel` /
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.TimeByApp.cs`: replace `AppBreakdownPanel` /
   `AppUsageRow` and `DefaultAppsShown` with the pie builder (wedge geometry, list rows, breadcrumb,
   Back, in-place swap, focus handling, accessibility). Keep `DistractionList`, `StackedCategories`,
   `Minutes()`, `TimeByAppLegend()` (caption tweak). Update the file's header comment.
-- `winui-agentic/Planillium.App/Pages/ReportsPage.xaml.cs`: the TIME BY APP block (about lines
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.xaml.cs`: the TIME BY APP block (about lines
   183-198) calls the new builder; add the static drill-path field; reset it in the period-switch
   handler (about line 118); update the header-comment index line 18 and the "expandable groups"
   comment. Section title unchanged.
-- `winui-agentic/Planillium.App.Tests/Planillium.App.Tests.csproj`: add one
+- `agentic/winui-agentic/Planillium.App.Tests/Planillium.App.Tests.csproj`: add one
   `<Compile Include="..\Planillium.App\Services\PieSlices.cs" Link="App\PieSlices.cs" />` (source-link
   pattern, NOT a ProjectReference, per the project's build notes).
-- `winui-agentic/Planillium.App.Tests/PieSlicesTests.cs` (new): tests for the cases below.
+- `agentic/winui-agentic/Planillium.App.Tests/PieSlicesTests.cs` (new): tests for the cases below.
 - No change: `Planillium.App.csproj`, SQLite schema, `config.json`/settings, `ReportExport.cs`
   (the HTML/CSV export keeps its own tables and is out of scope), `ReportData.cs`.
-- Docs the Coder updates in the same pass (inside `winui-agentic/` only): none outside code
+- Docs the Coder updates in the same pass (inside `agentic/winui-agentic/` only): none outside code
   comments; do not touch repo-root `CONTEXT.md`, `MANUAL.md` or `CHANGELOG.md` (pilot rule: outcomes
   are logged by the orchestrator in `context/todos.md`).
 
@@ -102,7 +102,7 @@ valid, else falls back to root.
 
 ## Acceptance criteria (mechanical, for QA)
 
-1. `dotnet build -p:Platform=x64 -c Debug` from `winui-agentic/Planillium.App/` succeeds with 0 warnings (TreatWarningsAsErrors is on); `dotnet test` from `winui-agentic/Planillium.App.Tests/` passes, and the suite includes new `PieSlices` tests covering edge cases 3, 6, 7, 8, 16.
+1. `dotnet build -p:Platform=x64 -c Debug` from `agentic/winui-agentic/Planillium.App/` succeeds with 0 warnings (TreatWarningsAsErrors is on); `dotnet test` from `agentic/winui-agentic/Planillium.App.Tests/` passes, and the suite includes new `PieSlices` tests covering edge cases 3, 6, 7, 8, 16.
 2. `git diff` shows `Planillium.App.csproj` has no new `PackageReference`.
 3. Reports > TIME BY APP no longer contains bar rows or per-app expand chevrons-with-subpanels; it shows a pie, a list, the category legend, and a breadcrumb "All apps".
 4. Root level: slice count is at most 7; if the scratch data has more than 7 apps there is a slice named "Other (N apps)" and N equals total apps minus 6.
@@ -117,7 +117,7 @@ valid, else falls back to root.
 13. A scratch database with exactly one app produces a full-circle slice, no exception; an empty scratch database shows "No activity logged yet." and no chart.
 14. Light and dark theme render check (PrintWindow with `PW_RENDERFULLCONTENT`, flag 2): wedges visible, stroke separators visible, text legible.
 15. `ReportsPage` still renders every other section (score, income, summary table, distractions, insights, diary) unchanged: alignment-grid constants in `ReportsPage.Styling.cs` unmodified and the Top Distractions rows pixel-aligned as before.
-16. No file outside `winui-agentic/` modified; `git status` shows no changes under `winui/`.
+16. No file outside `agentic/winui-agentic/` modified; `git status` shows no changes under `regular/winui/`.
 
 ## Safety notes (QA)
 
@@ -131,7 +131,7 @@ valid, else falls back to root.
   that postdate the fork may be absent) is respected.
 - Read-only UI Automation and screenshots are fine; do not click Complete/Move/Day-off controls on
   any page. Drill and Back clicks are view-only and safe on scratch data.
-- Do not read `winui/Planillium.App/` (contamination rule), `CONTEXT.md`, or git history of that folder.
+- Do not read `regular/winui/Planillium.App/` (contamination rule), `CONTEXT.md`, or git history of that folder.
 
 ## Open question
 

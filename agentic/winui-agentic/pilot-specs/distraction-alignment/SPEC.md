@@ -48,9 +48,9 @@ Rejected alternatives:
 - Monospace font / padded strings: fragile with a proportional font and non-Latin digits. Rejected.
 
 ## Exact files to change
-- `winui-agentic/Planillium.App/Pages/ReportsPage.Styling.cs`: add the three width constants (with doc comment).
-- `winui-agentic/Planillium.App/Pages/ReportsPage.TimeByApp.cs`: rewrite `DistractionList` row layout; update `AppUsageRow` columns (fixed hours, always-present chevron column).
-- `winui-agentic/Planillium.App/Pages/ReportsPage.Tables.cs`: READ ONLY check of the summary tables (lines ~31, ~147 use one Grid with Auto columns, so rows already share columns); change nothing unless QA finds misalignment.
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.Styling.cs`: add the three width constants (with doc comment).
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.TimeByApp.cs`: rewrite `DistractionList` row layout; update `AppUsageRow` columns (fixed hours, always-present chevron column).
+- `agentic/winui-agentic/Planillium.App/Pages/ReportsPage.Tables.cs`: READ ONLY check of the summary tables (lines ~31, ~147 use one Grid with Auto columns, so rows already share columns); change nothing unless QA finds misalignment.
 - No settings schema, SQLite, or migration changes. `ReportData.FmtHours` and `MainWindow.FormatEur` unchanged (HTML/CSV export in `ReportExport.cs` unaffected).
 - Docs per project rules: `CHANGELOG.md` (Unreleased) entry; `context/todos.md` dated line.
   (Skip CONTEXT.md; QA/Coder should not read it either.)
@@ -73,13 +73,13 @@ Rejected alternatives:
 5. AC-5: Distraction bar fill width <= track width on every row at 900 dip window width and at wide width.
 6. AC-6: No EUR column content when `perMinuteEur == 0`, yet bar start/end x are unchanged compared with a period that has EUR.
 7. AC-7: The bar start x on Top Distractions equals the bar start x on Time by App (still the shared `LabelColumnWidth + ColumnGap` axis) and the summary table's first figure axis is unchanged.
-8. AC-8: `dotnet build -p:Platform=x64 -c Debug` (and with `/warnaserror` as per project history) passes cleanly; `dotnet test` in `winui-agentic/Planillium.App.Tests` (if present in the fork) passes unchanged.
+8. AC-8: `dotnet build -p:Platform=x64 -c Debug` (and with `/warnaserror` as per project history) passes cleanly; `dotnet test` in `agentic/winui-agentic/Planillium.App.Tests` (if present in the fork) passes unchanged.
 9. AC-9: HTML/CSV report export output byte-identical to before for the same data.
 
 ## Safety notes
 - Never run against the real `data/progress.db` or real `config.json`, and never touch the live running Planillium instance or stop/relaunch it. Test only in a worktree scratch copy with a scratch `data/` and scratch `config.json`.
 - No clicking that changes plan/score data (complete/move/day-off). Expanding Time by App rows and "Show more" are read-only and fine; read-only UIA only.
-- Do not write to `winui/Planillium.App/` (original side) or read its post-fork changes.
+- Do not write to `regular/winui/Planillium.App/` (original side) or read its post-fork changes.
 
 ## Open question
 - None blocking. If EUR in Time by App is wanted later, that is a separate request.

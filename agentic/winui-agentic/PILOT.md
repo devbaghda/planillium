@@ -2,28 +2,28 @@
 
 Independent duplicate of the WinUI app, built by a Designer + Planner → Coder → QA pipeline
 (`.claude/agents/planillium-{designer,planner,coder,qa}.md`), compared against the same feature
-built by the regular single-session-with-skills workflow in `winui/Planillium.App/` (shipped, in
+built by the regular single-session-with-skills workflow in `regular/winui/Planillium.App/` (shipped, in
 daily live use, never touched by this pilot). Method for both sides, rules and metrics:
 `~/.claude/reference/feature-workflow.md`.
 
 ## Fork point
 
-Created **2026-09-22** from `winui/Planillium.App/` and `winui/Planillium.App.Tests/` — source
+Created **2026-09-22** from `regular/winui/Planillium.App/` and `regular/winui/Planillium.App.Tests/` — source
 only, `bin/`/`obj/` excluded (91 + 17 files, count-verified). Real data (`data/progress.db`,
-`config.json`, `plans/*.json`) lives at the repo root, never under `winui/`, and is never read here.
+`config.json`, `plans/*.json`) lives at the repo root, never under `regular/winui/`, and is never read here.
 
 ## Documents are split (2026-10-01)
 
 This folder has its **own** `CONTEXT.md`, `DECISIONS.md` and `context/` — copied once on
 2026-10-01, edited only by the agentic side from then on. Agents here read only this folder plus the
 feature's `pilot-specs/<slug>/{REQUEST.md,ACCEPTANCE.md}`. They never read the parent project's
-`CONTEXT.md`, `DECISIONS.md`, `context/`, or anything under `winui/` — the old "shared ground"
+`CONTEXT.md`, `DECISIONS.md`, `context/`, or anything under `regular/winui/` — the old "shared ground"
 arrangement was dropped because a living handoff doc leaked a regular-side implementation write-up
 into the blind comparison (2026-09-22). With fully separate copies there is nothing to leak.
 
 ## Contamination rule
 
-Planner, Designer, Coder and QA never read `winui/Planillium.App/`'s source, its git history, or any
+Planner, Designer, Coder and QA never read `regular/winui/Planillium.App/`'s source, its git history, or any
 description of how the regular workflow built a given request. Each side answers the same product
 brief independently. QA, when asked to test the **regular** side, reads that side's source (it must
 test it) but never the agentic side's spec or code while doing so, and applies the identical
