@@ -72,7 +72,7 @@ progress — that's the part with no substitute.
 Launch every `planillium-*` agent (designer, planner, coder, qa) with `run_in_background: false`, one at a time, 
 and never start the other side while one is running. The Agent tool defaults to background, which is how QA and 
 the Planner overlapped on 2026-10-13 and made that feature's token/time numbers unmeasurable. 
-(`~/.claude/hooks/sequential-agents.sh` enforces this once registered in settings.json - pending user approval.)
+(`~/.claude/hooks/sequential-agents.sh` enforces this; registered in settings.json 2026-10-13.)
 
 ## Verifying UI fixes without breaking things
 - The global no-mutating-real-data rule applies here as: **never simulate clicks/keystrokes that
