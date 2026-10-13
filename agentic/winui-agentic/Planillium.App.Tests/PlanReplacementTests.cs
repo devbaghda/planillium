@@ -294,4 +294,191 @@ public sealed class PlanReplacementTests
         Assert.Equal("no done tasks", PlanReplacement.KeptText(0));
         Assert.Equal("1 done task", PlanReplacement.KeptText(1));
     }
+
+    // ---- spec replace-remaining-v2 -------------------------------------------------------------
+
+    /// <summary>A reply whose tasks are given as raw JSON objects, so each field can be set exactly.</summary>
+    private static string RawReply(params string[] taskObjects) =>
+        "```json\n{ \"phases\": [ { \"tasks\": [" + string.Join(",", taskObjects) + "] } ] }\n```";
+
+    private static PlanReplacement.Replacement Paste(string reply)
+    {
+        Assert.Null(PlanReplacement.ParseReplacement(reply, Array.Empty<string>(), out var r));
+        return r!;
+    }
+
+    [Fact]
+    public void Assess_RemainingListsEveryUnfinishedTaskInFull_InDayThenTitleOrder()
+    {
+        var id = NewId();
+        WritePlan(id, DateTime.Today.ToIsoDate());
+        using (var db = new Database())
+            for (var d = 1; d <= 4; d++) db.SaveCompletion(id, d, $"Task {d}", true);
+
+        using var database = new Database();
+        var situation = PlanReplacement.Assess(id, database);
+
+        Assert.Equal(situation.RemovedCount, situation.Remaining.Count);
+        Assert.Equal(
+            new[] { (5, "Task 5"), (6, "Task 6"), (7, "Task 7"), (8, "Task 8"), (9, "Task 9"), (10, "Task 10") },
+            situation.Remaining.Select(r => (r.AssignedDay, r.Title)));
+        var first = situation.Remaining[0];
+        Assert.Equal("d", first.Detail);
+        Assert.Equal("m", first.MentorNote);
+        Assert.Null(first.Category);
+        Assert.Null(first.DurationMin);
+        Assert.Empty(first.Tools);
+    }
+
+    [Fact]
+    public void ReplaceRemainder_ListsEveryRemainingTaskWithAllFields_AndNoneForMissing()
+    {
+        var done = new[] { new PlanReplacement.DoneTask(1, "Done one") };
+        var remaining = new[]
+        {
+            new PlanReplacement.RemainingTask(5, "Full task", "Do X", "Note Y", "practice", 45,
+                new[] { "VS Code", "Anki" }),
+            new PlanReplacement.RemainingTask(6, "Bare task", null, "  ", null, null, Array.Empty<string>()),
+        };
+
+        var prompt = PlanTemplates.ReplaceRemainder("My Plan", done, remaining, 2, "Drop the reddit parts")
+            .Replace("\r\n", "\n"); // the template file is CRLF; the values use \n
+
+        Assert.Contains("Tasks to be replaced (the unfinished ones, in full):", prompt);
+        Assert.Contains("Day 5: Full task\n  Detail: Do X\n  Mentor note: Note Y\n  Category: practice\n" +
+                        "  Duration: 45 min\n  Tools: VS Code, Anki", prompt);
+        Assert.Contains("Day 6: Bare task\n  Detail: (none)\n  Mentor note: (none)\n  Category: (none)\n" +
+                        "  Duration: (none)\n  Tools: (none)", prompt);
+        Assert.DoesNotContain("null", prompt);
+        Assert.Contains("What I want changed:\nDrop the reddit parts", prompt);
+        Assert.Contains("Day 1: Done one", prompt);
+        Assert.Contains("Ticked tasks (fixed, do not repeat):", prompt);
+        Assert.Contains("```json", prompt);
+        Assert.Contains("Every task title must be unique and must\nnot match any ticked task above.", prompt);
+        Assert.Contains("\"day\": 2,", prompt);
+    }
+
+    [Fact]
+    public void ReplaceRemainder_EmptyChangeText_CarriesTheNeutralLine()
+    {
+        var prompt = PlanTemplates.ReplaceRemainder("P", Array.Empty<PlanReplacement.DoneTask>(),
+            Array.Empty<PlanReplacement.RemainingTask>(), 1, "   \n ").Replace("\r\n", "\n");
+        Assert.Contains("What I want changed:\nNo specific change requested; improve and re-plan the remaining work as you see fit.", prompt);
+        Assert.Contains("Ticked tasks (fixed, do not repeat):\n(none yet)", prompt);
+    }
+
+    [Fact]
+    public void ReplaceRemainder_BracesInUserAndTaskText_AppearLiterally()
+    {
+        var done = new[] { new PlanReplacement.DoneTask(1, "Done {done_list}") };
+        var remaining = new[]
+        {
+            new PlanReplacement.RemainingTask(3, "Brace task", "Use {remaining_list} and {change_text} here",
+                "{start_day} is literal", null, null, Array.Empty<string>()),
+        };
+        var change = "Replace {start_day} and {plan_name} everywhere, also {done_list} and {remaining_list}";
+
+        var prompt = PlanTemplates.ReplaceRemainder("Plan {start_day}", done, remaining, 7, change);
+
+        Assert.Contains(change, prompt);
+        Assert.Contains("Use {remaining_list} and {change_text} here", prompt);
+        Assert.Contains("{start_day} is literal", prompt);
+        Assert.Contains("Day 1: Done {done_list}", prompt);
+        Assert.Contains("\"name\": \"Plan {start_day}\"", prompt);
+        Assert.Contains("\"day\": 7,", prompt);
+    }
+
+    [Fact]
+    public void ParseWords_TrimsDropsEmptiesAndDeduplicatesCaseInsensitively()
+    {
+        Assert.Equal(new[] { "Reddit", "LinkedIn" },
+            PlanReplacement.ParseWords("  Reddit ,, reddit, LinkedIn ,  , "));
+        Assert.Equal(new[] { "Reddit" }, PlanReplacement.ParseWords(",,Reddit,"));
+        Assert.Empty(PlanReplacement.ParseWords(" , ,  "));
+        Assert.Empty(PlanReplacement.ParseWords(""));
+        Assert.Empty(PlanReplacement.ParseWords(null));
+        Assert.Equal(new[] { "ärger" }, PlanReplacement.ParseWords("ärger, ÄRGER"));
+    }
+
+    [Fact]
+    public void FindMentions_CatchesEachFieldCaseInsensitively()
+    {
+        var reply = RawReply(
+            "{ \"day\": 1, \"task\": \"Plain\", \"detail\": \"Visit reddit daily\" }",
+            "{ \"day\": 2, \"task\": \"Reddit sprint\", \"detail\": \"x\" }",
+            "{ \"day\": 3, \"task\": \"Mentor\", \"mentor_note\": \"Avoid REDDIT traps\" }",
+            "{ \"day\": 4, \"task\": \"Tools\", \"tools\": [\"Chrome - Reddit\"] }",
+            "{ \"day\": 5, \"task\": \"Clean\", \"detail\": \"nothing\", \"tools\": [\"VS Code\"] }");
+
+        var mentions = PlanReplacement.FindMentions(Paste(reply), new[] { "Reddit" });
+
+        Assert.Equal(new[] { "Plain", "Reddit sprint", "Mentor", "Tools" }, mentions.Select(m => m.Title));
+        Assert.All(mentions, m => Assert.Equal(new[] { "Reddit" }, m.Words));
+    }
+
+    [Fact]
+    public void FindMentions_TwoWords_TaskListedOnceWithBothWordsInTypedOrder()
+    {
+        var reply = RawReply(
+            "{ \"day\": 1, \"task\": \"Both\", \"detail\": \"reddit and linkedin\" }",
+            "{ \"day\": 2, \"task\": \"Only LinkedIn\", \"mentor_note\": \"post to linkedin\" }",
+            "{ \"day\": 3, \"task\": \"Neither\", \"detail\": \"none\" }");
+
+        var words = PlanReplacement.ParseWords("LinkedIn, Reddit");
+        var mentions = PlanReplacement.FindMentions(Paste(reply), words);
+
+        Assert.Equal(2, mentions.Count);
+        Assert.Equal("Both", mentions[0].Title);
+        Assert.Equal(new[] { "LinkedIn", "Reddit" }, mentions[0].Words);
+        Assert.Equal("Only LinkedIn", mentions[1].Title);
+        Assert.Equal(new[] { "LinkedIn" }, mentions[1].Words);
+    }
+
+    [Fact]
+    public void FindMentions_OneWordInThreeFields_ListedOnceWithWordOnce()
+    {
+        var reply = RawReply(
+            "{ \"day\": 1, \"task\": \"Reddit intro\", \"detail\": \"reddit\", \"mentor_note\": \"Reddit\", \"tools\": [\"reddit app\"] }");
+
+        var mentions = PlanReplacement.FindMentions(Paste(reply), new[] { "Reddit" });
+
+        var single = Assert.Single(mentions);
+        Assert.Equal("Reddit intro", single.Title);
+        Assert.Equal(new[] { "Reddit" }, single.Words);
+    }
+
+    [Fact]
+    public void FindMentions_NoMatchOrNoWords_ReturnsNothing_AndNonStringFieldsDoNotThrow()
+    {
+        var reply = RawReply(
+            "{ \"day\": 1, \"task\": \"Odd\", \"detail\": 42, \"mentor_note\": null, \"tools\": \"Reddit\" }",
+            "{ \"day\": 2, \"task\": \"Reddit x\", \"detail\": 7, \"tools\": [3, null, \"Reddit\"] }");
+        var replacement = Paste(reply);
+
+        var mentions = PlanReplacement.FindMentions(replacement, new[] { "Reddit" });
+        Assert.Equal(new[] { "Reddit x" }, mentions.Select(m => m.Title));
+
+        Assert.Empty(PlanReplacement.FindMentions(replacement, new[] { "Slack" }));
+        Assert.Empty(PlanReplacement.FindMentions(replacement, PlanReplacement.ParseWords(" , ")));
+    }
+
+    [Fact]
+    public void MentionsSummary_WordingForEachState()
+    {
+        Assert.Null(PlanReplacement.MentionsSummary(Array.Empty<string>(), Array.Empty<PlanReplacement.Mention>()));
+        Assert.Equal("✓ No mentions of Reddit found in the new tasks.",
+            PlanReplacement.MentionsSummary(new[] { "Reddit" }, Array.Empty<PlanReplacement.Mention>()));
+        Assert.Equal("⚠ Warning: 1 new task still mentions Reddit.",
+            PlanReplacement.MentionsSummary(new[] { "Reddit" },
+                new[] { new PlanReplacement.Mention("A", new[] { "Reddit" }) }));
+        Assert.Equal("⚠ Warning: 2 new tasks still mention Reddit or LinkedIn.",
+            PlanReplacement.MentionsSummary(new[] { "Reddit", "LinkedIn" }, new[]
+            {
+                new PlanReplacement.Mention("A", new[] { "Reddit" }),
+                new PlanReplacement.Mention("B", new[] { "LinkedIn" }),
+            }));
+        Assert.Equal("A, B or C", PlanReplacement.WordList(new[] { "A", "B", "C" }));
+        Assert.Equal("• Plain  (contains: Reddit, LinkedIn)",
+            PlanReplacement.MentionLine(new PlanReplacement.Mention("Plain", new[] { "Reddit", "LinkedIn" })));
+    }
 }

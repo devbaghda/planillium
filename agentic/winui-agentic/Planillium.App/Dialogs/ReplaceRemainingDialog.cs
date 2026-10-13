@@ -24,7 +24,10 @@ public static class ReplaceRemainingDialog
     private const string StartChangedMessage =
         "The date changed while this was open. The figures above are updated — check them and press Replace tasks again.";
 
-    private sealed record Step1Result(string ReplyText, PlanReplacement.Replacement Replacement);
+    /// <summary>Step 1's values. ChangeText and WordsText are per-use only: kept in memory for Back,
+    /// never written anywhere (spec replace-remaining-v2, AC 10).</summary>
+    private sealed record Step1Result(string ReplyText, PlanReplacement.Replacement Replacement,
+        string ChangeText, string WordsText);
 
     private enum Step2Outcome { Cancel, Back, Applied }
 
@@ -45,16 +48,20 @@ public static class ReplaceRemainingDialog
         }
 
         var replyText = "";
+        var changeText = "";
+        var wordsText = "";
         while (true)
         {
             using (var db = new Database())
                 situation = PlanReplacement.Assess(planId, db);
 
-            var step1 = await ShowStep1Async(xamlRoot, situation, replyText);
+            var step1 = await ShowStep1Async(xamlRoot, situation, replyText, changeText, wordsText);
             if (step1 is null) return false;
             replyText = step1.ReplyText;
+            changeText = step1.ChangeText;
+            wordsText = step1.WordsText;
 
-            var step2 = await ShowStep2Async(xamlRoot, planId, step1.Replacement);
+            var step2 = await ShowStep2Async(xamlRoot, planId, step1.Replacement, step1.WordsText);
             if (step2 == Step2Outcome.Back) continue;
             return step2 == Step2Outcome.Applied;
         }
@@ -63,7 +70,7 @@ public static class ReplaceRemainingDialog
     /// <summary>Step 1: prompt, copy, paste. Returns null when cancelled. An invalid paste keeps
     /// the dialog open with the reason shown (args.Cancel) and the typed text untouched.</summary>
     private static async Task<Step1Result?> ShowStep1Async(XamlRoot xamlRoot,
-        PlanReplacement.Situation situation, string replyText)
+        PlanReplacement.Situation situation, string replyText, string changeText, string wordsText)
     {
         var summary = new TextBlock
         {
@@ -76,11 +83,22 @@ public static class ReplaceRemainingDialog
 
         var caption1 = new TextBlock
         {
-            Text = "1. Copy this prompt into claude.ai.",
+            Text = "1. Say what should change.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         };
+
+        var change = new TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 72,
+            Header = "What should change?",
+            PlaceholderText = "For example: remove everything about Reddit. Leave empty to let Claude improve the remaining work.",
+            Text = changeText,
+        };
+        AutomationProperties.SetName(change, "What should change?");
 
         var prompt = new TextBox
         {
@@ -89,7 +107,7 @@ public static class ReplaceRemainingDialog
             TextWrapping = TextWrapping.Wrap,
             Height = 110,
             Header = "Prompt for Claude",
-            Text = PlanTemplates.ReplaceRemainder(situation.Plan.Name, situation.Done, situation.StartDay),
+            Text = BuildPrompt(situation, change.Text),
         };
         AutomationProperties.SetName(prompt, "Prompt for Claude");
 
@@ -103,9 +121,25 @@ public static class ReplaceRemainingDialog
             copyBtn.Content = "Copied ✓";
         };
 
+        // The prompt is rebuilt on every edit of the change field, so Copy always copies the current
+        // text. A "Copied ✓" left over from the previous text would mislead, so it resets to "Copy".
+        change.TextChanged += (_, _) =>
+        {
+            prompt.Text = BuildPrompt(situation, change.Text);
+            if (Equals(copyBtn.Content, "Copied ✓")) copyBtn.Content = "Copy";
+        };
+
         var caption2 = new TextBlock
         {
-            Text = "2. Paste Claude's reply below.",
+            Text = "2. Copy this prompt into claude.ai.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var caption3 = new TextBlock
+        {
+            Text = "3. Paste Claude's reply below.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
@@ -131,13 +165,34 @@ public static class ReplaceRemainingDialog
         // Editing the reply clears the previous problem, as the user is now fixing it.
         reply.TextChanged += (_, _) => error.Visibility = Visibility.Collapsed;
 
+        // Optional. Editing it does not clear the reply error: that message is about the reply.
+        var words = new TextBox
+        {
+            Header = "Words that must be gone",
+            PlaceholderText = "Reddit, LinkedIn",
+            Text = wordsText,
+        };
+        AutomationProperties.SetName(words, "Words that must be gone");
+
+        var wordsHelper = new TextBlock
+        {
+            Text = "Optional. Separate with commas. If any of them is still in Claude's new tasks, the preview warns you.",
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            TextWrapping = TextWrapping.Wrap,
+        };
+
         var panel = new StackPanel { Spacing = 10, MinWidth = DialogContentWidth };
         panel.Children.Add(summary);
         panel.Children.Add(caption1);
+        panel.Children.Add(change);
+        panel.Children.Add(caption2);
         panel.Children.Add(prompt);
         panel.Children.Add(copyBtn);
-        panel.Children.Add(caption2);
+        panel.Children.Add(caption3);
         panel.Children.Add(reply);
+        panel.Children.Add(words);
+        panel.Children.Add(wordsHelper);
         panel.Children.Add(error);
 
         var doneTitles = situation.Done.Select(d => d.Title).ToList();
@@ -146,6 +201,8 @@ public static class ReplaceRemainingDialog
             primaryButtonText: "Preview", closeButtonText: "Cancel",
             defaultButton: ContentDialogButton.Primary);
         dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
+        // Focus on open: the change field, so the user types first.
+        dialog.Loaded += (_, _) => change.Focus(FocusState.Programmatic);
 
         PlanReplacement.Replacement? parsed = null;
         dialog.PrimaryButtonClick += (_, args) =>
@@ -162,13 +219,17 @@ public static class ReplaceRemainingDialog
 
         var result = await DialogGate.ShowAsync(dialog);
         if (result != ContentDialogResult.Primary || parsed is null) return null;
-        return new Step1Result(reply.Text, parsed);
+        return new Step1Result(reply.Text, parsed, change.Text, words.Text);
     }
+
+    private static string BuildPrompt(PlanReplacement.Situation situation, string changeText) =>
+        PlanTemplates.ReplaceRemainder(situation.Plan.Name, situation.Done, situation.Remaining,
+            situation.StartDay, changeText);
 
     /// <summary>Step 2: preview and confirm. The default button is Cancel, so Enter cannot
     /// confirm a destructive change. Figures are recomputed on open and again at confirm.</summary>
     private static async Task<Step2Outcome> ShowStep2Async(XamlRoot xamlRoot, string planId,
-        PlanReplacement.Replacement replacement)
+        PlanReplacement.Replacement replacement, string wordsText)
     {
         PlanReplacement.Situation current;
         using (var db = new Database())
@@ -194,6 +255,11 @@ public static class ReplaceRemainingDialog
         AddFactRow(facts, 1, "New tasks start", startValue);
         AddFactRow(facts, 2, "Old finish date", oldValue);
         AddFactRow(facts, 3, "New finish date", newValue);
+
+        // The words check is advisory (spec replace-remaining-v2): it never changes the buttons or
+        // blocks Replace tasks. No usable words means no block at all (State A).
+        var words = PlanReplacement.ParseWords(wordsText);
+        var mentions = PlanReplacement.FindMentions(replacement, words);
 
         var consequence = new TextBlock
         {
@@ -228,6 +294,8 @@ public static class ReplaceRemainingDialog
         var panel = new StackPanel { Spacing = 10, MinWidth = DialogContentWidth };
         panel.Children.Add(headline);
         panel.Children.Add(facts);
+        var mentionsBlock = BuildMentionsBlock(words, mentions);
+        if (mentionsBlock is not null) panel.Children.Add(mentionsBlock);
         panel.Children.Add(consequence);
         panel.Children.Add(error);
 
@@ -279,6 +347,86 @@ public static class ReplaceRemainingDialog
             return Step2Outcome.Applied;
         }
         return dialogResult == ContentDialogResult.Secondary ? Step2Outcome.Back : Step2Outcome.Cancel;
+    }
+
+    /// <summary>The words-check block (spec replace-remaining-v2, Design D3). Null when no usable
+    /// words were entered. State B is one neutral line; State C is a bordered warning with a
+    /// scrollable list of every hit.</summary>
+    private static FrameworkElement? BuildMentionsBlock(IReadOnlyList<string> words,
+        IReadOnlyList<PlanReplacement.Mention> mentions)
+    {
+        var summary = PlanReplacement.MentionsSummary(words, mentions);
+        if (summary is null) return null;
+
+        if (mentions.Count == 0)
+        {
+            var found = new TextBlock
+            {
+                Text = summary,
+                FontSize = 13,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                TextWrapping = TextWrapping.Wrap,
+            };
+            AutomationProperties.SetName(found, summary);
+            return found;
+        }
+
+        var heading = new TextBlock
+        {
+            Text = summary,
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+            TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetName(heading, summary);
+
+        var lines = new StackPanel { Spacing = 4 };
+        foreach (var mention in mentions)
+        {
+            var line = PlanReplacement.MentionLine(mention);
+            var lineBlock = new TextBlock
+            {
+                Text = line,
+                FontSize = 13,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
+                TextWrapping = TextWrapping.Wrap,
+            };
+            AutomationProperties.SetName(lineBlock, line);
+            lines.Children.Add(lineBlock);
+        }
+        var list = new ScrollViewer
+        {
+            Content = lines,
+            MaxHeight = 150,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            IsTabStop = true,
+        };
+
+        var footer = new TextBlock
+        {
+            Text = "You can still replace the tasks, or press Back and ask Claude to remove these.",
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var content = new StackPanel { Spacing = 6 };
+        content.Children.Add(heading);
+        content.Children.Add(list);
+        content.Children.Add(footer);
+
+        var border = new Border
+        {
+            BorderBrush = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12),
+            Child = content,
+        };
+        AutomationProperties.SetName(border, "Words that must be gone check");
+        return border;
     }
 
     private static Task ShowCleanupFailedAsync(XamlRoot xamlRoot)

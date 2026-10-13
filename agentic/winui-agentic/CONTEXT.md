@@ -17,7 +17,7 @@ rules and fork point: `PILOT.md`.
 ## 2. Current state
 
 Built so far through this pipeline: lost-earnings-counter (2026-09-22), an eight-item batch
-(2026-10-01), and "Replace remaining tasks…" (2026-10-09, built and unit-tested, not yet QA'd; new tasks start on last done day + 1, day 1 if none done, not clamped to today — `DECISIONS.md` rule 15). Product architecture, schema and settings: `context/domain.md`. Business rules and
+(2026-10-01), and "Replace remaining tasks…" (2026-10-09, built and unit-tested, not yet QA'd; new tasks start on last done day + 1, day 1 if none done, not clamped to today — `DECISIONS.md` rule 15), and its v2 (2026-10-13, built and unit-tested, not yet QA'd: full unfinished-task list in the prompt, "What should change?" field, advisory "Words that must be gone" check in the preview). Product architecture, schema and settings: `context/domain.md`. Business rules and
 standing lessons: `DECISIONS.md`.
 
 ## 3. Section index

@@ -21,6 +21,21 @@ public static class PlanReplacement
     /// <summary>A task the user has ticked complete, with its override-adjusted day.</summary>
     public sealed record DoneTask(int AssignedDay, string Title);
 
+    /// <summary>An unfinished task, in full, as the replace prompt lists it (spec replace-remaining-v2).
+    /// Fields the plan file leaves out are null (or an empty list for Tools).</summary>
+    public sealed record RemainingTask(
+        int AssignedDay,
+        string Title,
+        string? Detail,
+        string? MentorNote,
+        string? Category,
+        int? DurationMin,
+        IReadOnlyList<string> Tools);
+
+    /// <summary>A new task whose text still contains one of the words the user asked to be gone
+    /// (spec replace-remaining-v2). <see cref="Words"/> are as the user typed them, in typed order.</summary>
+    public sealed record Mention(string Title, IReadOnlyList<string> Words);
+
     /// <summary>
     /// The plan as it stands right now. Recomputed when each step opens and again at confirm,
     /// because the start day depends on the ticked tasks as they are at that moment.
@@ -32,7 +47,8 @@ public static class PlanReplacement
         int LastDoneDay,
         int StartDay,
         DateOnly StartDate,
-        DateOnly OldFinish);
+        DateOnly OldFinish,
+        IReadOnlyList<RemainingTask> Remaining);
 
     /// <summary>A validated paste. <see cref="PhasesJson"/> is the raw text of the pasted phase
     /// objects (phases that are not JSON objects are dropped); Apply re-parses it so each write
@@ -82,6 +98,19 @@ public static class PlanReplacement
         var lastDone = done.Count == 0 ? 0 : done.Max(d => d.AssignedDay);
         var start = lastDone + 1;
 
+        var remaining = tasks.Where(t => !t.Completed)
+            .Select(t => new RemainingTask(
+                t.AssignedDay,
+                t.Task.Text,
+                t.Task.Detail,
+                t.Task.MentorNote,
+                t.Task.Category,
+                t.Task.DurationMin,
+                t.Task.Tools ?? new List<string>()))
+            .OrderBy(r => r.AssignedDay)
+            .ThenBy(r => r.Title, StringComparer.Ordinal)
+            .ToList();
+
         return new Situation(
             plan,
             done,
@@ -89,8 +118,98 @@ public static class PlanReplacement
             lastDone,
             start,
             plan.DateForPlanDay(start),
-            plan.CurrentEndDate(tasks));
+            plan.CurrentEndDate(tasks),
+            remaining);
     }
+
+    /// <summary>
+    /// Splits the "Words that must be gone" field on commas. Entries are trimmed, empty entries
+    /// dropped, and repeats removed case-insensitively (the first spelling is kept). Empty or
+    /// comma/space-only input gives an empty list, which the dialog treats as "no check".
+    /// </summary>
+    public static IReadOnlyList<string> ParseWords(string? csv)
+    {
+        var words = new List<string>();
+        if (string.IsNullOrWhiteSpace(csv)) return words;
+        foreach (var part in csv.Split(','))
+        {
+            var word = part.Trim();
+            if (word.Length == 0) continue;
+            if (words.Any(w => string.Equals(w, word, StringComparison.OrdinalIgnoreCase))) continue;
+            words.Add(word);
+        }
+        return words;
+    }
+
+    /// <summary>
+    /// Lists every pasted task whose title, detail, mentor note or any tools entry contains at
+    /// least one of <paramref name="words"/> (case-insensitive substring match). Each task appears
+    /// once, with each of its matched words once, in typed order. Category and duration are not
+    /// searched. Non-string fields are skipped. An empty word list returns no mentions.
+    /// </summary>
+    public static IReadOnlyList<Mention> FindMentions(Replacement replacement, IReadOnlyList<string> words)
+    {
+        var result = new List<Mention>();
+        if (words.Count == 0) return result;
+
+        using var doc = JsonDocument.Parse(replacement.PhasesJson);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return result;
+        foreach (var phase in doc.RootElement.EnumerateArray())
+        {
+            if (phase.ValueKind != JsonValueKind.Object) continue;
+            if (!phase.TryGetProperty("tasks", out var tasks) || tasks.ValueKind != JsonValueKind.Array) continue;
+            foreach (var task in tasks.EnumerateArray())
+            {
+                if (task.ValueKind != JsonValueKind.Object) continue;
+                var fields = new List<string>();
+                AddStringField(task, "task", fields);
+                AddStringField(task, "detail", fields);
+                AddStringField(task, "mentor_note", fields);
+                if (task.TryGetProperty("tools", out var tools) && tools.ValueKind == JsonValueKind.Array)
+                    foreach (var tool in tools.EnumerateArray())
+                        if (tool.ValueKind == JsonValueKind.String && tool.GetString() is { } name)
+                            fields.Add(name);
+
+                var matched = words
+                    .Where(w => fields.Any(f => f.Contains(w, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+                if (matched.Count == 0) continue;
+
+                var title = task.TryGetProperty("task", out var t) && t.ValueKind == JsonValueKind.String
+                    ? t.GetString()?.Trim() ?? ""
+                    : "";
+                result.Add(new Mention(title, matched));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The step 2 mentions line (spec replace-remaining-v2, Design D3). Null when no usable words
+    /// were entered (no block at all). Otherwise the "No mentions" sentence when nothing was found,
+    /// or the warning heading with the singular/plural count.
+    /// </summary>
+    public static string? MentionsSummary(IReadOnlyList<string> words, IReadOnlyList<Mention> mentions)
+    {
+        if (words.Count == 0) return null;
+        var list = WordList(words);
+        if (mentions.Count == 0) return $"✓ No mentions of {list} found in the new tasks.";
+        return mentions.Count == 1
+            ? $"⚠ Warning: 1 new task still mentions {list}."
+            : $"⚠ Warning: {mentions.Count} new tasks still mention {list}.";
+    }
+
+    /// <summary>One warning list line: "• Title  (contains: Reddit, LinkedIn)".</summary>
+    public static string MentionLine(Mention mention) =>
+        $"• {mention.Title}  (contains: {string.Join(", ", mention.Words)})";
+
+    /// <summary>"Reddit", "Reddit or LinkedIn", "A, B or C" (typed order kept).</summary>
+    public static string WordList(IReadOnlyList<string> words) => words.Count switch
+    {
+        0 => "",
+        1 => words[0],
+        _ => string.Join(", ", words.Take(words.Count - 1)) + " or " + words[words.Count - 1],
+    };
 
     /// <summary>
     /// Parses a pasted reply (a ```json fence, or a bare {...} object) into a Replacement. Returns
@@ -317,6 +436,12 @@ public static class PlanReplacement
         if (!task.TryGetProperty("task", out var title) || title.ValueKind != JsonValueKind.String) return null;
         var trimmed = title.GetString()?.Trim();
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    private static void AddStringField(JsonElement task, string name, List<string> fields)
+    {
+        if (task.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { } text)
+            fields.Add(text);
     }
 
     private static int? DayOf(JsonElement task)

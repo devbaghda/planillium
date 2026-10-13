@@ -193,6 +193,16 @@ include the ticked tasks below, and do not repeat them under a new title.
 Ticked tasks (fixed, do not repeat):
 {done_list}
 
+Tasks to be replaced (the unfinished ones, in full):
+{remaining_list}
+
+What I want changed:
+{change_text}
+
+Apply the requested change to every place it appears, including inside detail text, mentor notes
+and tools of tasks that were not otherwise touched. Keep the remaining work otherwise as it is,
+unless the change requires otherwise.
+
 Give me the remaining tasks as a single JSON code block (```json ... ```), with nothing else
 inside the fence. Number the days of the new tasks starting from day {start_day}, and keep
 whatever spacing between days makes sense for the work. Every task title must be unique and must
@@ -222,18 +232,60 @@ For "tools", list only real, precise app or website names I'll have open for tha
 an empty list where no particular app is needed.
 """;
 
-    /// <summary>Fills <see cref="ReplaceRemainderTemplate"/> for one plan. With no ticked tasks the
-    /// list reads "(none yet)".</summary>
-    public static string ReplaceRemainder(string planName, IReadOnlyList<PlanReplacement.DoneTask> done, int startDay)
+    /// <summary>The change text used when the "What should change?" field is empty or whitespace.</summary>
+    public const string NoChangeRequested = "No specific change requested; improve and re-plan the remaining work as you see fit.";
+
+    /// <summary>
+    /// Fills <see cref="ReplaceRemainderTemplate"/> for one plan. With no ticked tasks the done list
+    /// reads "(none yet)". Filling is a single pass: the values (plan name, done list, the remaining
+    /// tasks, the change text) are inserted and never re-scanned, so braces typed by the user or
+    /// present in task text (for example "{start_day}") appear literally in the prompt.
+    /// </summary>
+    public static string ReplaceRemainder(string planName, IReadOnlyList<PlanReplacement.DoneTask> done,
+        IReadOnlyList<PlanReplacement.RemainingTask> remaining, int startDay, string changeText)
     {
         var doneList = done.Count == 0
             ? "(none yet)"
             : string.Join("\n", done.Select(d => $"Day {d.AssignedDay}: {d.Title}"));
-        return ReplaceRemainderTemplate
-            .Replace("{plan_name}", planName)
-            .Replace("{done_list}", doneList)
-            .Replace("{start_day}", startDay.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var remainingList = remaining.Count == 0
+            ? "(none)"
+            : string.Join("\n\n", remaining.Select(RemainingBlock));
+        var change = string.IsNullOrWhiteSpace(changeText) ? NoChangeRequested : changeText;
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["plan_name"] = planName,
+            ["done_list"] = doneList,
+            ["remaining_list"] = remainingList,
+            ["change_text"] = change,
+            ["start_day"] = startDay.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+        return System.Text.RegularExpressions.Regex.Replace(
+            ReplaceRemainderTemplate,
+            @"\{(plan_name|done_list|remaining_list|change_text|start_day)\}",
+            m => values[m.Groups[1].Value]);
     }
+
+    /// <summary>One remaining task as plain text (spec replace-remaining-v2, Chosen approach). Every
+    /// label is always present; missing values read "(none)". Continuation lines of a multi-line
+    /// field are indented under its label.</summary>
+    private static string RemainingBlock(PlanReplacement.RemainingTask task)
+    {
+        var tools = task.Tools.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+        var duration = task.DurationMin.HasValue
+            ? task.DurationMin.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " min"
+            : "(none)";
+        return string.Join("\n",
+            $"Day {task.AssignedDay}: {task.Title}",
+            $"  Detail: {Field(task.Detail)}",
+            $"  Mentor note: {Field(task.MentorNote)}",
+            $"  Category: {Field(task.Category)}",
+            $"  Duration: {duration}",
+            $"  Tools: {(tools.Count == 0 ? "(none)" : string.Join(", ", tools))}");
+    }
+
+    private static string Field(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "(none)" : value.Replace("\n", "\n    ");
 
     public const string Reformat = """
 I already have a plan for "{subject}" that I wrote myself. I want you to

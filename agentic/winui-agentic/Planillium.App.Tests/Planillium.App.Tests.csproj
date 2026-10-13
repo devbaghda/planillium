@@ -103,6 +103,9 @@
     <!-- Linked for PlanReplacement (spec replace-remaining-tasks): the pure paste-parsing, preview
          and plan-file/DB apply logic behind "Replace remaining tasks…". Plain C#, no WinUI types. -->
     <Compile Include="..\Planillium.App\Services\PlanReplacement.cs" Link="App\PlanReplacement.cs" />
+    <!-- Linked for PlanTemplates.ReplaceRemainder (spec replace-remaining-v2): the prompt renderer,
+         tested directly. Plain C#; depends only on PlanReplacement. -->
+    <Compile Include="..\Planillium.App\Services\PlanTemplates.cs" Link="App\PlanTemplates.cs" />
     <!-- Linked for ReportData.PeriodStats, the period aggregation behind Reports' score card
          and insights (2026-08-04). Pulls in AppNames/CategoryStyle-free plain C# only. -->
     <Compile Include="..\Planillium.App\Services\ReportData.cs" Link="App\ReportData.cs" />
