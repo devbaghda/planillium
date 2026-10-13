@@ -121,17 +121,12 @@ public static class ReplaceRemainingDialog
             copyBtn.Content = "Copied ✓";
         };
 
-        // The prompt is rebuilt on every edit of the change field, so Copy always copies the current
-        // text. A "Copied ✓" left over from the previous text would mislead, so it resets to "Copy".
-        change.TextChanged += (_, _) =>
-        {
-            prompt.Text = BuildPrompt(situation, change.Text);
-            if (Equals(copyBtn.Content, "Copied ✓")) copyBtn.Content = "Copy";
-        };
-
         var caption2 = new TextBlock
         {
-            Text = "2. Copy this prompt into claude.ai.",
+            // With a key saved, the same step also offers Ask Claude (ai-layer spec, D2.3).
+            Text = AiKey.Has()
+                ? "2. Ask Claude here, or copy this prompt into claude.ai."
+                : "2. Copy this prompt into claude.ai.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
@@ -165,6 +160,40 @@ public static class ReplaceRemainingDialog
         // Editing the reply clears the previous problem, as the user is now fixing it.
         reply.TextChanged += (_, _) => error.Visibility = Visibility.Collapsed;
 
+        var doneTitles = situation.Done.Select(d => d.Title).ToList();
+        PlanReplacement.Replacement? parsed = null;
+        var advancedByAi = false;
+        ContentDialog? open = null;
+
+        // Ask Claude (ai-layer spec). On a reply, the same ParseReplacement path as Preview runs:
+        // a valid reply closes this step and goes on to the preview; an invalid one stays here.
+        var ai = new AiAskControls(reply, "Replace remaining tasks: the plan's name, the titles and details of its " +
+                                          "tasks, and what you typed in \"What should change?\".",
+            () => BuildPrompt(situation, change.Text),
+            locked => change.IsReadOnly = locked,
+            text =>
+            {
+                var problem = PlanReplacement.ParseReplacement(text, doneTitles, out var replacement);
+                if (problem is not null || replacement is null)
+                {
+                    ShowError(error, problem ?? "Couldn't read the reply. Paste it again.");
+                    return "Claude replied, but the reply isn't usable yet — see the message below. You can edit it, or ask again.";
+                }
+                parsed = replacement;
+                advancedByAi = true;
+                open?.Hide();
+                return null;
+            });
+
+        // The prompt is rebuilt on every edit of the change field, so Copy always copies the current
+        // text. A "Copied ✓" left over from the previous text would mislead, so it resets to "Copy".
+        change.TextChanged += (_, _) =>
+        {
+            prompt.Text = BuildPrompt(situation, change.Text);
+            if (Equals(copyBtn.Content, "Copied ✓")) copyBtn.Content = "Copy";
+            ai.ClearReason();
+        };
+
         // Optional. Editing it does not clear the reply error: that message is about the reply.
         var words = new TextBox
         {
@@ -188,23 +217,29 @@ public static class ReplaceRemainingDialog
         panel.Children.Add(change);
         panel.Children.Add(caption2);
         panel.Children.Add(prompt);
-        panel.Children.Add(copyBtn);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Left };
+        actions.Children.Add(copyBtn);
+        actions.Children.Add(ai.Ask);
+        panel.Children.Add(actions);
+        panel.Children.Add(ai.Progress);
+        panel.Children.Add(ai.Notice);
+        panel.Children.Add(ai.Reason);
         panel.Children.Add(caption3);
         panel.Children.Add(reply);
         panel.Children.Add(words);
         panel.Children.Add(wordsHelper);
         panel.Children.Add(error);
 
-        var doneTitles = situation.Done.Select(d => d.Title).ToList();
         var dialog = DialogControls.Build(xamlRoot, "Replace remaining tasks",
             new ScrollViewer { Content = panel, MaxHeight = 560 },
             primaryButtonText: "Preview", closeButtonText: "Cancel",
             defaultButton: ContentDialogButton.Primary);
         dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
+        open = dialog;
+        ai.Attach(dialog);
         // Focus on open: the change field, so the user types first.
         dialog.Loaded += (_, _) => change.Focus(FocusState.Programmatic);
 
-        PlanReplacement.Replacement? parsed = null;
         dialog.PrimaryButtonClick += (_, args) =>
         {
             var problem = PlanReplacement.ParseReplacement(reply.Text, doneTitles, out var replacement);
@@ -218,7 +253,8 @@ public static class ReplaceRemainingDialog
         };
 
         var result = await DialogGate.ShowAsync(dialog);
-        if (result != ContentDialogResult.Primary || parsed is null) return null;
+        if (parsed is null) return null;
+        if (result != ContentDialogResult.Primary && !advancedByAi) return null;
         return new Step1Result(reply.Text, parsed, change.Text, words.Text);
     }
 

@@ -197,6 +197,16 @@
 ---
 
 
+16. **Optional AI layer ("Ask Claude", added 2026-10-13, ai-layer spec).** The API key lives only in
+    Windows Credential Manager under `anthropic_api_key@Planillium` (`anthropic_api_key_test` in
+    DEBUG/test builds with `PLANILLIUM_AI_BASE_URL` set; never the real slot). It is never written to
+    config.json, the DB, a log or a file, and is not shown after saving. The model name is
+    `ai.model` in config.json (default `claude-sonnet-5-5`). The call sends only the prompt the dialog
+    shows; the first use asks once (`ai_notice_accepted` in the app state). Claude's reply never applies
+    by itself: it fills the reply box and goes through the same validation and confirm as a pasted reply.
+    The base-URL override is compiled out of Release builds. Decided after the spec's D1-D4 review;
+    the inline notice (not a ContentDialog) is a WinUI single-dialog constraint, not a product choice.
+
 ### Standing lessons
 _The durable ones. Every entry here cost a real bug to learn; none may be dropped in a
 compaction. General versions of several now also live in the global `windows-app-auditor` /

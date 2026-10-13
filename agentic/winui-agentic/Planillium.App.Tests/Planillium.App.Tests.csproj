@@ -96,6 +96,11 @@
          and ReportData.DiaryEntry.Tag both need this linked the same way DiaryCategory is. -->
     <Compile Include="..\Planillium.App\Services\DiaryTag.cs" Link="App\DiaryTag.cs" />
     <Compile Include="..\Planillium.App\Services\PaidTags.cs" Link="App\PaidTags.cs" />
+    <!-- Linked for AiClient (ai-layer spec): the Anthropic call, its failure categories and reply
+         parsing. Plain C#; ConfigService.cs (linked above) refers to AiSettings, so this is needed
+         by the same build. AiKey.cs (Credential Manager) is deliberately NOT linked: the tests
+         inject the key directly and never touch the real or test Credential Manager slot. -->
+    <Compile Include="..\Planillium.App\Services\AiClient.cs" Link="App\AiClient.cs" />
     <Compile Include="..\Planillium.App\Services\JsonFileIO.cs" Link="App\JsonFileIO.cs" />
     <Compile Include="..\Planillium.App\Services\Log.cs" Link="App\Log.cs" />
     <Compile Include="..\Planillium.App\Services\NotificationCenter.cs" Link="App\NotificationCenter.cs" />

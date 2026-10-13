@@ -227,6 +227,49 @@
                     </StackPanel>
                 </StackPanel>
 
+                <StackPanel x:Name="AIPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="AI" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Optional. With your own Anthropic API key, &quot;Ask Claude&quot; in Replace remaining tasks and Add plan sends the prompt shown there to Anthropic and fills in Claude's reply for you. Without a key you copy the prompt to claude.ai and paste the reply back, as before. The key is stored in Windows Credential Manager for your Windows user — never in your plan files, database, settings file or logs."/>
+                    <PasswordBox x:Name="AiKeyBox" Header="Anthropic API key" Width="360"
+                                 HorizontalAlignment="Left" PasswordRevealMode="Hidden"
+                                 PlaceholderText="sk-ant-…"
+                                 AutomationProperties.Name="Anthropic API key"
+                                 KeyDown="AiBox_KeyDown"/>
+                    <TextBox x:Name="AiModelBox" Header="Model" Width="260"
+                             HorizontalAlignment="Left" PlaceholderText="claude-sonnet-5-5"
+                             AutomationProperties.Name="Model" KeyDown="AiBox_KeyDown"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Leave empty to use the default (claude-sonnet-5-5). Change it here if Anthropic retires this model — no app update needed."/>
+                    <!-- Star columns, not a horizontal StackPanel: same reason as the Data panel. -->
+                    <Grid ColumnSpacing="10" HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="170"/><ColumnDefinition Width="*" MaxWidth="170"/><ColumnDefinition Width="*" MaxWidth="170"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="AiSaveBtn" Grid.Column="0" Content="Save" Style="{StaticResource AccentButtonStyle}"
+                                HorizontalAlignment="Stretch" AutomationProperties.Name="Save" Click="AiSave_Click"/>
+                        <Button x:Name="AiTestBtn" Grid.Column="1" Content="Test connection" IsEnabled="False"
+                                HorizontalAlignment="Stretch" AutomationProperties.Name="Test connection" Click="AiTest_Click"/>
+                        <Button x:Name="AiRemoveBtn" Grid.Column="2" Content="Remove key…" IsEnabled="False"
+                                HorizontalAlignment="Stretch" AutomationProperties.Name="Remove key…" Click="AiRemove_Click"/>
+                    </Grid>
+                    <Grid x:Name="AiProgressRow" ColumnSpacing="10" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="360"/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ProgressBar Grid.Column="0" IsIndeterminate="True" VerticalAlignment="Center"/>
+                        <Button x:Name="AiStopBtn" Grid.Column="1" Content="Stop" AutomationProperties.Name="Stop" Click="AiStop_Click"/>
+                    </Grid>
+                    <TextBlock x:Name="AIStatus" TextWrapping="Wrap" FontSize="13" MinHeight="18"
+                               AutomationProperties.LiveSetting="Polite"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               Text="Test connection sends only the words &quot;Reply with the word OK.&quot; — no plan or diary data."/>
+                </StackPanel>
+
                 <StackPanel x:Name="DataPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
                     <TextBlock Text="Data" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock x:Name="DataInfo" TextWrapping="Wrap" IsTextSelectionEnabled="True"
@@ -330,6 +373,14 @@
                     <StackPanel Padding="0,4">
                         <TextBlock Text="TickTick" FontWeight="SemiBold" FontSize="13"/>
                         <TextBlock x:Name="SumTickTick" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="AI">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="AI" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumAI" FontSize="11" TextWrapping="Wrap" MaxLines="2"
                                    TextTrimming="CharacterEllipsis"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>

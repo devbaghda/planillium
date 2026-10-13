@@ -187,6 +187,27 @@ public static class ConfigService
         Root.TryGetProperty("ticktick", out var t) &&
         t.TryGetProperty("client_id", out var v) ? v.GetString() ?? "" : "";
 
+    /// <summary>The ai.model value as stored (trimmed), or "" when never set. Settings shows this
+    /// in its Model field, so an untouched field stays empty and the placeholder shows.</summary>
+    public static string AiModelStored =>
+        Root.TryGetProperty("ai", out var ai) && ai.TryGetProperty("model", out var v) &&
+        v.ValueKind == System.Text.Json.JsonValueKind.String
+            ? v.GetString()?.Trim() ?? "" : "";
+
+    /// <summary>The model the AI layer actually uses: the stored ai.model, or the default when blank.</summary>
+    public static string AiModel => AiModelStored is { Length: > 0 } stored ? stored : AiSettings.DefaultModel;
+
+    /// <summary>Writes ai.model (trimmed; "" means "use the default").</summary>
+    public static void SetAiModel(string model)
+    {
+        Mutate(node =>
+        {
+            if (node["ai"] is not JsonObject ai)
+                node["ai"] = ai = new JsonObject();
+            ai["model"] = model.Trim();
+        });
+    }
+
     /// <summary>Configured potential net monthly income in EUR (for the lost-earnings counter),
     /// default 2925.0 (2700 x 13 months / 12).</summary>
     public static double PotentialMonthlyIncomeEur()

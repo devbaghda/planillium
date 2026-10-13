@@ -43,3 +43,9 @@ standing lessons: `DECISIONS.md`.
 ## 5. Still open
 
 1. **(opened 2026-10-02) Three fixes awaiting the user's visual re-check, and a test run.** Reports column fix, pie alignment, pie slice shading (`context/todos.md` 2026-10-02). Automated tests not re-run after the change. Slice colouring is a design call: if per-category shading is wrong, the alternative is a distinct colour per app.
+2. **(opened 2026-10-13) "Ask Claude" (ai-layer) built and unit-tested, not QA'd.** Settings -> AI plus
+   Ask Claude in Replace remaining tasks and Add plan (`pilot-specs/ai-layer/SPEC.md`, `DECISIONS.md`
+   rule 16, `context/domain.md` "AI layer"). Build (Debug, -warnaserror) 0 warnings; `dotnet test` all
+   pass, including `AiClientTests.cs` against a local HttpListener stub. Not done: live Credential
+   Manager save/test (only the test slot may be used), the one-time notice visuals, Stop and the
+   dialog layout at narrow width. Deviation: the notice is inline, not a ContentDialog.

@@ -1,6 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
+using Windows.System;
 
 namespace Planillium.App.Pages;
 
@@ -26,7 +29,7 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        _panels = [GeneralPanel, IncomePanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
+        _panels = [GeneralPanel, IncomePanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, AIPanel, DataPanel];
         if (_panels.Length != SectionList.Items.Count)
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
@@ -52,6 +55,8 @@ public sealed partial class SettingsPage : Page
             StartupToggle.IsOn = StartupService.IsEnabled;
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
+            AiModelBox.Text = ConfigService.AiModelStored;
+            RefreshAiPanel();
             LoadIncome();
             LoadRules();
             // After LoadRules, not before: the keyword counts are read off the boxes it fills.
@@ -85,9 +90,13 @@ public sealed partial class SettingsPage : Page
             SectionList.SelectedIndex = _lastSection;
             return;
         }
+        // The AI status line is per-visit: it clears when the user leaves the AI section.
+        if (_panels[_lastSection] == AIPanel) AIStatus.Text = "";
         _lastSection = SectionList.SelectedIndex;
         for (var i = 0; i < _panels.Length; i++)
             _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
+        if (_panels[_lastSection] == AIPanel && AIStatus.Text.Length == 0 && AiKey.Has())
+            SetAiStatus("A key is saved on this computer.", failure: false);
         SectionScroll.ChangeView(null, 0, null, disableAnimation: true);
     }
 
@@ -668,6 +677,132 @@ public sealed partial class SettingsPage : Page
         {
             RefreshTickTickStatus();
         }
+    }
+
+    // ── AI section (ai-layer spec, Design D1). The key is only ever written to Credential
+    // Manager and only ever passed to the request header; it is never shown back, logged or
+    // placed in any text on this page.
+
+    /// <summary>Set while a Test connection call runs; Stop cancels it.</summary>
+    private CancellationTokenSource? _aiTestCts;
+
+    /// <summary>Everything that depends on whether a key is saved: the key box placeholder,
+    /// Test/Remove enablement and the menu summary.</summary>
+    private void RefreshAiPanel()
+    {
+        var hasKey = AiKey.Has();
+        AiKeyBox.PlaceholderText = hasKey ? "A key is saved — paste a new one to replace it" : "sk-ant-…";
+        AiTestBtn.IsEnabled = hasKey;
+        AiRemoveBtn.IsEnabled = hasKey;
+        SumAI.Text = hasKey ? $"Key saved · {ConfigService.AiModel}" : "No key — copy and paste";
+    }
+
+    private void SetAiStatus(string text, bool failure)
+    {
+        AIStatus.Text = text;
+        AIStatus.Foreground = (Brush)Application.Current.Resources[failure
+            ? "SystemFillColorCriticalBrush" : "TextFillColorPrimaryBrush"];
+    }
+
+    /// <summary>Locks the key/model inputs and the buttons while a test runs, and shows the progress row.</summary>
+    private void SetAiBusy(bool busy)
+    {
+        var hasKey = !busy && AiKey.Has();
+        AiSaveBtn.IsEnabled = !busy;
+        AiKeyBox.IsEnabled = !busy;
+        AiModelBox.IsEnabled = !busy;
+        AiTestBtn.IsEnabled = hasKey;
+        AiRemoveBtn.IsEnabled = hasKey;
+        AiProgressRow.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void AiSave_Click(object sender, RoutedEventArgs e) => SaveAi();
+
+    private void AiBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Enter) return;
+        e.Handled = true;
+        SaveAi();
+    }
+
+    /// <summary>The Save button's logic, also run by Enter in either box. The key is trimmed by
+    /// AiKey.Save; an empty box with no saved key is refused, and writes nothing.</summary>
+    private void SaveAi()
+    {
+        var key = AiKeyBox.Password.Trim();
+        var model = AiModelBox.Text.Trim();
+        var modelChanged = model != ConfigService.AiModelStored;
+
+        if (key.Length == 0)
+        {
+            if (!AiKey.Has())
+            {
+                SetAiStatus("Not saved: paste your API key first.", failure: true);
+                return;
+            }
+            if (modelChanged) ConfigService.SetAiModel(model);
+            SetAiStatus(modelChanged ? "Model saved." : "Nothing to save.", failure: false);
+            RefreshAiPanel();
+            return;
+        }
+
+        if (!AiKey.Save(key))
+        {
+            SetAiStatus("Not saved: Windows could not store the key. Try again.", failure: true);
+            return;
+        }
+        ConfigService.SetAiModel(model);
+        AiKeyBox.Password = "";
+        SetAiStatus("✓ Key saved. It is stored in Windows Credential Manager and is not shown again.", failure: false);
+        RefreshAiPanel();
+    }
+
+    private async void AiTest_Click(object sender, RoutedEventArgs e)
+    {
+        // Test uses what is saved, never what is typed: unsaved edits would test something the
+        // user has not committed to, so no request is made.
+        if (AiKeyBox.Password.Trim().Length > 0 || AiModelBox.Text.Trim() != ConfigService.AiModelStored)
+        {
+            SetAiStatus("Press Save first — Test connection uses the saved key and model.", failure: false);
+            return;
+        }
+
+        var model = ConfigService.AiModel;
+        var cts = new CancellationTokenSource();
+        _aiTestCts = cts;
+        SetAiBusy(true);
+        var started = DateTime.UtcNow;
+        var call = AiKey.CreateClient(model).AskAsync(
+            AiSettings.TestConnectionPrompt, cts.Token, AiSettings.TestConnectionMaxTokens);
+        while (!call.IsCompleted)
+        {
+            SetAiStatus($"Asking Claude… {(int)(DateTime.UtcNow - started).TotalSeconds} s", failure: false);
+            await Task.WhenAny(call, Task.Delay(1000));
+        }
+        var result = await call;
+        _aiTestCts = null;
+        cts.Dispose();
+        SetAiBusy(false);
+
+        if (result.Succeeded) SetAiStatus($"✓ Connected. Claude answered using {model}.", failure: false);
+        else if (result.Failure == AiFailure.Cancelled) SetAiStatus("Stopped. Nothing was changed.", failure: false);
+        else SetAiStatus("Not connected: " + result.Message, failure: true);
+    }
+
+    private void AiStop_Click(object sender, RoutedEventArgs e) => _aiTestCts?.Cancel();
+
+    private async void AiRemove_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Remove the saved API key?",
+            "\"Ask Claude\" will no longer be offered until you save a key again. " +
+            "Your plans and other settings are not changed.",
+            primaryButtonText: "Remove key", closeButtonText: "Cancel",
+            defaultButton: ContentDialogButton.Close);
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        AiKey.Remove();
+        RefreshAiPanel();
+        SetAiStatus("Key removed.", failure: false);
     }
 
     private async void ExportAll_Click(object sender, RoutedEventArgs e)

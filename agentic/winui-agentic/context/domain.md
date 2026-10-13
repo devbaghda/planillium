@@ -142,6 +142,20 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
   -- Year-view totals accurate forever after per-entry detail is gone
 ```
 
+## AI layer (ai-layer, 2026-10-13)
+
+- Files: `Services/AiClient.cs` (failure categories, user copy, `AiSettings`, the Messages API call,
+  reply parsing; no WinUI, source-linked into tests), `Services/AiKey.cs` (Credential Manager access
+  and the shared `HttpClient`), `Dialogs/AiAskControls.cs` (the Ask Claude strip used by Replace
+  remaining and Add plan), `Dialogs/AiNoticeDialog.cs` (the one-time notice, inline).
+- Request: `POST {base}/v1/messages`, headers `x-api-key` and `anthropic-version: 2023-06-01`, body
+  `{model, max_tokens, messages:[{role:user, content: prompt}]}`. `max_tokens` 8000 (Test connection 16).
+  Timeout 2 minutes; Stop cancels. A reply cut off at `max_tokens` is refused.
+- Base URL: production `https://api.anthropic.com`; `PLANILLIUM_AI_BASE_URL` overrides it only in
+  DEBUG/test builds.
+- Settings -> AI: key box (write-only), Save, Test connection (uses the saved key and model), Remove
+  key. Model is `ai.model` in config.json. The app state flag `ai_notice_accepted` records the notice.
+
 ## config.json key fields
 _2026-09-14_
 

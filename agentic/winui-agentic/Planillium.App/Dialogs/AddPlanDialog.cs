@@ -221,6 +221,52 @@ public static class AddPlanDialog
         // each {token} for the matching field's current value — bold + accent when filled,
         // italic + muted "[Field label]" when still blank, so the sentence always reads as
         // real English rather than showing raw {subject}/{claude_role} tokens.
+        // Shared by Generate prompt and Ask Claude (ai-layer spec): the same validation and the same
+        // text, so what Claude is sent is exactly what the box shows. Null when validation refused.
+        string? GeneratePrompt()
+        {
+            var m = Modes[modeBox.SelectedIndex];
+            if (subject.Text.Trim().Length == 0) { Show(error, $"{m.Field1Label} is required."); return null; }
+            // Reformat mode's own plan-text box was never checked before being substituted
+            // into the template — an empty box silently produced a prompt with a blank
+            // {user_plan} slot and no error (audit finding #18).
+            if (m.Reformat && ownPlan.Text.Trim().Length == 0)
+            {
+                Show(error, "Paste or load your plan text first.");
+                return null;
+            }
+            var text = m.Template.Replace("{subject}", subject.Text.Trim());
+            text = m.Reformat
+                ? text.Replace("{user_plan}", ownPlan.Text.Trim())
+                : text.Replace("{claude_role}", role.Text.Trim().Length > 0 ? role.Text.Trim() : "seasoned mentor")
+                      .Replace("{area_of_interest}", area.Text.Trim().Length > 0 ? area.Text.Trim() : subject.Text.Trim());
+            prompt.Text = text;
+            copyBtn.IsEnabled = true;
+            // A freshly generated prompt is a new, uncopied prompt — reset the confirmation
+            // label so it doesn't keep reading "Copied ✓" for content that was never
+            // actually copied (audit finding #19).
+            copyBtn.Content = "Copy";
+            error.Visibility = Visibility.Collapsed;
+            return text;
+        }
+
+        // Ask Claude (ai-layer spec, D2). Locks the inputs that form the prompt while a call runs.
+        var ai = new AiAskControls(reply,
+            "Add plan: the fields you filled in. If you use \"Format my own plan\", that includes your own plan text in full — everything you pasted or loaded from a file.",
+            () => GeneratePrompt(),
+            locked =>
+            {
+                modeBox.IsEnabled = !locked;
+                subject.IsEnabled = !locked;
+                role.IsEnabled = !locked;
+                area.IsEnabled = !locked;
+                ownPlan.IsEnabled = !locked;
+                loadBtn.IsEnabled = !locked;
+                genBtn.IsEnabled = !locked;
+            },
+            _ => "✓ Claude's reply is in the box below. Nothing is added until you press Import plan.");
+        genRow.Children.Add(ai.Ask);
+
         var mutedBrush = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
         var accentBrush = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
         void RefreshPreview()
@@ -256,39 +302,17 @@ public static class AddPlanDialog
             ownPlan.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
             loadBtn.Visibility = m.Reformat ? Visibility.Visible : Visibility.Collapsed;
             RefreshPreview();
+            ai.ClearReason();
         };
-        subject.TextChanged += (_, _) => RefreshPreview();
-        role.TextChanged += (_, _) => RefreshPreview();
-        area.TextChanged += (_, _) => RefreshPreview();
+        subject.TextChanged += (_, _) => { RefreshPreview(); ai.ClearReason(); };
+        role.TextChanged += (_, _) => { RefreshPreview(); ai.ClearReason(); };
+        area.TextChanged += (_, _) => { RefreshPreview(); ai.ClearReason(); };
+        ownPlan.TextChanged += (_, _) => ai.ClearReason();
         RefreshPreview();
 
         loadBtn.Click += async (_, _) => await LoadFromFileAsync(reply, ownPlan, error);
 
-        genBtn.Click += (_, _) =>
-        {
-            var m = Modes[modeBox.SelectedIndex];
-            if (subject.Text.Trim().Length == 0) { Show(error, $"{m.Field1Label} is required."); return; }
-            // Reformat mode's own plan-text box was never checked before being substituted
-            // into the template — an empty box silently produced a prompt with a blank
-            // {user_plan} slot and no error (audit finding #18).
-            if (m.Reformat && ownPlan.Text.Trim().Length == 0)
-            {
-                Show(error, "Paste or load your plan text first.");
-                return;
-            }
-            var text = m.Template.Replace("{subject}", subject.Text.Trim());
-            text = m.Reformat
-                ? text.Replace("{user_plan}", ownPlan.Text.Trim())
-                : text.Replace("{claude_role}", role.Text.Trim().Length > 0 ? role.Text.Trim() : "seasoned mentor")
-                      .Replace("{area_of_interest}", area.Text.Trim().Length > 0 ? area.Text.Trim() : subject.Text.Trim());
-            prompt.Text = text;
-            copyBtn.IsEnabled = true;
-            // A freshly generated prompt is a new, uncopied prompt — reset the confirmation
-            // label so it doesn't keep reading "Copied ✓" for content that was never
-            // actually copied (audit finding #19).
-            copyBtn.Content = "Copy";
-            error.Visibility = Visibility.Collapsed;
-        };
+        genBtn.Click += (_, _) => GeneratePrompt();
 
         copyBtn.Click += (_, _) =>
         {
@@ -309,6 +333,9 @@ public static class AddPlanDialog
         panel.Children.Add(loadBtn);
         panel.Children.Add(genRow);
         panel.Children.Add(prompt);
+        panel.Children.Add(ai.Progress);
+        panel.Children.Add(ai.Notice);
+        panel.Children.Add(ai.Reason);
         panel.Children.Add(reply);
         panel.Children.Add(error);
 
@@ -321,6 +348,7 @@ public static class AddPlanDialog
         // comment above for why this is needed at all, and why panel/preview elements below are
         // sized to DialogContentWidth (smaller than this) rather than to this same value.
         dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
+        ai.Attach(dialog);
 
         // Keep the dialog open on failed import: cancel the close, show the error.
         var planTools = new List<string>();
