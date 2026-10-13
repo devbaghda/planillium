@@ -151,6 +151,13 @@ internal sealed class AiAskControls
             return;
         }
 
+        // Never overwrite a reply the user already has (user decision 2026-10-13): nothing is sent.
+        if (AiReplyBox.BlocksAsk(_reply.Text))
+        {
+            ShowNeutral(AiReplyBox.Blocked);
+            return;
+        }
+
         var prompt = _buildPrompt();
         if (prompt is null) return;
 

@@ -30,6 +30,38 @@ public sealed class AiClientTests : IClassFixture<TestRootFixture>
             stop_reason = "end_turn",
         });
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\r\n\t ")]
+    public void Ask_is_allowed_when_the_reply_box_is_empty_or_whitespace(string reply)
+    {
+        Assert.False(AiReplyBox.BlocksAsk(reply));
+    }
+
+    [Theory]
+    [InlineData("{\"phases\": []}")]
+    [InlineData("x")]
+    [InlineData("  a  ")]
+    public void Ask_is_blocked_when_the_reply_box_holds_any_text(string reply)
+    {
+        Assert.True(AiReplyBox.BlocksAsk(reply));
+    }
+
+    [Fact]
+    public void Ask_is_allowed_when_the_reply_box_is_null()
+    {
+        Assert.False(AiReplyBox.BlocksAsk(null));
+    }
+
+    [Fact]
+    public void Blocked_message_is_the_agreed_wording()
+    {
+        Assert.Equal(
+            "The reply box already has text — clear it first so Claude's answer doesn't overwrite it.",
+            AiReplyBox.Blocked);
+    }
+
     [Fact]
     public async Task Request_has_the_documented_shape_and_headers()
     {

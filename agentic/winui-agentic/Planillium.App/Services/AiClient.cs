@@ -229,3 +229,17 @@ public sealed class AiClient
         }
     }
 }
+
+/// <summary>
+/// The rule that "Ask Claude" never overwrites a reply the user already has in the box
+/// (ai-layer spec, D2.5; user decision 2026-10-13). Plain C#, so the test project can check it.
+/// </summary>
+public static class AiReplyBox
+{
+    /// <summary>Shown in the reason line when Ask Claude is pressed over existing text. Nothing is sent.</summary>
+    public const string Blocked =
+        "The reply box already has text — clear it first so Claude's answer doesn't overwrite it.";
+
+    /// <summary>True when the reply box holds any non-whitespace text, so a new call must not run.</summary>
+    public static bool BlocksAsk(string? replyText) => !string.IsNullOrWhiteSpace(replyText);
+}

@@ -46,6 +46,11 @@ Nothing is changed by the AI call itself. Only the prompt text is ever sent.
    - *Add plan*: the prompt sent is the generated prompt (same validation as "Generate prompt": required fields, own
      plan text in Reformat mode). On success fill the reply box and stop; the user presses the existing **Import plan**
      (that is the confirm; `TryImport` unchanged). **No auto-import.**
+   - **Reply box is never overwritten (decided 2026-10-13).** If the reply box holds any non-whitespace text when
+     Ask Claude is pressed, nothing is sent and the reason line shows exactly
+     `The reply box already has text — clear it first so Claude's answer doesn't overwrite it.` (neutral style, not
+     the `Couldn't get a reply — ` failure style: nothing failed). Checked by `AiReplyBox.BlocksAsk` (plain C#,
+     unit-tested) after the key check and before the prompt is built or the notice shown.
    - Failure/cancel/timeout: plain reason shown (separate from the red reply-validation error line so editing the reply
      does not hide it), manual screen fully usable, plan files untouched. Closing the dialog during a call cancels it.
 7. **Logging**: log only category + HTTP status number (e.g. `AiClient: 401`). Never the key, request body, response
@@ -308,8 +313,9 @@ Focus: opening the dialog is unchanged (Replace focuses "What should change?"). 
 failure, stop) focus returns to the Ask Claude button. When Success moves Replace remaining to Step 2, the existing
 Step 2 rules (default = Cancel) apply untouched.
 
-`Ask again` replaces the reply box content with the new reply without asking (the previous reply is regenerable; see
-Open question 5). A pasted reply the user typed in is overwritten the same way.
+`Ask again` keeps its label, but while the reply box holds any text it sends nothing and shows the blocked message
+(see Chosen approach 6). To get a new reply the user clears the box first; nothing is ever overwritten silently
+(Open question 5, decided 2026-10-13).
 
 Edit-while-running is prevented rather than handled: those inputs are read-only for the duration (spec edge case,
 "simplest acceptable"), and the prompt box shows exactly what was sent.
@@ -405,8 +411,8 @@ error" are all honoured. One note for the Planner (not a conflict): Save writes 
 
 ## Open question (Designer additions, no product decision made)
 
-5. **"Ask again" overwrites the reply box.** If the user has typed or edited a reply by hand and presses Ask again, their
-   edits are replaced without a prompt. Chosen: replace silently (replies are regenerable, extra confirm adds a click to
-   the common case). Say if they would rather get a confirm when the box was edited by hand.
+5. **"Ask again" overwrites the reply box.** — **Resolved 2026-10-13 (user decision):** Ask Claude never overwrites
+   text already in the reply box. With any non-whitespace text there, nothing is sent and the blocked message shows
+   (Chosen approach 6). The earlier "replace silently" choice is withdrawn.
 6. **No way to withdraw the notice acceptance** other than editing state.json. Not in the request, so not designed;
    say if Settings -> AI should get a "Show the data notice again" link.
