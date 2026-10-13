@@ -169,6 +169,8 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
     `MASTERMIND/src/pilot_metrics/pilot_metrics.py`. Handoff diagram:
     `https://claude.ai/artifact/81B78ayvAVq8g9QxgGADnz`. Past outcomes: `context/todos.md`.
 
+0b. **(opened 2026-10-13) AI layer + replace-remaining v2 — built both sides, QA PASS WITH CAVEATS, local commits only (not pushed).** Live UI checks owed in both apps (one at a time): Settings → AI, Ask Claude in both dialogs, notice, Stop/Cancel. Details: `context/todos.md` 2026-10-13.
+
 ## 8. Next steps
 
 No standing backlog beyond §7 — the app is shipped and in daily use, not mid-build. Take §7 in the

@@ -14,6 +14,9 @@
 
 ## Done
 
+### 2026-10-13 — replace-remaining v2 + AI layer (regular side)
+v2: full task content in prompt, words-that-must-be-gone check (commit 1991f52). AI layer: `AiClient` (streaming, 120 s idle / 6 min cap), `AiSettings`, `AiAskPanel`, Settings → AI, wired into Replace remaining + Add plan (9770b30). Env override `PLANILLIUM_AI_BASE_URL` read only in Debug/tests. QA: both PASS WITH CAVEATS, 0 defects. Known: scoring rows for not-yet-scored days use the post-replace plan; "Clear all my data" does not remove the key; Test connection has no cancel. Live UI checks still owed.
+
 ### Project history (pre-WinUI, Python/Tkinter era — retired 2026-07-07/08)
 
 Built 2026-06-28 through 2026-07-06 as a single-file Tkinter app (`main.py` +

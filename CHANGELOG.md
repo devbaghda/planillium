@@ -6,6 +6,7 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Features**
+- **Ask Claude (AI layer).** Settings → AI takes an Anthropic API key (stored encrypted by Windows, never in config.json, the database, the repo or the installer). With a key, Replace remaining and Add plan get an "Ask Claude" button that sends the prompt and fills in the reply — no copy/paste; the preview/Import step still decides. No key, or a failed call, leaves the manual screens exactly as before. Replace remaining also lists tasks in full in the prompt and has an optional "Words that must be gone" check in the preview.
 - **Replace remaining tasks.** On a plan's card, "Replace remaining…" keeps every task you've ticked done and swaps the rest for a new list from Claude (copy the prompt, paste the reply, preview, confirm). The plan's finish date, Day X of Y and the sidebar "late from plan" figure all follow the new length.
 - **Payable tags.** Time tagged Studioshoo (or any payable tag you add in Settings → Income) counts as paid work at its monthly rate ÷ 168 h. It reduces the unearned-income figure and has its own Earnings block in Reports.
 - **Time by app is now a pie.** One slice per app (the eight biggest, the rest folded into "Other");

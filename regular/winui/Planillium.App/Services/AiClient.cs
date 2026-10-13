@@ -43,9 +43,13 @@ public sealed class AiClient
     {
         _apiKey = apiKey;
         _model = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
-        _baseUrl = (string.IsNullOrWhiteSpace(baseUrl)
-            ? Environment.GetEnvironmentVariable(BaseUrlEnv) is { Length: > 0 } env ? env : ProductionBase
-            : baseUrl).TrimEnd('/');
+        // The env override exists for stub-server testing only. In a Release build it is not even read,
+        // so nothing in the environment can redirect the real key to another server.
+        var fromEnv = ProductionBase;
+#if DEBUG || PLANILLIUM_TESTS
+        if (Environment.GetEnvironmentVariable(BaseUrlEnv) is { Length: > 0 } env) fromEnv = env;
+#endif
+        _baseUrl = (string.IsNullOrWhiteSpace(baseUrl) ? fromEnv : baseUrl).TrimEnd('/');
     }
 
     /// <summary>Sends <paramref name="prompt"/> as a single user message and returns Claude's full reply text.</summary>
