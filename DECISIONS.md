@@ -196,6 +196,14 @@
     overdue. `total_days` is rewritten to the last new day, so "Day X of Y", "Finishes" and drift
     follow (drift restarts at 0). Removed tasks' `task_overrides` are deleted in the same
     transaction as the file write. A new title equal to a done title is rejected.
+16. **AI layer ("Ask Claude")** (user decisions 2026-10-13). Anthropic API key in Windows Credential
+    Manager only — never config.json, DB, repo or installer. Scope: Replace remaining + Add plan.
+    Manual copy/paste stays as the fallback (no key, or call failed). Overdue tasks are still always
+    replaced by Replace remaining (the user declined a "keep overdue" checkbox; consequence stated:
+    not-yet-scored days and later diary recalculations use the post-replace plan; booked score rows
+    are untouched). **Ask Claude never overwrites text already in the reply box** — it refuses and
+    says to clear the box first. The one-time "what gets sent" notice, once accepted, is not
+    withdrawable from the UI — deliberately left as is.
 
 ---
 
