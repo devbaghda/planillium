@@ -68,6 +68,12 @@ progress — that's the part with no substitute.
   `ProjectReference` without first confirming `dotnet build` on this machine can actually handle
   a `UseWinUI=true` transitive reference (it couldn't as of 2026-07-09).
 
+## Workflow agents run in the foreground only
+Launch every `planillium-*` agent (designer, planner, coder, qa) with `run_in_background: false`, one at a time, 
+and never start the other side while one is running. The Agent tool defaults to background, which is how QA and 
+the Planner overlapped on 2026-10-13 and made that feature's token/time numbers unmeasurable. 
+(`~/.claude/hooks/sequential-agents.sh` enforces this once registered in settings.json - pending user approval.)
+
 ## Verifying UI fixes without breaking things
 - The global no-mutating-real-data rule applies here as: **never simulate clicks/keystrokes that
   would change the user's real plan/score data** — completing a task, moving a task, marking a day
