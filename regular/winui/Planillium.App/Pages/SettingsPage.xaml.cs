@@ -686,23 +686,36 @@ public sealed partial class SettingsPage : Page
         RefreshAiStatus();
     }
 
+    private CancellationTokenSource? _aiTestCts;
+
     private async void AiTest_Click(object sender, RoutedEventArgs e)
     {
         AiTestBtn.IsEnabled = false;
-        AiResult.Text = "Testing…";
+        AiStopBtn.Visibility = Visibility.Visible;
+        AiResult.Text = "Testing… (gives up after 30 seconds)";
+        _aiTestCts = new CancellationTokenSource();
         try
         {
-            await AiSettings.CreateClient().TestAsync();
+            await AiSettings.CreateClient().TestAsync(_aiTestCts.Token);
             AiResult.Text = "Connected ✓";
         }
+        catch (AiException ex) when (ex.Kind == AiFailure.Cancelled) { AiResult.Text = "Stopped."; }
         catch (AiException ex) { AiResult.Text = ex.Message; }
         catch (Exception ex)
         {
             Log.Error("SettingsPage (AI test)", ex);
             AiResult.Text = "Something went wrong talking to the AI service.";
         }
-        finally { RefreshAiStatus(); }
+        finally
+        {
+            _aiTestCts.Dispose();
+            _aiTestCts = null;
+            AiStopBtn.Visibility = Visibility.Collapsed;
+            RefreshAiStatus();
+        }
     }
+
+    private void AiStop_Click(object sender, RoutedEventArgs e) => _aiTestCts?.Cancel();
 
     private async void AiRemove_Click(object sender, RoutedEventArgs e)
     {

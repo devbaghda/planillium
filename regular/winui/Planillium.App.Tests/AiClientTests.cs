@@ -128,6 +128,24 @@ public sealed class AiClientTests : IDisposable
     }
 
     [Fact]
+    public async Task TestConnection_GivesUpAtItsOwnCap_NotTheLongReplyCap()
+    {
+        _handler = async c => { await Task.Delay(5000); try { c.Response.Close(); } catch { } };
+        var client = new AiClient(Key, "claude-test", _url) { IdleTimeout = TimeSpan.FromSeconds(10), TestCap = TimeSpan.FromMilliseconds(400) };
+        var ex = await Assert.ThrowsAsync<AiException>(() => client.TestAsync());
+        Assert.Equal(AiFailure.Timeout, ex.Kind);
+    }
+
+    [Fact]
+    public async Task TestConnection_StopButton_IsReportedAsCancelled()
+    {
+        _handler = async c => { await Task.Delay(5000); try { c.Response.Close(); } catch { } };
+        using var cts = new CancellationTokenSource(300);
+        var ex = await Assert.ThrowsAsync<AiException>(() => Client().TestAsync(cts.Token));
+        Assert.Equal(AiFailure.Cancelled, ex.Kind);
+    }
+
+    [Fact]
     public async Task NoKey_FailsBeforeAnyRequest()
     {
         var ex = await Assert.ThrowsAsync<AiException>(() => new AiClient("", "m", _url).CompleteAsync("p"));

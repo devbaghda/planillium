@@ -138,9 +138,21 @@ public sealed class AiClient
         }
     }
 
-    /// <summary>One tiny call (a few tokens) used by Settings → AI "Test connection".</summary>
-    public async Task TestAsync(CancellationToken ct = default) =>
-        _ = await CompleteAsync("Reply with the single word: ok", ct).ConfigureAwait(false);
+    /// <summary>Hard limit for "Test connection": a one-word answer never needs the 6-minute reply cap.</summary>
+    public TimeSpan TestCap { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>One tiny call (a few tokens) used by Settings → AI "Test connection". Gives up after
+    /// <see cref="TestCap"/>; the caller's token (the Stop button) cancels it sooner.</summary>
+    public async Task TestAsync(CancellationToken ct = default)
+    {
+        using var cap = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cap.CancelAfter(TestCap);
+        try { _ = await CompleteAsync("Reply with the single word: ok", cap.Token).ConfigureAwait(false); }
+        catch (AiException ex) when (ex.Kind == AiFailure.Cancelled && !ct.IsCancellationRequested)
+        {
+            throw new AiException(AiFailure.Timeout, "No answer within 30 seconds. Check your internet connection and try again.");
+        }
+    }
 
     private static async Task<AiException> FailureFor(HttpResponseMessage resp, CancellationToken ct)
     {
