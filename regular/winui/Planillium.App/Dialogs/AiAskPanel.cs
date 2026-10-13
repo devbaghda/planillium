@@ -17,6 +17,7 @@ public sealed class AiAskPanel : StackPanel
 {
     private readonly Func<string> _prompt;
     private readonly Func<string, Task> _onReply;
+    private readonly Func<string?>? _blocker;
     private readonly Button _ask = new() { Content = "Ask Claude" };
     private readonly Button _cancel = new() { Content = "Cancel request" };
     private readonly ProgressRing _ring = new() { IsActive = true, Width = 20, Height = 20 };
@@ -32,9 +33,11 @@ public sealed class AiAskPanel : StackPanel
     private CancellationTokenSource? _cts;
 
     /// <param name="prompt">The prompt as it should be sent right now (empty = nothing to send yet).</param>
+    /// <param name="blocker">Returns a reason not to ask right now (e.g. the reply box already holds text that a new answer would overwrite), or null.</param>
     /// <param name="onReply">Called on the UI thread with Claude's reply text.</param>
-    public AiAskPanel(Func<string> prompt, Func<string, Task> onReply)
+    public AiAskPanel(Func<string> prompt, Func<string, Task> onReply, Func<string?>? blocker = null)
     {
+        _blocker = blocker;
         _prompt = prompt;
         _onReply = onReply;
         Spacing = 8;
@@ -66,6 +69,7 @@ public sealed class AiAskPanel : StackPanel
         _ask.Click += (_, _) =>
         {
             if (_prompt().Trim().Length == 0) { Fail("There is no prompt to send yet — generate it first."); return; }
+            if (_blocker?.Invoke() is { } why) { Fail(why); return; }
             if (!AiSettings.NoticeAccepted) { _notice.Visibility = Visibility.Visible; _ask.Visibility = Visibility.Collapsed; return; }
             _ = RunAsync();
         };

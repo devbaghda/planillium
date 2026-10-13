@@ -316,7 +316,7 @@ public static class AddPlanDialog
             reply.Text = text;
             error.Visibility = Visibility.Collapsed;
             return Task.CompletedTask;
-        });
+        }, () => reply.Text.Trim().Length > 0 ? "The reply box already has text — clear it first so Claude's answer doesn't overwrite it." : null);
         panel.Children.Add(ai);
         panel.Children.Add(reply);
         panel.Children.Add(error);

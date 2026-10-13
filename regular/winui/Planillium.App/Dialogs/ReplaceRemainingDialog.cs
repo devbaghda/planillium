@@ -117,7 +117,7 @@ public static class ReplaceRemainingDialog
                 dialog?.Hide();
             }
             return Task.CompletedTask;
-        });
+        }, () => reply.Text.Trim().Length > 0 ? "The reply box already has text — clear it first so Claude's answer doesn't overwrite it." : null);
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
         panel.Children.Add(intro);
