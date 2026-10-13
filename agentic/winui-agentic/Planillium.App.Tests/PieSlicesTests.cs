@@ -15,7 +15,7 @@ public class PieSlicesTests
 
         var slices = PieSlices.BuildSlices(items, 120);
 
-        Assert.Equal(1, slices.Count);
+        Assert.Single(slices);
         Assert.Equal("Chrome", slices[0].Name);
         Assert.Equal(120, slices[0].Total);
         Assert.Equal(360.0, slices[0].SweepAngle, 0.01);  // Full circle
@@ -200,10 +200,10 @@ public class PieSlicesTests
     public void EmptyDataReturnsNoSlices()
     {
         var slices = PieSlices.BuildSlices([], 0);
-        Assert.Equal(0, slices.Count);
+        Assert.Empty(slices);
 
         slices = PieSlices.BuildSlices(new(), 100);
-        Assert.Equal(0, slices.Count);
+        Assert.Empty(slices);
     }
 
     /// <summary>Percentage calculation: each slice's percentage of the level total.</summary>
@@ -238,7 +238,7 @@ public class PieSlicesTests
 
         // Both shown individually because SmallApp is exactly 3% (not below)
         Assert.Equal(2, slices.Count);
-        Assert.True(slices.Any(s => s.Name == "SmallApp"));
+        Assert.Contains(slices, s => s.Name == "SmallApp");
     }
 
     /// <summary>Multiple small entries below 3% are merged into "Other".</summary>

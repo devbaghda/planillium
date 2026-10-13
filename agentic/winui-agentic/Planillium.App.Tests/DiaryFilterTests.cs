@@ -94,9 +94,9 @@ public sealed class DiaryFilterTests
         var result = DiaryFilter.PruneToAvailable(selected, available);
 
         Assert.Equal(2, result.Count);
-        Assert.True(result.Contains("Chrome", StringComparer.OrdinalIgnoreCase));
-        Assert.True(result.Contains("Firefox", StringComparer.OrdinalIgnoreCase));
-        Assert.False(result.Contains("Safari", StringComparer.OrdinalIgnoreCase));
+        Assert.Contains("Chrome", result, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("Firefox", result, StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Safari", result, StringComparer.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -127,8 +127,8 @@ public sealed class DiaryFilterTests
         var result = DiaryFilter.PruneToAvailable(selected, available);
 
         Assert.Equal(2, result.Count);
-        Assert.True(result.Contains("Chrome"));
-        Assert.True(result.Contains("Firefox"));
+        Assert.Contains("Chrome", result);
+        Assert.Contains("Firefox", result);
     }
 
     [Fact]
