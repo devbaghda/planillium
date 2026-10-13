@@ -309,6 +309,15 @@ public static class AddPlanDialog
         panel.Children.Add(loadBtn);
         panel.Children.Add(genRow);
         panel.Children.Add(prompt);
+        // AI layer (2026-10-13): fills the reply box from Claude; importing still needs the user's own
+        // click on Import, which runs the same validation as a pasted reply.
+        var ai = new AiAskPanel(() => prompt.Text, text =>
+        {
+            reply.Text = text;
+            error.Visibility = Visibility.Collapsed;
+            return Task.CompletedTask;
+        });
+        panel.Children.Add(ai);
         panel.Children.Add(reply);
         panel.Children.Add(error);
 
@@ -335,6 +344,7 @@ public static class AddPlanDialog
         };
 
         var imported = await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
+        ai.CancelRunning();
         if (imported) await TeachPlanTools.RunAsync(host.XamlRoot, planTools);
         return imported;
     }

@@ -26,7 +26,7 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        _panels = [GeneralPanel, HoursPanel, IncomePanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, DataPanel];
+        _panels = [GeneralPanel, HoursPanel, IncomePanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, AiPanel, DataPanel];
         if (_panels.Length != SectionList.Items.Count)
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
@@ -52,6 +52,7 @@ public sealed partial class SettingsPage : Page
             StartupToggle.IsOn = StartupService.IsEnabled;
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
+            RefreshAiStatus();
             LoadRules();
             LoadIncome();
             // After LoadRules, not before: the keyword counts are read off the boxes it fills.
@@ -651,6 +652,68 @@ public sealed partial class SettingsPage : Page
         state.Opacity = value;
         StateService.Save(state);
         RefreshSummaries();
+    }
+
+    private void RefreshAiStatus()
+    {
+        var has = AiSettings.HasKey;
+        AiStatus.Text = has ? "A key is saved on this PC." : "No key saved — Ask Claude is off.";
+        SumAi.Text = has ? "Key saved · " + AiSettings.Model : "No key — manual copy/paste";
+        AiModelBox.Text = AiSettings.Model;
+        AiRemoveBtn.IsEnabled = has;
+        AiTestBtn.IsEnabled = has;
+        AiKeyBox.PlaceholderText = has ? "Saved — type a new key to replace it" : "sk-ant-…";
+    }
+
+    private void AiSave_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            AiSettings.SaveModel(AiModelBox.Text);
+            var key = AiKeyBox.Password.Trim();
+            if (key.Length > 0)
+            {
+                if (!AiSettings.SaveKey(key)) { AiResult.Text = "Windows refused to store the key. Nothing was saved."; return; }
+                AiKeyBox.Password = "";
+            }
+            AiResult.Text = "Saved.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage (AI save)", ex);
+            AiResult.Text = "Couldn't save. Nothing was changed.";
+        }
+        RefreshAiStatus();
+    }
+
+    private async void AiTest_Click(object sender, RoutedEventArgs e)
+    {
+        AiTestBtn.IsEnabled = false;
+        AiResult.Text = "Testing…";
+        try
+        {
+            await AiSettings.CreateClient().TestAsync();
+            AiResult.Text = "Connected ✓";
+        }
+        catch (AiException ex) { AiResult.Text = ex.Message; }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage (AI test)", ex);
+            AiResult.Text = "Something went wrong talking to the AI service.";
+        }
+        finally { RefreshAiStatus(); }
+    }
+
+    private async void AiRemove_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Remove the API key?",
+            "Deletes the saved key from this PC. Ask Claude turns off until you add one again; " +
+            "the manual copy/paste screens keep working.",
+            primaryButtonText: "Remove", closeButtonText: "Cancel");
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+        try { AiSettings.RemoveKey(); AiResult.Text = "Key removed."; }
+        catch (Exception ex) { Log.Error("SettingsPage (AI remove)", ex); AiResult.Text = "Couldn't remove the key."; }
+        RefreshAiStatus();
     }
 
     private async void TickTickConnect_Click(object sender, RoutedEventArgs e)

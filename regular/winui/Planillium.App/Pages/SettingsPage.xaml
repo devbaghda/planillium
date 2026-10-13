@@ -231,6 +231,21 @@
                     </StackPanel>
                 </StackPanel>
 
+                <StackPanel x:Name="AiPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="AI" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="With an Anthropic API key, &quot;Ask Claude&quot; in Replace remaining and Add plan sends the prompt for you and fills in the reply — no copying and pasting. The key is stored encrypted by Windows on this PC only: never in config.json, the database, the repo or the installer. Without a key the manual copy/paste screens keep working."/>
+                    <TextBlock x:Name="AiStatus" TextWrapping="Wrap"/>
+                    <PasswordBox x:Name="AiKeyBox" Header="API key" PlaceholderText="sk-ant-…" MaxWidth="460" HorizontalAlignment="Left"/>
+                    <TextBox x:Name="AiModelBox" Header="Model" MaxWidth="460" HorizontalAlignment="Left"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="AiSaveBtn" Content="Save" Click="AiSave_Click"/>
+                        <Button x:Name="AiTestBtn" Content="Test connection" Click="AiTest_Click"/>
+                        <Button x:Name="AiRemoveBtn" Content="Remove key…" Click="AiRemove_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AiResult" TextWrapping="Wrap" FontSize="12"/>
+                </StackPanel>
+
                 <StackPanel x:Name="DataPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
                     <TextBlock Text="Data" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock x:Name="DataInfo" TextWrapping="Wrap" IsTextSelectionEnabled="True"
@@ -334,6 +349,14 @@
                     <StackPanel Padding="0,4">
                         <TextBlock Text="TickTick" FontWeight="SemiBold" FontSize="13"/>
                         <TextBlock x:Name="SumTickTick" FontSize="11" TextWrapping="Wrap" MaxLines="2"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="AI">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="AI" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock x:Name="SumAi" FontSize="11" TextWrapping="Wrap" MaxLines="2"
                                    TextTrimming="CharacterEllipsis"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>

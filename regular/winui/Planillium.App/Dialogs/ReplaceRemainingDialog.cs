@@ -42,7 +42,7 @@ public static class ReplaceRemainingDialog
         {
             Text = "Your done tasks stay exactly as they are. Everything else in this plan is replaced by what " +
                    "you paste below. 1) Say what should change, 2) copy the prompt into claude.ai, " +
-                   "3) paste Claude's reply here.",
+                   "3) paste Claude's reply here. (With an API key set in Settings → AI, \"Ask Claude\" does steps 2 and 3 for you.)",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Opacity = 0.8,
@@ -97,17 +97,39 @@ public static class ReplaceRemainingDialog
             Visibility = Visibility.Collapsed,
         };
 
+        // AI layer (2026-10-13): "Ask Claude" fills the reply box and, when it validates, jumps straight
+        // to the preview — the same Prepare() a pasted reply goes through, so nothing is applied by it.
+        PlanRemainder.Change? change = null;
+        var advance = false;
+        ContentDialog? dialog = null;
+        var ai = new AiAskPanel(() => prompt.Text, text =>
+        {
+            reply.Text = text;
+            var problem = PlanRemainder.Prepare(plan, tasks, text, out change);
+            if (problem != null)
+            {
+                error.Text = problem + " The reply is in the box below; you can fix it by hand or ask again.";
+                error.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                advance = true;
+                dialog?.Hide();
+            }
+            return Task.CompletedTask;
+        });
+
         var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
         panel.Children.Add(intro);
         panel.Children.Add(wish);
         panel.Children.Add(words);
+        panel.Children.Add(ai);
         panel.Children.Add(copy);
         panel.Children.Add(prompt);
         panel.Children.Add(reply);
         panel.Children.Add(error);
 
-        PlanRemainder.Change? change = null;
-        var dialog = DialogControls.Build(xamlRoot, $"Replace remaining tasks — {plan.Name}",
+        dialog = DialogControls.Build(xamlRoot, $"Replace remaining tasks — {plan.Name}",
             new ScrollViewer { Content = panel, MaxHeight = 560 },
             primaryButtonText: "Preview", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
         // Keep the dialog open on a bad reply, show the problem inline (same pattern as AddPlanDialog).
@@ -121,7 +143,9 @@ public static class ReplaceRemainingDialog
                 args.Cancel = true;
             }
         };
-        if (await DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary || change is null) return null;
+        var shown = await DialogGate.ShowAsync(dialog);
+        ai.CancelRunning();
+        if ((shown != ContentDialogResult.Primary && !advance) || change is null) return null;
 
         var oldEnd = plan.DateForPlanDay(plan.TotalDaysComputed);
         var newEnd = plan.DateForPlanDay(change.LastNewDay);
