@@ -169,12 +169,8 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
     `MASTERMIND/src/pilot_metrics/pilot_metrics.py`. Handoff diagram:
     `https://claude.ai/artifact/81B78ayvAVq8g9QxgGADnz`. Past outcomes: `context/todos.md`.
 
-0b. **(opened 2026-10-13) AI layer + replace-remaining v2 — built both sides, QA PASS WITH CAVEATS, local commits only (not pushed).** Live UI checks owed in both apps (one at a time): Settings → AI, Ask Claude in both dialogs, notice, Stop/Cancel. Details: `context/todos.md` 2026-10-13; rule 16 in `DECISIONS.md`.
-   Decided 2026-10-13: Ask Claude never overwrites a non-empty reply box (regular done, 448f414; agentic coder running);
-   one-time notice left as is. **Still owed:** agentic never-overwrite change is built and committed (see log), only its QA is owed, Dashboard rows for
-   replace-remaining-v2 and ai-layer (tokens/time null for v2 -- sides were interleaved), Settings -> AI and the two
-   Ask Claude buttons in `MANUAL.md`, Release rebuild of the regular app (live exe was locked), push when asked.
-   Commits so far (local): 1991f52, 40f79c3, 9770b30, 61e13a8, 5d9913b, 448f414.
+0b. **(opened 2026-10-13) AI layer + replace-remaining v2 -- built both sides, QA PASS WITH CAVEATS (0 defects), local commits only (not pushed).** Live UI checks owed in both apps (one at a time, scratch data): Settings -> AI (save/test/remove key), Ask Claude in both dialogs (Stop/Cancel, notice, blocked message with text in the reply box, whitespace-only box allowed, byte-identical plan file after failure). Details: `context/todos.md` 2026-10-13; rule 16 in `DECISIONS.md`.
+   Done 2026-10-13: never-overwrite rule + re-check after notice and after answer (regular de9b185, agentic c7b1420), agentic test-analyzer errors fixed (485eeac; strict build clean both sides, tests 197 / 299), Dashboard rows (replace-remaining-v2, ai-layer; tokens/time null -- no clean window), MANUAL.md, Release rebuilt and relaunched. Open: push when asked; agentic CONTEXT.md section 2 not refreshed by its Coder; "Clear all my data" leaves the key.
 
 ## 8. Next steps
 

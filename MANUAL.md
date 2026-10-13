@@ -36,7 +36,10 @@ archiving a plan also offers to start one of your queued ideas right there.
 already ticked done and replaces all other tasks with a new list: say what should change, copy the
 prompt into claude.ai, paste the reply back, check the preview, confirm. The new tasks start after
 your last done task (even if that day is already past, in which case they show as overdue), and the finish date and "late from plan" figure restart
-from the new list.
+from the new list. With an API key set (Settings → AI), an **Ask Claude** button in this dialog does
+the copy-and-paste for you and goes straight to the preview; it never writes over text already in
+the reply box (clear the box first), and nothing is changed until you confirm. Without a key, or if
+the request fails, the manual copy-and-paste still works.
 
 Each plan can include:
 
@@ -181,7 +184,7 @@ clicked into.
 ## Settings and configuration
 
 Settings is organised as seven sections — General, Hours & reminders, Scoring, Activity keywords,
-Idle-answer library, TickTick, and Data — chosen from the menu down the right-hand side. Each menu
+Idle-answer library, TickTick, AI, and Data — chosen from the menu down the right-hand side. Each menu
 entry shows a summary of what that section currently holds, so you can read your whole
 configuration off the menu without opening anything, and go straight to the part you want to
 change. The page stays the same size and shape whichever section you're on, and it reopens on the
@@ -275,6 +278,12 @@ tool, not a cloud-first collaboration app. Specifically:
   are sent to and from TickTick's own servers so the two stay in sync — that's the one place data
   leaves your machine. Credentials for TickTick (and any other connected service) are stored
   securely via the operating system's credential store rather than in plain text.
+- **Ask Claude (optional).** If you add an Anthropic API key in Settings → AI, the **Ask Claude**
+  buttons in Replace remaining and Add plan send the prompt shown in the dialog — the plan's name,
+  its task text and what you typed — to Anthropic and fill in the reply. Your diary, scores,
+  earnings, tags and settings are never sent. The key is kept in the Windows credential store, never
+  in config.json, and "Remove key" in Settings → AI deletes it. "Clear all my data" does not remove
+  the key. The first use shows a one-time notice. Add plan still waits for you to press Import.
 
 ## Tips for getting the most out of it
 
