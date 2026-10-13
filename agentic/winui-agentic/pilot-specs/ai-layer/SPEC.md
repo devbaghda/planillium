@@ -304,7 +304,7 @@ not add navigation).
 | Notice declined | enabled again | unchanged | unchanged | enabled | neutral: `Nothing was sent.` |
 | Running | disabled (label stays) | **change/words-affecting inputs read-only** (Replace: "What should change?"; Add plan: mode, field 1–3, own plan text, Load from file, Generate prompt) — `Copy` stays enabled | `IsReadOnly=true` | **disabled** (so a half-arrived reply cannot be submitted) | progress row |
 | Success, Replace remaining | — | — | filled | — | none; the dialog then runs the existing Preview check at once |
-| Success, Replace, reply not valid | enabled, label `Ask again` | editable | filled, editable | enabled | neutral: `Claude replied, but the reply isn't usable yet — see the message below. You can edit it, or ask again.` and the existing red `error` shows `ParseReplacement`'s own text under the reply box |
+| Success, Replace, reply not valid | enabled, label `Ask again` | editable | filled, editable | enabled | neutral: `Claude replied, but the reply isn't usable yet — see the message below. You can edit it, or clear the box and ask again.` and the existing red `error` shows `ParseReplacement`'s own text under the reply box |
 | Success, Add plan | enabled, label `Ask again` | editable | filled, editable | enabled (`Import plan`) | neutral: `✓ Claude's reply is in the box below. Nothing is added until you press Import plan.` |
 | Failure | enabled, label unchanged | editable | **left exactly as it was** | enabled | critical reason, D4 |
 | Stopped by user | enabled | editable | unchanged | enabled | neutral: `Stopped. Nothing was changed.` |
@@ -314,7 +314,7 @@ failure, stop) focus returns to the Ask Claude button. When Success moves Replac
 Step 2 rules (default = Cancel) apply untouched.
 
 `Ask again` keeps its label, but while the reply box holds any text it sends nothing and shows the blocked message
-(see Chosen approach 6). To get a new reply the user clears the box first; nothing is ever overwritten silently
+(see Chosen approach 6). The box is re-checked after the first-use notice is accepted (blocked message, nothing sent) and when the answer arrives (text typed during the call: the answer is discarded and the reason line reads the blocked message plus `Claude's answer was discarded.`). To get a new reply the user clears the box first; nothing is ever overwritten silently
 (Open question 5, decided 2026-10-13).
 
 Edit-while-running is prevented rather than handled: those inputs are read-only for the duration (spec edge case,

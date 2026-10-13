@@ -177,7 +177,7 @@ public static class ReplaceRemainingDialog
                 if (problem is not null || replacement is null)
                 {
                     ShowError(error, problem ?? "Couldn't read the reply. Paste it again.");
-                    return "Claude replied, but the reply isn't usable yet — see the message below. You can edit it, or ask again.";
+                    return "Claude replied, but the reply isn't usable yet — see the message below. You can edit it, or clear the box and ask again.";
                 }
                 parsed = replacement;
                 advancedByAi = true;

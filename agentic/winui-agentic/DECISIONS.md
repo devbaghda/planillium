@@ -208,7 +208,7 @@
     the inline notice (not a ContentDialog) is a WinUI single-dialog constraint, not a product choice.
     **Reply box never overwritten (user decision 2026-10-13):** "Ask Claude" sends nothing while the reply
     box holds any non-whitespace text; the reason line says to clear it first. Replaces the spec's earlier
-    "Ask again replaces silently" choice. Checked by `AiReplyBox.BlocksAsk` (`AiClient.cs`).
+    "Ask again replaces silently" choice. Checked by `AiReplyBox.BlocksAsk` (`AiClient.cs`), and again after the first-use notice and when the answer arrives (text typed during the call discards the answer).
 
 ### Standing lessons
 _The durable ones. Every entry here cost a real bug to learn; none may be dropped in a

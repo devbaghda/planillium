@@ -240,6 +240,9 @@ public static class AiReplyBox
     public const string Blocked =
         "The reply box already has text — clear it first so Claude's answer doesn't overwrite it.";
 
+    /// <summary>Shown when text appeared in the reply box while Claude was answering: the answer is dropped.</summary>
+    public const string DiscardedAfterAnswer = Blocked + " Claude's answer was discarded.";
+
     /// <summary>True when the reply box holds any non-whitespace text, so a new call must not run.</summary>
     public static bool BlocksAsk(string? replyText) => !string.IsNullOrWhiteSpace(replyText);
 }

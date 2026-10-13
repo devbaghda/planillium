@@ -179,6 +179,15 @@ internal sealed class AiAskControls
                 if (!_closed) ShowNeutral(NothingSent);
                 return;
             }
+
+            // Text may have arrived in the box while the notice was up: check again before sending.
+            if (AiReplyBox.BlocksAsk(_reply.Text))
+            {
+                _busy = false;
+                Lock(false);
+                if (!_closed) ShowNeutral(AiReplyBox.Blocked);
+                return;
+            }
         }
 
         Progress.Visibility = Visibility.Visible;
@@ -208,6 +217,11 @@ internal sealed class AiAskControls
         {
             var suffix = result.Failure == AiFailure.NoKey ? "" : CopyPromptSuffix;
             SetReason(FailurePrefix + result.Message + suffix, failure: true);
+        }
+        else if (AiReplyBox.BlocksAsk(_reply.Text))
+        {
+            // Text was typed into the box while the call ran: the answer is dropped, the box is kept.
+            ShowNeutral(AiReplyBox.DiscardedAfterAnswer);
         }
         else
         {

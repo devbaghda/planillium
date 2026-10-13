@@ -63,6 +63,29 @@ public sealed class AiClientTests : IClassFixture<TestRootFixture>
     }
 
     [Fact]
+    public void Discarded_after_answer_message_is_the_blocked_message_plus_the_discard_note()
+    {
+        Assert.Equal(
+            "The reply box already has text — clear it first so Claude's answer doesn't overwrite it. Claude's answer was discarded.",
+            AiReplyBox.DiscardedAfterAnswer);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  \t")]
+    public void A_box_still_empty_after_the_answer_accepts_the_answer(string boxAfterCall)
+    {
+        Assert.False(AiReplyBox.BlocksAsk(boxAfterCall));
+    }
+
+    [Fact]
+    public void A_box_typed_into_during_the_call_discards_the_answer()
+    {
+        var boxAfterCall = "my own text";
+        Assert.True(AiReplyBox.BlocksAsk(boxAfterCall));
+    }
+
+    [Fact]
     public async Task Request_has_the_documented_shape_and_headers()
     {
         using var stub = new StubAnthropic();
