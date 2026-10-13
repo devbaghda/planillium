@@ -55,6 +55,11 @@ public static class ReplaceRemainingDialog
             TextWrapping = TextWrapping.Wrap,
             Height = 70,
         };
+        var words = new TextBox
+        {
+            Header = "Words that must be gone (optional)",
+            PlaceholderText = "e.g. Reddit — the preview will warn if a new task still mentions it",
+        };
         var prompt = new TextBox
         {
             AcceptsReturn = true,
@@ -95,6 +100,7 @@ public static class ReplaceRemainingDialog
         var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
         panel.Children.Add(intro);
         panel.Children.Add(wish);
+        panel.Children.Add(words);
         panel.Children.Add(copy);
         panel.Children.Add(prompt);
         panel.Children.Add(reply);
@@ -119,15 +125,28 @@ public static class ReplaceRemainingDialog
 
         var oldEnd = plan.DateForPlanDay(plan.TotalDaysComputed);
         var newEnd = plan.DateForPlanDay(change.LastNewDay);
+        var wordList = PlanRemainder.ParseWords(words.Text);
+        var mentions = PlanRemainder.FindMentions(change, wordList);
+        var wordCheck = wordList.Count == 0 ? "" :
+            mentions.Count == 0
+                ? $"\n\n✓ No mention of {string.Join(", ", wordList)} found in the new tasks."
+                : $"\n\n⚠ Still mentioned ({mentions.Count}):\n" +
+                  string.Join("\n", mentions.Select(m => $"• “{m.TaskTitle}” — “{m.Word}” in {m.Field}")) +
+                  "\nYou can still replace, or cancel and ask Claude again.";
         var confirm = DialogControls.Build(xamlRoot, "Replace remaining tasks?",
-            new TextBlock
+            new ScrollViewer
             {
-                Text = $"{change.DoneCount} done task(s) stay untouched.\n" +
-                       $"{change.RemovedTexts.Count} unfinished task(s) will be removed.\n" +
-                       $"{change.AddedCount} new task(s) will be added, days {change.StartDay}–{change.LastNewDay}.\n" +
-                       $"The plan will now finish on {newEnd:dd.MM.yyyy} (was {oldEnd:dd.MM.yyyy}); " +
-                       "its \"late from plan\" count restarts from zero.\n\nThis can't be undone.",
-                TextWrapping = TextWrapping.Wrap,
+                MaxHeight = 420,
+                Content = new TextBlock
+                {
+                    Text = $"{change.DoneCount} done task(s) stay untouched.\n" +
+                           $"{change.RemovedTexts.Count} unfinished task(s) will be removed.\n" +
+                           $"{change.AddedCount} new task(s) will be added, days {change.StartDay}–{change.LastNewDay}.\n" +
+                           $"The plan will now finish on {newEnd:dd.MM.yyyy} (was {oldEnd:dd.MM.yyyy}); " +
+                           "its \"late from plan\" count restarts from zero." + wordCheck +
+                           "\n\nThis can't be undone.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
             },
             primaryButtonText: "Replace", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Close);
         if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;

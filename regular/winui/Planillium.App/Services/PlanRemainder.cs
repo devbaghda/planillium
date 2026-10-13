@@ -56,8 +56,9 @@ public static class PlanRemainder
         if (done.Count == 0) sb.AppendLine("- (nothing yet)");
         foreach (var t in done) sb.AppendLine($"- Day {t.AssignedDay}: {t.Task.Text}");
         sb.AppendLine();
-        sb.AppendLine("CURRENT REMAINING TASKS (the part to be replaced — keep what is still good, drop or change the rest):");
-        foreach (var t in left) sb.AppendLine($"- Day {t.AssignedDay}: {t.Task.Text}");
+        sb.AppendLine("CURRENT REMAINING TASKS, in full (the part to be replaced — keep what is still good, drop or change the rest; " +
+                      "check the detail, note and tools of every task, not only its title):");
+        foreach (var t in left) AppendFullTask(sb, t);
         sb.AppendLine();
         sb.AppendLine("Reply with ONE ```json block and nothing the app needs outside it, in exactly this shape:");
         sb.AppendLine("{ \"phases\": [ { \"phase\": 1, \"name\": \"Phase name\", \"tasks\": [");
@@ -70,6 +71,61 @@ public static class PlanRemainder
                       "Do not include the done tasks.");
         return sb.ToString();
     }
+
+    private static void AppendFullTask(StringBuilder sb, AssignedTask t)
+    {
+        var p = t.Task;
+        sb.AppendLine($"- Day {t.AssignedDay}: {p.Text}");
+        if (!string.IsNullOrWhiteSpace(p.Detail)) sb.AppendLine($"    detail: {p.Detail.Trim()}");
+        if (!string.IsNullOrWhiteSpace(p.MentorNote)) sb.AppendLine($"    mentor_note: {p.MentorNote.Trim()}");
+        if (!string.IsNullOrWhiteSpace(p.Category)) sb.AppendLine($"    category: {p.Category.Trim()}");
+        if (p.DurationMin is int d) sb.AppendLine($"    duration_min: {d}");
+        if (p.Tools.Count > 0) sb.AppendLine($"    tools: {string.Join(", ", p.Tools)}");
+    }
+
+    /// <summary>Splits the dialog's "Words that must be gone" box (comma- or newline-separated) into
+    /// trimmed, non-empty, distinct words. Empty input = no check.</summary>
+    public static List<string> ParseWords(string? raw) =>
+        (raw ?? "").Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w.Trim()).Where(w => w.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>A new task that still contains one of the unwanted words, and where.</summary>
+    public sealed record Mention(string TaskTitle, string Word, string Field);
+
+    /// <summary>Scans the NEW tasks (title, detail, mentor note, tools) for any of <paramref name="words"/>,
+    /// case-insensitively. A pure check on the already-validated reply — it never blocks, only informs.</summary>
+    public static List<Mention> FindMentions(Change change, IReadOnlyCollection<string> words)
+    {
+        var found = new List<Mention>();
+        if (words.Count == 0) return found;
+        foreach (var phase in change.NewPhases)
+        {
+            if (phase["tasks"] is not JsonArray ts) continue;
+            foreach (var node in ts)
+            {
+                if (node is not JsonObject t) continue;
+                var title = (t["task"] as JsonValue)?.TryGetValue<string>(out var s) == true ? s : "";
+                foreach (var word in words)
+                {
+                    void Check(string field, string? text)
+                    {
+                        if (text != null && text.Contains(word, StringComparison.OrdinalIgnoreCase))
+                            found.Add(new Mention(title, word, field));
+                    }
+                    Check("title", title);
+                    Check("detail", Text(t, "detail"));
+                    Check("mentor note", Text(t, "mentor_note"));
+                    if (t["tools"] is JsonArray tools)
+                        Check("tools", string.Join(" | ", tools.Select(x => (x as JsonValue)?.TryGetValue<string>(out var v) == true ? v : "")));
+                }
+            }
+        }
+        return found;
+    }
+
+    private static string? Text(JsonObject o, string key) =>
+        (o[key] as JsonValue)?.TryGetValue<string>(out var s) == true ? s : null;
 
     /// <summary>Validates a pasted reply against the plan's current state. Returns an error message
     /// (plain language), or null on success with <paramref name="change"/> filled in.</summary>

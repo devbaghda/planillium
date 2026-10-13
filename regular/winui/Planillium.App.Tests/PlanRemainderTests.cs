@@ -174,4 +174,59 @@ public sealed class PlanRemainderTests
         Assert.Contains("drop Reddit", p);
         Assert.DoesNotContain("ALREADY DONE (do not repeat, do not reuse these titles):\n- Day 5", p.Replace("\r\n", "\n"));
     }
+
+    [Fact]
+    public void BuildPrompt_ListsRemainingTasksInFull()
+    {
+        var id = NewId();
+        var (plan, db, _) = Fixture(id);
+        using var _d = db;
+        var all = Assigned(plan, db);
+        var t5 = all.First(a => a.Task.Text == "Task 5").Task;
+        t5.Detail = "Post in r/test about Reddit"; t5.MentorNote = "Why: reach"; t5.Category = "outreach";
+        t5.DurationMin = 45; t5.Tools = new List<string> { "Chrome - Reddit" };
+
+        var p = PlanRemainder.BuildPrompt(plan, all, "");
+
+        Assert.Contains("detail: Post in r/test about Reddit", p);
+        Assert.Contains("mentor_note: Why: reach", p);
+        Assert.Contains("category: outreach", p);
+        Assert.Contains("duration_min: 45", p);
+        Assert.Contains("tools: Chrome - Reddit", p);
+    }
+
+    [Fact]
+    public void ParseWords_TrimsSplitsAndDedupes()
+    {
+        Assert.Equal(new[] { "Reddit", "linkedin" }, PlanRemainder.ParseWords(" Reddit , linkedin;LinkedIn\n reddit "));
+        Assert.Empty(PlanRemainder.ParseWords("  "));
+        Assert.Empty(PlanRemainder.ParseWords(null));
+    }
+
+    [Fact]
+    public void FindMentions_CatchesTitleDetailNoteAndTools_CaseInsensitive()
+    {
+        var id = NewId();
+        var (plan, db, _) = Fixture(id);
+        using var _d = db;
+        const string reply = """
+            { "phases": [ { "name": "P", "tasks": [
+              { "day": 1, "task": "Clean", "detail": "nothing here" },
+              { "day": 2, "task": "Reddit title" },
+              { "day": 3, "task": "D", "detail": "post on reddit" },
+              { "day": 4, "task": "M", "mentor_note": "use REDDIT wisely" },
+              { "day": 5, "task": "T", "tools": ["Chrome - Reddit"] },
+              { "day": 6, "task": "L", "detail": "LinkedIn post" } ] } ] }
+            """;
+        Assert.Null(PlanRemainder.Prepare(plan, Assigned(plan, db), reply, out var c));
+
+        var m = PlanRemainder.FindMentions(c!, new[] { "Reddit" });
+        Assert.Equal(new[] { "title", "detail", "mentor note", "tools" }, m.Select(x => x.Field));
+        Assert.DoesNotContain(m, x => x.TaskTitle == "Clean");
+
+        var m2 = PlanRemainder.FindMentions(c!, new[] { "Reddit", "LinkedIn" });
+        Assert.Contains(m2, x => x.TaskTitle == "L" && x.Word == "LinkedIn");
+        Assert.Empty(PlanRemainder.FindMentions(c!, Array.Empty<string>()));
+        Assert.Empty(PlanRemainder.FindMentions(c!, new[] { "Pinterest" }));
+    }
 }
