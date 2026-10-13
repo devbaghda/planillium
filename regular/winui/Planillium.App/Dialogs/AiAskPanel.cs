@@ -73,7 +73,13 @@ public sealed class AiAskPanel : StackPanel
             if (!AiSettings.NoticeAccepted) { _notice.Visibility = Visibility.Visible; _ask.Visibility = Visibility.Collapsed; return; }
             _ = RunAsync();
         };
-        accept.Click += (_, _) => { AiSettings.AcceptNotice(); _notice.Visibility = Visibility.Collapsed; _ = RunAsync(); };
+        accept.Click += (_, _) =>
+        {
+            AiSettings.AcceptNotice();
+            _notice.Visibility = Visibility.Collapsed;
+            if (_blocker?.Invoke() is { } why) { _ask.Visibility = Visibility.Visible; Fail(why); return; }
+            _ = RunAsync();
+        };
         decline.Click += (_, _) => { _notice.Visibility = Visibility.Collapsed; _ask.Visibility = Visibility.Visible; };
         _cancel.Click += (_, _) => _cts?.Cancel();
 
@@ -112,7 +118,9 @@ public sealed class AiAskPanel : StackPanel
         {
             var client = AiSettings.CreateClient();
             var reply = await client.CompleteAsync(_prompt(), _cts.Token);
-            await _onReply(reply);
+            // Text typed into the reply box while Claude was answering must not be overwritten.
+            if (_blocker?.Invoke() is { } why) Fail(why + " Claude's answer was discarded.");
+            else await _onReply(reply);
         }
         catch (AiException ex) when (ex.Kind == AiFailure.Cancelled) { /* the user asked for it — say nothing */ }
         catch (AiException ex) { Fail(ex.Message); }

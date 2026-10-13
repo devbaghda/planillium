@@ -108,7 +108,7 @@ public static class ReplaceRemainingDialog
             var problem = PlanRemainder.Prepare(plan, tasks, text, out change);
             if (problem != null)
             {
-                error.Text = problem + " The reply is in the box below; you can fix it by hand or ask again.";
+                error.Text = problem + " The reply is in the box below; you can fix it by hand, or clear the box and ask again.";
                 error.Visibility = Visibility.Visible;
             }
             else
