@@ -171,7 +171,7 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
 
 0b. **(opened 2026-10-13) AI layer + replace-remaining v2 — built both sides, QA PASS WITH CAVEATS, local commits only (not pushed).** Live UI checks owed in both apps (one at a time): Settings → AI, Ask Claude in both dialogs, notice, Stop/Cancel. Details: `context/todos.md` 2026-10-13; rule 16 in `DECISIONS.md`.
    Decided 2026-10-13: Ask Claude never overwrites a non-empty reply box (regular done, 448f414; agentic coder running);
-   one-time notice left as is. **Still owed:** agentic never-overwrite change + its QA, Dashboard rows for
+   one-time notice left as is. **Still owed:** agentic never-overwrite change is built and committed (see log), only its QA is owed, Dashboard rows for
    replace-remaining-v2 and ai-layer (tokens/time null for v2 -- sides were interleaved), Settings -> AI and the two
    Ask Claude buttons in `MANUAL.md`, Release rebuild of the regular app (live exe was locked), push when asked.
    Commits so far (local): 1991f52, 40f79c3, 9770b30, 61e13a8, 5d9913b, 448f414.
