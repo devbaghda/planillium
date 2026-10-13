@@ -264,7 +264,15 @@ public static class AddPlanDialog
                 loadBtn.IsEnabled = !locked;
                 genBtn.IsEnabled = !locked;
             },
-            _ => "✓ Claude's reply is in the box below. Nothing is added until you press Import plan.");
+            text =>
+            {
+                // Honest about a reply that is clearly not a plan. The reason goes under the reply
+                // box (same as an Import failure); nothing is imported here either way.
+                var problem = PlanReplyCheck.Problem(text);
+                if (problem is null) return "✓ Claude's reply is in the box below. Nothing is added until you press Import plan.";
+                Show(error, problem);
+                return "Claude replied, but the reply doesn't look like a plan yet — see the message below.";
+            });
         genRow.Children.Add(ai.Ask);
 
         var mutedBrush = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];

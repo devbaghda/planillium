@@ -378,3 +378,109 @@ public sealed class AiClientTests : IClassFixture<TestRootFixture>
         }
     }
 }
+
+/// <summary>
+/// Defect D1 (QA 2026-10-13): Ask Claude filled a garbage reply into the box and the reason
+/// vanished, because the box's change event fired for that fill after the reason was shown.
+/// These check the state the dialogs now keep, not the window.
+/// </summary>
+public sealed class ReplyErrorStateTests
+{
+    private const string Garbage = "Sorry, here is something without any JSON in it.";
+
+    [Fact]
+    public void The_change_event_of_an_AI_fill_keeps_the_problem_it_was_shown_with()
+    {
+        var state = new ReplyErrorState();
+        // Order in the dialog: the box is filled first, the problem is shown, then the box's change event fires.
+        state.Show(Garbage, "Couldn't find valid JSON");
+        state.OnReplyChanged(Garbage);
+        Assert.Equal("Couldn't find valid JSON", state.Message);
+    }
+
+    [Fact]
+    public void Typing_in_the_box_clears_the_problem()
+    {
+        var state = new ReplyErrorState();
+        state.Show(Garbage, "Couldn't find valid JSON");
+        state.OnReplyChanged(Garbage + "x");
+        Assert.Null(state.Message);
+    }
+
+    [Fact]
+    public void Emptying_the_box_clears_the_problem()
+    {
+        var state = new ReplyErrorState();
+        state.Show(Garbage, "Couldn't find valid JSON");
+        state.OnReplyChanged("");
+        Assert.Null(state.Message);
+    }
+
+    [Fact]
+    public void A_change_with_no_problem_showing_does_nothing()
+    {
+        var state = new ReplyErrorState();
+        state.OnReplyChanged("anything");
+        Assert.Null(state.Message);
+    }
+
+    [Fact]
+    public void Once_an_edit_has_cleared_the_problem_restoring_the_text_does_not_bring_it_back()
+    {
+        var state = new ReplyErrorState();
+        state.Show(Garbage, "Couldn't find valid JSON");
+        state.OnReplyChanged(Garbage + "x");
+        state.OnReplyChanged(Garbage);
+        Assert.Null(state.Message);
+    }
+}
+
+/// <summary>Add plan's honest check on an AI reply (PlanReplyCheck). Import keeps its own full check.</summary>
+public sealed class PlanReplyCheckTests
+{
+    private const string ValidPlan =
+        "{\"id\": \"netherlands-relocation\", \"name\": \"Netherlands Relocation\", \"phases\": []}";
+
+    [Fact]
+    public void A_fenced_plan_with_the_required_fields_passes()
+    {
+        var reply = "Here is your plan:\n```json\n" + ValidPlan + "\n```\nGood luck.";
+        Assert.Null(PlanReplyCheck.Problem(reply));
+    }
+
+    [Fact]
+    public void A_bare_plan_object_passes()
+    {
+        Assert.Null(PlanReplyCheck.Problem(ValidPlan));
+    }
+
+    [Fact]
+    public void A_reply_with_no_JSON_is_reported_as_not_valid_JSON()
+    {
+        Assert.Equal(
+            "Couldn't find valid JSON — paste the whole reply including the ```json block.",
+            PlanReplyCheck.Problem("Sorry, I can't help with that."));
+    }
+
+    [Fact]
+    public void Broken_JSON_is_reported_as_not_parsing()
+    {
+        Assert.Equal(
+            "That JSON doesn't parse — check it's the complete reply including the ```json fence.",
+            PlanReplyCheck.Problem("```json\n{\"id\": \"x\", \"name\": }\n```"));
+    }
+
+    [Fact]
+    public void A_missing_required_field_is_named()
+    {
+        Assert.Equal(
+            "Plan is missing the required field 'phases'.",
+            PlanReplyCheck.Problem("{\"id\": \"x\", \"name\": \"X\"}"));
+    }
+
+    [Fact]
+    public void An_empty_reply_asks_for_a_reply()
+    {
+        Assert.Equal("Paste Claude's reply first.", PlanReplyCheck.Problem("   "));
+    }
+}

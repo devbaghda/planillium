@@ -157,8 +157,19 @@ public static class ReplaceRemainingDialog
             TextWrapping = TextWrapping.Wrap,
             Visibility = Visibility.Collapsed,
         };
-        // Editing the reply clears the previous problem, as the user is now fixing it.
-        reply.TextChanged += (_, _) => error.Visibility = Visibility.Collapsed;
+        // The problem under the reply box. It is about the reply text it was raised for: editing the
+        // box to anything else clears it, but the fill of an AI reply must not (defect D1).
+        var replyError = new ReplyErrorState();
+        void ShowReplyError(string message)
+        {
+            replyError.Show(reply.Text, message);
+            ShowError(error, message);
+        }
+        reply.TextChanged += (_, _) =>
+        {
+            replyError.OnReplyChanged(reply.Text);
+            if (replyError.Message is null) error.Visibility = Visibility.Collapsed;
+        };
 
         var doneTitles = situation.Done.Select(d => d.Title).ToList();
         PlanReplacement.Replacement? parsed = null;
@@ -176,7 +187,7 @@ public static class ReplaceRemainingDialog
                 var problem = PlanReplacement.ParseReplacement(text, doneTitles, out var replacement);
                 if (problem is not null || replacement is null)
                 {
-                    ShowError(error, problem ?? "Couldn't read the reply. Paste it again.");
+                    ShowReplyError(problem ?? "Couldn't read the reply. Paste it again.");
                     return "Claude replied, but the reply isn't usable yet — see the message below. You can edit it, or clear the box and ask again.";
                 }
                 parsed = replacement;
@@ -245,7 +256,7 @@ public static class ReplaceRemainingDialog
             var problem = PlanReplacement.ParseReplacement(reply.Text, doneTitles, out var replacement);
             if (problem is not null || replacement is null)
             {
-                ShowError(error, problem ?? "Couldn't read the reply. Paste it again.");
+                ShowReplyError(problem ?? "Couldn't read the reply. Paste it again.");
                 args.Cancel = true;
                 return;
             }

@@ -416,3 +416,18 @@ error" are all honoured. One note for the Planner (not a conflict): Save writes 
    (Chosen approach 6). The earlier "replace silently" choice is withdrawn.
 6. **No way to withdraw the notice acceptance** other than editing state.json. Not in the request, so not designed;
    say if Settings -> AI should get a "Show the data notice again" link.
+
+## Follow-up 2026-10-13 (QA defect D1 and Add plan's reply message)
+
+- **D1 (Replace remaining tasks).** After an AI fill with an unusable reply, the reason under the reply box
+  was cleared by the box's own change event, which fires for the fill after the reason was shown. Fix:
+  `ReplyErrorState` (`Services/AiClient.cs`) keeps the problem tied to the reply text it was raised for;
+  an edit to any other text clears it. The fill itself does not. Preview's own invalid-paste message uses
+  the same state. Tests: `ReplyErrorStateTests` (`Planillium.App.Tests/AiClientTests.cs`).
+- **Add plan.** The success callback runs `PlanReplyCheck.Problem` (JSON present, parses, has id/name/phases).
+  A failing reply shows the reason under the reply box and the reason line reads "Claude replied, but the
+  reply doesn't look like a plan yet — see the message below." The green "✓ … in the box" line is only for
+  a reply that passes. Nothing is imported. Import keeps its full `TryImport` check. Tests: `PlanReplyCheckTests`.
+- Not changed: the Ask Claude strip (`AiAskControls`), the never-overwrite rule and the re-checks after
+  notice and answer.
+- Not done: live UIA re-check of both dialogs with a stub reply (QA owed).

@@ -246,3 +246,69 @@ public static class AiReplyBox
     /// <summary>True when the reply box holds any non-whitespace text, so a new call must not run.</summary>
     public static bool BlocksAsk(string? replyText) => !string.IsNullOrWhiteSpace(replyText);
 }
+
+/// <summary>
+/// The problem message under a reply box, and when it lets go of it (defect D1, found in QA
+/// 2026-10-13). The message is about one specific reply text. Editing the box to anything else
+/// clears it. The reply box's change event also fires for the text Ask Claude itself fills in,
+/// after the problem was already shown, and that fill must not clear it. Plain C#, so the test
+/// project can check it.
+/// </summary>
+public sealed class ReplyErrorState
+{
+    private string? _about;
+
+    /// <summary>The problem to show, or null when none is showing.</summary>
+    public string? Message { get; private set; }
+
+    /// <summary>Shows <paramref name="message"/> as a problem with <paramref name="replyText"/>, the text now in the box.</summary>
+    public void Show(string replyText, string message)
+    {
+        _about = replyText;
+        Message = message;
+    }
+
+    /// <summary>Called on every change of the reply box with its current text. Clears the message
+    /// only when the box no longer holds the text the message is about.</summary>
+    public void OnReplyChanged(string currentText)
+    {
+        if (Message is not null && currentText != _about) Message = null;
+    }
+}
+
+/// <summary>
+/// A cheap check that a reply is at least plan-shaped: JSON with the fields the importer requires.
+/// Used only to tell the user, honestly, that a reply is not usable yet. Import itself still runs
+/// its full check (AddPlanDialog.TryImport), and nothing is added on this check alone. The messages
+/// match TryImport's.
+/// </summary>
+public static class PlanReplyCheck
+{
+    /// <summary>Null when the reply looks like a plan, otherwise the plain-language reason.</summary>
+    public static string? Problem(string replyText)
+    {
+        var raw = replyText.Trim();
+        if (raw.Length == 0) return "Paste Claude's reply first.";
+
+        var fence = System.Text.RegularExpressions.Regex.Match(raw,
+            "```(?:json)?\\s*(\\{.*?\\})\\s*```", System.Text.RegularExpressions.RegexOptions.Singleline);
+        var json = fence.Success ? fence.Groups[1].Value
+                 : raw.StartsWith('{') ? raw : null;
+        if (json is null)
+            return "Couldn't find valid JSON — paste the whole reply including the ```json block.";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            foreach (var field in new[] { "id", "name", "phases" })
+                if (!root.TryGetProperty(field, out _))
+                    return $"Plan is missing the required field '{field}'.";
+            return null;
+        }
+        catch (JsonException)
+        {
+            return "That JSON doesn't parse — check it's the complete reply including the ```json fence.";
+        }
+    }
+}
