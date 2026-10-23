@@ -56,14 +56,63 @@ public sealed class B1MoneyFormatTests
         Assert.Equal("", MoneyFormat.FromNumber(double.NaN, ','));
     }
 
-    [Fact]
-    public void ThousandsPointInItalianCulture_IsTreatedAsDecimal_DocumentedBehaviour()
+    [Theory]
+    [InlineData("14.000", "14" + T3 + "000", 14000.0)]
+    [InlineData("1.600", "1" + T3 + "600", 1600.0)]
+    [InlineData("14.000.000", "14" + T3 + "000" + T3 + "000", 14000000.0)]
+    [InlineData("14.000,5", "14" + T3 + "000,5", 14000.5)]
+    [InlineData("14.5", "14,5", 14.5)]
+    [InlineData("14,5", "14,5", 14.5)]
+    [InlineData("14.55", "14,55", 14.55)]
+    [InlineData("1,600", "1,60", 1.6)]
+    public void DotPlusThreeDigits_IsThousands_CommaIsDecimal(string raw, string expectedText, double expectedValue)
     {
-        // "14.000" typed in it-IT: '.' is read as the decimal separator -> "14,00" -> 14 (not 14000).
-        var (text, _) = MoneyFormat.Normalize("14.000", 6, ',');
-        Assert.Equal("14,00", text);
-        Assert.Equal(14.0, MoneyFormat.Parse(text));
+        // Rule decided 2026-10-23. A dot with 1-2 digits stays a dot on screen only while it is still the
+        // last thing typed (pending); Normalize of a complete decimal like "14.5" keeps it pending, so settle it.
+        var (text, _) = MoneyFormat.Normalize(raw, raw.Length, ',');
+        text = MoneyFormat.Settle(text, ',');
+        Assert.Equal(expectedText, text);
+        Assert.Equal(expectedValue, MoneyFormat.Parse(text), 6);
+        Assert.Equal(expectedValue, MoneyFormat.Parse(raw), 6);
     }
+
+    [Fact]
+    public void MidTyping_OneDotZeroDotZeroZeroDotZeroZeroZero_ReachesThousands()
+    {
+        var steps = new[] { "1", "1.", "1.0", "1.00", "1.000" };
+        var texts = steps.Select(s => MoneyFormat.Normalize(s, s.Length, ',').Text).ToArray();
+        Assert.Equal("1", texts[0]);
+        Assert.Equal("1.", texts[1]);      // pending dot stays a dot
+        Assert.Equal("1.0", texts[2]);
+        Assert.Equal("1.00", texts[3]);
+        Assert.Equal("1" + T3 + "000", texts[4]);
+        Assert.Equal(1000.0, MoneyFormat.Parse(texts[4]));
+    }
+
+    [Fact]
+    public void FocusLoss_SettlesPendingDotToCultureSeparator()
+    {
+        Assert.Equal("1,5", MoneyFormat.Settle("1.5", ','));
+        Assert.Equal("1,", MoneyFormat.Settle("1.", ','));
+        Assert.Equal("1" + T3 + "000", MoneyFormat.Settle("1" + T3 + "000", ','));
+        Assert.Equal("1.5", MoneyFormat.Settle("1.5", '.'));
+    }
+
+    [Fact]
+    public void DotFollowedByFourOrMoreDigits_IsDecimalCutToTwo()
+    {
+        var (text, _) = MoneyFormat.Normalize("14.0001", 7, ',');
+        Assert.Equal("14,00", text);
+    }
+
+    [Fact]
+    public void SavedValueIsPlainNumber_ForDotThousands()
+    {
+        Assert.Equal(14000.0, MoneyFormat.Parse(MoneyFormat.Normalize("14.000", 6, ',').Text));
+        Assert.Equal("14" + T3 + "000", MoneyFormat.FromNumber(14000, ','));
+    }
+
+    private const string T3 = " ";
 }
 
 [Collection("TestRoot")]
