@@ -250,7 +250,7 @@ public static class ReportExport
             ? $" (≈ {MainWindow.FormatEur(min / 60.0 * hourValueEur)})" : "";
         if (off > 120)
             hints.Add($"You spent {ReportData.FmtHours(off)}{Eur(off)} off-plan {phrase}. " +
-                      "Try blocking distracting apps during working hours.");
+                      "Try blocking distracting apps and activities during working hours.");
         // Ratio is against on-plan + neutral time (2026-10-01 request), not on-plan alone.
         var workish = on + neutral;
         if (workish > 0 && (double)off / workish > 0.4)

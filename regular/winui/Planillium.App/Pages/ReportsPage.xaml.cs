@@ -149,6 +149,7 @@ public sealed partial class ReportsPage : Page
             var earnings = income.PaidEarningsForPeriod(_period);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
+            Body.Children.Add(Card(IncomeStrip(incomeSum, earnings.Sum(e => e.Eur), periodName)));
             Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin, earnings.Sum(e => e.Eur))));
             Body.Children.Add(Card(EarningsCard(earnings, periodName)));
 
@@ -237,6 +238,36 @@ public sealed partial class ReportsPage : Page
                               $"{ReportData.FmtHours(totals.OnMin)} on-plan · " +
                               $"{ReportData.FmtHours(totals.OffMin)} off-plan · {dayOffLabel}"));
         return card;
+    }
+
+    /// <summary>The two money figures for the period side by side, in EUR (B1, 2026-10-23 request):
+    /// the lost/gained-income figure (unchanged from the card below) and the part of it earned from
+    /// paid work. Paid work is already inside the first figure, so the note says so — the two are
+    /// not meant to be added. No calculation of its own: both numbers are the ones the cards
+    /// below already use.</summary>
+    private static Grid IncomeStrip(double sum, double earned, string periodName)
+    {
+        var grid = new Grid { ColumnSpacing = 24 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        StackPanel Col(string caption, double v, string note)
+        {
+            var p = new StackPanel { Spacing = 2 };
+            p.Children.Add(Caption(caption));
+            p.Children.Add(new TextBlock
+            {
+                Text = MainWindow.FormatEur(v), FontSize = 28, FontWeight = FontWeights.Bold,
+                Foreground = IncomeBrush(v),
+            });
+            p.Children.Add(Dim(note));
+            return p;
+        }
+        var left = Col($"INCOME LOST OR GAINED — {periodName}", sum, "Includes paid work.");
+        var right = Col($"OF WHICH PAID WORK — {periodName}", earned, "Part of the figure on the left, not added to it.");
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(left);
+        grid.Children.Add(right);
+        return grid;
     }
 
     /// <summary>Lost/gained-earnings counter (2026-09-22 request), scoped to the same period

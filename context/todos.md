@@ -14,6 +14,9 @@
 
 ## Done
 
+### 2026-10-23 — B1 Reports/Settings batch (regular side)
+Reports: two-figure EUR strip (`ReportsPage.IncomeStrip`, no new calculation). Insight wording "apps and activities" (`ReportExport.Suggestions`). Settings → Income: `MoneyBox` + `MoneyFormat` (thin-space grouping, no arrows; dot+3 digits = thousands, user decision 2026-10-23), previous salary built by the same `RateRow` as payable tags, Esc/click-outside on the new-tag line (LostFocus + page pointer handler; focus parks on the section list). Debug build 0 warnings; Release not rebuilt while the live app ran. QA: see CONTEXT.md section 7.
+
 ### 2026-10-13 — replace-remaining v2 + AI layer (regular side)
 v2: full task content in prompt, words-that-must-be-gone check (commit 1991f52). AI layer: `AiClient` (streaming, 120 s idle / 6 min cap), `AiSettings`, `AiAskPanel`, Settings → AI, wired into Replace remaining + Add plan (9770b30). Env override `PLANILLIUM_AI_BASE_URL` read only in Debug/tests. QA: both PASS WITH CAVEATS, 0 defects. Known: scoring rows for not-yet-scored days use the post-replace plan; "Clear all my data" does not remove the key; Test connection has no cancel. Live UI checks still owed.
 
