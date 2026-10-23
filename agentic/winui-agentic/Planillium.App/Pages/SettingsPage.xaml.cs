@@ -308,11 +308,16 @@ public sealed partial class SettingsPage : Page
         NewPaidTagName.Text = "";
         NewPaidTagRate.Text = "";
         // Deferred: a press outside the line may still be moving focus to the control that was clicked;
-        // the focus park only takes focus if nothing else did. It is a non-text element, so no text box
-        // (and no stray typing into a saved amount) can receive focus from here.
+        // the focus park only takes focus if nothing else did. It is a non-text element (a Button), so no text
+        // box (and no stray typing into a saved amount) can receive focus from here. If the park refuses focus,
+        // the section list (also non-text) takes it; if that refuses too, it is logged.
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (IsFocusInsideNewPaidTagLine()) FocusPark.Focus(FocusState.Programmatic);
+            if (!IsFocusInsideNewPaidTagLine()) return;
+            if (FocusPark.Focus(FocusState.Programmatic)) return;
+            Log.Warn("SettingsPage.LeavePaidTagLine", "focus park refused focus; trying the section list");
+            if (!SectionList.Focus(FocusState.Programmatic))
+                Log.Warn("SettingsPage.LeavePaidTagLine", "section list also refused focus; focus stays in the line");
         });
     }
 
