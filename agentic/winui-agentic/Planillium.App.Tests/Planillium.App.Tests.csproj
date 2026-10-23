@@ -127,6 +127,7 @@
     <Compile Include="..\Planillium.App\Services\ScoreReason.cs" Link="App\ScoreReason.cs" />
     <Compile Include="..\Planillium.App\Services\ScoreService.cs" Link="App\ScoreService.cs" />
     <Compile Include="..\Planillium.App\Services\IncomeService.cs" Link="App\IncomeService.cs" />
+    <Compile Include="..\Planillium.App\Services\MoneyFormat.cs" Link="App\MoneyFormat.cs" />
     <!-- Linked for PieSlices, the pure logic for building pie-chart slices from app usage data. -->
     <Compile Include="..\Planillium.App\Services\PieSlices.cs" Link="App\PieSlices.cs" />
     <!-- The one table of scoring keys/defaults/ranges that ScoreService, ConfigService and
