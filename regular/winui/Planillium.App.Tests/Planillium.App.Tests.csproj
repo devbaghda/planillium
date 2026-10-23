@@ -114,6 +114,8 @@
     <!-- Lost/gained-earnings counter (2026-09-22). Plain C#, depends only on
          Database/ConfigService/ReportData, all already linked above. -->
     <Compile Include="..\Planillium.App\Services\IncomeService.cs" Link="App\IncomeService.cs" />
+    <!-- B1 money-box text rules (2026-10-23), QA-linked 2026-10-24. -->
+    <Compile Include="..\Planillium.App\Services\MoneyFormat.cs" Link="App\MoneyFormat.cs" />
   </ItemGroup>
 
   <ItemGroup>
