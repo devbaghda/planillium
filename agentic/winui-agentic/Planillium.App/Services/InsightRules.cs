@@ -26,7 +26,7 @@ public static class InsightRules
             var offHours = ReportData.FmtHours(off);
             var offEur = FormatEur(off / 60.0 * hourValueEur);
             hints.Add($"You spent {offHours} ({offEur}) off-plan {phrase}. " +
-                      "Try blocking distracting apps during working hours.");
+                      "Try blocking distracting apps and activities during working hours.");
         }
 
         // Ratio insight: off-plan time as a fraction of on-plan + neutral.

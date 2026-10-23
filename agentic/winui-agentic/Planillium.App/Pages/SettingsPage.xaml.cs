@@ -1,7 +1,9 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Planillium.App.Controls;
 using Planillium.App.Services;
 using Windows.System;
 
@@ -26,6 +28,10 @@ public sealed partial class SettingsPage : Page
     /// on "General" every time is exactly the annoyance a menu is supposed to remove.</summary>
     private static int _lastSection;
 
+    /// <summary>The previous-salary box (config income.potential_monthly_net_eur). Built here, not in XAML,
+    /// so it goes through the same <see cref="MonthlyRow"/> builder as the payable-tag rows.</summary>
+    private readonly MoneyBox MonthlyIncomeBox;
+
     public SettingsPage()
     {
         InitializeComponent();
@@ -34,6 +40,13 @@ public sealed partial class SettingsPage : Page
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
                 "every menu entry must open a section.");
+        MonthlyIncomeBox = new MoneyBox { Header = "Previous salary — monthly net (€)", PlaceholderText = "0", Width = 240 };
+        AutomationProperties.SetName(MonthlyIncomeBox, "Previous salary — monthly net (€)");
+        MonthlyIncomeBox.ValueChanged += (_, _) => Income_Changed(MonthlyIncomeBox, EventArgs.Empty);
+        SalaryRowHost.Children.Add(MonthlyRow(MonthlyIncomeBox, remove: null));
+        // Click-outside for the "New payable tag" line. handledEventsToo so it still sees presses a child
+        // control has already handled (buttons, text boxes).
+        AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Page_PointerPressed), handledEventsToo: true);
         BuildScoringSection();
         SectionList.SelectedIndex = _lastSection;
         // The strip is fixed at two lines so it can't resize the page (see XAML), which means a
@@ -197,32 +210,90 @@ public sealed partial class SettingsPage : Page
         foreach (var tag in PaidTags.All())
         {
             var t = tag;
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            var rate = new NumberBox
-            {
-                Header = $"{t.Label} — monthly net (€)", Value = t.MonthlyEur, Minimum = 0, Width = 240,
-                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
-            };
-            var hourly = new TextBlock
-            {
-                Text = $"= {MainWindow.FormatEur(t.HourlyEur)}/h",
-                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6),
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            };
+            var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", PlaceholderText = "0", Width = 240 };
+            AutomationProperties.SetName(rate, $"{t.Label} — monthly net (€)");
+            rate.Value = t.MonthlyEur;
             rate.ValueChanged += (_, _) =>
             {
-                if (double.IsNaN(rate.Value)) return;
-                hourly.Text = $"= {MainWindow.FormatEur(rate.Value / IncomeService.WorkingHoursPerMonth)}/h";
                 if (_initialising) return;
                 SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
             };
             var remove = new Button { Content = "Remove", VerticalAlignment = VerticalAlignment.Bottom };
             remove.Click += (_, _) => SavePaidTags(PaidTags.All().Where(p => p.Value != t.Value), rerender: true);
-            row.Children.Add(rate); row.Children.Add(hourly); row.Children.Add(remove);
-            PaidTagsHost.Children.Add(row);
+            PaidTagsHost.Children.Add(MonthlyRow(rate, remove));
         }
         if (PaidTagsHost.Children.Count == 0)
             PaidTagsHost.Children.Add(new TextBlock { Text = "No payable tags.", FontSize = 12 });
+    }
+
+    /// <summary>
+    /// One money row, shared by the previous-salary row and every payable-tag row: the box, a readout
+    /// "= EUR x/h" that follows every keystroke ("= —/h" while empty), and an optional Remove button.
+    /// The salary row passes no button, so its readout ends the row.
+    /// </summary>
+    private static StackPanel MonthlyRow(MoneyBox box, Button? remove)
+    {
+        var readout = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6),
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        void RefreshReadout()
+        {
+            var v = box.Value;
+            readout.Text = double.IsNaN(v) ? "= —/h" : $"= {MainWindow.FormatEur(v / IncomeService.WorkingHoursPerMonth)}/h";
+        }
+        box.TextChanged += (_, _) => RefreshReadout();
+        RefreshReadout();
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        row.Children.Add(box);
+        row.Children.Add(readout);
+        if (remove != null) row.Children.Add(remove);
+        return row;
+    }
+
+    /// <summary>Esc in either field of the "New payable tag" line leaves it: both fields are emptied,
+    /// nothing is added or saved. Focus moves to the section scroller so no field keeps the focus rail.</summary>
+    private void NewPaidTag_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Escape) return;
+        e.Handled = true;
+        LeavePaidTagLine();
+    }
+
+    /// <summary>A press outside the "New payable tag" line, while focus is inside it, leaves the line the
+    /// same way Esc does. Not handled: the press still reaches whatever was clicked (a salary box keeps focus).</summary>
+    private void Page_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!IsFocusInsideNewPaidTagLine()) return;
+        var p = e.GetCurrentPoint(NewPaidTagLine).Position;
+        var inside = p.X >= 0 && p.Y >= 0 && p.X <= NewPaidTagLine.ActualWidth && p.Y <= NewPaidTagLine.ActualHeight;
+        if (!inside) LeavePaidTagLine();
+    }
+
+    private void LeavePaidTagLine()
+    {
+        NewPaidTagName.Text = "";
+        NewPaidTagRate.Text = "";
+        // Deferred: a press outside the line may still be moving focus to the control that was clicked;
+        // the scroller only takes focus if nothing else did.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (IsFocusInsideNewPaidTagLine()) SectionScroll.Focus(FocusState.Programmatic);
+        });
+    }
+
+    private bool IsFocusInsideNewPaidTagLine()
+    {
+        if (XamlRoot == null) return false;
+        for (DependencyObject? d = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+             d != null;
+             d = VisualTreeHelper.GetParent(d))
+        {
+            if (ReferenceEquals(d, NewPaidTagLine)) return true;
+        }
+        return false;
     }
 
     private void SavePaidTags(IEnumerable<PaidTag> tags, bool rerender)
@@ -269,7 +340,9 @@ public sealed partial class SettingsPage : Page
             {
                 if (cfg["income"] is not System.Text.Json.Nodes.JsonObject income)
                     cfg["income"] = income = new System.Text.Json.Nodes.JsonObject();
-                income["potential_monthly_net_eur"] = MonthlyIncomeBox.Value;
+                // An empty salary box (NaN) is not written: the key keeps its last saved number.
+                if (!double.IsNaN(MonthlyIncomeBox.Value))
+                    income["potential_monthly_net_eur"] = MonthlyIncomeBox.Value;
                 income["employed"] = EmployedToggle.IsOn;
             });
             SaveStatus.Text = "Income settings saved.";

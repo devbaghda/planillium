@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Change: Reports shows two figures above the income card for each period (Today / This week / This month / This year): "Income lost or gained" (the same headline figure as before, which already includes paid work) and "Of which paid work" (the payable-tag total), both in EUR. The headline and the other cards are unchanged; no calculation changed.
+- Change: the off-plan nudge now reads "Try blocking distracting apps and activities during working hours."
+- Change: Settings -> Income money boxes (previous salary, each payable tag's monthly net, the new-tag amount) group thousands with a thin space as you type (2 925, 1 600, 14 000) and no longer show up/down arrows. The saved value is still a plain number.
+- Change: Settings -> Income previous salary is laid out like a payable-tag row ("Previous salary -- monthly net (EUR)", the box, and "= EUR x/h").
+- Change: in Settings -> Income, pressing Esc in the "New payable tag" line, or clicking outside it, clears both fields and adds nothing.
 - Fix: after "Ask Claude" fills a reply that is not usable (Replace remaining tasks), the specific reason now stays under the reply box. Before, it vanished right after it appeared and only the reason line above said the reply was not usable. Typing in the box still clears it.
 - Change: Add plan's "Ask Claude" no longer says "Claude's reply is in the box" for a reply that is clearly not a plan. It shows the reason under the reply box instead (not valid JSON, JSON that does not parse, or a missing id/name/phases). Nothing is imported on this check; Import still runs its full check.
 - Change: "Ask Claude" never overwrites a reply already in the reply box (Replace remaining tasks and Add plan). With text in the box it sends nothing and says to clear the box first. The box is checked again after the first-use notice and when the answer arrives; text typed during the call discards the answer.
