@@ -39,7 +39,7 @@ No income/earnings/scoring calculation changes.
 3. **Money boxes:** replace the NumberBox on these three inputs by a small reusable `MoneyBox` (TextBox-based control or helper in
    `Controls/`, new pure formatter class `Services/MoneyFormat.cs` for parse/format so it is unit-testable): on every text change it strips
    non-digits/separators, regroups the integer part with a thin space U+2009 (acceptance accepts thin or normal), keeps the
-   caret at the same digit position, keeps an optional decimal part with the culture's decimal separator (max 2 digits). Exposes
+   caret at the same digit position, keeps an optional decimal part with the culture's decimal separator (max 2 digits). Separator rules (comma = decimal, dot + 3 digits = thousands): see D3, "Separator policy". Exposes
    `Value` (double; NaN when empty/unparseable) and a `ValueChanged` event so the existing handlers (`Income_Changed`, tag-row save) keep
    their contract. Non-number / negative / empty behave as before: negative sign is not accepted (previous `Minimum=0` clamp), empty = NaN =
    "needs a number" / not saved (the existing NaN guards stay). Rejected: keeping NumberBox with a `DecimalFormatter` -- NumberBox only
@@ -202,6 +202,17 @@ Only the second sentence changes; the first sentence and its number formatting s
 existing NumberBoxes show. No spin buttons, no clear glyph that looks like one. Placeholder (empty state): `0`. Input scope: Number (numeric
 on-screen keyboard). Display: integer part grouped with U+2009 thin space every three digits from the right; decimal part only if the user types one,
 max 2 digits, culture decimal separator. Examples: `2925` -> `2 925`, `1600` -> `1 600`, `14000` -> `14 000`, `1600,5` -> `1 600,5`.
+
+**Separator policy (decided by the user 2026-10-23; supersedes any earlier reading of "." as a decimal):**
+- A **comma is always the decimal separator**, in every culture.
+- A **dot followed by exactly three digits is a thousands separator**, in every culture: `14.000` -> `14 000`,
+  `1.600` -> `1 600`, `14.000.000` -> `14 000 000`, `14.000,5` -> `14 000,5`. It is dropped on display.
+- A **dot followed by 1 or 2 digits is a decimal**: `14.5` -> `14,5` (culture separator once settled).
+- While a decimal dot is still being typed (one or two digits, or none, and nothing after them) it stays a dot on
+  screen, so typing `1.000` does not turn into `1,00` on the way; when focus leaves the box it becomes the culture
+  separator (`MoneyFormat.Settle`). Without this, the third digit could never reach the thousands rule.
+- A dot followed by four or more digits is treated as a decimal and cut to two decimal digits, as before.
+- The saved value is the plain number in every case (`14.000` saves `14000`).
 Grouping is applied as the user types and the caret stays after the same digit it was after before regrouping. On load, values are shown grouped (2 925, not 2925).
 Whole amounts are shown without a trailing `,00`.
 

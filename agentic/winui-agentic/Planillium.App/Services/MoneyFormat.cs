@@ -35,6 +35,7 @@ public static class MoneyFormat
         var dec = new StringBuilder();
         var hasSep = false;
         var sepIndex = -1;
+        var pendingDot = false;
         for (var i = 0; i < raw.Length; i++)
         {
             var c = raw[i];
@@ -43,10 +44,17 @@ public static class MoneyFormat
                 if (!hasSep) intRaw.Append(c);
                 else if (dec.Length < MaxDecimalDigits) dec.Append(c);
             }
+            else if (IsThousandsDot(raw, i))
+            {
+                // Thousands separator: dropped, the digits around it stay one number.
+            }
             else if ((c == ',' || c == '.') && !hasSep)
             {
                 hasSep = true;
                 sepIndex = i;
+                // A dot still being typed (1 or 2 digits, or none, and nothing after them) stays a dot
+                // until the number is settled, so typing "1.000" is not turned into "1,00" on the way.
+                pendingDot = c == '.' && IsPendingDecimalDot(raw, i);
             }
         }
 
@@ -55,7 +63,8 @@ public static class MoneyFormat
         if (intDigits.Length == 0 && !hasSep && intRaw.Length > 0) intDigits = "0";
 
         var grouped = Group(intDigits);
-        var text = hasSep ? $"{grouped}{decimalSeparator}{dec}" : grouped;
+        var sep = pendingDot ? '.' : decimalSeparator;
+        var text = hasSep ? $"{grouped}{sep}{dec}" : grouped;
 
         // Caret: count the digits typed before the caret, and place the caret after the same number of
         // digits in the result. A caret that was after the separator stays after it.
@@ -83,6 +92,40 @@ public static class MoneyFormat
             if (pos <= sepOut) pos = sepOut + 1;
         }
         return (text, Math.Min(pos, text.Length));
+    }
+
+    /// <summary>
+    /// Box text once focus leaves it: a decimal dot still pending (see <see cref="Normalize"/>) becomes the
+    /// culture's decimal separator. Other text is returned unchanged.
+    /// </summary>
+    public static string Settle(string text, char decimalSeparator)
+    {
+        text ??= "";
+        var dot = text.LastIndexOf('.');
+        if (dot < 0 || decimalSeparator == '.' || !IsPendingDecimalDot(text, dot)) return text;
+        return string.Concat(text.AsSpan(0, dot), decimalSeparator.ToString(), text.AsSpan(dot + 1));
+    }
+
+    /// <summary>
+    /// A '.' followed by exactly three digits is a thousands separator ("14.000" = 14000, "14.000.000" = 14000000),
+    /// whatever the culture. A comma is always the decimal separator, and a '.' followed by 1 or 2 digits stays a decimal.
+    /// </summary>
+    private static bool IsThousandsDot(string s, int i)
+    {
+        if (s[i] != '.') return false;
+        var run = 0;
+        for (var j = i + 1; j < s.Length && char.IsAsciiDigit(s[j]); j++) run++;
+        return run == 3;
+    }
+
+    /// <summary>A '.' with at most two digits after it and nothing else: a decimal still being typed.</summary>
+    private static bool IsPendingDecimalDot(string s, int i)
+    {
+        var rest = s.AsSpan(i + 1);
+        if (rest.Length > MaxDecimalDigits) return false;
+        foreach (var c in rest)
+            if (!char.IsAsciiDigit(c)) return false;
+        return true;
     }
 
     /// <summary>Groups an integer digit string with a thin space every three digits from the right.</summary>
@@ -124,9 +167,12 @@ public static class MoneyFormat
         var intDigits = new StringBuilder();
         var decDigits = new StringBuilder();
         var hasSep = false;
-        foreach (var c in text ?? "")
+        text ??= "";
+        for (var i = 0; i < text.Length; i++)
         {
+            var c = text[i];
             if (char.IsAsciiDigit(c)) (hasSep ? decDigits : intDigits).Append(c);
+            else if (IsThousandsDot(text, i)) continue;
             else if ((c == ',' || c == '.') && !hasSep) hasSep = true;
         }
         if (intDigits.Length == 0 && decDigits.Length == 0) return double.NaN;

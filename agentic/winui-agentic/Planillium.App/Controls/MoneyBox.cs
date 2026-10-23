@@ -1,4 +1,5 @@
 using System;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Planillium.App.Services;
@@ -28,6 +29,13 @@ public sealed class MoneyBox : TextBox
     {
         get => MoneyFormat.Parse(Text);
         set => Text = MoneyFormat.FromNumber(value, _decimalSeparator);
+    }
+
+    protected override void OnLostFocus(RoutedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        var settled = MoneyFormat.Settle(Text, _decimalSeparator);
+        if (settled != Text) Text = settled;
     }
 
     private void OnTextChanged(object sender, TextChangedEventArgs e)

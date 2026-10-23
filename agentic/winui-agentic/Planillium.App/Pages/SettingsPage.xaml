@@ -113,12 +113,14 @@
                     <StackPanel x:Name="PaidTagsHost" Spacing="8"/>
                     <!-- Left-aligned so its bounds are the content, not the page width: the outside-click
                          test (Page_PointerPressed) measures against these bounds. -->
-                    <StackPanel x:Name="NewPaidTagLine" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                    <StackPanel x:Name="NewPaidTagLine" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left"
+                                KeyDown="NewPaidTagLine_KeyDown">
                         <TextBox x:Name="NewPaidTagName" Header="New payable tag" PlaceholderText="Name" Width="160"
-                                 KeyDown="NewPaidTag_KeyDown"/>
+                                 KeyDown="NewPaidTag_KeyDown" LostFocus="NewPaidTag_LostFocus"/>
                         <controls:MoneyBox x:Name="NewPaidTagRate" Header="Monthly net (€)" PlaceholderText="0" Text="0"
-                                           Width="150" KeyDown="NewPaidTag_KeyDown"/>
-                        <Button Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click"/>
+                                           Width="150" KeyDown="NewPaidTag_KeyDown" LostFocus="NewPaidTag_LostFocus"/>
+                        <Button Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click"
+                                LostFocus="NewPaidTag_LostFocus"/>
                     </StackPanel>
                     <TextBlock Text="The sidebar shows the running total of lost earnings (while unemployed) or gained earnings (while employed), backfilled from 2025-12-04."
                                TextWrapping="Wrap" FontSize="12"
@@ -308,6 +310,13 @@
                 </StackPanel>
             </Grid>
         </ScrollViewer>
+
+        <!-- Focus park for the "New payable tag" line (SettingsPage.xaml.cs, LeavePaidTagLine): a focusable
+             element that is not a text box, so focus never lands in a box after Esc or an outside click.
+             Not a tab stop, so keyboard navigation never lands on it. -->
+        <ContentControl x:Name="FocusPark" Grid.Row="1" Grid.Column="0" Width="1" Height="1" Opacity="0"
+                        IsTabStop="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        AutomationProperties.AccessibilityView="Raw"/>
 
         <!-- ══ section menu ══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" CornerRadius="8"

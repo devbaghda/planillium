@@ -13,6 +13,10 @@ public sealed partial class SettingsPage : Page
 {
     private bool _initialising = true;
 
+    /// <summary>Set by a Tab press inside the "New payable tag" line, so the focus move that Tab causes is
+    /// not mistaken for a click outside the line (see <see cref="NewPaidTag_LostFocus"/>).</summary>
+    private bool _tabKeyPending;
+
     /// <summary>The SCORING section's inputs, keyed by their config.json key — built once in
     /// <see cref="BuildScoringSection"/> from <see cref="ScoringRules.All"/> so load and save
     /// both iterate the same table the score formula itself reads from.</summary>
@@ -262,8 +266,10 @@ public sealed partial class SettingsPage : Page
         LeavePaidTagLine();
     }
 
-    /// <summary>A press outside the "New payable tag" line, while focus is inside it, leaves the line the
-    /// same way Esc does. Not handled: the press still reaches whatever was clicked (a salary box keeps focus).</summary>
+    /// <summary>A press outside the "New payable tag" line, while focus is still inside it, leaves the line the
+    /// same way Esc does. Not handled: the press still reaches whatever was clicked. A press that moves focus to
+    /// another control is caught by <see cref="NewPaidTag_LostFocus"/> instead: a clicked text box or toggle has
+    /// already taken focus by the time this page-level handler runs, so focus is no longer inside the line here.</summary>
     private void Page_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (!IsFocusInsideNewPaidTagLine()) return;
@@ -272,15 +278,41 @@ public sealed partial class SettingsPage : Page
         if (!inside) LeavePaidTagLine();
     }
 
+    /// <summary>Tab inside the line is keyboard navigation, not leaving it: remember it so the focus move it causes
+    /// is not treated as a click outside.</summary>
+    private void NewPaidTagLine_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Tab) _tabKeyPending = true;
+    }
+
+    /// <summary>Focus left one of the line's controls. Tab keeps the line. Any other move of focus to something
+    /// outside the line (a click on the salary box, a tag rate, "Currently employed", ...) leaves the line as Esc
+    /// does, and the clicked control keeps the focus. The check runs after the focus move has settled, so an Add
+    /// click (focus moves to Add, which is inside the line) and a window switch (no element focused) do not count.</summary>
+    private void NewPaidTag_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_tabKeyPending)
+        {
+            _tabKeyPending = false;
+            return;
+        }
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (XamlRoot != null && FocusManager.GetFocusedElement(XamlRoot) != null && !IsFocusInsideNewPaidTagLine())
+                LeavePaidTagLine();
+        });
+    }
+
     private void LeavePaidTagLine()
     {
         NewPaidTagName.Text = "";
         NewPaidTagRate.Text = "";
         // Deferred: a press outside the line may still be moving focus to the control that was clicked;
-        // the scroller only takes focus if nothing else did.
+        // the focus park only takes focus if nothing else did. It is a non-text element, so no text box
+        // (and no stray typing into a saved amount) can receive focus from here.
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (IsFocusInsideNewPaidTagLine()) SectionScroll.Focus(FocusState.Programmatic);
+            if (IsFocusInsideNewPaidTagLine()) FocusPark.Focus(FocusState.Programmatic);
         });
     }
 
