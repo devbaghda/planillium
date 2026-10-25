@@ -216,6 +216,17 @@
     a tag — for that line's amount box this wins over "the text stays" (a Tab out of the line keeps
     it). A refused Enter-add (no name, negative or empty amount) leaves the cursor in the line so it
     can be fixed (builder's choice; not stated by the user).
+    **B1d additions (user decisions 2026-10-25):** the new-tag line refuses an empty amount, an
+    amount of 0 and a non-number (letters are stripped as typed, so it arrives empty) -- nothing is
+    added, a red message shows under the line until the line is changed, and any old "Saved." is
+    removed; the line's amount box starts empty, never "0". A Tab out of the new-tag amount box
+    keeps the text (only Esc / a click outside clear the line). After the Add button adds a tag the
+    cursor ends nowhere (Tab continues from the button); after a refused button-Add it goes to the
+    box to fix (builder's choice). The cursor never lands in an Income box the click was not on,
+    whatever was clicked. Leaving the salary or a payable-tag box empty (or a tag box at 0) puts the
+    stored amount back with a status message -- box and stored value always agree (builder's choice
+    of the two options the user allowed; a minus still stays as typed). A payable tag is never
+    saved at 0.
 
 ---
 

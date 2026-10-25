@@ -18,7 +18,9 @@ namespace Planillium.App.Services;
 /// invalid and <see cref="Committed"/> never fires — nothing is saved, the text stays as typed even
 /// when the box is left. <see cref="NegativeChanged"/> reports every change of that state so a
 /// message can stay visible exactly as long as the text is negative. Enter raises
-/// <see cref="Submitted"/> after committing, so the page can move the cursor out of the box.</summary>
+/// <see cref="Submitted"/> after committing, so the page can move the cursor out of the box.
+/// B1d (2026-10-25): a box with <see cref="KeepsStoredValue"/> left empty (letters are stripped as
+/// typed, so "abc" ends up empty too) goes back to its stored amount instead of sitting blank.</summary>
 public sealed class MoneyBox : TextBox
 {
     private bool _internal;
@@ -87,22 +89,21 @@ public sealed class MoneyBox : TextBox
         Update();
     }
 
-    /// <summary>Re-reads the number and the sign from the text; raises the two change events.</summary>
+    /// <summary>Re-reads the number and the sign from the text; raises the two change events.
+    /// B1d: both fields are set BEFORE either event fires. Firing ValueChanged while IsNegative still
+    /// held the old sign made the hourly readout read "-500 123 → 500 123" as still negative and stick
+    /// on "= —/h".</summary>
     private void Update()
     {
         var neg = Text.Any(IsMinus);
         var v = MoneyFormat.Parse(Text);          // digits only; the sign is applied here
         if (neg && !double.IsNaN(v)) v = -v;
-        if (!v.Equals(_value))
-        {
-            _value = v;
-            ValueChanged?.Invoke(this, EventArgs.Empty);
-        }
-        if (neg != IsNegative)
-        {
-            IsNegative = neg;
-            NegativeChanged?.Invoke(this, neg);
-        }
+        var valueChanged = !v.Equals(_value);
+        var signChanged = neg != IsNegative;
+        _value = v;
+        IsNegative = neg;
+        if (valueChanged) ValueChanged?.Invoke(this, EventArgs.Empty);
+        if (signChanged) NegativeChanged?.Invoke(this, neg);
     }
 
     protected override void OnLostFocus(RoutedEventArgs e)
@@ -134,8 +135,29 @@ public sealed class MoneyBox : TextBox
             try { Text = settled; }
             finally { _internal = false; }
         }
-        if (IsNegative || _value.Equals(_committed)) return;
+        if (IsNegative) return;
+        // B1d: a box holding a stored amount never leaves an empty (or unaccepted) text behind it —
+        // the box would say one thing and config.json another. It goes back to the stored amount and
+        // says so through Reverted; nothing is saved.
+        if (KeepsStoredValue && (double.IsNaN(_value) || (Accepts is not null && !Accepts(_value))))
+        {
+            if (double.IsNaN(_committed)) return;
+            Value = _committed;
+            Reverted?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        if (_value.Equals(_committed)) return;
         _committed = _value;
         Committed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>B1d: set on boxes that show a stored amount (salary, payable tags). Leaving such a
+    /// box empty, or with a value <see cref="Accepts"/> refuses, puts the stored amount back.</summary>
+    public bool KeepsStoredValue { get; set; }
+
+    /// <summary>B1d: optional extra rule for a non-negative value (e.g. "above 0" for payable tags).</summary>
+    public Func<double, bool>? Accepts { get; set; }
+
+    /// <summary>B1d: raised after an empty or refused value was replaced by the stored amount.</summary>
+    public event EventHandler? Reverted;
 }

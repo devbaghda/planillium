@@ -10,7 +10,7 @@ public sealed partial class SettingsPage : Page
 
     /// <summary>Previous salary: built in code so it shares <see cref="RateRow"/> with the payable
     /// tag rows (B1, 2026-10-23: same layout, same money box).</summary>
-    private readonly MoneyBox MonthlyIncomeBox = new() { Header = "Previous salary — monthly net (€)", Width = 240 };
+    private readonly MoneyBox MonthlyIncomeBox = new() { Header = "Previous salary — monthly net (€)", Width = 240, KeepsStoredValue = true };
 
     /// <summary>Set when Tab is pressed in the new-tag line, so a Tab out of it is not treated
     /// like a click elsewhere (which clears the line).</summary>
@@ -43,12 +43,22 @@ public sealed partial class SettingsPage : Page
         IncomeFocusPark.LostFocus += (_, _) => IncomeFocusPark.IsTabStop = false;
         MonthlyIncomeBox.Committed += (_, _) => { if (!_initialising) SaveIncome(); };
         MonthlyIncomeBox.Submitted += (_, _) => Park(MonthlyIncomeBox);
+        WatchMoneyBox(MonthlyIncomeBox, () => "Previous salary needs a number");
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
-        NewPaidTagRate.Value = 0;
-        NewPaidTagHintHost.Children.Add(NegativeHint(NewPaidTagRate));
+        NewPaidTagRate.Value = double.NaN;
+        WatchMoneyBox(NewPaidTagRate, null);
+        var (lineHint, showLineHint) = ErrorHint();
+        _showNewTagHint = showLineHint;
+        NewPaidTagHintHost.Children.Add(lineHint);
+        NewPaidTagRate.NegativeChanged += (_, _) => SyncNewTagHint();
+        // B1d: a refusal message stays until the line is actually changed (compared by value, so a
+        // text re-format of the same number does not wipe the message it just caused).
+        NewPaidTagRate.ValueChanged += (_, _) => { if (!NewPaidTagRate.Value.Equals(_refusedAmount)) ClearNewTagError(); };
+        NewPaidTagName.TextChanged += (_, _) => { if ((NewPaidTagName.Text ?? "").Trim() != _refusedName) ClearNewTagError(); };
         // handledEventsToo: a click on a button or text box marks the press handled, but it must
         // still count as "outside the new-tag line".
         AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(Page_PointerPressed), true);
+        AddHandler(UIElement.PointerReleasedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(Page_PointerReleased), true);
         SectionList.SelectedIndex = _lastSection;
         // The strip is fixed at two lines so it can't resize the page (see XAML), which means a
         // long message trims. Mirroring it into the tooltip here rather than at ~20 assignment
@@ -312,8 +322,10 @@ public sealed partial class SettingsPage : Page
         foreach (var tag in PaidTags.All())
         {
             var t = tag;
-            var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", Width = 240 };
+            // B1d: a payable tag never holds 0 or nothing — leaving the box that way puts the stored amount back.
+            var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", Width = 240, KeepsStoredValue = true, Accepts = v => v > 0 };
             rate.Value = t.MonthlyEur;
+            WatchMoneyBox(rate, () => $"\"{t.Label}\" needs an amount above 0");
             rate.Committed += (_, _) =>
             {
                 if (double.IsNaN(rate.Value) || rate.IsNegative || _initialising) return;
@@ -344,26 +356,75 @@ public sealed partial class SettingsPage : Page
     /// whether or not the box still has focus.</summary>
     private static StackPanel NegativeHint(MoneyBox box)
     {
+        var (panel, show) = ErrorHint();
+        box.NegativeChanged += (_, on) => show(on ? NegativeText : null);
+        show(box.IsNegative ? NegativeText : null);
+        return panel;
+    }
+
+    /// <summary>B1d: the red message line itself (error colour, error icon, semibold, announced by
+    /// screen readers), with a setter: a text shows it, null hides it. Shared by the money rows'
+    /// minus message and the new-tag line's refusal messages so both look identical.</summary>
+    private static (StackPanel Panel, Action<string?> Show) ErrorHint()
+    {
         var critical = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
         var text = new TextBlock
         {
-            Text = NegativeText, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
             Foreground = critical, VerticalAlignment = VerticalAlignment.Center,
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetLiveSetting(text, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Assertive);
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Visibility = Visibility.Collapsed };
         panel.Children.Add(new FontIcon { Glyph = "", FontSize = 14, Foreground = critical, VerticalAlignment = VerticalAlignment.Center });
         panel.Children.Add(text);
-        void Sync(bool on)
+        void Show(string? message)
         {
-            panel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-            if (on)
-                Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.FromElement(text)?
-                    .RaiseAutomationEvent(Microsoft.UI.Xaml.Automation.Peers.AutomationEvents.LiveRegionChanged);
+            var was = panel.Visibility == Visibility.Visible ? text.Text : null;
+            panel.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
+            if (message is null || message == was) return;
+            text.Text = message;
+            Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.FromElement(text)?
+                .RaiseAutomationEvent(Microsoft.UI.Xaml.Automation.Peers.AutomationEvents.LiveRegionChanged);
         }
-        box.NegativeChanged += (_, on) => Sync(on);
-        Sync(box.IsNegative);
-        return panel;
+        return (panel, Show);
+    }
+
+    /// <summary>B1d, for every money box on the Income section: a minus appearing wipes a stale
+    /// "Saved." (nothing is being saved now), and a box that put its stored amount back says so.</summary>
+    private void WatchMoneyBox(MoneyBox box, Func<string>? revertReason)
+    {
+        box.NegativeChanged += (_, on) => { if (on) SaveStatus.Text = ""; };
+        if (revertReason is not null)
+            box.Reverted += (_, _) => SaveStatus.Text = revertReason() + " — the saved amount was kept.";
+    }
+
+    // ── the new-tag line's message (B1c minus, B1d refusals) ─────────────
+
+    private Action<string?> _showNewTagHint = _ => { };
+    private string? _newTagError;
+    private string? _refusedName;
+    private double _refusedAmount = double.NaN;
+
+    /// <summary>The minus message wins while the amount is negative; otherwise the last refusal.</summary>
+    private void SyncNewTagHint() => _showNewTagHint(NewPaidTagRate.IsNegative ? NegativeText : _newTagError);
+
+    private void ClearNewTagError()
+    {
+        if (_newTagError is null) return;
+        _newTagError = null;
+        _refusedName = null;
+        SyncNewTagHint();
+    }
+
+    /// <summary>Shows why Add was refused, under the line, and removes any "Saved." left over from
+    /// an earlier success (B1d: a refusal must not sit next to a success message).</summary>
+    private void RefuseNewTag(string message)
+    {
+        _newTagError = message;
+        _refusedName = (NewPaidTagName.Text ?? "").Trim();
+        _refusedAmount = NewPaidTagRate.Value;
+        SaveStatus.Text = "";
+        SyncNewTagHint();
     }
 
     private static StackPanel RateRow(MoneyBox rate, Button? remove)
@@ -377,6 +438,7 @@ public sealed partial class SettingsPage : Page
         void Refresh() => hourly.Text = double.IsNaN(rate.Value) || rate.IsNegative
             ? "= —/h" : $"= {MainWindow.FormatEur(rate.Value / IncomeService.WorkingHoursPerMonth)}/h";
         rate.ValueChanged += (_, _) => Refresh();
+        rate.NegativeChanged += (_, _) => Refresh();   // B1d: deleting the minus alone must refresh too
         Refresh();
         row.Children.Add(rate);
         row.Children.Add(hourly);
@@ -470,9 +532,16 @@ public sealed partial class SettingsPage : Page
         });
     }
 
+    /// <summary>What the last press landed on, for the release-time check (a TextBox captures the
+    /// pointer, so the release's own source is not where the click was).</summary>
+    private DependencyObject? _pressSource;
+
     private void Page_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        _tabPending = false;   // a click is never "the Tab that left the line"
+        _focusIntent = null;
         var src = e.OriginalSource as DependencyObject;
+        _pressSource = src;
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
         var inLine = focused is not null && InNewPaidTagLine(focused);
         var blank = IsNonInteractive(src);
@@ -480,6 +549,11 @@ public sealed partial class SettingsPage : Page
         // (or the new-tag line) and leaves it nowhere. A click on another control lets that control
         // take focus as usual.
         if ((focused is MoneyBox || inLine) && blank) Park(focused as UIElement);
+        // B1d: whatever the click did, the cursor must not end up in an Income box the click was not
+        // on (WinUI may hand focus to the first focusable box when a container takes a click —
+        // the salary box is that first box). Checked once the press, and again once the release,
+        // has been fully processed.
+        DispatcherQueue.TryEnqueue(() => GuardStrayFocus(src));
         if (!inLine || InNewPaidTagLine(src)) return;
         ClearNewPaidTagLine();
         if (blank) return;
@@ -490,6 +564,30 @@ public sealed partial class SettingsPage : Page
             var now = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
             if (now is not null && InNewPaidTagLine(now)) Park(now as UIElement);
         });
+    }
+
+    private void Page_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        var src = _pressSource;
+        DispatcherQueue.TryEnqueue(() => GuardStrayFocus(src));
+    }
+
+    /// <summary>B1d: if, after a click, a text box in the Income section holds the cursor although
+    /// the click did not land in that box, the cursor is moved to "nowhere" (the park). A click into
+    /// a box, or on a control that takes focus itself (toggle, button), is left alone.</summary>
+    private void GuardStrayFocus(DependencyObject? src)
+    {
+        if (XamlRoot is null || IncomePanel.Visibility != Visibility.Visible) return;
+        if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is not TextBox box) return;
+        if (!IsInIncomePanel(box) || IsWithin(src, box) || ReferenceEquals(box, _focusIntent)) return;
+        Park(box);
+    }
+
+    private static bool IsWithin(DependencyObject? d, DependencyObject container)
+    {
+        for (; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, container)) return true;
+        return false;
     }
 
     /// <summary>True when the press landed on something that is not an input control: a heading,
@@ -509,7 +607,8 @@ public sealed partial class SettingsPage : Page
     private void ClearNewPaidTagLine()
     {
         NewPaidTagName.Text = "";
-        NewPaidTagRate.Value = 0;
+        NewPaidTagRate.Value = double.NaN;   // B1d: empty, not "0" — 0 is not an amount a tag may have
+        ClearNewTagError();
     }
 
     private void SavePaidTags(IEnumerable<PaidTag> tags, bool rerender)
@@ -528,24 +627,47 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void AddPaidTag_Click(object sender, RoutedEventArgs e) => TryAddPaidTag();
+    /// <summary>B1d: after a mouse (or keyboard) Add the cursor leaves the line — not into a box and
+    /// not left on the button; Tab carries on from the button. On a refusal the cursor goes to the
+    /// box that needs fixing.</summary>
+    private void AddPaidTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryAddPaidTag(out var fix)) { Park(NewPaidTagAdd); return; }
+        _focusIntent = fix;   // put there on purpose: the stray-focus guard must leave it
+        fix?.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>A box the page itself just focused in answer to a click (refused Add); exempt from
+    /// <see cref="GuardStrayFocus"/> until the next press.</summary>
+    private Control? _focusIntent;
+
+    private bool TryAddPaidTag() => TryAddPaidTag(out _);
 
     /// <summary>The Add button's action, shared with Enter in the line (B1c). Returns true when a
-    /// tag was added; on a refusal the line keeps its text and the reason is shown.</summary>
-    private bool TryAddPaidTag()
+    /// tag was added; on a refusal the line keeps its text, the reason shows in red under the line
+    /// and <paramref name="fix"/> is the box to correct. B1d: an empty amount, an amount of 0 and a
+    /// text that is no number (letters are stripped as typed, so it arrives empty) are refused — a
+    /// payable tag at 0 is never saved.</summary>
+    private bool TryAddPaidTag(out Control? fix)
     {
+        fix = null;
         var label = (NewPaidTagName.Text ?? "").Trim();
         var slug = PaidTags.Slug(label);
-        if (slug.Length == 0) { SaveStatus.Text = "Give the new tag a name (letters or digits)."; return false; }
-        if (NewPaidTagRate.IsNegative) return false;   // its own message is already showing under the line
-        if (double.IsNaN(NewPaidTagRate.Value)) { SaveStatus.Text = "Monthly net needs a number."; return false; }
+        if (slug.Length == 0) { fix = NewPaidTagName; RefuseNewTag("Give the new tag a name (letters or digits)."); return false; }
+        if (NewPaidTagRate.IsNegative) { fix = NewPaidTagRate; SaveStatus.Text = ""; return false; }   // its own message is already showing
+        if (double.IsNaN(NewPaidTagRate.Value) || NewPaidTagRate.Value <= 0)
+        {
+            fix = NewPaidTagRate;
+            RefuseNewTag("Monthly net needs an amount above 0.");
+            return false;
+        }
         var all = PaidTags.All().ToList();
-        if (all.Any(p => p.Value == slug)) { SaveStatus.Text = $"\"{label}\" is already a payable tag."; return false; }
+        if (all.Any(p => p.Value == slug)) { fix = NewPaidTagName; RefuseNewTag($"\"{label}\" is already a payable tag."); return false; }
         // A name matching a built-in tag (e.g. Selfdev) simply makes that tag payable.
         var builtIn = Array.Find(DiaryTag.Options, o => o.Value == slug);
         all.Add(new PaidTag(slug, builtIn.Label ?? label, NewPaidTagRate.Value));
         SavePaidTags(all, rerender: true);
-        NewPaidTagName.Text = ""; NewPaidTagRate.Value = 0;
+        ClearNewPaidTagLine();
         return true;
     }
 

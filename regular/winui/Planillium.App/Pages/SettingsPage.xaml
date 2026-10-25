@@ -170,11 +170,12 @@
                                 PreviewKeyDown="NewPaidTagLine_PreviewKeyDown">
                         <TextBox x:Name="NewPaidTagName" Header="New payable tag" PlaceholderText="Name" Width="160"
                                  LostFocus="NewPaidTag_LostFocus"/>
-                        <svc:MoneyBox x:Name="NewPaidTagRate" Header="Monthly net (€)" Text="0" Width="150"
+                        <!-- B1d: starts EMPTY (was "0", which let a name-only line add a tag at 0). -->
+                        <svc:MoneyBox x:Name="NewPaidTagRate" Header="Monthly net (€)" PlaceholderText="e.g. 1 600" Width="150"
                                       LostFocus="NewPaidTag_LostFocus"/>
-                        <Button Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click" LostFocus="NewPaidTag_LostFocus"/>
+                        <Button x:Name="NewPaidTagAdd" Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click" LostFocus="NewPaidTag_LostFocus"/>
                     </StackPanel>
-                    <!-- B1c: holds the same "Amounts can't be negative." message the money rows use (built in code by NegativeHint). -->
+                    <!-- B1c/B1d: the line's red message — "Amounts can't be negative." or why Add was refused (built in code by ErrorHint). -->
                     <StackPanel x:Name="NewPaidTagHintHost" Margin="0,-12,0,0"/>
                     <TextBlock Text="While unemployed, the sidebar and Reports track what this income would have been worth, day by day, as a running loss. Once employed, each day from the switch onward adds instead — days already counted keep the sign they were counted with."
                                TextWrapping="Wrap" FontSize="12"
