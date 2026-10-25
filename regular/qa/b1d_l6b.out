@@ -1,0 +1,18 @@
+  Previous s after '5': box='5' hourly=['= €0,03/h', '= €9,52/h']
+  Previous s after '0': box='50' hourly=['= €0,30/h', '= €9,52/h']
+  Previous s after '0': box='500' hourly=['= €2,98/h', '= €9,52/h']
+  Previous s after ' ': box='500' hourly=['= €2,98/h', '= €9,52/h']
+  Previous s after '1': box='5\u2009001' hourly=['= €29,77/h', '= €9,52/h']
+  Previous s after '2': box='50\u2009012' hourly=['= €297,69/h', '= €9,52/h']
+  Previous s after '3': box='500\u2009123' hourly=['= €2\xa0976,92/h', '= €9,52/h']
+  Enter: 500 123 ['= €2\xa0976,92/h', '= €9,52/h'] (500123, {'Studioshoo': 1600})
+  Studioshoo after '5': box='5' hourly=['= €2\xa0976,92/h', '= €0,03/h']
+  Studioshoo after '0': box='50' hourly=['= €2\xa0976,92/h', '= €0,30/h']
+  Studioshoo after '0': box='500' hourly=['= €2\xa0976,92/h', '= €2,98/h']
+  Studioshoo after ' ': box='500' hourly=['= €2\xa0976,92/h', '= €2,98/h']
+  Studioshoo after '1': box='5\u2009001' hourly=['= €2\xa0976,92/h', '= €29,77/h']
+  Studioshoo after '2': box='50\u2009012' hourly=['= €2\xa0976,92/h', '= €297,69/h']
+  Studioshoo after '3': box='500\u2009123' hourly=['= €2\xa0976,92/h', '= €2\xa0976,92/h']
+  Enter: 500 123 ['= €2\xa0976,92/h', '= €2\xa0976,92/h'] (500123, {'Studioshoo': 500123})
+  paste salary: '500\u2009123' ['= €2\xa0976,92/h', '= €2\xa0976,92/h']
+  Enter: ['= €2\xa0976,92/h', '= €2\xa0976,92/h'] (500123, {'Studioshoo': 500123})

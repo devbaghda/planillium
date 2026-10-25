@@ -1,0 +1,16 @@
+# Line 10 regression: B1c Enter-in-name add, minus in add line, digits after minus, focus after.
+from b1d_h import *
+launch(); w().set_focus(); time.sleep(1); goto()
+def status(): return w().child_window(auto_id="SaveStatus").window_text()
+typein(NAME, "nmx"); typein(NEW, "300"); edit(NAME).click_input(); time.sleep(.3); send_keys("{END}{ENTER}"); time.sleep(1.2)
+log("Enter in name box: cfg", cfg(), "line", val(NAME), val(NEW), "focus", foc()); nine("after Enter-in-name add")
+typein(NAME, "neg"); typein(NEW, "-500"); log("minus in add line: box", repr(val(NEW)), "red", red())
+send_keys("{ENTER}"); time.sleep(1); log(" Enter: cfg", cfg(), "red", red(), "focus", foc())
+addbtn = w().child_window(auto_id="NewPaidTagAdd"); addbtn.click_input(); time.sleep(1); log(" Add click: cfg", cfg(), "red", red(), "focus", foc())
+send_keys("{END}12"); time.sleep(.5); log(" digits after minus:", repr(val(NEW)), red())
+shot("b1d_reg_minus_newtag.png")
+send_keys("{HOME}{DELETE}"); time.sleep(.5); log(" minus deleted:", repr(val(NEW)), red())
+send_keys("{ESC}"); time.sleep(.5)
+typein(SAL, "-500"); send_keys("{TAB}"); time.sleep(1); log("salary -500 Tab: box", repr(val(SAL)), "cfg", cfg(), "red", red())
+mouse.click(coords=(w().rectangle().left+850, w().rectangle().top+230)); time.sleep(1); log(" blank click: box", repr(val(SAL)), "red", red(), "focus", foc())
+shot("b1d_reg_minus_salary.png")

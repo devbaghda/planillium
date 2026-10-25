@@ -1,0 +1,37 @@
+== L7 setup: successful save first
+  [salary saved] cfg=(3000, {'Studioshoo': 1600}) name='' amt='' red=[] status='Saved.' focus=('50000', '', 'IncomeFocusPark')
+== L1a: name asd, amount empty, mouse-click Add
+  [L1a after Add click] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+== L1b: Enter in name box
+  [L1b after Enter in name] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'New payable tag', 'NewPaidTagName')
+== L1c: Enter in amount box (empty)
+  [L1c after Enter in empty amount] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+== L1d: amount only spaces
+  [L1d spaces + Enter] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+  [L1d spaces + Add click] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+== L1e: amount 0
+  [L1e 0 + Add click] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='0' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+  [L1e 0 + Enter] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='0' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+== L2: amount abc
+  [L2 typed abc] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+  [L2 abc + Add click] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+  [L2 abc + Enter] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='' red=[('Monthly net needs an amount above 0.', True)] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+  [L2 typed 12abc] cfg=(3000, {'Studioshoo': 1600}) name='asd' amt='12' red=[] status='' focus=('50004', 'Monthly net (€)', 'NewPaidTagRate')
+== L4a: Esc clears
+  [L4a after Esc] cfg=(3000, {'Studioshoo': 1600}) name='' amt='' red=[] status='' focus=('50007', 'Income', '')
+== L4b: click outside clears
+  [L4b blank click] cfg=(3000, {'Studioshoo': 1600}) name='' amt='' red=[] status='' focus=('50000', '', 'IncomeFocusPark')
+  [L4b click salary box] cfg=(3000, {'Studioshoo': 1600}) name='' amt='' red=[] status='' focus=('50004', 'Previous salary — monthly net (€)', '')
+== L3: Tab keeps
+  [L3 after Tab from amount] cfg=(3000, {'Studioshoo': 1600}) name='zed' amt='500' red=[] status='' focus=('50000', 'Add', 'NewPaidTagAdd')
+   second Tab -> ('50007', 'Income', '') name/amt zed 500
+== L8: mouse-click Add after valid entry
+  [L8 after Add click] cfg=(3000, {'Studioshoo': 1600, 'zed': 500}) name='' amt='' red=[] status='Saved.' focus=('50000', '', 'IncomeFocusPark')
+  [L8 type 9 after Add] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+   Tab after Add -> ('50007', 'Income', '')
+== L8b: duplicate name refused
+  [dup zed] cfg=(3000, {'Studioshoo': 1600, 'zed': 500}) name='zed' amt='10' red=[('"zed" is already a payable tag.', True)] status='' focus=('50004', 'New payable tag', 'NewPaidTagName')
+== L8c: Enter-add valid
+  [Enter-add yod] cfg=(3000, {'Studioshoo': 1600, 'zed': 500, 'yod': 250}) name='' amt='' red=[] status='Saved.' focus=('50000', '', 'IncomeFocusPark')
+  [after Enter-add] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+final cfg (3000, {'Studioshoo': 1600, 'zed': 500, 'yod': 250})

@@ -1,0 +1,9 @@
+Enter in name box: cfg (2925, {'Studioshoo': 1600, 'nmx': 300}) line   focus ('50000', '', 'IncomeFocusPark')
+  [after Enter-in-name add] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+minus in add line: box '-500' red [("Amounts can't be negative.", True)]
+ Enter: cfg (2925, {'Studioshoo': 1600, 'nmx': 300}) red [("Amounts can't be negative.", True)] focus ('50004', 'Monthly net (€)', 'NewPaidTagRate')
+ Add click: cfg (2925, {'Studioshoo': 1600, 'nmx': 300}) red [("Amounts can't be negative.", True)] focus ('50004', 'Monthly net (€)', 'NewPaidTagRate')
+ digits after minus: '-50\u2009012' [("Amounts can't be negative.", True)]
+ minus deleted: '50\u2009012' []
+salary -500 Tab: box '-500' cfg (2925, {'Studioshoo': 1600, 'nmx': 300}) red [("Amounts can't be negative.", True)]
+ blank click: box '-500' red [("Amounts can't be negative.", True)] focus ('50000', 'Employment status Unemployed', 'EmployedToggle')

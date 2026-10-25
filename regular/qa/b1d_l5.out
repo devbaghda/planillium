@@ -1,0 +1,129 @@
+fixture ((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', ''])
+  [nothing -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [nothing -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [nothing -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '']) AFTER=((2925, {'Studioshoo': 1600}), ['29\u2009259', '1\u2009600', '', ''])
+  [nothing -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '']) AFTER=((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '9'])
+  [nothing -> status strip] focus=('50020', '', 'SaveStatus') type9-unchanged=True
+  [nothing -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [nothing -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary box -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [salary box -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '']) AFTER=((2925, {'Studioshoo': 1600}), ['29\u2009259', '1\u2009600', '', ''])
+  [salary box -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '']) AFTER=((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '9'])
+  [salary box -> status strip] focus=('50020', 'Saved.', 'SaveStatus') type9-unchanged=True
+  [salary box -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [salary box -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary box edited -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [salary box edited -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary box edited -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1600}), ['3\u2009000', '1\u2009600', '', '']) AFTER=((3000, {'Studioshoo': 1600}), ['30\u2009009', '1\u2009600', '', ''])
+  [salary box edited -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1600}), ['3\u2009000', '1\u2009600', '', '']) AFTER=((3000, {'Studioshoo': 1600}), ['3\u2009000', '1\u2009600', '', '9'])
+  [salary box edited -> status strip] focus=('50020', 'Saved.', 'SaveStatus') type9-unchanged=True
+  [salary box edited -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [salary box edited -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [tag box -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [tag box -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1600}), ['3\u2009000', '1\u2009600', '', '']) AFTER=((3000, {'Studioshoo': 1600}), ['30\u2009009', '1\u2009600', '', ''])
+  [tag box -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1600}), ['3\u2009000', '1\u2009600', '', '']) AFTER=((3000, {'Studioshoo': 1600}), ['3\u2009000', '1\u2009600', '', '9'])
+  [tag box -> status strip] focus=('50020', 'Saved.', 'SaveStatus') type9-unchanged=True
+  [tag box -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [tag box -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [tag box edited -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [tag box edited -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag box edited -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', '']) AFTER=((3000, {'Studioshoo': 1700}), ['30\u2009009', '1\u2009700', '', ''])
+  [tag box edited -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', '']) AFTER=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', '9'])
+  [tag box edited -> status strip] focus=('50020', 'Saved.', 'SaveStatus') type9-unchanged=True
+  [tag box edited -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [tag box edited -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [add-line name -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [add-line name -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line name -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', '']) AFTER=((3000, {'Studioshoo': 1700}), ['30\u2009009', '1\u2009700', '', ''])
+  [add-line name -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', 'qq']) AFTER=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', 'qq9'])
+  [add-line name -> status strip] focus=('50020', 'Saved.', 'SaveStatus') type9-unchanged=True
+  [add-line name -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [add-line name -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [add-line amount -> blank right of salary] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> blank right of toggle] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> blank below add line] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> heading Settings] focus=('50033', '', '') type9-unchanged=True
+  [add-line amount -> heading Income] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> label Employment status] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> label salary readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> label tag readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> label bottom text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line amount -> label salary box header] focus=('50004', 'Previous salary — monthly net (€)', '') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '', '']) AFTER=((3000, {'Studioshoo': 1700}), ['30\u2009009', '1\u2009700', '', ''])
+  [add-line amount -> label new-tag header] focus=('50004', 'New payable tag', 'NewPaidTagName') type9-unchanged=False BEFORE=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '55', '']) AFTER=((3000, {'Studioshoo': 1700}), ['3\u2009000', '1\u2009700', '55', '9'])
+  [add-line amount -> status strip] focus=('50020', 'Saved.', 'SaveStatus') type9-unchanged=True
+  [add-line amount -> sidebar BALANCE label] focus=('50033', '', '') type9-unchanged=True
+  [add-line amount -> button Employment toggle (x2)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+cfg end (3000, {'Studioshoo': 1700}) window (L78, T78, R1258, B858)
+CASES 112 FAILURES 14
+  BAD ('nothing', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('nothing', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)
+  BAD ('salary box', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('salary box', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)
+  BAD ('salary box edited', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('salary box edited', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)
+  BAD ('tag box', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('tag box', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)
+  BAD ('tag box edited', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('tag box edited', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)
+  BAD ('add-line name', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('add-line name', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)
+  BAD ('add-line amount', 'label salary box header', ('50004', 'Previous salary — monthly net (€)', ''), False)
+  BAD ('add-line amount', 'label new-tag header', ('50004', 'New payable tag', 'NewPaidTagName'), False)

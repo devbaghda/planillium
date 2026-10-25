@@ -1,0 +1,58 @@
+  [salary Enter (before any click)] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Enter -> click blank] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Enter -> click heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Enter -> click label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Enter -> click label readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Tab (before any click)] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary Tab -> click blank] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary Tab -> click heading Paid work] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary Tab -> click label paid-work text] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary Tab -> click label readout] focus=('50000', 'Employment status Unemployed', 'EmployedToggle') type9-unchanged=True
+  [salary Shift+Tab (before any click)] focus=('50007', 'Settings', 'SettingsItem') type9-unchanged=True
+  [salary Shift+Tab -> click blank] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Shift+Tab -> click heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Shift+Tab -> click label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [salary Shift+Tab -> click label readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag Enter (before any click)] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag Enter -> click blank] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag Enter -> click heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag Enter -> click label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag Enter -> click label readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [tag Tab (before any click)] focus=('50000', 'Remove', '') type9-unchanged=True
+  [tag Tab -> click blank] focus=('50000', 'Remove', '') type9-unchanged=True
+  [tag Tab -> click heading Paid work] focus=('50000', 'Remove', '') type9-unchanged=True
+  [tag Tab -> click label paid-work text] focus=('50000', 'Remove', '') type9-unchanged=True
+  [tag Tab -> click label readout] focus=('50000', 'Remove', '') type9-unchanged=True
+  [add-line Esc (before any click)] focus=('50007', 'Income', '') type9-unchanged=True
+  [add-line Esc -> click blank] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Esc -> click heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Esc -> click label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Esc -> click label readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Tab x2 (before any click)] focus=('50007', 'Income', '') type9-unchanged=True
+  [add-line Tab x2 -> click blank] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Tab x2 -> click heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Tab x2 -> click label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [add-line Tab x2 -> click label readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [refused button Add (before any click)] focus=('50004', 'Monthly net (€)', 'NewPaidTagRate') type9-unchanged=False BEFORE=((3003, {'Studioshoo': 1602}), ['3\u2009003', '1\u2009602', '', 'pp']) AFTER=((3003, {'Studioshoo': 1602}), ['3\u2009003', '1\u2009602', '9', 'pp'])
+  [refused button Add -> click blank] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [refused button Add -> click heading Paid work] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [refused button Add -> click label paid-work text] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+  [refused button Add -> click label readout] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+== section list: General then Income
+  [after section list -> Income] focus=('50007', 'Income', '') type9-unchanged=True
+== nav away and back via sidebar
+  [after sidebar Today -> Settings -> Income] focus=('50007', 'Income', '') type9-unchanged=True
+== L6 in new-tag box: add 'big' with 500 123 by mouse
+  new box shows '500\u2009123'
+  cfg (3003, {'Studioshoo': 1602, 'big': 500123}) hourly ['= €17,88/h', '= €9,54/h', '= €2\xa0976,92/h'] focus ('50000', '', 'IncomeFocusPark')
+  [after Add big] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+== Remove button on 'big'
+  remove buttons 2
+  cfg (3003, {'Studioshoo': 1602}) focus ('50000', '', 'IncomeFocusPark')
+  [after Remove click] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+== Esc in add line, then letters on the section list
+  focus ('50007', 'Income', '')
+  [after Esc in add line] focus=('50007', 'Income', '') type9-unchanged=True
+  after typing 's': focus ('50007', 'Income', '') income panel visible? True
+BAD 1
+  BAD ('refused button Add', '-', ('50004', 'Monthly net (€)', 'NewPaidTagRate'))

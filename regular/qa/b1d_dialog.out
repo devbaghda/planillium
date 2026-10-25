@@ -1,0 +1,7 @@
+buttons at start []
+on Income, focus ('50007', 'Income', '')
+parked ('50000', '', 'IncomeFocusPark')
+dialog after 48 s: [('Start the day', 'PrimaryButton'), ('Later', 'CloseButton')] focus ('50000', 'Start the day', 'PrimaryButton')
+after close ('50004', 'Reflection: what moved the needle today?', '') more dialogs [('Close the day · +0 pts', 'PrimaryButton'), ('Later', 'CloseButton')]
+  [after dialog closed by mouse] focus=('50004', 'Reflection: what moved the needle today?', '') type9-unchanged=True
+  [after 2nd dialog closed] focus=('50007', 'Today', '') type9-unchanged=True
