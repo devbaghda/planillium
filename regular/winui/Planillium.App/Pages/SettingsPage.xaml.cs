@@ -409,12 +409,16 @@ public sealed partial class SettingsPage : Page
     }
 
     /// <summary>True for a TextBlock that is not part of any input control (a heading or caption).</summary>
-    private static bool IsPlainText(DependencyObject? d)
+    private bool IsPlainText(DependencyObject? d)
     {
         if (d is not TextBlock) return false;
+        // Walk up to the Income panel only: the page, scroll viewer and list above it are Controls too.
         for (; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+        {
+            if (ReferenceEquals(d, IncomePanel)) return true;
             if (d is Microsoft.UI.Xaml.Controls.Control) return false;
-        return true;
+        }
+        return false;
     }
 
     private void ClearNewPaidTagLine()

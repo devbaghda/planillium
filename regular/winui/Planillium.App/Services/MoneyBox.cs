@@ -22,6 +22,7 @@ public sealed class MoneyBox : TextBox
     public event EventHandler? ValueChanged;
     public event EventHandler? Committed;
     public event EventHandler<bool>? NegativeTyped;
+    private string? _lastFixed;
     private double _committed = double.NaN;
 
     public MoneyBox()
@@ -38,6 +39,7 @@ public sealed class MoneyBox : TextBox
         get => _value;
         set
         {
+            _lastFixed = null;
             _internal = true;
             try { Text = MoneyFormat.FromNumber(value, CultureInfo.CurrentCulture); }
             finally { _internal = false; }
@@ -50,11 +52,16 @@ public sealed class MoneyBox : TextBox
     private void OnTextChanged(object sender, TextChangedEventArgs e)
     {
         if (_internal) return;
+        // Our own correction below raises a second TextChanged (delivered after _internal is cleared);
+        // it must not hide the hint the first one just showed.
+        if (Text == _lastFixed) return;
+        _lastFixed = null;
         NegativeTyped?.Invoke(this, Text.Contains('-') || Text.Contains('−'));
         var fixedText = MoneyFormat.Normalize(Text, SelectionStart, CultureInfo.CurrentCulture, out var caret);
         if (fixedText != Text)
         {
             _internal = true;
+            _lastFixed = fixedText;
             try { Text = fixedText; SelectionStart = caret; }
             finally { _internal = false; }
         }
