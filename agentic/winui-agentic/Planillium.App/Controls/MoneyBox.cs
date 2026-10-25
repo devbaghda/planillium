@@ -9,8 +9,9 @@ namespace Planillium.App.Controls;
 /// <summary>
 /// A text box for money amounts: no spin buttons, digits grouped with a thin space as the user types
 /// (<see cref="MoneyFormat"/>). A typed or pasted minus sign is kept as one leading "-" and makes the box
-/// invalid (<see cref="IsNegative"/>): <see cref="Value"/> is then NaN, so nothing that reads it saves a
-/// negative amount. <see cref="Value"/> is also NaN when the box is empty.
+/// invalid (<see cref="IsNegative"/>); with <see cref="AllowZero"/> off, a zero amount is invalid too. While invalid
+/// (<see cref="ProblemText"/> not null) <see cref="Value"/> is NaN, so nothing that reads it saves the amount.
+/// <see cref="Value"/> is also NaN when the box is empty (letters are dropped as typed, so "abc" leaves it empty).
 /// </summary>
 public sealed class MoneyBox : TextBox
 {
@@ -27,14 +28,69 @@ public sealed class MoneyBox : TextBox
         TextChanged += OnTextChanged;
     }
 
-    /// <summary>The amount as a plain number; NaN when the box is empty, has no digits, or is negative.</summary>
+    /// <summary>The amount as a plain number; NaN when the box is empty, has no digits, or is invalid
+    /// (negative, or zero where <see cref="AllowZero"/> is off).</summary>
     public double Value
     {
-        // Read from Text, not from IsNegative: a programmatic Text set is visible here at once, while the
-        // TextChanged that updates IsNegative arrives later.
-        get => MoneyFormat.ContainsMinus(Text) ? double.NaN : MoneyFormat.Parse(Text);
-        set => Text = MoneyFormat.FromNumber(value, _decimalSeparator);
+        // Read from Text, not from the cached problem state: a programmatic Text set is visible here at once,
+        // while the TextChanged that updates the state arrives later.
+        get => ProblemFor(Text, AllowZero) != null ? double.NaN : MoneyFormat.Parse(Text);
+        set
+        {
+            Text = MoneyFormat.FromNumber(value, _decimalSeparator);
+            if (!double.IsNaN(value)) _saved = value;
+        }
     }
+
+    /// <summary>False for amounts that must be above zero (a payable tag's rate, the new-tag amount): a 0 is then
+    /// invalid, shown with a message like a minus, and never saved. True (default) for the previous salary.</summary>
+    public bool AllowZero { get; set; } = true;
+
+    /// <summary>True for boxes that show a saved amount (salary, payable-tag rates): leaving the box with no number
+    /// in it (emptied, or only letters typed) puts the saved amount back, so the box never shows blank while the
+    /// stored value is something else (B1d). Off for the new-tag amount, where empty is the starting state.</summary>
+    public bool RevertEmptyOnLeave { get; set; }
+
+    /// <summary>Raised after leaving the box put the saved amount back (see <see cref="RevertEmptyOnLeave"/>).</summary>
+    public event EventHandler? Reverted;
+
+    public const string NegativeText = "Amounts can't be negative.";
+    public const string ZeroText = "Amount must be more than 0.";
+
+    /// <summary>The message for an invalid box text, or null: <see cref="NegativeText"/> for a minus anywhere,
+    /// <see cref="ZeroText"/> for a zero amount when <paramref name="allowZero"/> is false. Empty is not a problem
+    /// here (each caller decides what empty means).</summary>
+    public static string? ProblemFor(string? text, bool allowZero)
+    {
+        text ??= "";
+        if (MoneyFormat.ContainsMinus(text)) return NegativeText;
+        if (!allowZero && MoneyFormat.Parse(text) == 0) return ZeroText;
+        return null;
+    }
+
+    /// <summary>The current problem message (see <see cref="ProblemFor"/>), or null while the box is valid or empty.
+    /// Derived from the text on every change, also programmatic ones, and kept after the box is left.</summary>
+    public string? ProblemText
+    {
+        get => _problem;
+        private set
+        {
+            if (_problem == value) return;
+            var wasNegative = IsNegative;
+            _problem = value;
+            ProblemChanged?.Invoke(this, EventArgs.Empty);
+            if (wasNegative != IsNegative) IsNegativeChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised when <see cref="ProblemText"/> changes.</summary>
+    public event EventHandler? ProblemChanged;
+
+    private string? _problem;
+
+    /// <summary>The last amount known to be stored: set by a programmatic <see cref="Value"/> and by every
+    /// successful <see cref="Commit"/>. What <see cref="RevertEmptyOnLeave"/> puts back.</summary>
+    private double _saved = double.NaN;
 
     /// <summary>Raised when the user leaves the box or presses Enter and the number differs from the one
     /// the box had when it got focus (or was last committed). Never raised for programmatic <see cref="Value"/> sets,
@@ -52,21 +108,11 @@ public sealed class MoneyBox : TextBox
 
     private double _baseline = double.NaN;
     private bool _hasBaseline;
-    private bool _isNegative;
 
     /// <summary>True while the box's text holds a minus sign. Derived from the text itself (set on every text
     /// change, including programmatic ones), so it stays true for as long as the minus is in the box, also after
     /// the box is left, and turns false as soon as the minus is deleted or the text is replaced.</summary>
-    public bool IsNegative
-    {
-        get => _isNegative;
-        private set
-        {
-            if (_isNegative == value) return;
-            _isNegative = value;
-            IsNegativeChanged?.Invoke(this, EventArgs.Empty);
-        }
-    }
+    public bool IsNegative => _problem == NegativeText;
 
     /// <summary>Raises <see cref="ValueCommitted"/> if the box holds a valid number that differs from the baseline.</summary>
     public void Commit()
@@ -75,6 +121,7 @@ public sealed class MoneyBox : TextBox
         var v = Value;
         if (double.IsNaN(v) || v == _baseline) return;
         _baseline = v;
+        _saved = v;
         ValueCommitted?.Invoke(this, EventArgs.Empty);
     }
 
@@ -85,14 +132,25 @@ public sealed class MoneyBox : TextBox
         _hasBaseline = true;
     }
 
-    /// <summary>Leaving saves a valid number. An invalid one (negative) is left in the box as typed, with its
-    /// message; nothing is saved and the saved value stays as it was (user decision 2026-10-25).</summary>
+    /// <summary>Leaving saves a valid number. An invalid one (negative, or a zero where it is not allowed) is left in
+    /// the box as typed, with its message; nothing is saved and the saved value stays as it was (user decision
+    /// 2026-10-25). A box left with no number in it shows the saved amount again when <see cref="RevertEmptyOnLeave"/>
+    /// is on (B1d: box and stored value agree).</summary>
     protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
         Settle();
         Commit();
         _hasBaseline = false;
+        RevertIfEmpty();
+    }
+
+    private void RevertIfEmpty()
+    {
+        if (!RevertEmptyOnLeave || double.IsNaN(_saved)) return;
+        if (MoneyFormat.ContainsMinus(Text) || !double.IsNaN(MoneyFormat.Parse(Text))) return;
+        Value = _saved;
+        Reverted?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnKeyDown(KeyRoutedEventArgs e)
@@ -123,7 +181,7 @@ public sealed class MoneyBox : TextBox
         // Computed from the text about to be shown. WinUI delivers the TextChanged for the write-back below
         // after _normalising is already false; that echo carries the same text, so it yields the same answer
         // and cannot hide the message the keystroke just showed (the B1b D1 defect).
-        IsNegative = MoneyFormat.ContainsMinus(text);
+        ProblemText = ProblemFor(text, AllowZero);
         if (text != raw)
         {
             _normalising = true;

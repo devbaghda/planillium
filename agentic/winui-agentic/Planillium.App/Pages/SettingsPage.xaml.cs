@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Controls;
@@ -12,10 +13,6 @@ namespace Planillium.App.Pages;
 public sealed partial class SettingsPage : Page
 {
     private bool _initialising = true;
-
-    /// <summary>Set by a Tab press inside the "New payable tag" line, so the focus move that Tab causes is
-    /// not mistaken for a click outside the line (see <see cref="NewPaidTag_LostFocus"/>).</summary>
-    private bool _tabKeyPending;
 
     /// <summary>The SCORING section's inputs, keyed by their config.json key — built once in
     /// <see cref="BuildScoringSection"/> from <see cref="ScoringRules.All"/> so load and save
@@ -44,29 +41,29 @@ public sealed partial class SettingsPage : Page
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
                 "every menu entry must open a section.");
-        MonthlyIncomeBox = new MoneyBox { Header = "Previous salary — monthly net (€)", PlaceholderText = "0", Width = 240 };
+        MonthlyIncomeBox = new MoneyBox
+        {
+            Header = "Previous salary — monthly net (€)", PlaceholderText = "0", Width = 240, RevertEmptyOnLeave = true,
+        };
         AutomationProperties.SetName(MonthlyIncomeBox, "Previous salary — monthly net (€)");
         MonthlyIncomeBox.ValueCommitted += (_, _) => Income_Changed(MonthlyIncomeBox, EventArgs.Empty);
-        MonthlyIncomeBox.EnterPressed += (_, _) => ParkAfterEnter(MonthlyIncomeBox);
-        NewPaidTagRate.IsNegativeChanged += (_, _) =>
-        {
-            NewPaidTagHint.Visibility = NewPaidTagRate.IsNegative ? Visibility.Visible : Visibility.Collapsed;
-            // Scroll the message into view (it can sit below the fold with several tags); focus is not touched.
-            // Done now (after a forced layout pass) and once more at low priority, after the box's own
-            // caret-into-view and any re-measure have run -- see RevealNewPaidTagHint.
-            if (NewPaidTagRate.IsNegative)
-            {
-                RevealNewPaidTagHint();
-                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RevealNewPaidTagHint);
-            }
-        };
+        WireSavedMoneyBox(MonthlyIncomeBox);
+        // The message under the new-tag line shows the amount box's own problem (minus, zero) or, after a refused
+        // Add, why it was refused (B1d). See UpdateNewPaidTagHint.
+        NewPaidTagRate.ProblemChanged += (_, _) => UpdateNewPaidTagHint();
+        NewPaidTagName.TextChanged += (_, _) => ClearAddRefusalIfEdited();
+        NewPaidTagRate.TextChanged += (_, _) => ClearAddRefusalIfEdited();
         // The hint's first real size arrives with a layout pass; reveal again then (covers any late re-measure).
         NewPaidTagHint.SizeChanged += (_, _) => { if (NewPaidTagHint.Visibility == Visibility.Visible) RevealNewPaidTagHint(); };
         // Enter in the new-tag amount box: the box swallows Enter (so NewPaidTag_KeyDown never sees it) and raises
         // EnterPressed instead. An invalid amount adds nothing and shows its message; the cursor stays.
-        NewPaidTagRate.EnterPressed += (_, _) => TryAddPaidTag(fromEnter: true);
+        NewPaidTagRate.EnterPressed += (_, _) => TryAddPaidTag(AddTrigger.Enter);
         NewPaidTagHint.Text = MinusHintText;
         AutomationProperties.SetName(NewPaidTagHint, MinusHintText);
+        // Focus guard (B1d item 3): a box in Settings -> Income only takes focus from a real click or a key the user
+        // pressed; see Page_GettingFocus. Tab is recorded first (tunnelling) so the add line can tell Tab apart.
+        AddHandler(UIElement.PreviewKeyDownEvent, new KeyEventHandler(Page_PreviewKeyDown), handledEventsToo: true);
+        GettingFocus += Page_GettingFocus;
         SalaryRowHost.Children.Add(MonthlyRow(MonthlyIncomeBox, remove: null));
         // Click-outside for the "New payable tag" line. handledEventsToo so it still sees presses a child
         // control has already handled (buttons, text boxes).
@@ -241,7 +238,13 @@ public sealed partial class SettingsPage : Page
         foreach (var tag in PaidTags.All())
         {
             var t = tag;
-            var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", PlaceholderText = "0", Width = 240 };
+            // A payable tag's rate must be above 0 (B1d: a tag with amount 0 is never saved); emptied, it shows the
+            // saved rate again on leave.
+            var rate = new MoneyBox
+            {
+                Header = $"{t.Label} — monthly net (€)", PlaceholderText = "0", Width = 240,
+                AllowZero = false, RevertEmptyOnLeave = true,
+            };
             AutomationProperties.SetName(rate, $"{t.Label} — monthly net (€)");
             rate.Value = t.MonthlyEur;
             _committableBoxes.Add(rate);
@@ -250,15 +253,15 @@ public sealed partial class SettingsPage : Page
                 if (_initialising) return;
                 SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
             };
-            rate.EnterPressed += (_, _) => ParkAfterEnter(rate);
+            WireSavedMoneyBox(rate);
             var remove = new Button { Content = "Remove", VerticalAlignment = VerticalAlignment.Bottom };
             remove.Click += (_, _) =>
             {
                 SavePaidTags(PaidTags.All().Where(p => p.Value != t.Value), rerender: true);
                 // The rebuild destroys the focused Remove button and WinUI hands focus to the next text box
-                // (seen with UIA, 2026-10-25: the new-tag name box), where stray typing would land. ParkFocus
-                // only moves focus if a text box holds it.
-                ParkFocus("SettingsPage.RemovePaidTag");
+                // (seen with UIA, 2026-10-25: the new-tag name box), where stray typing would land. The focus
+                // guard (Page_GettingFocus) blocks that move; this parks focus wherever it ended in Income.
+                ParkFocus("SettingsPage.RemovePaidTag", ParkIf.InIncome);
             };
             PaidTagsHost.Children.Add(MonthlyRow(rate, remove));
         }
@@ -268,20 +271,23 @@ public sealed partial class SettingsPage : Page
 
     /// <summary>
     /// One money row, shared by the previous-salary row and every payable-tag row: the box, a readout
-    /// "= EUR x/h" that follows every keystroke ("= —/h" while empty), and an optional Remove button.
-    /// The salary row passes no button, so its readout ends the row.
+    /// "= EUR x/h" that follows every keystroke, and an optional Remove button. The readout is empty (hidden) while
+    /// the box holds no valid number -- never "= —/h" (B1d: the readout is either correct or hidden); it keeps its
+    /// width so the Remove button does not jump. The salary row passes no button, so its readout ends the row.
     /// </summary>
     private static StackPanel MonthlyRow(MoneyBox box, Button? remove)
     {
         var readout = new TextBlock
         {
-            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6),
+            VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6), MinWidth = 96,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };
         void RefreshReadout()
         {
+            // Value is read from the box's text at this moment (already normalised: the box's own TextChanged
+            // handler runs first), so the readout cannot lag one keystroke behind.
             var v = box.Value;
-            readout.Text = double.IsNaN(v) ? "= —/h" : $"= {MainWindow.FormatEur(v / IncomeService.WorkingHoursPerMonth)}/h";
+            readout.Text = double.IsNaN(v) ? "" : $"= {MainWindow.FormatEur(v / IncomeService.WorkingHoursPerMonth)}/h";
         }
         box.TextChanged += (_, _) => RefreshReadout();
         RefreshReadout();
@@ -296,8 +302,9 @@ public sealed partial class SettingsPage : Page
         return wrapper;
     }
 
-    /// <summary>The "Amounts can't be negative." line under a money box: visible for as long as the box holds a
-    /// minus sign (also after the box is left), hidden as soon as the minus is gone.</summary>
+    /// <summary>The message line under a money box ("Amounts can't be negative." / "Amount must be more than 0."):
+    /// visible for as long as the box holds an invalid amount (also after the box is left), hidden as soon as it is
+    /// valid again.</summary>
     private static TextBlock MakeMinusHint(MoneyBox box)
     {
         var hint = new TextBlock
@@ -308,23 +315,49 @@ public sealed partial class SettingsPage : Page
         };
         AutomationProperties.SetName(hint, MinusHintText);
         AutomationProperties.SetLiveSetting(hint, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-        box.IsNegativeChanged += (_, _) =>
-            hint.Visibility = box.IsNegative ? Visibility.Visible : Visibility.Collapsed;
+        box.ProblemChanged += (_, _) =>
+        {
+            if (box.ProblemText is { } p)
+            {
+                hint.Text = p;
+                AutomationProperties.SetName(hint, p);
+            }
+            hint.Visibility = box.ProblemText != null ? Visibility.Visible : Visibility.Collapsed;
+        };
         return hint;
     }
 
-    private const string MinusHintText = "Amounts can't be negative.";
+    private const string MinusHintText = MoneyBox.NegativeText;
 
-    /// <summary>Moves keyboard focus off any text box onto a non-text element, so stray typing edits nothing.
-    /// Deferred so it runs after the click's own focus handling. The focus park takes focus; if it refuses,
-    /// the section list does; if both refuse it is logged.</summary>
-    private void ParkFocus(string caller, bool onlyIfInside = false)
+    /// <summary>When <see cref="ParkFocus"/> may move focus (checked when it runs, after the triggering click or key
+    /// has finished moving focus itself).</summary>
+    private enum ParkIf
+    {
+        /// <summary>Focus is inside the "New payable tag" line.</summary>
+        InAddLine,
+        /// <summary>Nothing has focus, or the focused element is in Settings -> Income (a box or a button there).
+        /// Focus the user moved elsewhere (section list, another control outside Income) is left alone.</summary>
+        InIncome,
+    }
+
+    /// <summary>Moves keyboard focus onto a harmless non-text element (the 1x1 <c>FocusPark</c> button), so stray
+    /// typing edits nothing and Enter/Space activate nothing. Deferred so it runs after the click's own focus
+    /// handling. If the park refuses focus, the section list takes it; if both refuse it is logged.
+    /// <paramref name="beforeMove"/> runs only if focus is really about to be moved.</summary>
+    private void ParkFocus(string caller, ParkIf when, Action? beforeMove = null)
     {
         DispatcherQueue.TryEnqueue(() =>
         {
             if (XamlRoot == null) return;
-            var focused = FocusManager.GetFocusedElement(XamlRoot);
-            if (onlyIfInside ? !IsFocusInsideNewPaidTagLine() : focused is not TextBox) return;
+            var focused = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+            if (ReferenceEquals(focused, FocusPark)) return;
+            var ok = when switch
+            {
+                ParkIf.InAddLine => IsFocusInsideNewPaidTagLine(),
+                _ => focused == null || IsWithin(focused, IncomePanel),
+            };
+            if (!ok) return;
+            beforeMove?.Invoke();
             // A Button that is not a tab stop refuses programmatic focus (Focus() returns false), so the park is
             // made a tab stop only while it holds focus; FocusPark_LostFocus turns it off again.
             FocusPark.IsTabStop = true;
@@ -332,15 +365,18 @@ public sealed partial class SettingsPage : Page
             FocusPark.IsTabStop = false;
             Log.Warn(caller, "focus park refused focus; trying the section list");
             if (!SectionList.Focus(FocusState.Programmatic))
+            {
                 Log.Warn(caller, "section list also refused focus; focus stays where it was");
+                _keepAddLineOnNextLeave = false;
+            }
         });
     }
 
-    /// <summary>Scrolls Settings so the whole add-line minus message is on screen. B1c D1: the earlier queued
+    /// <summary>Scrolls Settings so the whole add-line message is on screen. B1c D1: the earlier queued
     /// StartBringIntoView ran before the newly visible row had been measured, so with the page already scrolled to
     /// its end (4+ paid tags at 1180x780) there was no extra extent to scroll into and nothing moved. Here layout is
     /// forced first, then the hint's real bottom edge is measured against the viewport and the scroller moved
-    /// explicitly. Scrolling only -- keyboard focus stays in the amount box.</summary>
+    /// explicitly. Scrolling only -- keyboard focus is not touched.</summary>
     private void RevealNewPaidTagHint()
     {
         if (NewPaidTagHint.Visibility != Visibility.Visible || SectionScroll.Content is not UIElement content) return;
@@ -351,18 +387,78 @@ public sealed partial class SettingsPage : Page
             SectionScroll.ChangeView(null, Math.Min(bottom - SectionScroll.ViewportHeight, SectionScroll.ScrollableHeight), null, true);
     }
 
+    /// <summary>Why the last Add was refused (shown under the line until either field is edited or the line is left),
+    /// and the two field texts at that moment, so only a real edit clears it (not a late write-back echo).</summary>
+    private string? _addRefusal;
+    private string _refusedName = "", _refusedRate = "";
+
+    /// <summary>The message under the new-tag line: the amount box's own problem (minus, zero) first, else the reason
+    /// the last Add was refused. Scrolled into view when it appears (any number of tags).</summary>
+    private void UpdateNewPaidTagHint()
+    {
+        var msg = NewPaidTagRate.ProblemText ?? _addRefusal;
+        var wasVisible = NewPaidTagHint.Visibility == Visibility.Visible;
+        if (msg != null)
+        {
+            NewPaidTagHint.Text = msg;
+            AutomationProperties.SetName(NewPaidTagHint, msg);
+        }
+        NewPaidTagHint.Visibility = msg != null ? Visibility.Visible : Visibility.Collapsed;
+        if (msg == null) return;
+        // Done now (after a forced layout pass) and once more at low priority, after the box's own caret-into-view
+        // and any re-measure have run -- see RevealNewPaidTagHint.
+        RevealNewPaidTagHint();
+        if (!wasVisible)
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RevealNewPaidTagHint);
+    }
+
+    private void SetAddRefusal(string? message)
+    {
+        _addRefusal = message;
+        _refusedName = NewPaidTagName.Text ?? "";
+        _refusedRate = NewPaidTagRate.Text ?? "";
+        UpdateNewPaidTagHint();
+    }
+
+    private void ClearAddRefusalIfEdited()
+    {
+        if (_addRefusal == null) return;
+        if ((NewPaidTagName.Text ?? "") == _refusedName && (NewPaidTagRate.Text ?? "") == _refusedRate) return;
+        _addRefusal = null;
+        UpdateNewPaidTagHint();
+    }
+
+    /// <summary>Shared wiring for the boxes that show a saved amount (salary, each payable-tag rate). Enter saves and
+    /// moves the cursor out; leaving with an invalid amount says in the status strip that nothing was saved (so an
+    /// earlier "Saved." is never left standing); leaving an emptied box puts the saved amount back and says so.</summary>
+    private void WireSavedMoneyBox(MoneyBox box)
+    {
+        box.EnterPressed += (_, _) => ParkAfterEnter(box);
+        box.LostFocus += (_, _) =>
+        {
+            if (box.ProblemText is { } p) SaveStatus.Text = $"Not saved: {p}";
+        };
+        box.Reverted += (_, _) => SaveStatus.Text = "Empty amount not saved; the saved amount is back in the box.";
+    }
+
     /// <summary>Enter in the salary or a payable-tag box: the box has already saved a valid number; the cursor then
-    /// leaves the box. With an empty or negative value nothing was saved and the cursor stays, so it can be fixed.</summary>
+    /// leaves the box. With an empty or invalid value nothing was saved and the cursor stays, so it can be fixed;
+    /// the status strip says why.</summary>
     private void ParkAfterEnter(MoneyBox box)
     {
-        if (!double.IsNaN(box.Value)) ParkFocus("SettingsPage.MoneyEnter");
+        if (!double.IsNaN(box.Value))
+        {
+            ParkFocus("SettingsPage.MoneyEnter", ParkIf.InIncome);
+            return;
+        }
+        SaveStatus.Text = box.ProblemText is { } p ? $"Not saved: {p}" : "Not saved: type an amount.";
     }
 
     private void FocusPark_LostFocus(object sender, RoutedEventArgs e) => FocusPark.IsTabStop = false;
 
-    /// <summary>A click on an Income heading takes typing focus out of any text box (money boxes included).</summary>
+    /// <summary>A click on an Income heading takes focus out of any box or button in Income.</summary>
     private void IncomeHeading_PointerPressed(object sender, PointerRoutedEventArgs e) =>
-        ParkFocus("SettingsPage.IncomeHeading");
+        ParkFocus("SettingsPage.IncomeHeading", ParkIf.InIncome);
 
     /// <summary>Esc in either field of the "New payable tag" line leaves it: both fields are emptied,
     /// nothing is added or saved, focus is parked. Enter in the name field works as the Add button. (Enter in the
@@ -372,7 +468,7 @@ public sealed partial class SettingsPage : Page
         if (e.Key == VirtualKey.Enter)
         {
             e.Handled = true;
-            TryAddPaidTag(fromEnter: true);
+            TryAddPaidTag(AddTrigger.Enter);
             return;
         }
         if (e.Key != VirtualKey.Escape) return;
@@ -385,10 +481,11 @@ public sealed partial class SettingsPage : Page
     /// another control is caught by <see cref="NewPaidTag_LostFocus"/> instead: a clicked text box or toggle has
     /// already taken focus by the time this page-level handler runs, so focus is no longer inside the line here.
     ///
-    /// A press on blank space or plain text while a money box (salary, payable-tag rate) has focus leaves that
-    /// box too. WinUI does not move focus for a press on something that cannot take it (seen with UIA,
-    /// 2026-10-25: after clicking beside the salary row the cursor stayed in the salary box, nothing was saved,
-    /// and a typed "9" edited it). So focus is parked, which makes the box save on leave.</summary>
+    /// A press anywhere that is not on the focused element, while a box or a button in Income (salary, a tag rate,
+    /// Remove, ...) has focus, parks focus. WinUI does not move focus for a press on something that cannot take it
+    /// (seen with UIA, 2026-10-25: after clicking beside the salary row the cursor stayed in the salary box, nothing
+    /// was saved, and a typed "9" edited it). Parking makes the box save on leave, and a focused button can no
+    /// longer be fired by a stray Enter or Space.</summary>
     private void Page_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (IsFocusInsideNewPaidTagLine())
@@ -403,10 +500,11 @@ public sealed partial class SettingsPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             if (XamlRoot == null) return;
-            if (FocusManager.GetFocusedElement(XamlRoot) is not MoneyBox box) return;
+            if (FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject focused) return;
+            if (focused is not (TextBox or ButtonBase) || !IsWithin(focused, IncomePanel)) return;
             if (IsFocusInsideNewPaidTagLine()) return; // the add line has its own rules above
-            if (IsWithin(source, box)) return;         // the press was on the focused box itself
-            ParkFocus("SettingsPage.MoneyBoxBlankClick");
+            if (IsWithin(source, focused)) return;     // the press was on the focused element itself
+            ParkFocus("SettingsPage.IncomeBlankClick", ParkIf.InIncome);
         });
     }
 
@@ -417,40 +515,88 @@ public sealed partial class SettingsPage : Page
         return false;
     }
 
-    /// <summary>Tab inside the line is keyboard navigation, not leaving it: remember it so the focus move it causes
-    /// is not treated as a click outside.</summary>
-    private void NewPaidTagLine_KeyDown(object sender, KeyRoutedEventArgs e)
+    /// <summary>When Tab / Shift+Tab was last pressed anywhere on the page (Environment.TickCount64). Recorded on the
+    /// tunnelling PreviewKeyDown, before any box can handle the key, so it is never missed.</summary>
+    private long _lastTabAt = long.MinValue / 2;
+
+    private bool TabJustPressed => Environment.TickCount64 - _lastTabAt < 600;
+
+    private void Page_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Tab) _tabKeyPending = true;
+        if (e.Key == VirtualKey.Tab) _lastTabAt = Environment.TickCount64;
     }
 
-    /// <summary>Focus left one of the line's controls. Tab keeps the line. Any other move of focus to something
-    /// outside the line (a click on the salary box, a tag rate, "Currently employed", ...) leaves the line as Esc
-    /// does, and the clicked control keeps the focus. The check runs after the focus move has settled, so an Add
-    /// click (focus moves to Add, which is inside the line) and a window switch (no element focused) do not count.</summary>
+    /// <summary>The element in this page that last received focus (whatever the cause). See Page_GettingFocus.</summary>
+    private DependencyObject? _lastFocusedInPage;
+
+    /// <summary>Focus guard for Settings -> Income (B1d item 3: the cursor never lands in the salary box -- or any
+    /// other Income box -- unless the user clicked or tabbed into it). A text box in Income may take focus when the
+    /// move comes from the user's own mouse, touch, pen or keyboard, or when it is a restore of the box that had
+    /// focus last (coming back from a menu, dialog or another window). Any other move into it -- WinUI's fallback
+    /// after a focused element is removed or a parked focus can no longer be restored, which picks the first box on
+    /// the page, i.e. the salary box -- is cancelled and focus parked instead. A mouse arrival that was not a click
+    /// on the box itself is caught afterwards by <see cref="Page_PointerPressed"/>.</summary>
+    private void Page_GettingFocus(UIElement sender, GettingFocusEventArgs args)
+    {
+        var target = args.NewFocusedElement;
+        if (target == null || !IsWithin(target, this)) return;
+        if (IsWithin(target, NewPaidTagLine)) _keepAddLineOnNextLeave = false;
+        var restore = ReferenceEquals(target, _lastFocusedInPage);
+        if (target is TextBox && IsWithin(target, IncomePanel) && !restore)
+        {
+            var byUser = args.InputDevice is FocusInputDeviceKind.Mouse or FocusInputDeviceKind.Touch
+                             or FocusInputDeviceKind.Pen or FocusInputDeviceKind.Keyboard
+                         || TabJustPressed;
+            if (!byUser)
+            {
+                var cancelled = args.TryCancel();
+                Log.Info($"SettingsPage focus guard: blocked a {args.InputDevice} focus move into an Income box " +
+                         $"({(target as FrameworkElement)?.Name ?? target.GetType().Name}); cancelled={cancelled}");
+                ParkFocus("SettingsPage.FocusGuard", ParkIf.InIncome);
+                return;
+            }
+        }
+        _lastFocusedInPage = target;
+    }
+
+    /// <summary>Focus left one of the line's controls. Tab / Shift+Tab keeps the line and what was typed in it (user
+    /// rule 2026-10-25). Any other move of focus to something outside the line (a click on the salary box, a tag
+    /// rate, "Currently employed", ...) leaves the line as Esc does, and the clicked control keeps the focus. The check
+    /// runs after the focus move has settled, so an Add click (focus moves to Add, which is inside the line) and a
+    /// window switch (no element focused) do not count. A refused mouse Add parks focus without clearing the line
+    /// (<see cref="_keepAddLineOnNextLeave"/>).</summary>
     private void NewPaidTag_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (_tabKeyPending)
-        {
-            _tabKeyPending = false;
-            return;
-        }
+        if (TabJustPressed) return;
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (XamlRoot != null && FocusManager.GetFocusedElement(XamlRoot) != null && !IsFocusInsideNewPaidTagLine())
-                LeavePaidTagLine();
+            if (XamlRoot == null) return;
+            var focused = FocusManager.GetFocusedElement(XamlRoot);
+            if (focused == null || IsFocusInsideNewPaidTagLine()) return;
+            // The park after a refused mouse Add: keep what was typed. Not a one-shot flag: LostFocus is delivered
+            // asynchronously, so the name box's own late LostFocus could consume a flag before the Add button's
+            // (seen live 2026-10-25: the refused entry was cleared).
+            if (_keepAddLineOnNextLeave && ReferenceEquals(focused, FocusPark)) return;
+            LeavePaidTagLine();
         });
     }
 
+    /// <summary>Set just before a refused mouse Add parks focus, so the focus move out of the line does not clear what
+    /// the user typed (they are about to fix it). Holds while focus sits on the park; cleared when focus next enters
+    /// the line (Page_GettingFocus) or the line is left.</summary>
+    private bool _keepAddLineOnNextLeave;
+
     private void LeavePaidTagLine()
     {
+        _keepAddLineOnNextLeave = false;
         NewPaidTagName.Text = "";
         NewPaidTagRate.Text = "";
+        SetAddRefusal(null);
         // Deferred: a press outside the line may still be moving focus to the control that was clicked;
         // the focus park only takes focus if nothing else did. It is a non-text element (a Button), so no text
         // box (and no stray typing into a saved amount) can receive focus from here. If the park refuses focus,
         // the section list (also non-text) takes it; if that refuses too, it is logged.
-        ParkFocus("SettingsPage.LeavePaidTagLine", onlyIfInside: true);
+        ParkFocus("SettingsPage.LeavePaidTagLine", ParkIf.InAddLine);
     }
 
     private bool IsFocusInsideNewPaidTagLine()
@@ -480,26 +626,43 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void AddPaidTag_Click(object sender, RoutedEventArgs e) => TryAddPaidTag(fromEnter: false);
+    private enum AddTrigger { Enter, Click }
 
-    /// <summary>The Add button's logic, also run by Enter in either field of the line. A negative or missing amount
-    /// adds nothing. After an Enter-add, focus is parked so no field of the line keeps the cursor.</summary>
-    private bool TryAddPaidTag(bool fromEnter)
+    private void AddPaidTag_Click(object sender, RoutedEventArgs e) => TryAddPaidTag(AddTrigger.Click);
+
+    /// <summary>The Add button's logic, also run by Enter in either field of the line. Refused, with the reason shown
+    /// under the line and in the status strip (replacing any earlier "Saved."), when the amount is empty, not a number,
+    /// negative or 0, the name is empty, or the tag exists (B1d: a tag with amount 0 is never saved). After an
+    /// Enter-add the cursor leaves the line; after a refused Enter it stays so the entry can be fixed. After any mouse
+    /// click on Add, focus leaves the Add button (and no box gets it); a refused click keeps what was typed.</summary>
+    private bool TryAddPaidTag(AddTrigger trigger)
     {
         var label = (NewPaidTagName.Text ?? "").Trim();
         var slug = PaidTags.Slug(label);
-        // Checked on the text itself: the box's IsNegative follows TextChanged, which WinUI delivers later.
-        if (MoneyFormat.ContainsMinus(NewPaidTagRate.Text)) { SaveStatus.Text = MinusHintText; return false; }
-        if (slug.Length == 0) { SaveStatus.Text = "Give the new tag a name (letters or digits)."; return false; }
-        if (double.IsNaN(NewPaidTagRate.Value)) { SaveStatus.Text = "Monthly net needs a number."; return false; }
+        var rateText = NewPaidTagRate.Text ?? "";
+        // Checked on the text itself: the box's ProblemText follows TextChanged, which WinUI delivers later.
+        var refusal =
+            MoneyBox.ProblemFor(rateText, allowZero: false)
+            ?? (slug.Length == 0 ? "Give the new tag a name (letters or digits)." : null)
+            ?? (double.IsNaN(MoneyFormat.Parse(rateText)) ? "Monthly net needs a number." : null)
+            ?? (PaidTags.All().Any(p => p.Value == slug) ? $"\"{label}\" is already a payable tag." : null);
+        if (refusal != null)
+        {
+            SaveStatus.Text = refusal;
+            SetAddRefusal(refusal);
+            if (trigger == AddTrigger.Click)
+                ParkFocus("SettingsPage.AddClickRefused", ParkIf.InAddLine, () => _keepAddLineOnNextLeave = true);
+            return false;
+        }
         var all = PaidTags.All().ToList();
-        if (all.Any(p => p.Value == slug)) { SaveStatus.Text = $"\"{label}\" is already a payable tag."; return false; }
         // A name matching a built-in tag (e.g. Selfdev) simply makes that tag payable.
         var builtIn = Array.Find(DiaryTag.Options, o => o.Value == slug);
-        all.Add(new PaidTag(slug, builtIn.Label ?? label, NewPaidTagRate.Value));
+        all.Add(new PaidTag(slug, builtIn.Label ?? label, MoneyFormat.Parse(rateText)));
         SavePaidTags(all, rerender: true);
-        NewPaidTagName.Text = ""; NewPaidTagRate.Value = 0;
-        if (fromEnter) ParkFocus("SettingsPage.AddEnter", onlyIfInside: true);
+        NewPaidTagName.Text = "";
+        NewPaidTagRate.Text = "";
+        SetAddRefusal(null);
+        ParkFocus(trigger == AddTrigger.Enter ? "SettingsPage.AddEnter" : "SettingsPage.AddClick", ParkIf.InAddLine);
         return true;
     }
 

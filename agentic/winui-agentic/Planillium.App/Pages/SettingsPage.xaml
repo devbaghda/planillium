@@ -115,11 +115,13 @@
                     <StackPanel x:Name="PaidTagsHost" Spacing="8"/>
                     <!-- Left-aligned so its bounds are the content, not the page width: the outside-click
                          test (Page_PointerPressed) measures against these bounds. -->
-                    <StackPanel x:Name="NewPaidTagLine" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left"
-                                KeyDown="NewPaidTagLine_KeyDown">
+                    <!-- The amount starts empty, not "0" (B1d: a tag with amount 0 must never be saved; a pre-filled
+                         0 let "asd" be added at 0). AllowZero off: a typed 0 shows its message like a minus. -->
+                    <StackPanel x:Name="NewPaidTagLine" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
                         <TextBox x:Name="NewPaidTagName" Header="New payable tag" PlaceholderText="Name" Width="160"
                                  KeyDown="NewPaidTag_KeyDown" LostFocus="NewPaidTag_LostFocus"/>
-                        <controls:MoneyBox x:Name="NewPaidTagRate" Header="Monthly net (€)" PlaceholderText="0" Text="0"
+                        <controls:MoneyBox x:Name="NewPaidTagRate" Header="Monthly net (€)" PlaceholderText="Amount"
+                                           AllowZero="False"
                                            Width="150" KeyDown="NewPaidTag_KeyDown" LostFocus="NewPaidTag_LostFocus"/>
                         <Button Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click"
                                 LostFocus="NewPaidTag_LostFocus"/>
