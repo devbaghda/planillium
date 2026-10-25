@@ -14,6 +14,7 @@ public sealed class MoneyBox : TextBox
 {
     private readonly char _decimalSeparator = MoneyFormat.DecimalSeparator;
     private bool _normalising;
+    private string? _writtenBack; // cleaned text we just wrote; its echo TextChanged must not reset the minus hint
 
     /// <summary>Raised after a text change that leaves a valid number in the box. Not raised when the box is empty.</summary>
     public event EventHandler? ValueChanged;
@@ -91,6 +92,7 @@ public sealed class MoneyBox : TextBox
             e.Handled = true;
             return;
         }
+        _writtenBack = null; // a new keystroke: any earlier write-back echo is stale
         base.OnKeyDown(e);
     }
 
@@ -98,10 +100,16 @@ public sealed class MoneyBox : TextBox
     {
         if (_normalising) return;
         var raw = Text;
-        NegativeAttempt = MoneyFormat.ContainsMinus(raw);
+        // The TextChanged raised by our own write-back below arrives after _normalising is already false
+        // (WinUI delivers it asynchronously). It carries the cleaned text, has no minus, and must not
+        // reset the hint that the user's keystroke just raised.
+        bool echo = _writtenBack != null && raw == _writtenBack;
+        _writtenBack = null;
+        if (!echo) NegativeAttempt = MoneyFormat.ContainsMinus(raw);
         var (text, caret) = MoneyFormat.Normalize(raw, SelectionStart, _decimalSeparator);
         if (text != raw)
         {
+            _writtenBack = text;
             _normalising = true;
             try
             {
