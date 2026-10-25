@@ -316,8 +316,9 @@
             </Grid>
         </ScrollViewer>
 
-        <!-- Focus park for the "New payable tag" line (SettingsPage.xaml.cs, LeavePaidTagLine): a focusable
-             element that is not a text box, so focus never lands in a box after Esc or an outside click.
+        <!-- Focus park (SettingsPage.xaml.cs, ParkFocus): a focusable element that is not a text box, so focus
+             never stays in a box after Esc or Enter in the "New payable tag" line, Enter in a money box, a click on
+             blank space or an Income heading, or a payable-tag Remove.
              Not a tab stop, so keyboard navigation never lands on it. -->
         <Button x:Name="FocusPark" Grid.Row="1" Grid.Column="0" Width="1" Height="1" Opacity="0"
                 MinWidth="0" MinHeight="0" Padding="0" BorderThickness="0"

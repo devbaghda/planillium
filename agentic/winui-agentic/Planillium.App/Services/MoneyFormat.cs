@@ -25,7 +25,8 @@ public static class MoneyFormat
     /// <summary>
     /// Cleans raw box text. Keeps digits, the first decimal separator (',' or '.'), at most
     /// <see cref="MaxIntegerDigits"/> integer and <see cref="MaxDecimalDigits"/> decimal digits.
-    /// Everything else (letters, '-', spaces, a second separator) is dropped. Returns the display text
+    /// Everything else (letters, '-', spaces, a second separator) is dropped (the money boxes use
+    /// <see cref="NormalizeKeepingSign"/>, which puts a typed minus back in front). Returns the display text
     /// and the caret index in it, placed after the same digit the caret was after in <paramref name="raw"/>.
     /// </summary>
     public static (string Text, int Caret) Normalize(string raw, int caret, char decimalSeparator)
@@ -92,6 +93,21 @@ public static class MoneyFormat
             if (pos <= sepOut) pos = sepOut + 1;
         }
         return (text, Math.Min(pos, text.Length));
+    }
+
+    /// <summary>
+    /// <see cref="Normalize"/>, but a minus sign is kept: if <paramref name="raw"/> has any minus
+    /// (see <see cref="ContainsMinus"/>), anywhere and any number of times, the result starts with exactly one
+    /// "-" (U+002D) followed by the normalised digits ("5-0" -> "-50", "--5" and "−5" -> "-5", "-" -> "-").
+    /// The caret is shifted past the sign, never placed before it. A box showing such text holds an invalid
+    /// (negative) amount; <see cref="Parse"/> still ignores the sign, so callers must check
+    /// <see cref="ContainsMinus"/> before using the number.
+    /// </summary>
+    public static (string Text, int Caret) NormalizeKeepingSign(string raw, int caret, char decimalSeparator)
+    {
+        var (text, pos) = Normalize(raw, caret, decimalSeparator);
+        if (!ContainsMinus(raw)) return (text, pos);
+        return ("-" + text, pos + 1);
     }
 
     /// <summary>True if the raw text has a minus sign: '-' (U+002D), U+2212 or U+2013.</summary>

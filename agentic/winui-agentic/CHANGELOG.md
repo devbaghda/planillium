@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Change: Settings -> Income money boxes (previous salary, payable-tag amounts, new-tag amount) now save when you leave the box or press Enter, not on every keystroke. Clicking the "Income" or "Paid work" heading takes the cursor out of any amount box so stray typing changes nothing. Typing or pasting a minus sign still drops it and now shows "Amounts can't be negative."
+- Change: Settings -> Income, Enter and leaving: Enter in an amount box saves it and takes the cursor out of the box; Enter in the "New payable tag" line (name or amount) works like the Add button and then takes the cursor out. Clicking blank space or plain text beside an amount box now leaves the box (it saves, and stray typing changes nothing); before, the cursor stayed in the box. Removing a payable tag no longer drops the cursor into the next text box.
+- Change: Settings -> Income, minus sign: a typed or pasted minus now stays in the box as one leading "-" ("-500"), and "Amounts can't be negative." stays under the box for as long as it is there, also after leaving the box. Nothing is saved and no tag can be added while it is there; delete the minus and the message goes. Enter in a box holding a minus (or an empty box) keeps the cursor there.
+- Change: Settings -> Income money boxes (previous salary, payable-tag amounts, new-tag amount) now save when you leave the box or press Enter, not on every keystroke. Clicking the "Income" or "Paid work" heading takes the cursor out of any amount box so stray typing changes nothing. A typed minus shows "Amounts can't be negative." (sign handling changed again, see the entry above).
 
 - Change: Reports shows two figures above the income card for each period (Today / This week / This month / This year): "Income lost or gained" (the same headline figure as before, which already includes paid work) and "Of which paid work" (the payable-tag total), both in EUR. The headline and the other cards are unchanged; no calculation changed.
 - Change: the off-plan nudge now reads "Try blocking distracting apps and activities during working hours."
