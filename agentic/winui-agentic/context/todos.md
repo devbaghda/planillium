@@ -51,3 +51,7 @@ Build (Debug x64, -warnaserror --no-incremental) 0 warnings, 0 errors; tests 346
 ### 2026-10-25 — B1c fix pass, QA defect D1 (agentic side)
 
 D1: with 3+ paid tags at 1180x780 the add line's "Amounts can't be negative." hint sat below the fold and the page did not scroll. Fix: when `NewPaidTagRate.IsNegative` turns true, `SettingsPage` calls `NewPaidTagHint.StartBringIntoView` (deferred, no animation; focus untouched). QA's `B1cMinusTests.cs` copied into `Planillium.App.Tests` unchanged. Build (x64, -warnaserror --no-incremental) 0 warnings/errors; tests 362/362. Not live-driven by the coder (QA re-run owes the 3+ tags at 1180x780 check).
+
+### 2026-10-25 — B1c fix pass 2, D1 still open with 4+ tags (agentic side)
+
+QA round 2: the queued `StartBringIntoView` worked only with 3 tags. Root cause: it ran before the newly shown hint row had been measured, so with the page already at its scroll end there was no new extent and nothing moved. Fix (`SettingsPage.RevealNewPaidTagHint`): force `SectionScroll.UpdateLayout()`, measure the hint's bottom against the viewport, `ChangeView` down if needed; run immediately, again at low dispatcher priority, and on the hint's `SizeChanged`. Scroll only, focus stays in the box. Strict build clean, 362/362 tests. Live-checked by the coder on a scratch `MENTOR_ROOT`, 1180x780, 3/4/6 tags: hint on screen at +0.3/1/3 s each time, typing "7" still lands in the box ("-5 007").

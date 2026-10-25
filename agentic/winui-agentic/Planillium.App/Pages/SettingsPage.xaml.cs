@@ -52,10 +52,16 @@ public sealed partial class SettingsPage : Page
         {
             NewPaidTagHint.Visibility = NewPaidTagRate.IsNegative ? Visibility.Visible : Visibility.Collapsed;
             // Scroll the message into view (it can sit below the fold with several tags); focus is not touched.
+            // Done now (after a forced layout pass) and once more at low priority, after the box's own
+            // caret-into-view and any re-measure have run -- see RevealNewPaidTagHint.
             if (NewPaidTagRate.IsNegative)
-                DispatcherQueue.TryEnqueue(() => NewPaidTagHint.StartBringIntoView(
-                    new BringIntoViewOptions { AnimationDesired = false }));
+            {
+                RevealNewPaidTagHint();
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, RevealNewPaidTagHint);
+            }
         };
+        // The hint's first real size arrives with a layout pass; reveal again then (covers any late re-measure).
+        NewPaidTagHint.SizeChanged += (_, _) => { if (NewPaidTagHint.Visibility == Visibility.Visible) RevealNewPaidTagHint(); };
         // Enter in the new-tag amount box: the box swallows Enter (so NewPaidTag_KeyDown never sees it) and raises
         // EnterPressed instead. An invalid amount adds nothing and shows its message; the cursor stays.
         NewPaidTagRate.EnterPressed += (_, _) => TryAddPaidTag(fromEnter: true);
@@ -328,6 +334,21 @@ public sealed partial class SettingsPage : Page
             if (!SectionList.Focus(FocusState.Programmatic))
                 Log.Warn(caller, "section list also refused focus; focus stays where it was");
         });
+    }
+
+    /// <summary>Scrolls Settings so the whole add-line minus message is on screen. B1c D1: the earlier queued
+    /// StartBringIntoView ran before the newly visible row had been measured, so with the page already scrolled to
+    /// its end (4+ paid tags at 1180x780) there was no extra extent to scroll into and nothing moved. Here layout is
+    /// forced first, then the hint's real bottom edge is measured against the viewport and the scroller moved
+    /// explicitly. Scrolling only -- keyboard focus stays in the amount box.</summary>
+    private void RevealNewPaidTagHint()
+    {
+        if (NewPaidTagHint.Visibility != Visibility.Visible || SectionScroll.Content is not UIElement content) return;
+        SectionScroll.UpdateLayout();
+        var top = NewPaidTagHint.TransformToVisual(content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+        var bottom = top + NewPaidTagHint.ActualHeight + 8;   // small margin below the text
+        if (bottom > SectionScroll.VerticalOffset + SectionScroll.ViewportHeight)
+            SectionScroll.ChangeView(null, Math.Min(bottom - SectionScroll.ViewportHeight, SectionScroll.ScrollableHeight), null, true);
     }
 
     /// <summary>Enter in the salary or a payable-tag box: the box has already saved a valid number; the cursor then
