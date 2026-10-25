@@ -31,17 +31,74 @@ public sealed class MoneyBox : TextBox
         set => Text = MoneyFormat.FromNumber(value, _decimalSeparator);
     }
 
+    /// <summary>Raised when the user leaves the box or presses Enter and the number differs from the one
+    /// the box had when it got focus (or was last committed). Never raised for programmatic <see cref="Value"/> sets.</summary>
+    public event EventHandler? ValueCommitted;
+
+    /// <summary>Raised when <see cref="NegativeAttempt"/> changes.</summary>
+    public event EventHandler? NegativeAttemptChanged;
+
+    private double _baseline = double.NaN;
+    private bool _hasBaseline;
+    private bool _negativeAttempt;
+
+    /// <summary>True while the last keystroke or paste contained a minus sign (which the box drops).</summary>
+    public bool NegativeAttempt
+    {
+        get => _negativeAttempt;
+        private set
+        {
+            if (_negativeAttempt == value) return;
+            _negativeAttempt = value;
+            NegativeAttemptChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raises <see cref="ValueCommitted"/> if the box holds a valid number that differs from the baseline.</summary>
+    public void Commit()
+    {
+        if (!_hasBaseline) return; // never focused since the last commit/leave: nothing the user typed
+        var v = Value;
+        if (double.IsNaN(v) || v == _baseline) return;
+        _baseline = v;
+        ValueCommitted?.Invoke(this, EventArgs.Empty);
+    }
+
+    protected override void OnGotFocus(RoutedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        _baseline = Value;
+        _hasBaseline = true;
+    }
+
     protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
         var settled = MoneyFormat.Settle(Text, _decimalSeparator);
         if (settled != Text) Text = settled;
+        NegativeAttempt = false;
+        Commit();
+        _hasBaseline = false;
+    }
+
+    protected override void OnKeyDown(KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            var settled = MoneyFormat.Settle(Text, _decimalSeparator);
+            if (settled != Text) Text = settled;
+            Commit();
+            e.Handled = true;
+            return;
+        }
+        base.OnKeyDown(e);
     }
 
     private void OnTextChanged(object sender, TextChangedEventArgs e)
     {
         if (_normalising) return;
         var raw = Text;
+        NegativeAttempt = MoneyFormat.ContainsMinus(raw);
         var (text, caret) = MoneyFormat.Normalize(raw, SelectionStart, _decimalSeparator);
         if (text != raw)
         {

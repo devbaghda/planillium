@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Change: Settings -> Income money boxes (previous salary, payable-tag amounts, new-tag amount) now save when you leave the box or press Enter, not on every keystroke. Clicking the "Income" or "Paid work" heading takes the cursor out of any amount box so stray typing changes nothing. Typing or pasting a minus sign still drops it and now shows "Amounts can't be negative."
+
 - Change: Reports shows two figures above the income card for each period (Today / This week / This month / This year): "Income lost or gained" (the same headline figure as before, which already includes paid work) and "Of which paid work" (the payable-tag total), both in EUR. The headline and the other cards are unchanged; no calculation changed.
 - Change: the off-plan nudge now reads "Try blocking distracting apps and activities during working hours."
 - Change: Settings -> Income money boxes (previous salary, each payable tag's monthly net, the new-tag amount) group thousands with a thin space as you type (2 925, 1 600, 14 000) and no longer show up/down arrows. The saved value is still a plain number.

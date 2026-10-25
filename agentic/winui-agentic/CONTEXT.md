@@ -16,6 +16,7 @@ rules and fork point: `PILOT.md`.
 
 ## 2. Current state
 
+B1b money boxes (2026-10-25): built, not yet QA'd — save on leave/Enter, focus park on Income headings, negative-amount hint; see `context/todos.md` 2026-10-25.
 Built so far through this pipeline: lost-earnings-counter (2026-09-22), an eight-item batch
 (2026-10-01), and "Replace remaining tasks…" (2026-10-09, built and unit-tested, not yet QA'd; new tasks start on last done day + 1, day 1 if none done, not clamped to today — `DECISIONS.md` rule 15), and its v2 (2026-10-13, built and unit-tested, not yet QA'd: full unfinished-task list in the prompt, "What should change?" field, advisory "Words that must be gone" check in the preview), and "Ask Claude" (ai-layer, 2026-10-13, built and unit-tested, not yet QA'd; defect D1 — reason cleared right after an AI fill — fixed the same day by `ReplyErrorState`, Add plan's reply check by `PlanReplyCheck`, both in `Services/AiClient.cs`). Product architecture, schema and settings: `context/domain.md`. Business rules and
 standing lessons: `DECISIONS.md`.
@@ -52,3 +53,4 @@ standing lessons: `DECISIONS.md`.
    **2026-10-13 follow-up:** QA defect D1 (garbage AI reply: reason vanished) fixed in Replace remaining
    tasks; Add plan now reports a non-plan reply honestly. Tests 310/310. Needs a live UIA re-check of
    both (`pilot-specs/ai-layer/SPEC.md`, "Follow-up 2026-10-13").
+3. **(opened 2026-10-24) B1 follow-up decided by the user, not started.** (1) Settings -> Income money boxes save on focus loss / Enter, not per keystroke; (2) clicking a Settings -> Income heading parks focus on a harmless element, so stray typing cannot edit the first number box; (3) a typed minus sign shows a short "amounts can't be negative" hint instead of being dropped silently.

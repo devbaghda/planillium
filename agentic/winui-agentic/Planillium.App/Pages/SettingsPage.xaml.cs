@@ -46,7 +46,11 @@ public sealed partial class SettingsPage : Page
                 "every menu entry must open a section.");
         MonthlyIncomeBox = new MoneyBox { Header = "Previous salary — monthly net (€)", PlaceholderText = "0", Width = 240 };
         AutomationProperties.SetName(MonthlyIncomeBox, "Previous salary — monthly net (€)");
-        MonthlyIncomeBox.ValueChanged += (_, _) => Income_Changed(MonthlyIncomeBox, EventArgs.Empty);
+        MonthlyIncomeBox.ValueCommitted += (_, _) => Income_Changed(MonthlyIncomeBox, EventArgs.Empty);
+        NewPaidTagRate.NegativeAttemptChanged += (_, _) =>
+            NewPaidTagHint.Visibility = NewPaidTagRate.NegativeAttempt ? Visibility.Visible : Visibility.Collapsed;
+        NewPaidTagHint.Text = MinusHintText;
+        AutomationProperties.SetName(NewPaidTagHint, MinusHintText);
         SalaryRowHost.Children.Add(MonthlyRow(MonthlyIncomeBox, remove: null));
         // Click-outside for the "New payable tag" line. handledEventsToo so it still sees presses a child
         // control has already handled (buttons, text boxes).
@@ -91,8 +95,13 @@ public sealed partial class SettingsPage : Page
         Unloaded += (_, _) =>
         {
             if (App.MainWindow is MainWindow win) win.TrackingStateChanged -= RefreshTrackerInfo;
+            // A box still focused when the page goes away: save what was typed (nothing is saved per keystroke).
+            foreach (var box in _committableBoxes.ToList()) box.Commit();
         };
     }
+
+    /// <summary>The salary box and every payable-tag rate box, committed when the page unloads.</summary>
+    private readonly List<MoneyBox> _committableBoxes = [];
 
     /// <summary>Shows the chosen section and hides the rest. Nothing is created or destroyed
     /// here — every panel stays loaded, so the values in a section you haven't opened are still
@@ -211,13 +220,16 @@ public sealed partial class SettingsPage : Page
     private void RenderPaidTags()
     {
         PaidTagsHost.Children.Clear();
+        _committableBoxes.Clear();
+        _committableBoxes.Add(MonthlyIncomeBox);
         foreach (var tag in PaidTags.All())
         {
             var t = tag;
             var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", PlaceholderText = "0", Width = 240 };
             AutomationProperties.SetName(rate, $"{t.Label} — monthly net (€)");
             rate.Value = t.MonthlyEur;
-            rate.ValueChanged += (_, _) =>
+            _committableBoxes.Add(rate);
+            rate.ValueCommitted += (_, _) =>
             {
                 if (_initialising) return;
                 SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
@@ -254,8 +266,57 @@ public sealed partial class SettingsPage : Page
         row.Children.Add(box);
         row.Children.Add(readout);
         if (remove != null) row.Children.Add(remove);
-        return row;
+        var wrapper = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 };
+        wrapper.Children.Add(row);
+        wrapper.Children.Add(MakeMinusHint(box));
+        return wrapper;
     }
+
+    /// <summary>The "Amounts can't be negative." line under a money box: collapsed until the box reports a
+    /// typed or pasted minus sign, hidden again on the next keystroke without one or when the box is left.</summary>
+    private static TextBlock MakeMinusHint(MoneyBox box)
+    {
+        var hint = new TextBlock
+        {
+            Text = MinusHintText, FontSize = 12, TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+        };
+        AutomationProperties.SetName(hint, MinusHintText);
+        AutomationProperties.SetLiveSetting(hint, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
+        box.NegativeAttemptChanged += (_, _) =>
+            hint.Visibility = box.NegativeAttempt ? Visibility.Visible : Visibility.Collapsed;
+        return hint;
+    }
+
+    private const string MinusHintText = "Amounts can't be negative.";
+
+    /// <summary>Moves keyboard focus off any text box onto a non-text element, so stray typing edits nothing.
+    /// Deferred so it runs after the click's own focus handling. The focus park takes focus; if it refuses,
+    /// the section list does; if both refuse it is logged.</summary>
+    private void ParkFocus(string caller, bool onlyIfInside = false)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (XamlRoot == null) return;
+            var focused = FocusManager.GetFocusedElement(XamlRoot);
+            if (onlyIfInside ? !IsFocusInsideNewPaidTagLine() : focused is not TextBox) return;
+            // A Button that is not a tab stop refuses programmatic focus (Focus() returns false), so the park is
+            // made a tab stop only while it holds focus; FocusPark_LostFocus turns it off again.
+            FocusPark.IsTabStop = true;
+            if (FocusPark.Focus(FocusState.Programmatic)) return;
+            FocusPark.IsTabStop = false;
+            Log.Warn(caller, "focus park refused focus; trying the section list");
+            if (!SectionList.Focus(FocusState.Programmatic))
+                Log.Warn(caller, "section list also refused focus; focus stays where it was");
+        });
+    }
+
+    private void FocusPark_LostFocus(object sender, RoutedEventArgs e) => FocusPark.IsTabStop = false;
+
+    /// <summary>A click on an Income heading takes typing focus out of any text box (money boxes included).</summary>
+    private void IncomeHeading_PointerPressed(object sender, PointerRoutedEventArgs e) =>
+        ParkFocus("SettingsPage.IncomeHeading");
 
     /// <summary>Esc in either field of the "New payable tag" line leaves it: both fields are emptied,
     /// nothing is added or saved. Focus moves to the section scroller so no field keeps the focus rail.</summary>
@@ -311,14 +372,7 @@ public sealed partial class SettingsPage : Page
         // the focus park only takes focus if nothing else did. It is a non-text element (a Button), so no text
         // box (and no stray typing into a saved amount) can receive focus from here. If the park refuses focus,
         // the section list (also non-text) takes it; if that refuses too, it is logged.
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (!IsFocusInsideNewPaidTagLine()) return;
-            if (FocusPark.Focus(FocusState.Programmatic)) return;
-            Log.Warn("SettingsPage.LeavePaidTagLine", "focus park refused focus; trying the section list");
-            if (!SectionList.Focus(FocusState.Programmatic))
-                Log.Warn("SettingsPage.LeavePaidTagLine", "section list also refused focus; focus stays in the line");
-        });
+        ParkFocus("SettingsPage.LeavePaidTagLine", onlyIfInside: true);
     }
 
     private bool IsFocusInsideNewPaidTagLine()

@@ -102,11 +102,13 @@
                 </StackPanel>
 
                 <StackPanel x:Name="IncomePanel" Spacing="16" VerticalAlignment="Top" Visibility="Collapsed">
-                    <TextBlock Text="Income" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock x:Name="IncomeHeading" Text="Income" Style="{StaticResource SubtitleTextBlockStyle}"
+                               PointerPressed="IncomeHeading_PointerPressed"/>
                     <!-- Filled in code (SettingsPage.xaml.cs, MonthlyIncomeBox): same row builder as the payable tags. -->
                     <StackPanel x:Name="SalaryRowHost" Orientation="Horizontal" Spacing="8"/>
                     <ToggleSwitch x:Name="EmployedToggle" Header="Currently employed" Toggled="Income_Changed"/>
-                    <TextBlock Text="Paid work" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock x:Name="PaidWorkHeading" Text="Paid work" Style="{StaticResource BodyStrongTextBlockStyle}"
+                               PointerPressed="IncomeHeading_PointerPressed"/>
                     <TextBlock Text="Diary time carrying one of these tags counts as paid work: hours × (monthly ÷ 168 h). It is added to the income figure and shown as its own Earnings block in Reports. A new name here also becomes a diary tag."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -122,6 +124,9 @@
                         <Button Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click"
                                 LostFocus="NewPaidTag_LostFocus"/>
                     </StackPanel>
+                    <TextBlock x:Name="NewPaidTagHint" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                               AutomationProperties.LiveSetting="Polite"/>
                     <TextBlock Text="The sidebar shows the running total of lost earnings (while unemployed) or gained earnings (while employed), backfilled from 2025-12-04."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -316,7 +321,7 @@
              Not a tab stop, so keyboard navigation never lands on it. -->
         <Button x:Name="FocusPark" Grid.Row="1" Grid.Column="0" Width="1" Height="1" Opacity="0"
                 MinWidth="0" MinHeight="0" Padding="0" BorderThickness="0"
-                IsTabStop="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+                IsTabStop="False" LostFocus="FocusPark_LostFocus" HorizontalAlignment="Left" VerticalAlignment="Top"
                 AutomationProperties.AccessibilityView="Raw"/>
 
         <!-- ══ section menu ══════════════════════════════════════════════════════════════ -->

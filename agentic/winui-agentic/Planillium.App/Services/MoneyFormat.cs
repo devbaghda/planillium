@@ -94,6 +94,13 @@ public static class MoneyFormat
         return (text, Math.Min(pos, text.Length));
     }
 
+    /// <summary>True if the raw text has a minus sign: '-' (U+002D), U+2212 or U+2013.</summary>
+    public static bool ContainsMinus(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return false;
+        return raw.IndexOfAny(['-', '−', '–']) >= 0;
+    }
+
     /// <summary>
     /// Box text once focus leaves it: a decimal dot still pending (see <see cref="Normalize"/>) becomes the
     /// culture's decimal separator. Other text is returned unchanged.
