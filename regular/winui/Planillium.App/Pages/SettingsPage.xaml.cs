@@ -40,6 +40,7 @@ public sealed partial class SettingsPage : Page
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
                 "every menu entry must open a section.");
         BuildScoringSection();
+        IncomeFocusPark.LostFocus += (_, _) => IncomeFocusPark.IsTabStop = false;
         MonthlyIncomeBox.Committed += (_, _) => { if (!_initialising) SaveIncome(); };
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
         NewPaidTagRate.Value = 0;
@@ -394,16 +395,16 @@ public sealed partial class SettingsPage : Page
 
     private void Page_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        if (IsPlainText(e.OriginalSource as DependencyObject)
-            && Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is MoneyBox)
+        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        var inLine = focused is not null && InNewPaidTagLine(focused);
+        if (focused is MoneyBox && IsPlainText(e.OriginalSource as DependencyObject))
         {
             // B1b: a click on a heading/label must not leave typing focus in a money box.
+            // A button that is not a tab stop refuses programmatic focus, so it is one only while parked.
+            IncomeFocusPark.IsTabStop = true;
             IncomeFocusPark.Focus(FocusState.Programmatic);
-            return;
         }
-        if (InNewPaidTagLine(e.OriginalSource as DependencyObject)) return;
-        if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject f
-            || !InNewPaidTagLine(f)) return;
+        if (InNewPaidTagLine(e.OriginalSource as DependencyObject) || !inLine) return;
         ClearNewPaidTagLine();
         SectionList.Focus(FocusState.Programmatic);
     }
