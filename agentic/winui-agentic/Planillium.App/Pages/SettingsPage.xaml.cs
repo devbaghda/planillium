@@ -49,7 +49,13 @@ public sealed partial class SettingsPage : Page
         MonthlyIncomeBox.ValueCommitted += (_, _) => Income_Changed(MonthlyIncomeBox, EventArgs.Empty);
         MonthlyIncomeBox.EnterPressed += (_, _) => ParkAfterEnter(MonthlyIncomeBox);
         NewPaidTagRate.IsNegativeChanged += (_, _) =>
+        {
             NewPaidTagHint.Visibility = NewPaidTagRate.IsNegative ? Visibility.Visible : Visibility.Collapsed;
+            // Scroll the message into view (it can sit below the fold with several tags); focus is not touched.
+            if (NewPaidTagRate.IsNegative)
+                DispatcherQueue.TryEnqueue(() => NewPaidTagHint.StartBringIntoView(
+                    new BringIntoViewOptions { AnimationDesired = false }));
+        };
         // Enter in the new-tag amount box: the box swallows Enter (so NewPaidTag_KeyDown never sees it) and raises
         // EnterPressed instead. An invalid amount adds nothing and shows its message; the cursor stays.
         NewPaidTagRate.EnterPressed += (_, _) => TryAddPaidTag(fromEnter: true);
