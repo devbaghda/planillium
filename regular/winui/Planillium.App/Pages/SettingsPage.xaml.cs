@@ -398,7 +398,7 @@ public sealed partial class SettingsPage : Page
             && Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is MoneyBox)
         {
             // B1b: a click on a heading/label must not leave typing focus in a money box.
-            SectionList.Focus(FocusState.Programmatic);
+            IncomeFocusPark.Focus(FocusState.Programmatic);
             return;
         }
         if (InNewPaidTagLine(e.OriginalSource as DependencyObject)) return;
