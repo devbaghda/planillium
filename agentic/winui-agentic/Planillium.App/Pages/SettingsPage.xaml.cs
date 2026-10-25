@@ -441,8 +441,9 @@ public sealed partial class SettingsPage : Page
         box.Reverted += (_, _) => SaveStatus.Text = "Empty amount not saved; the saved amount is back in the box.";
     }
 
-    /// <summary>Enter in the salary or a payable-tag box: the box has already saved a valid number; the cursor then
-    /// leaves the box. With an empty or invalid value nothing was saved and the cursor stays, so it can be fixed;
+    /// <summary>Enter in the salary or a payable-tag box: the box has already saved a valid number, or (emptied, letters
+    /// or spaces only) already shows the saved amount again; the cursor then leaves the box and ends nowhere (B1c rule,
+    /// B1d fix). With a minus or a zero nothing was saved and the cursor stays with the message, so it can be fixed;
     /// the status strip says why.</summary>
     private void ParkAfterEnter(MoneyBox box)
     {
@@ -488,12 +489,14 @@ public sealed partial class SettingsPage : Page
     /// longer be fired by a stray Enter or Space.</summary>
     private void Page_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (IsFocusInsideNewPaidTagLine())
+        // The line is "active" while focus is in it, and also after a refused mouse Add, which parks focus but keeps
+        // what was typed and the message (B1d fix: a click outside must still clear it then, as the user rule says).
+        if (IsFocusInsideNewPaidTagLine() || _keepAddLineOnNextLeave)
         {
             var p = e.GetCurrentPoint(NewPaidTagLine).Position;
             var inside = p.X >= 0 && p.Y >= 0 && p.X <= NewPaidTagLine.ActualWidth && p.Y <= NewPaidTagLine.ActualHeight;
             if (!inside) LeavePaidTagLine();
-            return;
+            if (IsFocusInsideNewPaidTagLine() || inside) return;
         }
         var source = e.OriginalSource as DependencyObject;
         // Deferred: a press on another box or control may still be moving focus there.
@@ -524,6 +527,13 @@ public sealed partial class SettingsPage : Page
     private void Page_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.Tab) _lastTabAt = Environment.TickCount64;
+        // Esc after a refused mouse Add (focus parked, typed text and message kept): clears the line like Esc inside
+        // it (B1d fix). Esc with the cursor in the line is left to NewPaidTag_KeyDown.
+        if (e.Key == VirtualKey.Escape && _keepAddLineOnNextLeave && !IsFocusInsideNewPaidTagLine())
+        {
+            e.Handled = true;
+            LeavePaidTagLine();
+        }
     }
 
     /// <summary>The element in this page that last received focus (whatever the cause). See Page_GettingFocus.</summary>
@@ -583,12 +593,15 @@ public sealed partial class SettingsPage : Page
 
     /// <summary>Set just before a refused mouse Add parks focus, so the focus move out of the line does not clear what
     /// the user typed (they are about to fix it). Holds while focus sits on the park; cleared when focus next enters
-    /// the line (Page_GettingFocus) or the line is left.</summary>
+    /// the line (Page_GettingFocus) or the line is left. While it holds, Esc (Page_PreviewKeyDown) and a press outside
+    /// the line (Page_PointerPressed) still clear the line and its message.</summary>
     private bool _keepAddLineOnNextLeave;
 
     private void LeavePaidTagLine()
     {
         _keepAddLineOnNextLeave = false;
+        // The refusal was also put in the status strip; once the line is cleared it no longer applies there either.
+        if (_addRefusal != null && SaveStatus.Text == _addRefusal) SaveStatus.Text = "";
         NewPaidTagName.Text = "";
         NewPaidTagRate.Text = "";
         SetAddRefusal(null);

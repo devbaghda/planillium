@@ -97,10 +97,10 @@ public sealed class MoneyBox : TextBox
     /// nor while the box is empty or negative.</summary>
     public event EventHandler? ValueCommitted;
 
-    /// <summary>Raised by every Enter, after <see cref="Commit"/> (so a valid number is saved first). The page decides
-    /// what follows: it moves focus out of the box only when <see cref="Value"/> is a number; with an empty or negative
-    /// box the cursor stays so the user can fix it. Raised for invalid values too so the new-tag line can show its
-    /// "needs a number" message.</summary>
+    /// <summary>Raised by every Enter, after <see cref="Commit"/> (so a valid number is saved first) and, with
+    /// <see cref="RevertEmptyOnLeave"/> on, after an empty box got its saved amount back. The page decides what follows:
+    /// it moves focus out of the box when <see cref="Value"/> is a number; with a negative or zero box the cursor stays
+    /// so the user can fix it. Raised for invalid values too so the new-tag line can show its "needs a number" message.</summary>
     public event EventHandler? EnterPressed;
 
     /// <summary>Raised when <see cref="IsNegative"/> changes.</summary>
@@ -145,11 +145,16 @@ public sealed class MoneyBox : TextBox
         RevertIfEmpty();
     }
 
+    /// <summary>Puts the saved amount back when the box holds no number (emptied, letters or spaces only) and
+    /// <see cref="RevertEmptyOnLeave"/> is on. A minus or a zero is left as typed (it has its own message). Run on every
+    /// way out of the box: leaving it, and Enter (B1d fix: Enter used to leave the box blank and focused).</summary>
     private void RevertIfEmpty()
     {
         if (!RevertEmptyOnLeave || double.IsNaN(_saved)) return;
         if (MoneyFormat.ContainsMinus(Text) || !double.IsNaN(MoneyFormat.Parse(Text))) return;
         Value = _saved;
+        // The box now shows the stored amount, so the coming LostFocus must not count it as a new value to save.
+        if (_hasBaseline) _baseline = _saved;
         Reverted?.Invoke(this, EventArgs.Empty);
     }
 
@@ -159,6 +164,9 @@ public sealed class MoneyBox : TextBox
         {
             Settle();
             Commit();
+            // Enter is a way out like leaving: an empty box shows the saved amount again before the page moves
+            // focus away (box and stored value agree).
+            RevertIfEmpty();
             e.Handled = true;
             // After Commit, so the save happens before the page moves focus away.
             EnterPressed?.Invoke(this, EventArgs.Empty);
