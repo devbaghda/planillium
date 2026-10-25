@@ -14,6 +14,9 @@
 
 ## Done
 
+### 2026-10-25 -- B1c Enter, focus and minus sign (regular side)
+`MoneyBox`: minus kept in front of the digits (`MoneyFormat` still formats the unsigned part, so its QA tests stand); `IsNegative` + `NegativeChanged` replace `NegativeTyped`; `Committed` never fires while negative; new `Submitted` on Enter. `SettingsPage`: `Park(from)` moves focus to `IncomeFocusPark` on Enter, on a heading/caption/blank-space click (`IsNonInteractive`, now page-wide) and after Remove (whose button leaves the tree and used to drop focus into the salary box); Tab/Shift+Tab on the park continue from the parked-from box (`IncomeFocusPark_PreviewKeyDown`) -- a plain Tab from the park was what put the cursor in the salary box. Enter in the new-tag name/amount box = `TryAddPaidTag` (shared with Add). Negative message: error colour + icon, semibold, live-region announced (`NegativeHint(box)`). Salary toggle save keeps the stored amount while the box is negative. Rule 17 in `DECISIONS.md`. Strict build 0 warnings, 229 tests pass; QA: `regular/winui/QA-REPORT.md`.
+
 ### 2026-10-25 -- B1b money boxes (regular side)
 `MoneyBox` gained `Committed` (fires on LostFocus/Enter when the number changed since the last commit) and `NegativeTyped(bool)` (minus typed -> hint "Amounts can't be negative.", sign still dropped; cleared on next minus-free keystroke or leaving the box). Settings saves (previous salary, payable-tag rates) now listen to `Committed`, not `ValueChanged` (kept for the live "= EUR/h" readout). New-tag amount saves nothing until Add. Clicking a plain heading/caption while a MoneyBox has focus parks focus on the section list (`SettingsPage.Page_PointerPressed`/`IsPlainText`). Strict build 0 warnings, 229 existing tests pass; QA: see CONTEXT.md section 7.
 

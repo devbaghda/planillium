@@ -42,9 +42,10 @@ public sealed partial class SettingsPage : Page
         BuildScoringSection();
         IncomeFocusPark.LostFocus += (_, _) => IncomeFocusPark.IsTabStop = false;
         MonthlyIncomeBox.Committed += (_, _) => { if (!_initialising) SaveIncome(); };
+        MonthlyIncomeBox.Submitted += (_, _) => Park(MonthlyIncomeBox);
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
         NewPaidTagRate.Value = 0;
-        NewPaidTagRate.NegativeTyped += (_, on) => NewPaidTagHint.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        NewPaidTagHintHost.Children.Add(NegativeHint(NewPaidTagRate));
         // handledEventsToo: a click on a button or text box marks the press handled, but it must
         // still count as "outside the new-tag line".
         AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(Page_PointerPressed), true);
@@ -315,11 +316,18 @@ public sealed partial class SettingsPage : Page
             rate.Value = t.MonthlyEur;
             rate.Committed += (_, _) =>
             {
-                if (double.IsNaN(rate.Value) || _initialising) return;
+                if (double.IsNaN(rate.Value) || rate.IsNegative || _initialising) return;
                 SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
             };
+            rate.Submitted += (_, _) => Park(rate);
             var remove = new Button { Content = "Remove", VerticalAlignment = VerticalAlignment.Bottom };
-            remove.Click += (_, _) => SavePaidTags(PaidTags.All().Where(p => p.Value != t.Value), rerender: true);
+            remove.Click += (_, _) =>
+            {
+                SavePaidTags(PaidTags.All().Where(p => p.Value != t.Value), rerender: true);
+                // The clicked button has just left the tree; without this, focus falls to the first
+                // input on the page — the salary box (B1c: the cursor must never land there unasked).
+                Park(null);
+            };
             PaidTagsHost.Children.Add(RateRow(rate, remove));
         }
         if (PaidTagsHost.Children.Count == 0)
@@ -330,11 +338,33 @@ public sealed partial class SettingsPage : Page
     /// and an optional Remove button. Shared by the previous salary and every payable tag.</summary>
     private const string NegativeText = "Amounts can't be negative.";
 
-    private static TextBlock NegativeHint() => new()
+    /// <summary>B1c: the "can't be negative" message for one money box — error colour, an error icon
+    /// (so it doesn't rely on colour alone), semibold, and announced by screen readers when it
+    /// appears. Visible exactly while the box's text is negative (<see cref="MoneyBox.IsNegative"/>),
+    /// whether or not the box still has focus.</summary>
+    private static StackPanel NegativeHint(MoneyBox box)
     {
-        Text = NegativeText, FontSize = 12, Visibility = Visibility.Collapsed,
-        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-    };
+        var critical = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
+        var text = new TextBlock
+        {
+            Text = NegativeText, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = critical, VerticalAlignment = VerticalAlignment.Center,
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetLiveSetting(text, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Assertive);
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Visibility = Visibility.Collapsed };
+        panel.Children.Add(new FontIcon { Glyph = "", FontSize = 14, Foreground = critical, VerticalAlignment = VerticalAlignment.Center });
+        panel.Children.Add(text);
+        void Sync(bool on)
+        {
+            panel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (on)
+                Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.FromElement(text)?
+                    .RaiseAutomationEvent(Microsoft.UI.Xaml.Automation.Peers.AutomationEvents.LiveRegionChanged);
+        }
+        box.NegativeChanged += (_, on) => Sync(on);
+        Sync(box.IsNegative);
+        return panel;
+    }
 
     private static StackPanel RateRow(MoneyBox rate, Button? remove)
     {
@@ -344,18 +374,16 @@ public sealed partial class SettingsPage : Page
             VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6),
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };
-        void Refresh() => hourly.Text = double.IsNaN(rate.Value)
+        void Refresh() => hourly.Text = double.IsNaN(rate.Value) || rate.IsNegative
             ? "= —/h" : $"= {MainWindow.FormatEur(rate.Value / IncomeService.WorkingHoursPerMonth)}/h";
         rate.ValueChanged += (_, _) => Refresh();
         Refresh();
         row.Children.Add(rate);
         row.Children.Add(hourly);
         if (remove is not null) row.Children.Add(remove);
-        var hint = NegativeHint();
-        rate.NegativeTyped += (_, on) => hint.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        var col = new StackPanel { Spacing = 2 };
+        var col = new StackPanel { Spacing = 4 };
         col.Children.Add(row);
-        col.Children.Add(hint);
+        col.Children.Add(NegativeHint(rate));
         return col;
     }
 
@@ -375,10 +403,59 @@ public sealed partial class SettingsPage : Page
     private void NewPaidTagLine_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         if (e.Key == Windows.System.VirtualKey.Tab) { _tabPending = true; return; }
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            // B1c: Enter in the name or amount box = the Add button. On the Add button itself Enter
+            // already clicks it, so it is left alone.
+            if (e.OriginalSource is not TextBox box) return;
+            e.Handled = true;
+            if (TryAddPaidTag()) Park(box);
+            return;
+        }
         if (e.Key != Windows.System.VirtualKey.Escape) return;
         e.Handled = true;
         ClearNewPaidTagLine();
         SectionList.Focus(FocusState.Programmatic);
+    }
+
+    // ── "the cursor is nowhere" (B1b park, B1c Enter/blank-click/Tab rules) ──
+    // WinUI has no "no focus" state inside a window, so "nowhere" is the 1 px see-through
+    // IncomeFocusPark button: it has no caret, so typing reaches no box. It sits just before the
+    // salary box in the tab order, so a plain Tab from it would put the cursor in the salary box
+    // whatever box was left — the very jump the user reported. Tab/Shift+Tab on the park therefore
+    // continue from the element that was parked from, as if the park had never happened.
+
+    /// <summary>The element focus was parked from (null when it no longer exists, e.g. after Remove).</summary>
+    private UIElement? _parkedFrom;
+
+    private void Park(UIElement? from)
+    {
+        _parkedFrom = from;
+        IncomeFocusPark.IsTabStop = true;   // a button that is not a tab stop refuses programmatic focus
+        IncomeFocusPark.Focus(FocusState.Programmatic);
+    }
+
+    private void IncomeFocusPark_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Tab) return;
+        var from = _parkedFrom;
+        if (from is null || !IsInIncomePanel(from) || from.Visibility != Visibility.Visible) return;
+        e.Handled = true;
+        var shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                     & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        // A Tab out of the new-tag line must not clear it (same flag the line's own Tab sets).
+        if (InNewPaidTagLine(from)) _tabPending = true;
+        from.Focus(FocusState.Keyboard);
+        Microsoft.UI.Xaml.Input.FocusManager.TryMoveFocus(
+            shift ? Microsoft.UI.Xaml.Input.FocusNavigationDirection.Previous : Microsoft.UI.Xaml.Input.FocusNavigationDirection.Next,
+            new Microsoft.UI.Xaml.Input.FindNextElementOptions { SearchRoot = XamlRoot.Content });
+    }
+
+    private bool IsInIncomePanel(DependencyObject? d)
+    {
+        for (; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, IncomePanel)) return true;
+        return false;
     }
 
     private void NewPaidTag_LostFocus(object sender, RoutedEventArgs e)
@@ -395,28 +472,35 @@ public sealed partial class SettingsPage : Page
 
     private void Page_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        var src = e.OriginalSource as DependencyObject;
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
         var inLine = focused is not null && InNewPaidTagLine(focused);
-        if ((focused is MoneyBox || inLine) && IsPlainText(e.OriginalSource as DependencyObject))
-        {
-            // B1b: a click on a heading/label must not leave typing focus in a money box.
-            // A button that is not a tab stop refuses programmatic focus, so it is one only while parked.
-            IncomeFocusPark.IsTabStop = true;
-            IncomeFocusPark.Focus(FocusState.Programmatic);
-        }
-        if (InNewPaidTagLine(e.OriginalSource as DependencyObject) || !inLine) return;
+        var blank = IsNonInteractive(src);
+        // B1b/B1c: a click on a heading, caption or blank space takes the cursor out of a money box
+        // (or the new-tag line) and leaves it nowhere. A click on another control lets that control
+        // take focus as usual.
+        if ((focused is MoneyBox || inLine) && blank) Park(focused as UIElement);
+        if (!inLine || InNewPaidTagLine(src)) return;
         ClearNewPaidTagLine();
-        if (!IsPlainText(e.OriginalSource as DependencyObject)) SectionList.Focus(FocusState.Programmatic);
+        if (blank) return;
+        // Clicked a control outside the line: if it did not take focus itself, don't leave the
+        // cursor in the just-emptied line.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var now = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+            if (now is not null && InNewPaidTagLine(now)) Park(now as UIElement);
+        });
     }
 
-    /// <summary>True for a TextBlock that is not part of any input control (a heading or caption).</summary>
-    private bool IsPlainText(DependencyObject? d)
+    /// <summary>True when the press landed on something that is not an input control: a heading,
+    /// caption, readout or blank space anywhere on this page. The content pane's ScrollViewer is
+    /// the one control allowed in the chain (blank space inside it); its scroll bars are not.</summary>
+    private bool IsNonInteractive(DependencyObject? d)
     {
-        if (d is not TextBlock) return false;
-        // Walk up to the Income panel only: the page, scroll viewer and list above it are Controls too.
         for (; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
         {
-            if (ReferenceEquals(d, IncomePanel)) return true;
+            if (ReferenceEquals(d, this)) return true;
+            if (ReferenceEquals(d, SectionScroll)) continue;
             if (d is Microsoft.UI.Xaml.Controls.Control) return false;
         }
         return false;
@@ -444,26 +528,32 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private void AddPaidTag_Click(object sender, RoutedEventArgs e)
+    private void AddPaidTag_Click(object sender, RoutedEventArgs e) => TryAddPaidTag();
+
+    /// <summary>The Add button's action, shared with Enter in the line (B1c). Returns true when a
+    /// tag was added; on a refusal the line keeps its text and the reason is shown.</summary>
+    private bool TryAddPaidTag()
     {
         var label = (NewPaidTagName.Text ?? "").Trim();
         var slug = PaidTags.Slug(label);
-        if (slug.Length == 0) { SaveStatus.Text = "Give the new tag a name (letters or digits)."; return; }
-        if (double.IsNaN(NewPaidTagRate.Value)) { SaveStatus.Text = "Monthly net needs a number."; return; }
+        if (slug.Length == 0) { SaveStatus.Text = "Give the new tag a name (letters or digits)."; return false; }
+        if (NewPaidTagRate.IsNegative) return false;   // its own message is already showing under the line
+        if (double.IsNaN(NewPaidTagRate.Value)) { SaveStatus.Text = "Monthly net needs a number."; return false; }
         var all = PaidTags.All().ToList();
-        if (all.Any(p => p.Value == slug)) { SaveStatus.Text = $"\"{label}\" is already a payable tag."; return; }
+        if (all.Any(p => p.Value == slug)) { SaveStatus.Text = $"\"{label}\" is already a payable tag."; return false; }
         // A name matching a built-in tag (e.g. Selfdev) simply makes that tag payable.
         var builtIn = Array.Find(DiaryTag.Options, o => o.Value == slug);
         all.Add(new PaidTag(slug, builtIn.Label ?? label, NewPaidTagRate.Value));
         SavePaidTags(all, rerender: true);
         NewPaidTagName.Text = ""; NewPaidTagRate.Value = 0;
+        return true;
     }
 
     /// <summary>Independent of SaveRules — same reasoning as SaveHoursAndEod's own doc
     /// comment: a bad value anywhere else on this page must never block this pair, and vice
-    /// versa. Unlike the hours/EOD save, there's nothing here that can fail validation once
-    /// past the NaN guard (Minimum="0" on the NumberBox already stops a negative from being
-    /// enterable), so this is a single unconditional Mutate rather than a two-outcome
+    /// versa. Past the NaN guard nothing here can fail validation: a negative amount (B1c: the
+    /// box keeps a typed minus) is never committed, and a toggle flip meanwhile keeps the stored
+    /// amount — so this is a single unconditional Mutate rather than a two-outcome
     /// validate-then-save.</summary>
     private void SaveIncome()
     {
@@ -472,13 +562,16 @@ public sealed partial class SettingsPage : Page
             SaveStatus.Text = "Potential monthly income needs a number.";
             return;
         }
+        // B1c: a negative amount is never saved; a toggle flip while the box shows one keeps the
+        // amount that is already stored.
+        var amount = MonthlyIncomeBox.IsNegative ? ConfigService.PotentialMonthlyIncomeEur() : MonthlyIncomeBox.Value;
         try
         {
             ConfigService.Mutate(cfg =>
             {
                 cfg["income"] = new System.Text.Json.Nodes.JsonObject
                 {
-                    ["monthly_net_eur"] = MonthlyIncomeBox.Value,
+                    ["monthly_net_eur"] = amount,
                     ["employed"] = EmployedToggle.IsOn,
                 };
             });

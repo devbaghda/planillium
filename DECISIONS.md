@@ -204,6 +204,18 @@
     are untouched). **Ask Claude never overwrites text already in the reply box** — it refuses and
     says to clear the box first. The one-time "what gets sent" notice, once accepted, is not
     withdrawable from the UI — deliberately left as is.
+17. **Settings -> Income money boxes: Enter, the cursor, and the minus sign** (user decisions
+    2026-10-25, B1c; the minus part reverses B1b's "minus is dropped"). Enter in a money box saves
+    and the cursor ends nowhere (parked on an invisible focus target with no caret); Enter in the
+    new-tag line = the Add button, and on success the cursor ends nowhere too. Leaving a box (Tab,
+    click elsewhere) saves it and must never put the cursor in the salary box; Tab after a park
+    continues from the box that was left. A typed minus is kept with the digits; "Amounts can't be
+    negative." stays visible exactly while the text is negative; while negative nothing is saved and
+    no tag can be added; leaving such a box keeps the text and the message, and the stored value
+    stays as it was. Kept from B1: Esc or a click outside the new-tag line clears it without adding
+    a tag — for that line's amount box this wins over "the text stays" (a Tab out of the line keeps
+    it). A refused Enter-add (no name, negative or empty amount) leaves the cursor in the line so it
+    can be fixed (builder's choice; not stated by the user).
 
 ---
 
