@@ -14,6 +14,9 @@
 
 ## Done
 
+### 2026-10-25 -- B1b money boxes (regular side)
+`MoneyBox` gained `Committed` (fires on LostFocus/Enter when the number changed since the last commit) and `NegativeTyped(bool)` (minus typed -> hint "Amounts can't be negative.", sign still dropped; cleared on next minus-free keystroke or leaving the box). Settings saves (previous salary, payable-tag rates) now listen to `Committed`, not `ValueChanged` (kept for the live "= EUR/h" readout). New-tag amount saves nothing until Add. Clicking a plain heading/caption while a MoneyBox has focus parks focus on the section list (`SettingsPage.Page_PointerPressed`/`IsPlainText`). Strict build 0 warnings, 229 existing tests pass; QA: see CONTEXT.md section 7.
+
 ### 2026-10-23 — B1 Reports/Settings batch (regular side)
 Reports: two-figure EUR strip (`ReportsPage.IncomeStrip`, no new calculation). Insight wording "apps and activities" (`ReportExport.Suggestions`). Settings → Income: `MoneyBox` + `MoneyFormat` (thin-space grouping, no arrows; dot+3 digits = thousands, user decision 2026-10-23), previous salary built by the same `RateRow` as payable tags, Esc/click-outside on the new-tag line (LostFocus + page pointer handler; focus parks on the section list). Debug build 0 warnings; Release not rebuilt while the live app ran. QA: see CONTEXT.md section 7.
 

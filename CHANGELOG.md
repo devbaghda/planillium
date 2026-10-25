@@ -6,6 +6,7 @@ going forward; the original Python/Tkinter version is retired.
 ## Unreleased
 
 **Features**
+- **Money boxes in Settings -> Income save when you leave them or press Enter**, not on every keystroke. Clicking a heading no longer leaves typing focus in a money box. Typing a minus sign shows "Amounts can't be negative." instead of silently dropping it.
 - **Reports show the money in EUR per period.** A strip above the income card shows the lost/gained-income figure and, beside it, the part of it earned from paid work, for Today / This week / This month / This year.
 - **Money boxes in Settings → Income** group thousands as you type (2 925, 14 000) and have no up/down arrows. A comma is the decimal; a dot followed by exactly three digits counts as thousands (14.000 = 14 000). Previous salary now sits in the same layout as a payable tag, with its "= €x,xx/h" readout. Esc or a click elsewhere leaves the "New payable tag" line.
 - **Off-plan insight wording:** "Try blocking distracting apps and activities during working hours."

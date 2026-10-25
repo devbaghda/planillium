@@ -169,6 +169,8 @@
                                       LostFocus="NewPaidTag_LostFocus"/>
                         <Button Content="Add" VerticalAlignment="Bottom" Click="AddPaidTag_Click" LostFocus="NewPaidTag_LostFocus"/>
                     </StackPanel>
+                    <TextBlock x:Name="NewPaidTagHint" Text="Amounts can't be negative." FontSize="12" Visibility="Collapsed"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <TextBlock Text="While unemployed, the sidebar and Reports track what this income would have been worth, day by day, as a running loss. Once employed, each day from the switch onward adds instead — days already counted keep the sign they were counted with."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>

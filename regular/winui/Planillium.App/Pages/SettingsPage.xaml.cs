@@ -40,9 +40,10 @@ public sealed partial class SettingsPage : Page
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
                 "every menu entry must open a section.");
         BuildScoringSection();
-        MonthlyIncomeBox.ValueChanged += (_, _) => { if (!_initialising) SaveIncome(); };
+        MonthlyIncomeBox.Committed += (_, _) => { if (!_initialising) SaveIncome(); };
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
         NewPaidTagRate.Value = 0;
+        NewPaidTagRate.NegativeTyped += (_, on) => NewPaidTagHint.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         // handledEventsToo: a click on a button or text box marks the press handled, but it must
         // still count as "outside the new-tag line".
         AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(Page_PointerPressed), true);
@@ -311,7 +312,7 @@ public sealed partial class SettingsPage : Page
             var t = tag;
             var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", Width = 240 };
             rate.Value = t.MonthlyEur;
-            rate.ValueChanged += (_, _) =>
+            rate.Committed += (_, _) =>
             {
                 if (double.IsNaN(rate.Value) || _initialising) return;
                 SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
@@ -326,6 +327,14 @@ public sealed partial class SettingsPage : Page
 
     /// <summary>One money row: the box, its "= €x,xx/h" readout (kept live, "= —/h" while empty)
     /// and an optional Remove button. Shared by the previous salary and every payable tag.</summary>
+    private const string NegativeText = "Amounts can't be negative.";
+
+    private static TextBlock NegativeHint() => new()
+    {
+        Text = NegativeText, FontSize = 12, Visibility = Visibility.Collapsed,
+        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+    };
+
     private static StackPanel RateRow(MoneyBox rate, Button? remove)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -341,7 +350,12 @@ public sealed partial class SettingsPage : Page
         row.Children.Add(rate);
         row.Children.Add(hourly);
         if (remove is not null) row.Children.Add(remove);
-        return row;
+        var hint = NegativeHint();
+        rate.NegativeTyped += (_, on) => hint.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        var col = new StackPanel { Spacing = 2 };
+        col.Children.Add(row);
+        col.Children.Add(hint);
+        return col;
     }
 
     // ── leaving the "New payable tag" line (B1, 2026-10-23) ──────────────
@@ -380,11 +394,27 @@ public sealed partial class SettingsPage : Page
 
     private void Page_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        if (IsPlainText(e.OriginalSource as DependencyObject)
+            && Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is MoneyBox)
+        {
+            // B1b: a click on a heading/label must not leave typing focus in a money box.
+            SectionList.Focus(FocusState.Programmatic);
+            return;
+        }
         if (InNewPaidTagLine(e.OriginalSource as DependencyObject)) return;
         if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is not DependencyObject f
             || !InNewPaidTagLine(f)) return;
         ClearNewPaidTagLine();
         SectionList.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>True for a TextBlock that is not part of any input control (a heading or caption).</summary>
+    private static bool IsPlainText(DependencyObject? d)
+    {
+        if (d is not TextBlock) return false;
+        for (; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+            if (d is Microsoft.UI.Xaml.Controls.Control) return false;
+        return true;
     }
 
     private void ClearNewPaidTagLine()
