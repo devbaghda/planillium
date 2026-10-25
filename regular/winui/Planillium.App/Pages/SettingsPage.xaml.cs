@@ -397,7 +397,7 @@ public sealed partial class SettingsPage : Page
     {
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
         var inLine = focused is not null && InNewPaidTagLine(focused);
-        if (focused is MoneyBox && IsPlainText(e.OriginalSource as DependencyObject))
+        if ((focused is MoneyBox || inLine) && IsPlainText(e.OriginalSource as DependencyObject))
         {
             // B1b: a click on a heading/label must not leave typing focus in a money box.
             // A button that is not a tab stop refuses programmatic focus, so it is one only while parked.
@@ -406,7 +406,7 @@ public sealed partial class SettingsPage : Page
         }
         if (InNewPaidTagLine(e.OriginalSource as DependencyObject) || !inLine) return;
         ClearNewPaidTagLine();
-        SectionList.Focus(FocusState.Programmatic);
+        if (!IsPlainText(e.OriginalSource as DependencyObject)) SectionList.Focus(FocusState.Programmatic);
     }
 
     /// <summary>True for a TextBlock that is not part of any input control (a heading or caption).</summary>
