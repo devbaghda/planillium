@@ -362,6 +362,9 @@ compaction. General versions of several now also live in the global `windows-app
   `_dq.TryEnqueue`, each **stored in a field** — an unrooted one is GC-eligible and stops firing.
 - Subscribe to `AppNotificationManager` events *before* `.Register()`; the reverse order throws
   at the WinRT layer.
+- **A focus/pointer fix must cover the whole container incl. edges and padding, and be tested at the
+  borders, not only the interior** (B1f 2026-10-26: d2d30b0 left the 4 px right padding strip of the
+  Settings scroller unclaimed; fixed in e82135f).
 
 **Prompts, timers and state**
 - Any "show a prompt on a timer" trigger needs BOTH the `IsOnScreen()`-check-then-toast-fallback
