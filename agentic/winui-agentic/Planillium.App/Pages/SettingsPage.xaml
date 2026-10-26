@@ -76,7 +76,9 @@
                  window the explanatory paragraphs would otherwise run to ~110 characters a line
                  and the controls stretch with them (a 284px box holding "08:00"). Below the cap
                  everything still shrinks to fit, which is what keeps the narrow case working. -->
-            <Grid>
+            <!-- B1f: PointerReleased stops a click on empty pane space from reaching the ScrollViewer, whose own
+                 release handling focuses its first focusable child (the salary box). See SectionContent_PointerReleased. -->
+            <Grid x:Name="SectionContent" Background="Transparent" PointerReleased="SectionContent_PointerReleased">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" MaxWidth="820"/>
                     <ColumnDefinition Width="Auto"/>

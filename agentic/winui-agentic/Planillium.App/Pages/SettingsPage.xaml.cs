@@ -511,6 +511,18 @@ public sealed partial class SettingsPage : Page
         });
     }
 
+    /// <summary>B1f root cause. A release of the mouse button that no control inside the pane claimed (a click on empty
+    /// space, a label, a heading) bubbles up to <c>SectionScroll</c>. A ScrollViewer that is not a tab stop answers such
+    /// a release by focusing its first focusable child -- here the salary box -- but only when focus is not already
+    /// inside it. The page's own press handling (Page_PointerPressed, LeavePaidTagLine, IncomeHeading_PointerPressed)
+    /// parks focus on <c>FocusPark</c>, which sits outside the scroller, a moment after the press. With a real mouse the
+    /// button is held ~100 ms, so the park usually lands before the release and the scroller then pulls focus into the
+    /// salary box (as a mouse move, so the focus guard lets it through); a scripted click releases at once, before the
+    /// park, and never showed it. Claiming the release here stops the scroller's step for every blank click, whatever
+    /// had focus before (a box, the section list, nothing after a window switch). Presses are untouched, so every
+    /// control still takes focus and every press handler still runs; controls claim their own releases first.</summary>
+    private void SectionContent_PointerReleased(object sender, PointerRoutedEventArgs e) => e.Handled = true;
+
     private static bool IsWithin(DependencyObject? element, DependencyObject ancestor)
     {
         for (var d = element; d != null; d = VisualTreeHelper.GetParent(d))
