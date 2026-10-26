@@ -520,8 +520,14 @@ public sealed partial class SettingsPage : Page
     /// salary box (as a mouse move, so the focus guard lets it through); a scripted click releases at once, before the
     /// park, and never showed it. Claiming the release here stops the scroller's step for every blank click, whatever
     /// had focus before (a box, the section list, nothing after a window switch). Presses are untouched, so every
-    /// control still takes focus and every press handler still runs; controls claim their own releases first.</summary>
+    /// control still takes focus and every press handler still runs; controls claim their own releases first.
+    /// D1 (fix pass 1): the claim must cover the scroller's whole visible area, so the content's own 4 px right padding
+    /// replaces the scroller's Padding, and SectionContent is kept at least viewport-tall (short sections otherwise
+    /// left a bare strip below the content).</summary>
     private void SectionContent_PointerReleased(object sender, PointerRoutedEventArgs e) => e.Handled = true;
+
+    private void SectionScroll_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        SectionContent.MinHeight = Math.Max(0, e.NewSize.Height);
 
     private static bool IsWithin(DependencyObject? element, DependencyObject ancestor)
     {

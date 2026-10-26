@@ -66,7 +66,7 @@
         <!-- ══ content pane ══════════════════════════════════════════════════════════════ -->
         <ScrollViewer x:Name="SectionScroll" Grid.Row="1" Grid.Column="0"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled"
-                      Padding="0,0,4,0">
+                      SizeChanged="SectionScroll_SizeChanged">
             <!-- The cap lives on a COLUMN, not on the Grid: `MaxWidth` plus
                  `HorizontalAlignment="Left"` would make this Grid size to its content instead of
                  to the space it's given, and every star column inside the sections would then
@@ -78,7 +78,9 @@
                  everything still shrinks to fit, which is what keeps the narrow case working. -->
             <!-- B1f: PointerReleased stops a click on empty pane space from reaching the ScrollViewer, whose own
                  release handling focuses its first focusable child (the salary box). See SectionContent_PointerReleased. -->
-            <Grid x:Name="SectionContent" Background="Transparent" PointerReleased="SectionContent_PointerReleased">
+            <!-- Padding="0,0,4,0" is the 4 px gap that used to be the scroller's own Padding (a strip the release claim missed);
+                 MinHeight is kept at the viewport height in code so a short section is covered to the bottom too. -->
+            <Grid x:Name="SectionContent" Background="Transparent" Padding="0,0,4,0" PointerReleased="SectionContent_PointerReleased">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" MaxWidth="820"/>
                     <ColumnDefinition Width="Auto"/>
