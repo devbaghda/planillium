@@ -68,6 +68,10 @@ public static class AppPaths
         }
     }
 
+    /// <summary>True when MENTOR_ROOT is set (a test copy on scratch data). Not #if-gated, on purpose:
+    /// if a Release build or a mistyped path ignores MENTOR_ROOT, real secrets stay blocked anyway.</summary>
+    public static bool IsScratchRun => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MENTOR_ROOT"));
+
     public static string ActivePlansDir => Path.Combine(Root, "plans", "active");
     /// <summary>Plan ideas saved for later — created when a user hits the active-plan limit
     /// but still wants to capture an idea instead of losing it (2026-07-22 request). Inert:

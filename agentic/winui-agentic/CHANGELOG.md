@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: a test copy of the app (started with MENTOR_ROOT set) no longer reads, saves or deletes your real AI key or TickTick credentials in Windows Credential Manager, and never contacts Anthropic or TickTick (the local test stub still works). In such a copy, "Ask Claude" shows "AI is off in this test copy...", Settings -> AI refuses to save a key with the same reason, and TickTick "Save & authorize" says "TickTick is off in this test copy..." without opening the browser. Normal runs are unchanged.
+
 - Change: Reports summary table (Day, Week, Month, Year) has two new columns after Score: "Income lost/gained" (red when negative, green otherwise) and "Of which paid work" (light green). Day and Week show one row per day, Month one per week, Year one per month; the Total row shows the period figure and the rows add up to it to the cent. The Score card and the "Income lost or gained / Of which paid work" row above the table are gone (the "days off marked" count went with the Score card). A table with a single row (Day, a Monday-only Week, a Month with one week, a Year with one month) shows no Total row; two or more rows keep it. Year also lists a month that has income but no logged activity.
 - Fix: Reports, Time by app: rows you can open show their chevron again, and the pie slices now have different colours (the list swatches match).
 

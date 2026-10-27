@@ -1202,6 +1202,11 @@ public sealed partial class SettingsPage : Page
             return;
         }
 
+        if (AiSettings.ScratchBlocked)
+        {
+            SetAiStatus("Not saved: " + AiSettings.ScratchBlockedMessage, failure: true);
+            return;
+        }
         if (!AiKey.Save(key))
         {
             SetAiStatus("Not saved: Windows could not store the key. Try again.", failure: true);

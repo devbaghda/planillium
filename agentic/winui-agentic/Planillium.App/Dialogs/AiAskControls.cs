@@ -254,7 +254,8 @@ internal sealed class AiAskControls
         _setInputsLocked(on);
     }
 
-    private void ShowHint() => SetReason(NoKeyHint, failure: false);
+    private void ShowHint() =>
+        SetReason(AiSettings.ScratchBlocked ? AiSettings.ScratchBlockedMessage : NoKeyHint, failure: false);
 
     private void SetReason(string message, bool failure)
     {

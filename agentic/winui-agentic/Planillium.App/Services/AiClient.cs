@@ -80,6 +80,11 @@ public static class AiSettings
         }
     }
 
+    /// <summary>True in a scratch run (MENTOR_ROOT set) without the local stub: no AI key is read.</summary>
+    public static bool ScratchBlocked => AppPaths.IsScratchRun && !TestOverrideActive;
+    public const string ScratchBlockedMessage =
+        "AI is off in this test copy (MENTOR_ROOT is set). Set PLANILLIUM_AI_BASE_URL to a local stub to use it.";
+
     public static string BaseUrl()
     {
 #if DEBUG || PLANILLIUM_TESTS

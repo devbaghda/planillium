@@ -34,8 +34,12 @@ public static class CredentialStore
         public string? TargetAlias; public string? UserName;
     }
 
+    /// <summary>In a scratch run only the stub's test key slot may be touched; real secrets never are.</summary>
+    private static bool Blocked(string key) => AppPaths.IsScratchRun && key != AiSettings.TestCredentialName;
+
     public static string? Read(string key)
     {
+        if (Blocked(key)) return null;
         // Only the two forms actually documented above: current name, and the
         // pre-rename name for a token an older build already wrote. Two more —
         // the bare service name and the bare key — used to be checked too with
@@ -67,6 +71,11 @@ public static class CredentialStore
 
     public static bool Write(string key, string value)
     {
+        if (Blocked(key))
+        {
+            Log.Info($"CredentialStore.Write({key}) refused: scratch run (MENTOR_ROOT set)");
+            return false;
+        }
         if (string.IsNullOrEmpty(value)) return false;
         var blobBytes = System.Text.Encoding.Unicode.GetBytes(value);  // UTF-16LE, no BOM
         var blob = Marshal.AllocCoTaskMem(blobBytes.Length);
@@ -123,6 +132,7 @@ public static class CredentialStore
     /// finding R11-13) — logged now, matching the pattern Write already uses on failure.</summary>
     public static void Delete(string key)
     {
+        if (Blocked(key)) return;
         foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}" })
         {
             if (CredDeleteW(target, 1 /* CRED_TYPE_GENERIC */, 0)) continue;

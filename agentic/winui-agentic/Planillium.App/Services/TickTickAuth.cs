@@ -56,6 +56,9 @@ public static class TickTickAuth
     // reasoning applies.
     private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
 
+    internal const string ScratchBlockedMessage =
+        "TickTick is off in this test copy (MENTOR_ROOT is set). Nothing was saved or sent.";
+
     public static string ClientId => ConfigService.TickTickClientId;
     public static string? ClientSecret => CredentialStore.Read("ticktick_client_secret");
     public static bool IsConfigured =>

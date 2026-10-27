@@ -268,6 +268,13 @@ compaction. General versions of several now also live in the global `windows-app
   `data/progress.db` outside the app's own code needs explicit confirmation naming the table and
   change (the harness's auto-mode classifier enforces this and rejects a vague "yes"). Read-only
   queries against it are always fine.
+- **A run with `MENTOR_ROOT` set never touches real Credential Manager entries (G7, 2026-10-27).**
+  `CredentialStore` (the single store) refuses Read/Write/Delete for every name except the AI test slot
+  `anthropic_api_key_test`; keyed on the env var alone (`AppPaths.IsScratchRun`), not `#if DEBUG`, so a
+  Release build or a mistyped path still fails closed. Services built on the secrets (AI, TickTick) then
+  fail cleanly with a message. Standing lesson: guard the delete and write paths of secrets too (a scratch
+  "Disconnect" / "Clear all my data" would otherwise delete the user's real tokens), and guard once at the
+  single store, not at each consumer.
 - Check `end_of_day_summary_time` before killing a live instance near EOD — killing it early can
   skip that day's evening-review popup entirely.
 - The live instance runs from `bin\x64\Release\...`, not Debug — confirm before trusting a Debug

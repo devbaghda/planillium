@@ -80,6 +80,7 @@ public static class TickTickConnectDialog
             try
             {
                 args.Cancel = true;   // stay open until the flow finishes
+                if (AppPaths.IsScratchRun) { status.Text = TickTickAuth.ScratchBlockedMessage; return; }
                 var id = idBox.Text.Trim();
                 var secret = secretBox.Password.Trim();
                 if (id.Length == 0 || (secret.Length == 0 && !hasSavedSecret))
