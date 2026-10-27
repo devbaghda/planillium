@@ -10,3 +10,5 @@ Cases found by QA beyond the checklist. Every QA runs them as extra lines; folde
   number and press Esc: box shows the newly saved amount, not the one loaded at startup.
 - 2026-10-27 (B1h, regular QA, needs a product decision first): scratch/verify instance Settings must not show "AI: Key
   saved" / "TickTick: Connected" from the real Credential Manager (O1; same item as "scratch app reaches real credentials").
+- 2026-10-27 (B1e, agentic QA): Reports with seeded diary data and paid-tag time, all four periods: the kept strip values
+  ("Income lost or gained", "Of which paid work") equal their pre-change values (B1e checked wording on empty data only).
