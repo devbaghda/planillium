@@ -231,6 +231,14 @@
     payable-tag box throws away whatever was typed (amount, emptied box, letters, spaces, a minus),
     shows the saved amount and the cursor ends nowhere; nothing is saved, no status message. The
     new-tag line's Esc is unchanged (clears the line).
+18. **Diary browsing (G2, user request 2026-10-23, built 2026-10-27).** Every diary filter list
+    (Category, App, Page, Tag) has a "-" entry meaning "no value for this field": blank category;
+    no window text (App "—"); no detected sub-item (Page); no tag. It combines with other ticked
+    values (OR inside a filter) and other filters (AND). The search has a field chooser (All fields
+    = the original behaviour). Paging offers 50 / 100 / 500 / 1000 / Show all with "Showing N of M";
+    the old 300-row cap on search / All-time results was dropped because it contradicted Show all.
+    What counts as an "app" (odd entries like "74% complete") is NOT decided: nothing is filtered
+    out, no stored data changed -- see `context/todos.md` 2026-10-27 G2.
 
 ---
 

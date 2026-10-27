@@ -169,9 +169,12 @@ Time by app is a pie: one slice per app (the eight biggest, the rest folded into
 
 The diary's Category, App, Page and Tag filters are tick-lists: tick several to see them together (the button shows what is ticked), and "Clear filters" unticks everything. The diary section of the Reports page has a date picker in its header for jumping straight to a specific day's activity instead of stepping through one day at a time, bounded to how far back diary history is retained. If you leave the page open on today's diary across midnight, it rolls onto the new day by itself; if you'd navigated to a specific past day, it stays there.
 
-The diary list itself only loads a batch of entries at a time (40 up front, 50 more each time you
-click "Show more") rather than the whole matching history at once, so a long search or a busy day
-still stays responsive. When editing or splitting a diary entry, the description field suggests
+Each of those four filter lists starts with a "-" entry: tick it to see the entries that have no value for that field (never categorized, no tag, no page, no app). It combines with the other ticks and filters. Next to the search box, a chooser sets which field the search looks in: All fields (the default), App, Page, Description, Category or Tag.
+
+The diary list itself only loads a batch of entries at a time (40 up front) rather than the whole
+matching history at once, so a long search or a busy day still stays responsive. Under the list,
+"Showing N of M" says how many are on screen, and the links reveal more: 50, 100, 500 or 1000 more at a
+time, or "Show all". When editing or splitting a diary entry, the description field suggests
 your most commonly used past descriptions as you type, so recurring ones don't need retyping — and
 your most common ones also show as one-tap buttons above the field, for when you don't want to
 type at all. When splitting an entry into several activities, tap fills in whichever row you last

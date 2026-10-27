@@ -8,3 +8,4 @@
 2026-10-27 B1i colour tweak regular: sonnet -- one colour, needs theme-aware choice; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
 2026-10-27 G7 generalist: opus -- security class (real secrets), cross-cutting guard; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
 2026-10-27 G7 generalist model check: opus confirmed sufficient (security class, cross-cutting guard over secret reads); outcome: ok
+2026-10-27 G2 generalist: sonnet -- explicit spec, bounded UI work; #8 investigate-only; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)

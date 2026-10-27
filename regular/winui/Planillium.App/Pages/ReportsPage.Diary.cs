@@ -31,6 +31,19 @@ public sealed partial class ReportsPage
     // Diary search text, same survives-navigation treatment.
     private static string _diarySearch = "";
 
+    // G2 (2026-10-27): which field the search matches. "all" = the original behaviour (app/page
+    // label, description, category, tag label). Same survives-navigation treatment.
+    private static readonly (string Value, string Label)[] DiarySearchFields =
+    {
+        ("all", "All fields"), ("app", "App"), ("page", "Page"),
+        ("desc", "Description"), ("cat", "Category"), ("tag", "Tag"),
+    };
+    private static string _diarySearchField = "all";
+
+    // G2 (2026-10-27): the "-" entry every filter list now has — rows with no value for that
+    // field. A sentinel that cannot be a real value (control character), shown as "-".
+    private const string DiaryNoValue = "\u0001none";
+
     // Column filters (2026-07-22 request, app/page split 2026-07-23) — independent of the
     // free-text search above and combinable with it: null means "no filter." App/page match
     // AppNames.Group/Sub respectively (the same values the row's own App/Page columns show —
@@ -135,7 +148,7 @@ public sealed partial class ReportsPage
         if (_diarySearch.Trim().Length == 0 && score.LoadReflection(_diaryDate) is { Length: > 0 } reflection)
             Body.Children.Add(ReflectionCallout(reflection));
 
-        var searchBox = BuildDiarySearchBox();
+        var (searchBox, searchFieldBox) = BuildDiarySearchBox();
         var (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
 
         // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
@@ -152,8 +165,6 @@ public sealed partial class ReportsPage
         var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons) = BuildDiaryMarkToolbar();
 
         var diaryResults = BuildDiaryResultsArea();
-
-        const int maxSearchResults = 300;
 
         // Guards SelectionChanged from firing when RenderDiaryResults below re-syncs these boxes'
         // SelectedItem to the persisted filter state (e.g. after the app/page lists are
@@ -218,29 +229,51 @@ public sealed partial class ReportsPage
             // options are now built from rows matching every OTHER active filter — the standard
             // faceted-search shape — so a filter only ever offers choices that can actually
             // produce a result under the filters already applied.
+            // G2: each filter set may also hold DiaryNoValue ("-"), which matches rows with no
+            // value for that field (OR-ed with any real values ticked alongside it).
+            // Category: blank category. App: no window text ("—"). Page: no detected sub-item.
+            // Tag: no tag.
             bool MatchesCategory(ReportData.DiaryEntry e) =>
-                _diaryCategoryFilter.Count == 0 || _diaryCategoryFilter.Contains(e.Cat);
-            bool MatchesApp(ReportData.DiaryEntry e) =>
-                _diaryAppFilter.Count == 0 || _diaryAppFilter.Contains(AppNames.Group(e.Window));
-            bool MatchesPage(ReportData.DiaryEntry e) =>
-                _diaryPageFilter.Count == 0 || _diaryPageFilter.Contains(AppNames.Sub(e.Window) ?? "");
+                _diaryCategoryFilter.Count == 0 || _diaryCategoryFilter.Contains(e.Cat) ||
+                (string.IsNullOrWhiteSpace(e.Cat) && _diaryCategoryFilter.Contains(DiaryNoValue));
+            bool MatchesApp(ReportData.DiaryEntry e)
+            {
+                if (_diaryAppFilter.Count == 0) return true;
+                var g = AppNames.Group(e.Window);
+                return g == "—" ? _diaryAppFilter.Contains(DiaryNoValue) : _diaryAppFilter.Contains(g);
+            }
+            bool MatchesPage(ReportData.DiaryEntry e)
+            {
+                if (_diaryPageFilter.Count == 0) return true;
+                var s = AppNames.Sub(e.Window);
+                return string.IsNullOrEmpty(s) ? _diaryPageFilter.Contains(DiaryNoValue) : _diaryPageFilter.Contains(s);
+            }
             bool MatchesTag(ReportData.DiaryEntry e) =>
-                _diaryTagFilter.Count == 0 || (e.Tag is { } tag && _diaryTagFilter.Contains(tag));
+                _diaryTagFilter.Count == 0 ||
+                (string.IsNullOrWhiteSpace(e.Tag) ? _diaryTagFilter.Contains(DiaryNoValue) : _diaryTagFilter.Contains(e.Tag));
+            bool Has(string? text) => text is { Length: > 0 } && text.Contains(q, StringComparison.OrdinalIgnoreCase);
             bool MatchesSearch(ReportData.DiaryEntry e) =>
-                !searching ||
-                AppNames.Label(e.Window).Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                (e.Desc is { Length: > 0 } d && d.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
-                e.Cat.Replace('_', ' ').Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                (DiaryTag.LabelOf(e.Tag) is { } tagLabel && tagLabel.Contains(q, StringComparison.OrdinalIgnoreCase));
+                !searching || _diarySearchField switch
+                {
+                    "app" => Has(AppNames.Group(e.Window)),
+                    "page" => Has(AppNames.Sub(e.Window)),
+                    "desc" => Has(e.Desc),
+                    "cat" => Has(e.Cat.Replace('_', ' ')),
+                    "tag" => Has(DiaryTag.LabelOf(e.Tag)),
+                    // "all fields": exactly the pre-G2 behaviour.
+                    _ => Has(AppNames.Label(e.Window)) || Has(e.Desc) ||
+                         Has(e.Cat.Replace('_', ' ')) || Has(DiaryTag.LabelOf(e.Tag)),
+                };
 
             syncingFilters = true;
             var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Group(e.Window))
+                .Where(a => a != "—")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
-            // drops filters whose app no longer appears in view
-            _diaryAppFilter.RemoveWhere(x => !appsInView.Contains(x, StringComparer.OrdinalIgnoreCase));
-            appBox.SetOptions(appsInView.Select(x => (x, x)));
+            // drops filters whose app no longer appears in view ("-" always stays offered)
+            _diaryAppFilter.RemoveWhere(x => x != DiaryNoValue && !appsInView.Contains(x, StringComparer.OrdinalIgnoreCase));
+            appBox.SetOptions(appsInView.Select(x => (x, x)).Prepend((DiaryNoValue, "-")));
 
             var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
@@ -248,12 +281,13 @@ public sealed partial class ReportsPage
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
             // drops filters whose page no longer appears in view
-            _diaryPageFilter.RemoveWhere(x => !pagesInView.Contains(x, StringComparer.OrdinalIgnoreCase));
-            pageBox.SetOptions(pagesInView.Select(x => (x!, x!)));
+            _diaryPageFilter.RemoveWhere(x => x != DiaryNoValue && !pagesInView.Contains(x, StringComparer.OrdinalIgnoreCase));
+            pageBox.SetOptions(pagesInView.Select(x => (x!, x!)).Prepend((DiaryNoValue, "-")));
 
             // Fixed option lists for category and tag — never rebuilt from what's in view.
-            categoryBox.SetOptions(DiaryCategory.EditableOptions.Select(o => (o.Value, o.Label)));
-            tagBox.SetOptions(DiaryTag.Options.Select(o => (o.Value, o.Label)));
+            // "-" first in each list (G2).
+            categoryBox.SetOptions(DiaryCategory.EditableOptions.Select(o => (o.Value, o.Label)).Prepend((DiaryNoValue, "-")));
+            tagBox.SetOptions(DiaryTag.Options.Select(o => (o.Value, o.Label)).Prepend((DiaryNoValue, "-")));
             allTimeBox.IsChecked = _diaryAllTime;
             syncingFilters = false;
 
@@ -289,13 +323,8 @@ public sealed partial class ReportsPage
                 UpdateMarkToolbar();
                 return;
             }
-            if (wideRange && filteredList.Count > maxSearchResults)
-            {
-                diaryResults.Children.Add(Dim(
-                    $"{filteredList.Count} matches — showing the {maxSearchResults} most recent " +
-                    "(subtotal above still covers all of them)."));
-                filteredList = filteredList.Take(maxSearchResults).ToList();
-            }
+            // G2: the old 300-row cap on wide (search / All time) results is gone — paging below
+            // now reaches every match ("Show all"), and rows are only built as they are revealed.
             lastRows = filteredList;
             selectedIds.RemoveWhere(id => !filteredList.Any(e => e.Id == id));
             UpdateMarkToolbar();
@@ -303,7 +332,7 @@ public sealed partial class ReportsPage
             // count fresh; the periodic live-refresh timer re-running this same method with an
             // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
             static string Key(HashSet<string> f) => string.Join(',', f.OrderBy(x => x, StringComparer.Ordinal));
-            var scopeKey = string.Join('|', _diaryDate, q, Key(_diaryCategoryFilter), Key(_diaryAppFilter),
+            var scopeKey = string.Join('|', _diaryDate, q, _diarySearchField, Key(_diaryCategoryFilter), Key(_diaryAppFilter),
                 Key(_diaryPageFilter), Key(_diaryTagFilter), _diaryAllTime);
             if (scopeKey != _diaryRowsShownScopeKey)
             {
@@ -400,6 +429,12 @@ public sealed partial class ReportsPage
             else
                 _diaryLiveRefresh?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
         }
+        searchFieldBox.SelectionChanged += (_, _) =>
+        {
+            if (searchFieldBox.SelectedItem is not ComboBoxItem { Tag: string field } || field == _diarySearchField) return;
+            _diarySearchField = field;
+            RenderDiaryResults();
+        };
         searchBox.TextChanged += (_, _) =>
         {
             _diarySearch = searchBox.Text;
@@ -418,20 +453,36 @@ public sealed partial class ReportsPage
     /// <summary>The diary's free-text search box — split out of BuildDiarySection
     /// (2026-07-28 code-quality audit finding: that method was 389 lines) since this
     /// piece is pure "build one control, add it to Body," with no shared mutable state.</summary>
-    private TextBox BuildDiarySearchBox()
+    private (TextBox SearchBox, ComboBox FieldBox) BuildDiarySearchBox()
     {
         var searchBox = new TextBox
         {
-            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary (app or description)…",
+            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary…",
             Text = _diarySearch,
-            Margin = new Thickness(0, 0, 0, 8),
         };
         // Placeholder text alone isn't exposed to screen readers as an accessible
         // name — a static name here (audit finding #16) since the placeholder text
         // itself already varies with the retention setting.
         AutomationProperties.SetName(searchBox, "Search the time diary");
-        Body.Children.Add(searchBox);
-        return searchBox;
+
+        // G2 (2026-10-27): which field the search looks in. "All fields" (the default) is the
+        // pre-G2 behaviour. Seeded from the persisted choice before the caller wires
+        // SelectionChanged, so building the page never fires a re-render.
+        var fieldBox = new ComboBox { MinWidth = 150, VerticalAlignment = VerticalAlignment.Stretch };
+        foreach (var (value, label) in DiarySearchFields)
+            fieldBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+        fieldBox.SelectedIndex = Math.Max(0, Array.FindIndex(DiarySearchFields, f => f.Value == _diarySearchField));
+        AutomationProperties.SetName(fieldBox, "Search field");
+
+        var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(searchBox, 0);
+        Grid.SetColumn(fieldBox, 1);
+        grid.Children.Add(searchBox);
+        grid.Children.Add(fieldBox);
+        Body.Children.Add(grid);
+        return (searchBox, fieldBox);
     }
 
     /// <summary>The category/app/page/tag filter row plus "All time" checkbox and "Clear
@@ -1046,30 +1097,51 @@ public sealed partial class ReportsPage
         // building them all at once defeats the whole point of DefaultDiaryRowsShown above
         // (the same non-virtualizing-StackPanel cost that capped the initial render). Re-adds
         // itself after each batch if there's still more left, so repeated clicks keep working.
-        const int showMoreIncrement = 50;
-        void AddShowMoreIfNeeded()
+        // G2 (2026-10-27): graded increments (50 / 100 / 500 / 1000) up to "Show all", plus a
+        // "Showing N of M" count, in one footer row that is rebuilt after every click. An
+        // increment is offered only while it is smaller than what is still hidden (an equal or
+        // larger one would just be "Show all"); the first button keeps its old
+        // "Show min(50, hidden) more" label.
+        var footer = new StackPanel
         {
-            if (shown >= diary.Count) return;
-            var hidden = diary.Count - shown;
-            HyperlinkButton moreBtn = null!;
-            moreBtn = new HyperlinkButton
-            {
-                Content = $"Show {Math.Min(showMoreIncrement, hidden)} more",
-                Margin = new Thickness(0, 6, 0, 0),
-            };
-            moreBtn.Click += (_, _) =>
-            {
-                list.Children.Remove(moreBtn);
-                var next = Math.Min(shown + showMoreIncrement, diary.Count);
-                for (var i = shown; i < next; i++)
-                    list.Children.Add(BuildRow(diary[i]));
-                shown = next;
-                _diaryRowsShown = next;
-                AddShowMoreIfNeeded();
-            };
-            list.Children.Add(moreBtn);
+            Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 6, 0, 0),
+        };
+        list.Children.Add(footer);
+        void RevealTo(int target)
+        {
+            var next = Math.Min(target, diary.Count);
+            for (var i = shown; i < next; i++)
+                list.Children.Insert(list.Children.Count - 1, BuildRow(diary[i]));
+            shown = next;
+            _diaryRowsShown = next;
+            RebuildFooter();
         }
-        AddShowMoreIfNeeded();
+        void RebuildFooter()
+        {
+            footer.Children.Clear();
+            footer.Children.Add(new TextBlock
+            {
+                Text = $"Showing {shown} of {diary.Count}",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+            var hidden = diary.Count - shown;
+            if (hidden <= 0) return;
+            HyperlinkButton Btn(string text, int count)
+            {
+                var b = new HyperlinkButton { Content = text };
+                AutomationProperties.SetName(b, count == hidden && hidden > 50 ? $"Show all {hidden} remaining" : $"Show {count} more");
+                b.Click += (_, _) => RevealTo(shown + count);
+                return b;
+            }
+            footer.Children.Add(Btn($"Show {Math.Min(50, hidden)} more", 50));
+            foreach (var inc in new[] { 100, 500, 1000 })
+                if (inc < hidden) footer.Children.Add(Btn($"{inc}", inc));
+            if (hidden > 50) footer.Children.Add(Btn($"Show all ({hidden})", hidden));
+        }
+        RebuildFooter();
         return list;
     }
 }
