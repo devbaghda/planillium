@@ -24,6 +24,9 @@
 - A scratch MENTOR_ROOT does not isolate Windows Credential Manager secrets (AI key, TickTick); check the Settings AI/TickTick rows before assuming a test instance is clean.
 - Reuse the B1d harness (`qa/b1d_h.py`) by setting its module globals instead of writing a new one.
 - MoneyBox is a WinUI control; the source-link test project cannot unit-test it (extracting its logic is an open offer, not a decision).
+- Seed scratch data in two steps: first launch creates the schema, kill the app, seed `time_diary` with sqlite3, relaunch; a seeded diary gap triggers a "Welcome back" dialog to skip before driving the UI.
+- A QA worktree may start on another branch's commit: `git checkout --detach winui-rebuild` before building, or old code runs.
+- The shell wrapper refuses compound commands containing git inside a worktree; run git commands on their own.
 
 ## Models
 - Focus / key-event work: consider opus (B1b sonnet needed 5 QA rounds; B1c and B1d opus passed in 1). QA for real-click focus work: opus.

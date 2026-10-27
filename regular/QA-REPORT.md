@@ -1,50 +1,32 @@
-VERDICT: PASS - workflow=regular feature=b1h-esc-saved-boxes defectsQa=0
+VERDICT: PASS - workflow=regular feature=B1e reports-cleanup defectsQa=0
 
-# QA report: B1h Esc in saved money boxes (regular side), 2026-10-27
+Build under test: commit ee27f29 (worktree detached at winui-rebuild), Debug, scratch MENTOR_ROOT, MENTOR_INSTANCE_SUFFIX=verify, own exe only (PIDs 13864, 18356, both killed). Time used about 5 of 15 min.
+Build: `dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental`: 0 warnings, 0 errors. Tests: 229 passed, 0 failed (regular side).
+Scratch data: config (income 2925/month, paid tag Studioshoo 1600/month), today's kickoff and review pre-set as done, 10 diary rows (on/off-plan, 4 paid-tag rows spread over today, last week, month, year); 327 income-ledger days posted by the app itself. One "Welcome back" away dialog appeared after seeding and was skipped.
 
-Build tested: commit 0ea247e, in its own QA worktree (`.claude/worktrees/qa-b1h`, detached). Strict Debug build
-(`-warnaserror --no-incremental`): 0 errors. With warnings treated as errors, 0 errors also means 0 warnings. `dotnet test`: 229/229 passed.
-The app ran against a scratch MENTOR_ROOT holding the fixture config (salary 2925, Studioshoo 1600) and a `data/` folder with only
-a `winui_state.json` that marks today's kickoff and review as done. No progress.db was copied. The run used
-`MENTOR_INSTANCE_SUFFIX=verify` and `PLANILLIUM_AI_BASE_URL` set to a dead local port. QA started only its own exe and killed only that process.
-All input was real: real keystrokes (`send_keys`) and real mouse clicks (`click_input`/`mouse.click`). After each check QA read the focused element and typed "9"
-to confirm that nothing changed. Time used: about 7 of the 15 minutes.
-
-## Per-line results
-
-| # | Result | Evidence |
+| Line | Result | Evidence |
 |---|---|---|
-| 1 | PASS | Salary box: QA typed 2500 and pressed Esc. The box showed "2 925", config stayed 2925 and no "Saved." appeared. Focus went to `IncomeFocusPark`, and typing "9" changed nothing. Studioshoo box: same test, the box showed "1 600" and config stayed 1600 (`qa/b1h_lines1-4.out`, screenshot `qa/b1h_esc_tag.png`). |
-| 2 | PASS | QA emptied each box and pressed Esc. Each box showed its saved amount again, with config unchanged, focus on the park target, and "9" changing nothing. |
-| 3 | PASS | "abc" and three spaces, in both boxes: typing leaves the box empty. Esc put back the saved amount, config was unchanged, focus went to the park target, and "9" changed nothing. |
-| 4 | PASS | "-5" in both boxes: the box showed "-5" with "Amounts can't be negative." on screen. Esc put back the saved amount and the message disappeared. Config was unchanged, focus went to the park target, and "9" changed nothing. |
-| 5 | PASS | Salary 3000 + Enter saved 3000 and showed "Saved.", focus went to the park target, and "9" changed nothing. Studioshoo 1700 + Enter saved 1700 and parked the same way. After that save, typing 2500 + Esc showed "3 000", the new saved amount. New-tag line: "zz"/400 + Esc cleared both fields and added nothing. Focus left the line (to the Income section list item) and "9" changed nothing. Tab out of an edited salary box (2800) saved it and moved focus to the Employment toggle. A click on blank space after editing Studioshoo (1650) saved it and parked focus (`qa/b1h_reg.out`). |
-| 6 | PASS | Build clean and 229/229 tests pass. B1d paths the diff could touch were seen again: an empty salary box + Tab went back to the saved amount, and "-5" + Tab stayed in the box with its message while config was unchanged. B1c (Enter-save) is covered by line 5. Scope came from the diff (MoneyBox.OnKeyDown Esc branch plus the two `Cancelled` hookups in SettingsPage), which is why the other B1-B1d lines were not re-run. |
+| 1 Each period: Score card, then "Income lost or gained" + "Of which paid work" row; no "Unearned income" / "Earnings from paid work" card | PASS | UIA text dump plus PrintWindow screenshots for Day, Week, Month, Year (per_Day.png ... per_Year.png in scratchpad b1e). Order in every period: SCORE EARNED (y=173) -> INCOME LOST OR GAINED / OF WHICH PAID WORK (y=299) -> table heading. No UNEARNED/EXTRA INCOME or EARNINGS FROM PAID WORK text anywhere on the page. |
+| 2 Kept figures unchanged in value and wording | PASS | Diff shows `IncomeStrip` body untouched (only its doc comment changed), same inputs as before. Wording seen: "Includes paid work." / "Part of the figure on the left, not added to it." Paid values re-computed from the seed independently: Day 90 min = EUR 14,29; Week 14,29; Month 340 min = 53,97; Year 540 min = 85,71 (rate 1600/168 per h) - all match the screen. Income figures: Day -80,07; Week -174,42; Month -2 493,61; Year -28 786,87 (ledger-driven, not changed by diff). "Before" screen was not run; comparison is by code identity (git show ee27f29) as the brief allowed. |
+| 3 No gap or leftover heading; table follows directly | PASS | Strip bottom y=374 to table heading y=411 in all four periods (same 37 px, normal section spacing); no stray caption between. Screenshots Day and Year viewed. |
+| 4 Sibling check: no other view renders removed cards | PASS | Grep of Planillium.App (cs/xaml, excluding bin/obj) for IncomeCard, EarningsCard, "UNEARNED INCOME", "EXTRA INCOME", "EARNINGS FROM PAID": no code left on Reports. Only hits are the sidebar balance label (MainWindow.xaml / MainWindow.Startup.cs:443, "LOST/EXTRA INCOME", a different element, not a Reports card, unchanged) . Other pages not visually opened (no render path exists, per grep). |
+| 5 Build clean, tests pass, standing checks | PASS | See build/test above. Standing input-box checks (app-qa-checks 5) not run: diff touches no input code (stated in brief). |
 
-## Defects
-None.
+Extra cases (qa-extra.md): none run - all are Settings money-box cases; this change touches only the Reports page.
 
-## Security
-- No real data was touched: scratch root only, the live Release exe was not running, and the fixture holds no secrets (only `ticktick.client_id`, which is empty).
-- **O1 (outside the checklist, not caused by B1h):** the QA instance shows "AI: Key saved" and "TickTick: Connected".
-  The AI key comes from Windows Credential Manager (`AiSettings.HasKey` -> `CredentialStore.Read`), which neither
-  MENTOR_ROOT nor the instance suffix separates. Why it matters: a QA or test run that triggers an AI call would send
-  the user's **real key** to whatever `PLANILLIUM_AI_BASE_URL` points at (the local stub, which would then receive the key), or to the real
-  API if the variable is missing. Fix: the `verify` instance (or a scratch root) should use its own credential name,
-  or none at all. Then a test instance cannot reach the real key. Not exercised here because no AI call was made.
+Defects: none.
 
-## Untestable lines
-None.
+Security (diff only: ReportsPage.xaml.cs, deletions of two UI builders and two call lines): injection none found; auth none; secrets none; deserialisation none; data exposure none; input validation none (no input); business-logic none; supply chain none (no dependency change); resource abuse none. /security-review not run; applied the list by hand.
 
-## Extra observations
-- The new-tag line's Esc moves focus to the Income section list item, not to the park target. This did not change in B1h, and "9" there is harmless.
-- The first script run crashed while printing a thin space to the cp1252 console. The regression part was re-run with UTF-8 output, and the Esc results come from the first run's log.
+Untestable: none.
 
-## New cases
-- Saved money box (salary or tag): save a new amount with Enter, then type a different number and press Esc. Expected: the box shows the newly saved amount, not the one loaded at startup.
-- QA/verify instance with scratch MENTOR_ROOT: open Settings. Expected: the AI row does not show "Key saved" from the user's real Credential Manager entry (O1; this needs a product decision before it becomes an acceptance line).
+Extra observations:
+- Removal also drops the per-tag earnings breakdown ("Studioshoo: 1,5 h x ... = ...") and the "one hour of work is valued at ..." line. CHANGELOG states this; REQUEST asks only to remove the two cards, so consistent, but the user may want to know the breakdown is gone from the page.
+- Scratch instance shows sidebar LOST INCOME -31 348,73 versus Year figure -28 786,87: different scopes (sidebar balance vs Reports Year); unchanged by this diff, not a defect of B1e.
 
-## Lessons
-- Run QA scripts with `PYTHONIOENCODING=utf-8`: the app's numbers contain a thin space (U+2009), and printing one to the cp1252 console kills the script partway through.
-- A scratch MENTOR_ROOT does not separate everything. Secrets in Windows Credential Manager (AI key, possibly TickTick) are shared with the live app. Check what the Settings summary shows before assuming the test instance is clean.
-- Reusing `b1d_h.py` by setting its module globals (`H.ROOT`, `H.EXE`, ...) worked and saved writing a new harness.
+New cases: none.
+
+Lessons:
+- Seeding: first launch creates the schema, so kill, seed time_diary via sqlite3, relaunch (no hand-written CREATE needed). Seeded gap in diary triggers a "Welcome back" away dialog; skip it before driving the UI.
+- Worktree starts on whatever commit it was created from (was the agentic branch): `git checkout --detach winui-rebuild` before building, or the old code runs.
+- The shell wrapper refuses compound commands containing git in a worktree; run git commands alone.
