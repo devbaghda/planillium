@@ -150,8 +150,6 @@ public sealed partial class ReportsPage : Page
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
             Body.Children.Add(Card(IncomeStrip(incomeSum, earnings.Sum(e => e.Eur), periodName)));
-            Body.Children.Add(Card(IncomeCard(incomeSum, periodName, totals.OffMin, earnings.Sum(e => e.Eur))));
-            Body.Children.Add(Card(EarningsCard(earnings, periodName)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -241,10 +239,10 @@ public sealed partial class ReportsPage : Page
     }
 
     /// <summary>The two money figures for the period side by side, in EUR (B1, 2026-10-23 request):
-    /// the lost/gained-income figure (unchanged from the card below) and the part of it earned from
+    /// the lost/gained-income figure and the part of it earned from
     /// paid work. Paid work is already inside the first figure, so the note says so — the two are
-    /// not meant to be added. No calculation of its own: both numbers are the ones the cards
-    /// below already use.</summary>
+    /// not meant to be added. B1e (2026-10-27): the two larger duplicate cards that used to follow
+    /// were removed; this strip is the only place these figures show.</summary>
     private static Grid IncomeStrip(double sum, double earned, string periodName)
     {
         var grid = new Grid { ColumnSpacing = 24 };
@@ -268,82 +266,6 @@ public sealed partial class ReportsPage : Page
         grid.Children.Add(left);
         grid.Children.Add(right);
         return grid;
-    }
-
-    /// <summary>Lost/gained-earnings counter (2026-09-22 request), scoped to the same period
-    /// selector as everything else above the diary. Wording is driven by this period's own
-    /// net sign, not by the current employment toggle directly — a period can straddle a
-    /// toggle flip (posted days keep whatever sign applied when they were posted, per the
-    /// settled non-retroactive rule), so "you've gained €X" while the total for that period
-    /// is still negative would read as contradicting the number right above it.</summary>
-    private static StackPanel IncomeCard(double sum, string periodName, int offMin, double earned)
-    {
-        var lost = sum < 0;
-
-        var card = new StackPanel { Spacing = 2 };
-        card.Children.Add(Caption($"{(lost ? "UNEARNED" : "EXTRA")} INCOME — {periodName}"));
-        card.Children.Add(new TextBlock
-        {
-            Text = MainWindow.FormatEur(sum),
-            FontSize = 44,
-            FontWeight = FontWeights.Bold,
-            Foreground = IncomeBrush(sum),
-        });
-        // Matches the exact timerange this card is showing, not a generic "this period" —
-        // the settled decision was explicit that a "today" figure must say "today," not
-        // reuse another period's wording (2026-09-22).
-        var timeWord = _period switch
-        {
-            ReportPeriod.Day => "today",
-            ReportPeriod.Week => "this week",
-            ReportPeriod.Month => "this month",
-            ReportPeriod.Year => "this year",
-            _ => "this period",
-        };
-        var verb = lost ? "lost" : "gained";
-        card.Children.Add(Dim(
-            $"You've {verb} {MainWindow.FormatEur(Math.Abs(sum))} {timeWord}, based on a potential " +
-            $"{MainWindow.FormatEur(ConfigService.PotentialMonthlyIncomeEur())}/month."));
-        if (earned > 0)
-            card.Children.Add(Dim($"Includes {MainWindow.FormatEur(earned)} earned from paid work {timeWord}."));
-        // Derived from the two figures already on this card and the off-plan total already on
-        // ScoreCard above it (2026-09-22 request) — not a separate rate lookup, so it can't drift
-        // from what the period actually shows. No off-plan time this period means no rate to show,
-        // not a €0,00/h that would misleadingly read as "off-plan time costs nothing."
-        if (offMin > 0)
-        {
-            var hv = IncomeService.HourValueEur();
-            card.Children.Add(Dim(
-                $"One hour of work is valued at {MainWindow.FormatEur(hv)} " +
-                $"(monthly ÷ {IncomeService.WorkingHoursPerMonth:0} h); " +
-                $"your {ReportData.FmtHours(offMin)} off-plan {timeWord} ≈ " +
-                $"{MainWindow.FormatEur(offMin / 60.0 * hv)}."));
-        }
-        return card;
-    }
-
-    /// <summary>Paid-work earnings for the period (payable-tagged diary time × each tag's hourly
-    /// value, user decision 2026-10-01). Also counted inside the income figure above; shown
-    /// separately so the money actually earned is visible on its own.</summary>
-    private static StackPanel EarningsCard(List<IncomeService.PaidEarning> earnings, string periodName)
-    {
-        var total = earnings.Sum(e => e.Eur);
-        var card = new StackPanel { Spacing = 2 };
-        card.Children.Add(Caption($"EARNINGS FROM PAID WORK — {periodName}"));
-        card.Children.Add(new TextBlock
-        {
-            Text = MainWindow.FormatEur(total),
-            FontSize = 44,
-            FontWeight = FontWeights.Bold,
-            Foreground = IncomeBrush(total),
-        });
-        if (earnings.Count == 0)
-            card.Children.Add(Dim("No time tagged with a payable tag in this period. Set payable tags and rates in Settings → Income."));
-        foreach (var e in earnings)
-            card.Children.Add(Dim(
-                $"{e.Tag.Label}: {ReportData.FmtHours(e.Minutes)} × {MainWindow.FormatEur(e.Tag.HourlyEur)}/h " +
-                $"(monthly {MainWindow.FormatEur(e.Tag.MonthlyEur)} ÷ {IncomeService.WorkingHoursPerMonth:0} h) = {MainWindow.FormatEur(e.Eur)}"));
-        return card;
     }
 
     /// <summary>Rule-of-thumb suggestions, over the same period as everything else above the

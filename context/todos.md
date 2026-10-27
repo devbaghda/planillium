@@ -526,3 +526,7 @@ WinUI / layout. Layout not UIA-measured at 900 DIP (user eyeballed it).
 ## 2026-10-27 — B1h (Esc in saved money boxes) built, regular side only
 
 - `MoneyBox` (KeepsStoredValue boxes: previous salary, every payable tag): Esc puts the stored amount back, saves nothing, raises `Cancelled`; Settings parks the cursor on it (same park as Enter). New-tag line Esc unchanged. Matches agentic B1g. QA result: see `regular/QA-REPORT.md`.
+
+## 2026-10-27 -- B1e (Reports duplicate cards) built, regular side
+
+- `ReportsPage.xaml.cs`: removed `IncomeCard` and `EarningsCard` (and their two `Body.Children.Add` calls); `IncomeStrip` stays as the only money row. Figures' calculation untouched (`SumForPeriod`, `PaidEarningsForPeriod`). Sibling grep: no other page/export rendered the removed captions. Precheck: strict Debug build 0 warnings, 229/229 tests.

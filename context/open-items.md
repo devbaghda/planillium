@@ -104,5 +104,5 @@
 
 - B1d user eyes-on, REGULAR app only (Release rebuilt from latest commits 2026-10-26 10:10; the earlier running build was stale, from 2026-10-25 20:49): acceptance lines 1-10 all OK by the user. Agentic app NOT yet tried by the user (it did not start while the regular one was open; launch it after closing the regular one). `defectsUser` on the dashboard still to be filled after both are tried.
 - Caveat C1 decided (user): clicking a caption puts the cursor in the box -- keep as is.
-- B1e REQUESTED (user, 2026-10-26), NOT BUILT: Reports page, all four periods -- remove the large "Unearned income" and "Earnings from paid work" cards (duplicates); keep the Score card and the "Income lost or gained" + "Of which paid work" row. Briefs written in `regular/pilot-specs/b1e-reports-cleanup/` and `agentic/winui-agentic/pilot-specs/b1e-reports-cleanup/` (REQUEST, ACCEPTANCE, BRIEF). Run both sides + shared QA in a fresh session.
+- B1e BUILT (regular, 2026-10-27, local commit, not pushed): duplicate cards removed on all four periods; QA in `regular/QA-REPORT.md`. Agentic side still to run.
 - Blocker seen 2026-10-26: `workflow-generalist` dropped out of the session's agent list mid-session (its file `~/.claude/agents/workflow-generalist.md` was edited 15:30 and is valid); cause not confirmed, a fresh session should reload it.
