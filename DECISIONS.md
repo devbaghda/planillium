@@ -227,6 +227,10 @@
     stored amount back with a status message -- box and stored value always agree (builder's choice
     of the two options the user allowed; a minus still stays as typed). A payable tag is never
     saved at 0.
+    **B1h (user decision 2026-10-27, to match the agentic app):** Esc in the salary box or a
+    payable-tag box throws away whatever was typed (amount, emptied box, letters, spaces, a minus),
+    shows the saved amount and the cursor ends nowhere; nothing is saved, no status message. The
+    new-tag line's Esc is unchanged (clears the line).
 
 ---
 

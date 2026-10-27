@@ -43,6 +43,7 @@ public sealed partial class SettingsPage : Page
         IncomeFocusPark.LostFocus += (_, _) => IncomeFocusPark.IsTabStop = false;
         MonthlyIncomeBox.Committed += (_, _) => { if (!_initialising) SaveIncome(); };
         MonthlyIncomeBox.Submitted += (_, _) => Park(MonthlyIncomeBox);
+        MonthlyIncomeBox.Cancelled += (_, _) => Park(MonthlyIncomeBox);   // B1h: Esc leaves the box
         WatchMoneyBox(MonthlyIncomeBox, () => "Previous salary needs a number");
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
         NewPaidTagRate.Value = double.NaN;
@@ -332,6 +333,7 @@ public sealed partial class SettingsPage : Page
                 SavePaidTags(PaidTags.All().Select(p => p.Value == t.Value ? p with { MonthlyEur = rate.Value } : p), rerender: false);
             };
             rate.Submitted += (_, _) => Park(rate);
+            rate.Cancelled += (_, _) => Park(rate);   // B1h: Esc leaves the box
             var remove = new Button { Content = "Remove", VerticalAlignment = VerticalAlignment.Bottom };
             remove.Click += (_, _) =>
             {

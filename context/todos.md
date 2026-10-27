@@ -522,3 +522,7 @@ WinUI / layout. Layout not UIA-measured at 900 DIP (user eyeballed it).
 ## 2026-10-25 — B1d (input fixes) built both sides
 
 - Regular 18283fc (QA PASS WITH CAVEATS, 229 tests, 46 min, 743k new tokens); agentic 58597a2 (QA PASS after 2 rounds, 362 tests, 133 min, 1.22M new tokens). Tab keeps the add line; empty/zero/non-number amount refused. Open: user eyes-on (defectsUser), caption-click caveat, scratch-credentials leak, 40-digit amounts silently cut.
+
+## 2026-10-27 — B1h (Esc in saved money boxes) built, regular side only
+
+- `MoneyBox` (KeepsStoredValue boxes: previous salary, every payable tag): Esc puts the stored amount back, saves nothing, raises `Cancelled`; Settings parks the cursor on it (same park as Enter). New-tag line Esc unchanged. Matches agentic B1g. QA result: see `regular/QA-REPORT.md`.

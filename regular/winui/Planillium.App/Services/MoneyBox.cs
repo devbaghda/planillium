@@ -20,7 +20,10 @@ namespace Planillium.App.Services;
 /// message can stay visible exactly as long as the text is negative. Enter raises
 /// <see cref="Submitted"/> after committing, so the page can move the cursor out of the box.
 /// B1d (2026-10-25): a box with <see cref="KeepsStoredValue"/> left empty (letters are stripped as
-/// typed, so "abc" ends up empty too) goes back to its stored amount instead of sitting blank.</summary>
+/// typed, so "abc" ends up empty too) goes back to its stored amount instead of sitting blank.
+/// B1h (2026-10-27): Esc in a <see cref="KeepsStoredValue"/> box discards the typing, shows the stored
+/// amount and raises <see cref="Cancelled"/> so the page moves the cursor out. Other boxes (the
+/// new-tag line) keep their own Esc handling.</summary>
 public sealed class MoneyBox : TextBox
 {
     private bool _internal;
@@ -115,6 +118,16 @@ public sealed class MoneyBox : TextBox
     protected override void OnKeyDown(Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         base.OnKeyDown(e);
+        if (e.Key == Windows.System.VirtualKey.Escape && KeepsStoredValue)
+        {
+            // B1h: Esc in a box showing a stored amount throws away whatever was typed (digits, an
+            // emptied box, letters/spaces, a minus) and shows the stored amount again. Nothing is
+            // saved. The page moves the cursor out of the box on Cancelled.
+            e.Handled = true;
+            Value = _committed;
+            Cancelled?.Invoke(this, EventArgs.Empty);
+            return;
+        }
         if (e.Key != Windows.System.VirtualKey.Enter) return;
         Commit();
         Submitted?.Invoke(this, EventArgs.Empty);
@@ -160,4 +173,8 @@ public sealed class MoneyBox : TextBox
 
     /// <summary>B1d: raised after an empty or refused value was replaced by the stored amount.</summary>
     public event EventHandler? Reverted;
+
+    /// <summary>B1h: raised after Esc put the stored amount back (only on <see cref="KeepsStoredValue"/>
+    /// boxes); the page then moves the cursor out of the box.</summary>
+    public event EventHandler? Cancelled;
 }
