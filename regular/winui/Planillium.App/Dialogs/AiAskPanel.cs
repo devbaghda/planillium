@@ -24,7 +24,7 @@ public sealed class AiAskPanel : StackPanel
     private readonly Func<string, Task> _onReply;
     private readonly Func<string?>? _blocker;
     private readonly Button _ask = new() { Content = "Ask Claude" };
-    private readonly Button _cancel = new() { Content = "Cancel request" };
+    private readonly Button _cancel = new() { Content = "Cancel" };
     private readonly ProgressRing _ring = new() { IsActive = true, Width = 20, Height = 20 };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private readonly TextBlock _hint = new()
@@ -42,7 +42,7 @@ public sealed class AiAskPanel : StackPanel
     private readonly Stopwatch _clock = new();
     private CancellationTokenSource? _cts;
     private ReplyProgress? _replyProgress;
-    private const string AskingText = "Asking Claude… this can take a minute or two.";
+    private static readonly string AskingText = $"Asking Claude… this can take a few minutes; it gives up after {AiClient.WaitLimitText}.";
 
     /// <param name="prompt">The prompt as it should be sent right now (empty = nothing to send yet).</param>
     /// <param name="blocker">Returns a reason not to ask right now (e.g. the reply box already holds text that a new answer would overwrite), or null.</param>
@@ -182,6 +182,8 @@ public sealed class AiAskPanel : StackPanel
         {
             var client = AiSettings.CreateClient();
             var reply = await client.CompleteAsync(_prompt(), _cts.Token, progress.Feed);
+            // Cancel pressed just as the reply landed: the user's Cancel wins, nothing is applied.
+            if (_cts.IsCancellationRequested) return;
             StopClock("Waited {0} — Claude answered.");
             // Text typed into the reply box while Claude was answering must not be overwritten.
             if (_blocker?.Invoke() is { } why) Fail(why + " Claude's answer was discarded.");

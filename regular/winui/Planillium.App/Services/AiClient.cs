@@ -43,8 +43,15 @@ public sealed class AiClient
     /// <summary>Null only in a scratch run with no stub address: then no call is made at all (G7).</summary>
     private readonly string? _baseUrl;
 
-    public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromSeconds(120);
-    public TimeSpan TotalCap { get; init; } = TimeSpan.FromMinutes(6);
+    /// <summary>The longest an Ask/Add-plan reply is waited for (G4b: 4 minutes, was 2). The single source of
+    /// the limit: it feeds both timeouts below and every visible "gives up after" wording.</summary>
+    public static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(240);
+    /// <summary>The limit as shown to the user, e.g. "4 minutes".</summary>
+    public static string WaitLimitText => WaitLimit.TotalMinutes % 1 == 0
+        ? $"{(int)WaitLimit.TotalMinutes} minutes" : $"{(int)WaitLimit.TotalSeconds} seconds";
+
+    public TimeSpan IdleTimeout { get; init; } = WaitLimit;
+    public TimeSpan TotalCap { get; init; } = WaitLimit;
 
     public AiClient(string apiKey, string model, string? baseUrl = null)
     {
@@ -113,7 +120,7 @@ public sealed class AiClient
             {
                 idle.CancelAfter(IdleTimeout);
                 if (clock.Elapsed > TotalCap)
-                    throw new AiException(AiFailure.Timeout, "Claude took too long to answer. Nothing was changed.");
+                    throw new AiException(AiFailure.Timeout, $"Claude took longer than {WaitLimitText} to answer. Nothing was changed.");
                 if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
                 var json = line[5..].Trim();
                 if (json.Length == 0 || json == "[DONE]") continue;
@@ -160,7 +167,7 @@ public sealed class AiClient
         catch (OperationCanceledException)
         {
             if (ct.IsCancellationRequested) throw new AiException(AiFailure.Cancelled, "Cancelled.");
-            throw new AiException(AiFailure.Timeout, "Claude didn't answer in time. Nothing was changed.");
+            throw new AiException(AiFailure.Timeout, $"Claude didn't answer within {WaitLimitText}. Nothing was changed.");
         }
         catch (HttpRequestException ex)
         {
@@ -174,7 +181,7 @@ public sealed class AiClient
         }
     }
 
-    /// <summary>Hard limit for "Test connection": a one-word answer never needs the 6-minute reply cap.</summary>
+    /// <summary>Hard limit for "Test connection": a one-word answer never needs the full reply limit.</summary>
     public TimeSpan TestCap { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>One tiny call (a few tokens) used by Settings → AI "Test connection". Gives up after

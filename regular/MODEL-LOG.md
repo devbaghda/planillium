@@ -11,3 +11,4 @@
 2026-10-27 G2 generalist: sonnet -- explicit spec, bounded UI work; #8 investigate-only; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
 2026-10-27 G4 generalist: opus -- timing/streaming measurement + counter in async UI (LESSONS: timing class raises difficulty); outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
 2026-10-27 G4 generalist model check: opus confirmed sufficient (async timing + streaming measurement); outcome: ok
+- 2026-10-27 G4b ask-wait-cancel | PM chose sonnet (small bounded change) | outcome: ok (built, precheck green 229/229; QA deferred)

@@ -1,0 +1,2 @@
+# Brief: G4b (regular side only: D:/CLAUDE/Planillium/regular/)
+Read REQUEST.md and ACCEPTANCE.md here. Work only inside D:/CLAUDE/Planillium/regular/. Tests deferred: run only strict build (dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental) and dotnet test --no-build; no QA. Scratch/real-data rules as in the project CLAUDE.md. Commit locally on winui-rebuild, do not push. Update your own docs (CHANGELOG Unreleased, context notes). Hand back via report with files changed and any questions.
