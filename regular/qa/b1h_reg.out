@@ -1,0 +1,15 @@
+start ((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '']) focus ('50007', 'Income', '')
+SAL 3000 Enter: cfg (3000, {'Studioshoo': 1600}) box 3 000 saved ['Saved.']
+  [after SAL Enter] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+TAG 1700 Enter: cfg (3000, {'Studioshoo': 1700}) box 1 700
+  [after TAG Enter] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+after save, SAL 2500 Esc -> box 3 000 cfg (3000, {'Studioshoo': 1700})
+new-tag Esc: line '' '' cfg (3000, {'Studioshoo': 1700}) focus ('50007', 'Income', '')
+  [after new-tag Esc] focus=('50007', 'Income', '') type9-unchanged=True
+SAL 2800 Tab: cfg (2800, {'Studioshoo': 1700}) box 2 800 focus ('50000', 'Employment status Unemployed', 'EmployedToggle')
+TAG 1650 blank click: cfg (2800, {'Studioshoo': 1650}) box 1 650 focus ('50000', '', 'IncomeFocusPark')
+  [after blank click] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+SAL empty Tab (B1d revert): box 2 800 cfg (2800, {'Studioshoo': 1650})
+TAG -5 Tab (B1d minus kept): box '-5' red [("Amounts can't be negative.", True)] cfg (2800, {'Studioshoo': 1650})
+  then Esc? focus ('50000', 'Remove', '')
+done

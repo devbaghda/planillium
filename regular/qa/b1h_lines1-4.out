@@ -1,0 +1,42 @@
+start ((2925, {'Studioshoo': 1600}), ['2\u2009925', '1\u2009600', '', '']) focus ('50007', 'Income', '')
+Previous s typed 2500: box='2\u2009500' red=[]
+  Esc -> box='2\u2009925' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Previous s 2500+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Previous s typed empty: box='' red=[]
+  Esc -> box='2\u2009925' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Previous s empty+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Previous s typed abc: box='' red=[]
+  Esc -> box='2\u2009925' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Previous s abc+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Previous s typed spaces: box='' red=[]
+  Esc -> box='2\u2009925' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Previous s spaces+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Previous s typed -5: box='-5' red=[("Amounts can't be negative.", True)]
+  Esc -> box='2\u2009925' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Previous s -5+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Studioshoo typed 2500: box='2\u2009500' red=[]
+  Esc -> box='1\u2009600' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Studioshoo 2500+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Studioshoo typed empty: box='' red=[]
+  Esc -> box='1\u2009600' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Studioshoo empty+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Studioshoo typed abc: box='' red=[]
+  Esc -> box='1\u2009600' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Studioshoo abc+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Studioshoo typed spaces: box='' red=[]
+  Esc -> box='1\u2009600' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Studioshoo spaces+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+Studioshoo typed -5: box='-5' red=[("Amounts can't be negative.", True)]
+  Esc -> box='1\u2009600' cfg=(2925, {'Studioshoo': 1600}) red=[] saved=[]
+  [Studioshoo -5+Esc] focus=('50000', '', 'IncomeFocusPark') type9-unchanged=True
+SAL 3000 Enter: cfg (3000, {'Studioshoo': 1600}) box Traceback (most recent call last):
+  File "D:\CLAUDE\Planillium\regular\qa\b1h_run.py", line 19, in <module>
+    typein(SAL, "3000"); send_keys("{ENTER}"); time.sleep(1); log("SAL 3000 Enter: cfg", cfg(), "box", val(SAL), "saved", saved()); nine("after SAL Enter")
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\CLAUDE\Planillium\regular\qa\b1d_h.py", line 18, in log
+    def log(*a): print(*a, flush=True)
+                 ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\devba\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2009' in position 1: character maps to <undefined>

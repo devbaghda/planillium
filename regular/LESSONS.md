@@ -10,6 +10,7 @@
 - After any click, check where focus ended up, not only what the click was on (containers may hand focus to the first focusable box).
 
 ## User rules (Settings -> Income, 2026-10-25)
+- Esc in a saved box (salary, payable tag) reverts to the saved amount, saves nothing, cursor ends nowhere (B1h, 2026-10-27).
 - Esc / click outside clears the add line; Tab out of its amount box keeps the text.
 - Enter in the add line = Add, then the cursor leaves; Enter or leaving a money box saves and focus ends nowhere, never the salary box.
 - A typed minus stays visible with its message until valid; nothing invalid is saved; a payable tag is never saved at 0 or empty.
@@ -19,6 +20,9 @@
 - Focus tests need real mouse clicks and keystrokes, window-relative coordinates, and a "type 9, nothing changes" check.
 - Pre-seed today's kickoff and review as done in the scratch state before launch, or timed prompts steal focus.
 - Read the status line by its own ID, separately from inline red messages.
+- Run QA scripts with `PYTHONIOENCODING=utf-8`: amounts contain a thin space (U+2009) that crashes cp1252 console output.
+- A scratch MENTOR_ROOT does not isolate Windows Credential Manager secrets (AI key, TickTick); check the Settings AI/TickTick rows before assuming a test instance is clean.
+- Reuse the B1d harness (`qa/b1d_h.py`) by setting its module globals instead of writing a new one.
 - MoneyBox is a WinUI control; the source-link test project cannot unit-test it (extracting its logic is an open offer, not a decision).
 
 ## Models
