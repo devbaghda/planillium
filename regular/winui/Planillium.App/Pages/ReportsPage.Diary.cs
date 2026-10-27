@@ -192,9 +192,18 @@ public sealed partial class ReportsPage
             syncingSelectAll = false;
         }
 
+        // Same query RenderDiaryResults runs; the live-refresh tick also uses it to see whether
+        // anything changed before rebuilding (G5).
+        List<ReportData.DiaryEntry> QueryDiaryRows() =>
+            _diarySearch.Trim().Length > 0 || _diaryAllTime
+                ? ReportData.DiaryInRange(today.AddDays(-ConfigService.DiaryRetentionDays()), today)
+                : ReportData.DiaryInRange(_diaryDate, _diaryDate);
+        long? lastRowsSignature = null;
+
         void RenderDiaryResults()
         {
             diaryResults.Children.Clear();
+            ReleaseDroppedTree();
             var q = _diarySearch.Trim();
             var searching = q.Length > 0;
             // "All time" (2026-07-23) reuses exactly the wide range free-text search already
@@ -207,9 +216,8 @@ public sealed partial class ReportsPage
             // oldest day still genuinely present) — this used to be one day short,
             // silently excluding the single oldest day still on disk (round-5 audit
             // finding #6).
-            var rows = wideRange
-                ? ReportData.DiaryInRange(today.AddDays(-ConfigService.DiaryRetentionDays()), today)
-                : ReportData.DiaryInRange(_diaryDate, _diaryDate);
+            var rows = QueryDiaryRows();
+            lastRowsSignature = DiaryRowsSignature(rows);
 
             // Rebuild the app/page filters' options from what's actually in the current scope
             // (today, or the whole range) rather than a fixed list — re-syncs all three boxes'
@@ -445,9 +453,33 @@ public sealed partial class ReportsPage
         // Only re-poll while today's rows are actually in scope with no search active — a
         // past-only day view is finished history (nothing new will ever appear), and a search
         // already re-renders itself on its own typing debounce above.
-        _diaryLiveRefreshAction = RenderDiaryResults;
+        // G5 (2026-10-27): the 30-second tick used to rebuild the whole list and all four filter
+        // drop-downs even when nothing had been logged since the last look, so a page left open
+        // kept allocating fresh controls every half minute and its memory crept up while idle
+        // (measured: 160 -> 214 MB in 8 minutes on a 9,000-row diary). It now re-reads the rows
+        // and rebuilds only when they differ from what is on screen; any user action still goes
+        // straight to RenderDiaryResults as before.
+        _diaryLiveRefreshAction = () =>
+        {
+            if (lastRowsSignature is long shown && DiaryRowsSignature(QueryDiaryRows()) == shown) return;
+            RenderDiaryResults();
+        };
         EnsureDiaryLiveRefreshTimer();
         SyncLiveRefresh();
+    }
+
+    /// <summary>Fingerprint of a diary query result: every field a row shows or is filtered
+    /// on, in order. Equal fingerprints mean the list on screen is already current (G5).</summary>
+    private static long DiaryRowsSignature(List<ReportData.DiaryEntry> rows)
+    {
+        var h = new HashCode();
+        h.Add(rows.Count);
+        foreach (var e in rows)
+        {
+            h.Add(e.Id); h.Add(e.Date); h.Add(e.Start); h.Add(e.End); h.Add(e.Dur);
+            h.Add(e.Cat); h.Add(e.Window); h.Add(e.Desc); h.Add(e.Tag);
+        }
+        return ((long)rows.Count << 32) ^ (uint)h.ToHashCode();
     }
 
     /// <summary>The diary's free-text search box — split out of BuildDiarySection
@@ -883,6 +915,30 @@ public sealed partial class ReportsPage
     // later by "Show more" still pick up the right checked state.
     private const int DefaultDiaryRowsShown = 40;
 
+    /// <summary>Builds one diary row when the ItemsRepeater brings it near the screen (G5).
+    /// No pooling, same as SchedulePage's DayCardElementFactory: each row closes over its own
+    /// entry's handlers, so a reused row would need rewiring anyway.
+    ///
+    /// Holds its row builder only WEAKLY; the page keeps the current one alive in
+    /// _diaryRowBuilder. Measured: with a strong reference every diary list ever shown stayed in
+    /// memory (27 repeaters and 227,000 row records after 24 period switches, +7 MB per switch,
+    /// not freed by a full collection). The repeater holds this factory in a way .NET's
+    /// collector can't see through, and the builder's closure (DiaryList's locals) holds the
+    /// repeater back, so the pair kept each other alive for good. With the weak link, replacing
+    /// _diaryRowBuilder is what lets the old list go.</summary>
+    private sealed partial class DiaryRowElementFactory : IElementFactory
+    {
+        private readonly WeakReference<Func<ReportData.DiaryEntry, UIElement>> _build;
+        public DiaryRowElementFactory(Func<ReportData.DiaryEntry, UIElement> build) => _build = new(build);
+        public UIElement GetElement(ElementFactoryGetArgs args) =>
+            // An old, already-replaced list can't be on screen, so an empty element is never seen.
+            _build.TryGetTarget(out var build) ? build((ReportData.DiaryEntry)args.Data) : new Grid();
+        public void RecycleElement(ElementFactoryRecycleArgs args) { }
+    }
+
+    /// <summary>The row builder of the diary list currently shown; see DiaryRowElementFactory.</summary>
+    private Func<ReportData.DiaryEntry, UIElement>? _diaryRowBuilder;
+
     private StackPanel DiaryList(
         List<ReportData.DiaryEntry> diary,
         HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
@@ -1089,8 +1145,21 @@ public sealed partial class ReportsPage
         // comment). RenderDiaryResults already resets it to the default on an actual scope
         // change before this method is ever called.
         var shown = Math.Min(_diaryRowsShown, diary.Count);
-        for (var i = 0; i < shown; i++)
-            list.Children.Add(BuildRow(diary[i]));
+        // G5 (2026-10-27): the revealed rows sit in a virtualizing ItemsRepeater instead of being
+        // built one Grid each into this StackPanel. The diary's own scroll box (520 px high, see
+        // BuildDiaryResultsArea) is what it virtualizes against, so only the rows on or near
+        // screen exist as controls; the rest are plain records. Measured before this: about
+        // 90 KB per built row, so "Show all" on a 9,000-row diary drove the app past 840 MB and
+        // hung it. What is revealed (and "Showing N of M") is unchanged; rows scrolled out of
+        // view are rebuilt from the same record when they come back, with their tick read from
+        // selectedIds as before.
+        var repeater = new ItemsRepeater
+        {
+            ItemsSource = diary.GetRange(0, shown),
+            Layout = new StackLayout { Spacing = 4 },
+            ItemTemplate = new DiaryRowElementFactory(_diaryRowBuilder = BuildRow),
+        };
+        list.Children.Add(repeater);
 
         // One batch at a time, not the whole rest in one go (2026-07-28 request) — a busy
         // search/date-range match can leave hundreds of rows hidden behind this button, and
@@ -1110,8 +1179,7 @@ public sealed partial class ReportsPage
         void RevealTo(int target)
         {
             var next = Math.Min(target, diary.Count);
-            for (var i = shown; i < next; i++)
-                list.Children.Insert(list.Children.Count - 1, BuildRow(diary[i]));
+            repeater.ItemsSource = diary.GetRange(0, next);
             shown = next;
             _diaryRowsShown = next;
             RebuildFooter();

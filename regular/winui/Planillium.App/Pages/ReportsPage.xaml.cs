@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -80,6 +81,25 @@ public sealed partial class ReportsPage : Page
     {
         base.OnNavigatedTo(e);
         Render();
+        RestoreScrollAfterReturn();
+    }
+
+    // G5: OnNavigatedFrom now empties the page while it is hidden, and an empty page can't keep
+    // its scroll position — coming back used to land where you left it (the old tree was still
+    // there while Render rebuilt it), and must keep doing so. The offset is noted on leaving and
+    // re-applied once the rebuilt page has been laid out tall enough to reach it.
+    private double? _returnOffset;
+    private void RestoreScrollAfterReturn()
+    {
+        if (_returnOffset is not double y || y <= 0) { _returnOffset = null; return; }
+        _returnOffset = null;
+        void Apply(object? sender, object args)
+        {
+            if (RootScroller.ScrollableHeight <= 0) return;   // not laid out yet
+            RootScroller.LayoutUpdated -= Apply;
+            RootScroller.ChangeView(null, Math.Min(y, RootScroller.ScrollableHeight), null, disableAnimation: true);
+        }
+        RootScroller.LayoutUpdated += Apply;
     }
 
     // NavigationCacheMode="Enabled" keeps this page instance alive (and its
@@ -90,6 +110,35 @@ public sealed partial class ReportsPage : Page
     {
         base.OnNavigatedFrom(e);
         _diaryLiveRefresh?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+        // G5 (2026-10-27): drop the hidden page's content. OnNavigatedTo always rebuilds it from
+        // scratch, so keeping the old tree alive behind another page only held memory (all the
+        // diary rows a "Show more"/"Show all" had revealed, plus every filter and table) for nothing.
+        // The two timer callbacks point into that tree, so they are released with it.
+        _diaryLiveRefreshAction = null;
+        _diarySearchDebounceAction = null;
+        _diaryRowBuilder = null;
+        _returnOffset = RootScroller.VerticalOffset;
+        Body.Children.Clear();
+        ReleaseDroppedTree();
+    }
+
+    // G5 (2026-10-27): every control this page builds is a small .NET wrapper around a much
+    // larger native XAML object. A thrown-away tree (each Render, each diary refresh, leaving
+    // the page) is only freed once .NET collects those wrappers, and .NET can't see the native
+    // size, so with this app's tiny managed heap it waited a long time: measured on a 9,000-row
+    // diary, 24 period switches left ~230 MB held; one forced collection plus a minute idle
+    // brought the same process back to ~110 MB. So after dropping a tree, ask for one collection
+    // at low priority (after the new tree is on screen). The managed heap is a few MB, so the
+    // collection itself takes milliseconds. Coalesced: several drops in a row cost one collection.
+    private bool _collectQueued;
+    private void ReleaseDroppedTree()
+    {
+        if (_collectQueued) return;
+        _collectQueued = DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            _collectQueued = false;
+            GC.Collect();
+        });
     }
 
     private void ExportHtml_Click(object sender, RoutedEventArgs e)
@@ -129,6 +178,7 @@ public sealed partial class ReportsPage : Page
     internal void Render()
     {
         Body.Children.Clear();
+        ReleaseDroppedTree();
         SaveErrorBar.IsOpen = false;
         ExportCsvItem.Text = $"CSV ({ReportData.PeriodName(_period).ToLowerInvariant()})";
         try

@@ -28,6 +28,13 @@
 - A QA worktree may start on another branch's commit: `git checkout --detach winui-rebuild` before building, or old code runs.
 - The shell wrapper refuses compound commands containing git inside a worktree; run git commands on their own.
 
+## Memory (WinUI)
+- Measure memory with cached UIA element references (select/toggle/invoke); full tree walks create automation peers and inflate the figure.
+- WinUI native memory behind dropped trees is freed late (GC sees only small wrappers): force a GC before calling growth a leak, and queue a low-priority collect after dropping a big tree.
+- A C# IElementFactory held by a native ItemsRepeater is a GC root; if its delegate's closure captures the repeater it leaks forever: hold the builder weakly, the page strongly.
+- Clearing a cached page's tree on leave loses its scroll position; save the offset and restore it after layout.
+- Watch private bytes as well as working set: Windows trims the working set of an idle app.
+
 ## Models
 - Focus / key-event work: consider opus (B1b sonnet needed 5 QA rounds; B1c and B1d opus passed in 1). QA for real-click focus work: opus.
 

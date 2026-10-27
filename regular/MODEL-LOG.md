@@ -12,3 +12,5 @@
 2026-10-27 G4 generalist: opus -- timing/streaming measurement + counter in async UI (LESSONS: timing class raises difficulty); outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
 2026-10-27 G4 generalist model check: opus confirmed sufficient (async timing + streaming measurement); outcome: ok
 - 2026-10-27 G4b ask-wait-cancel | PM chose sonnet (small bounded change) | outcome: ok (built, precheck green 229/229; QA deferred)
+- 2026-10-27 G5 memory | PM chose opus (cause unknown, needs investigation) | outcome: ok
+2026-10-27 G5 generalist model check: opus confirmed sufficient (unknown cause, memory investigation + measurement); outcome: ok

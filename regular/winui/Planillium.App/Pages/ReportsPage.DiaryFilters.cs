@@ -12,6 +12,13 @@ internal sealed class MultiPicker
     private readonly string _title;
     private readonly StackPanel _list = new() { Spacing = 2 };
     private readonly Dictionary<string, string> _labels = new();
+    // G5 (2026-10-27): the options are kept as plain data and the check boxes are only built
+    // while the drop-down is open, then dropped when it closes. The Page list in "All time"
+    // holds one entry per distinct page in the whole diary (thousands), and every diary
+    // refresh rebuilt all of them as hidden check boxes — the largest share of the memory
+    // Reports held and kept churning (measured, see regular/CHANGELOG.md G5).
+    private List<(string Value, string Label)> _options = new();
+    private bool _open;
     private bool _syncing;
 
     public DropDownButton Button { get; }
@@ -33,25 +40,34 @@ internal sealed class MultiPicker
             },
         };
         AutomationProperties.SetName(Button, automationName);
+        Button.Flyout.Opening += (_, _) => { _open = true; BuildBoxes(); };
+        Button.Flyout.Closed += (_, _) => { _open = false; _list.Children.Clear(); };
     }
 
     /// <summary>Rebuilds the check boxes from <paramref name="options"/> (value, label) and
     /// re-ticks whatever is in <see cref="Selected"/>.</summary>
     public void SetOptions(IEnumerable<(string Value, string Label)> options)
     {
+        _options = options.ToList();
+        _labels.Clear();
+        foreach (var (value, label) in _options) _labels[value] = label;
+        // Open drop-down (a tick re-ran the diary): rebuild in place, as before.
+        if (_open) BuildBoxes();
+        UpdateTitle();
+    }
+
+    private void BuildBoxes()
+    {
         _syncing = true;
         _list.Children.Clear();
-        _labels.Clear();
-        foreach (var (value, label) in options)
+        foreach (var (value, label) in _options)
         {
-            _labels[value] = label;
             var box = new CheckBox { Content = label, IsChecked = Selected.Contains(value), Tag = value };
             box.Checked += (_, _) => Toggle(value, true);
             box.Unchecked += (_, _) => Toggle(value, false);
             _list.Children.Add(box);
         }
         _syncing = false;
-        UpdateTitle();
     }
 
     private void Toggle(string value, bool on)
