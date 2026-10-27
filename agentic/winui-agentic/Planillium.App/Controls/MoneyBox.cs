@@ -47,26 +47,41 @@ public sealed class MoneyBox : TextBox
     public bool AllowZero { get; set; } = true;
 
     /// <summary>True for boxes that show a saved amount (salary, payable-tag rates): leaving the box with no number
-    /// in it (emptied, or only letters typed) puts the saved amount back, so the box never shows blank while the
-    /// stored value is something else (B1d). Off for the new-tag amount, where empty is the starting state.</summary>
+    /// in it (emptied, or only letters typed) or with a too-large amount puts the saved amount back, so the box never
+    /// shows blank or a refused 12-digit amount while the stored value is something else (B1d, B1g). Esc in such a box
+    /// discards whatever was typed, puts the saved amount back and raises <see cref="EscapePressed"/> (B1g). Off for the
+    /// new-tag amount, where empty is the starting state and Esc belongs to the add line.</summary>
     public bool RevertEmptyOnLeave { get; set; }
 
-    /// <summary>Raised after leaving the box put the saved amount back (see <see cref="RevertEmptyOnLeave"/>).</summary>
-    public event EventHandler? Reverted;
+    /// <summary>Raised after leaving the box (or Enter) put the saved amount back (see <see cref="RevertEmptyOnLeave"/>).
+    /// The argument is the refused amount's problem (<see cref="TooLargeText"/>), or null when the box was empty.</summary>
+    public event EventHandler<string?>? Reverted;
+
+    /// <summary>Raised by Esc in a box with <see cref="RevertEmptyOnLeave"/> on, after the saved amount was put back.
+    /// The argument is true when typed text was discarded (the box showed something other than the saved amount). The
+    /// page moves focus out of the box.</summary>
+    public event EventHandler<bool>? EscapePressed;
 
     public const string NegativeText = "Amounts can't be negative.";
     public const string ZeroText = "Amount must be more than 0.";
+    public const string TooLargeText = "Amount is too large (9 digits at most).";
 
     /// <summary>The message for an invalid box text, or null: <see cref="NegativeText"/> for a minus anywhere,
+    /// <see cref="TooLargeText"/> for more than <see cref="MoneyFormat.MaxIntegerDigits"/> integer digits (B1g),
     /// <see cref="ZeroText"/> for a zero amount when <paramref name="allowZero"/> is false. Empty is not a problem
     /// here (each caller decides what empty means).</summary>
     public static string? ProblemFor(string? text, bool allowZero)
     {
         text ??= "";
         if (MoneyFormat.ContainsMinus(text)) return NegativeText;
+        if (MoneyFormat.IntegerDigitCount(text) > MoneyFormat.MaxIntegerDigits) return TooLargeText;
         if (!allowZero && MoneyFormat.Parse(text) == 0) return ZeroText;
         return null;
     }
+
+    /// <summary>The problem of the text in the box right now (<see cref="ProblemFor"/>). Unlike <see cref="ProblemText"/>
+    /// it does not wait for TextChanged, so it is already null right after a revert.</summary>
+    public string? CurrentProblem => ProblemFor(Text, AllowZero);
 
     /// <summary>The current problem message (see <see cref="ProblemFor"/>), or null while the box is valid or empty.
     /// Derived from the text on every change, also programmatic ones, and kept after the box is left.</summary>
@@ -134,39 +149,58 @@ public sealed class MoneyBox : TextBox
 
     /// <summary>Leaving saves a valid number. An invalid one (negative, or a zero where it is not allowed) is left in
     /// the box as typed, with its message; nothing is saved and the saved value stays as it was (user decision
-    /// 2026-10-25). A box left with no number in it shows the saved amount again when <see cref="RevertEmptyOnLeave"/>
-    /// is on (B1d: box and stored value agree).</summary>
+    /// 2026-10-25). A box left with no number in it, or with a too-large amount, shows the saved amount again when
+    /// <see cref="RevertEmptyOnLeave"/> is on (B1d, B1g: box and stored value agree).</summary>
     protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
         Settle();
         Commit();
         _hasBaseline = false;
-        RevertIfEmpty();
+        RevertIfNoAmount();
     }
 
-    /// <summary>Puts the saved amount back when the box holds no number (emptied, letters or spaces only) and
-    /// <see cref="RevertEmptyOnLeave"/> is on. A minus or a zero is left as typed (it has its own message). Run on every
-    /// way out of the box: leaving it, and Enter (B1d fix: Enter used to leave the box blank and focused).</summary>
-    private void RevertIfEmpty()
+    /// <summary>Puts the saved amount back when <see cref="RevertEmptyOnLeave"/> is on and the box holds no number
+    /// (emptied, letters or spaces only) or a too-large amount (B1g: the 12 digits are not kept on screen; nothing was
+    /// saved). A minus or a zero is left as typed (it has its own message). Run on every way out of the box: leaving
+    /// it, and Enter (B1d fix: Enter used to leave the box blank and focused).</summary>
+    private void RevertIfNoAmount()
     {
         if (!RevertEmptyOnLeave || double.IsNaN(_saved)) return;
-        if (MoneyFormat.ContainsMinus(Text) || !double.IsNaN(MoneyFormat.Parse(Text))) return;
+        var problem = CurrentProblem;
+        var tooLarge = problem == TooLargeText;
+        if (!tooLarge && (problem != null || !double.IsNaN(MoneyFormat.Parse(Text)))) return;
+        PutSavedBack();
+        Reverted?.Invoke(this, tooLarge ? problem : null);
+    }
+
+    /// <summary>Shows the saved amount again. The box then holds the stored amount, so the coming LostFocus must not
+    /// count it as a new value to save (nor a box that held a minus when it got focus).</summary>
+    private void PutSavedBack()
+    {
         Value = _saved;
-        // The box now shows the stored amount, so the coming LostFocus must not count it as a new value to save.
         if (_hasBaseline) _baseline = _saved;
-        Reverted?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnKeyDown(KeyRoutedEventArgs e)
     {
+        if (e.Key == Windows.System.VirtualKey.Escape && RevertEmptyOnLeave)
+        {
+            // B1g (user rule 2026-10-27): Esc discards what was typed -- a new number, an emptied box, letters, a minus,
+            // a too-large amount -- shows the saved amount and the page moves the cursor out. Nothing is saved.
+            e.Handled = true;
+            var discarded = Text != MoneyFormat.FromNumber(_saved, _decimalSeparator);
+            PutSavedBack();
+            EscapePressed?.Invoke(this, discarded);
+            return;
+        }
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
             Settle();
             Commit();
-            // Enter is a way out like leaving: an empty box shows the saved amount again before the page moves
-            // focus away (box and stored value agree).
-            RevertIfEmpty();
+            // Enter is a way out like leaving: an empty or too-large box shows the saved amount again before the page
+            // moves focus away (box and stored value agree).
+            RevertIfNoAmount();
             e.Handled = true;
             // After Commit, so the save happens before the page moves focus away.
             EnterPressed?.Invoke(this, EventArgs.Empty);
@@ -185,7 +219,10 @@ public sealed class MoneyBox : TextBox
     {
         if (_normalising) return;
         var raw = Text;
-        var (text, caret) = MoneyFormat.NormalizeKeepingSign(raw, SelectionStart, _decimalSeparator);
+        // Up to BoxIntegerDigits are kept, so a too-large amount stays visible with its message instead of being cut
+        // to 9 digits without a word (B1g).
+        var (text, caret) = MoneyFormat.NormalizeKeepingSign(raw, SelectionStart, _decimalSeparator,
+            MoneyFormat.BoxIntegerDigits);
         // Computed from the text about to be shown. WinUI delivers the TextChanged for the write-back below
         // after _normalising is already false; that echo carries the same text, so it yields the same answer
         // and cannot hide the message the keystroke just showed (the B1b D1 defect).

@@ -33,3 +33,10 @@
 - qa (case f remainder) outcome: BUDGET-REQUEST 14 min at start (nothing run); relayed to PM
 - qa (case f remainder, 14 min granted): haiku -- same known script; its budget estimate was sound.
 - qa (case f remainder, 14 min) outcome: TIME-LIMIT at 14 min -- part B rest 24/24 PASS; part C 72 PASS / 7 FAIL (Previous salary box keeps focus after Esc / refused Enter), 65 checks not run; returned to PM
+## B1g money-box keys 2026-10-27
+- planner/designer: not launched -- brief is a bounded fix list (REQUEST 1-4 + ACCEPTANCE).
+- coder: opus -- key/focus class, repeated misses in B1b-B1f (LESSONS); must cover both box kinds and all exits.
+- coder outcome: ok (precheck green 0 warnings, 362/362; MoneyBox.cs, MoneyFormat.cs, SettingsPage.xaml.cs; not committed)
+- qa: opus planned (key/focus class, sonnet missed focus defects before) -- not launched: brief has no `QA budget:`; BUDGET-REQUEST relayed to PM.
+- qa: opus -- key/focus class; scope picked from diff. Budget 20 min granted by PM (acceptance 1-7 in salary box + one tag box, every exit, short Add-line/B1d-Enter regression; no full A/B/C matrix).
+- qa outcome: ok (PASS WITH CAVEATS, 44 checks, 0 defects, ~8 of 20 min; full A/B/C matrix scoped out)

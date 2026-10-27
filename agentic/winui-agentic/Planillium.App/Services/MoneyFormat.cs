@@ -13,8 +13,14 @@ public static class MoneyFormat
     /// <summary>The grouping character used in the display (U+2009, never a normal space).</summary>
     public const char ThinSpace = ' ';
 
-    /// <summary>Integer digits kept in a box; further typed digits are dropped.</summary>
+    /// <summary>Integer digits an amount may have (999 999 999 at most). <see cref="Normalize"/> drops further typed
+    /// digits by default; the money boxes keep up to <see cref="BoxIntegerDigits"/> so an over-long amount can be shown
+    /// and refused with a message (B1g) instead of being cut silently.</summary>
     public const int MaxIntegerDigits = 9;
+
+    /// <summary>Integer digits a money box keeps while typing (more are dropped); anything above
+    /// <see cref="MaxIntegerDigits"/> is refused as too large (B1g).</summary>
+    public const int BoxIntegerDigits = 15;
 
     /// <summary>Decimal digits kept in a box; further typed digits are dropped.</summary>
     public const int MaxDecimalDigits = 2;
@@ -24,12 +30,13 @@ public static class MoneyFormat
 
     /// <summary>
     /// Cleans raw box text. Keeps digits, the first decimal separator (',' or '.'), at most
-    /// <see cref="MaxIntegerDigits"/> integer and <see cref="MaxDecimalDigits"/> decimal digits.
+    /// <paramref name="maxIntegerDigits"/> (default <see cref="MaxIntegerDigits"/>) integer and <see cref="MaxDecimalDigits"/> decimal digits.
     /// Everything else (letters, '-', spaces, a second separator) is dropped (the money boxes use
     /// <see cref="NormalizeKeepingSign"/>, which puts a typed minus back in front). Returns the display text
     /// and the caret index in it, placed after the same digit the caret was after in <paramref name="raw"/>.
     /// </summary>
-    public static (string Text, int Caret) Normalize(string raw, int caret, char decimalSeparator)
+    public static (string Text, int Caret) Normalize(string raw, int caret, char decimalSeparator,
+        int maxIntegerDigits = MaxIntegerDigits)
     {
         raw ??= "";
         var intRaw = new StringBuilder();
@@ -60,7 +67,7 @@ public static class MoneyFormat
         }
 
         var intDigits = intRaw.ToString().TrimStart('0');
-        if (intDigits.Length > MaxIntegerDigits) intDigits = intDigits[..MaxIntegerDigits];
+        if (intDigits.Length > maxIntegerDigits) intDigits = intDigits[..maxIntegerDigits];
         if (intDigits.Length == 0 && !hasSep && intRaw.Length > 0) intDigits = "0";
 
         var grouped = Group(intDigits);
@@ -103,11 +110,34 @@ public static class MoneyFormat
     /// (negative) amount; <see cref="Parse"/> still ignores the sign, so callers must check
     /// <see cref="ContainsMinus"/> before using the number.
     /// </summary>
-    public static (string Text, int Caret) NormalizeKeepingSign(string raw, int caret, char decimalSeparator)
+    public static (string Text, int Caret) NormalizeKeepingSign(string raw, int caret, char decimalSeparator,
+        int maxIntegerDigits = MaxIntegerDigits)
     {
-        var (text, pos) = Normalize(raw, caret, decimalSeparator);
+        var (text, pos) = Normalize(raw, caret, decimalSeparator, maxIntegerDigits);
         if (!ContainsMinus(raw)) return (text, pos);
         return ("-" + text, pos + 1);
+    }
+
+    /// <summary>Number of integer digits in <paramref name="text"/> (before the first decimal separator, leading zeros
+    /// and thousands dots not counted): above <see cref="MaxIntegerDigits"/> the amount is too large (B1g).</summary>
+    public static int IntegerDigitCount(string? text)
+    {
+        text ??= "";
+        var count = 0;
+        var leading = true;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (char.IsAsciiDigit(c))
+            {
+                if (leading && c == '0') continue;
+                leading = false;
+                count++;
+            }
+            else if (IsThousandsDot(text, i)) continue;
+            else if (c == ',' || c == '.') break;
+        }
+        return count;
     }
 
     /// <summary>True if the raw text has a minus sign: '-' (U+002D), U+2212 or U+2013.</summary>

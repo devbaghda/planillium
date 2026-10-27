@@ -365,6 +365,12 @@ compaction. General versions of several now also live in the global `windows-app
 - **A focus/pointer fix must cover the whole container incl. edges and padding, and be tested at the
   borders, not only the interior** (B1f 2026-10-26: d2d30b0 left the 4 px right padding strip of the
   Settings scroller unclaimed; fixed in e82135f).
+- **A saved input box needs a defined result for every way out: Esc, Enter, Tab, click elsewhere -- and for every
+  kind of input (valid, empty, letters, minus, zero, too long).** Write the table before coding and give each
+  sibling box the same rows (B1g 2026-10-27, user rule: Esc in the salary / payable-tag boxes reverts to the saved
+  amount and the cursor leaves; refused Enter on a minus keeps the cursor and the message; a too-large amount is
+  refused with a message and reverted on every exit; the new-tag add line keeps its own Esc = clear and leave).
+  A silent input cap is a refusal without a message: B1b's 9-digit cut let "999999999999" save as 999 999 999.
 
 **Prompts, timers and state**
 - Any "show a prompt on a timer" trigger needs BOTH the `IsOnScreen()`-check-then-toast-fallback

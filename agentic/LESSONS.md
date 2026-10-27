@@ -34,3 +34,8 @@
 - Read winui-agentic/CONTEXT.md (own side's record); root CONTEXT.md is not yours.
 - Stage commits by explicit path: root CONTEXT.md/context/todos.md share names with the side's files.
 - Tool worktree isolation blocks writing QA-REPORT.md to the main target: QA uses its own git worktree and writes the report to the main path.
+- Bring the app to the foreground before each case, not only at launch (B1g: another app stole focus mid-run).
+- A diff-scoped matrix (2 boxes x every exit x 5 inputs) runs in under 3 min (~3.5 s per check): always run it.
+- Fix Esc/Enter/Tab/click behaviour for each (exit x input kind) row before coding; a silent input cap is an unmessaged refusal and the cut value can get saved.
+- Leave/revert logic reads the box's current text, not state cached from the last change event (WinUI updates it late).
+- A page-level key handler that swallows a key must pass it through when the focused control has its own rule for it.

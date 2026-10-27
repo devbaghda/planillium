@@ -430,21 +430,31 @@ public sealed partial class SettingsPage : Page
 
     /// <summary>Shared wiring for the boxes that show a saved amount (salary, each payable-tag rate). Enter saves and
     /// moves the cursor out; leaving with an invalid amount says in the status strip that nothing was saved (so an
-    /// earlier "Saved." is never left standing); leaving an emptied box puts the saved amount back and says so.</summary>
+    /// earlier "Saved." is never left standing); leaving an emptied box or one with a too-large amount puts the saved
+    /// amount back and says so. Esc (B1g) puts the saved amount back and moves the cursor out of the box.</summary>
     private void WireSavedMoneyBox(MoneyBox box)
     {
         box.EnterPressed += (_, _) => ParkAfterEnter(box);
         box.LostFocus += (_, _) =>
         {
-            if (box.ProblemText is { } p) SaveStatus.Text = $"Not saved: {p}";
+            // The text as it is now, not ProblemText: that follows TextChanged, which arrives after a revert (Esc,
+            // too large) and would put back a message for text that is no longer in the box.
+            if (box.CurrentProblem is { } p) SaveStatus.Text = $"Not saved: {p}";
         };
-        box.Reverted += (_, _) => SaveStatus.Text = "Empty amount not saved; the saved amount is back in the box.";
+        box.Reverted += (_, reason) => SaveStatus.Text = reason is null
+            ? "Empty amount not saved; the saved amount is back in the box."
+            : $"Not saved: {reason} The saved amount is back in the box.";
+        box.EscapePressed += (_, discarded) =>
+        {
+            if (discarded) SaveStatus.Text = "Change discarded; the saved amount is back in the box.";
+            ParkFocus("SettingsPage.MoneyEsc", ParkIf.InIncome);
+        };
     }
 
     /// <summary>Enter in the salary or a payable-tag box: the box has already saved a valid number, or (emptied, letters
-    /// or spaces only) already shows the saved amount again; the cursor then leaves the box and ends nowhere (B1c rule,
-    /// B1d fix). With a minus or a zero nothing was saved and the cursor stays with the message, so it can be fixed;
-    /// the status strip says why.</summary>
+    /// or spaces only, or a too-large amount) already shows the saved amount again; the cursor then leaves the box and
+    /// ends nowhere (B1c rule, B1d fix, B1g). With a minus or a zero nothing was saved and the cursor stays with the
+    /// message, so it can be fixed; the status strip says why.</summary>
     private void ParkAfterEnter(MoneyBox box)
     {
         if (!double.IsNaN(box.Value))
@@ -546,10 +556,12 @@ public sealed partial class SettingsPage : Page
     {
         if (e.Key == VirtualKey.Tab) _lastTabAt = Environment.TickCount64;
         // Esc after a refused mouse Add (focus parked, typed text and message kept): clears the line like Esc inside
-        // it (B1d fix). Esc with the cursor in the line is left to NewPaidTag_KeyDown.
+        // it (B1d fix). Esc with the cursor in the line is left to NewPaidTag_KeyDown. With the cursor in a saved money
+        // box (reached by Tab from the park) the key is not swallowed: the box still reverts and the cursor leaves (B1g).
         if (e.Key == VirtualKey.Escape && _keepAddLineOnNextLeave && !IsFocusInsideNewPaidTagLine())
         {
-            e.Handled = true;
+            var inSavedBox = XamlRoot != null && FocusManager.GetFocusedElement(XamlRoot) is MoneyBox { RevertEmptyOnLeave: true };
+            if (!inSavedBox) e.Handled = true;
             LeavePaidTagLine();
         }
     }
