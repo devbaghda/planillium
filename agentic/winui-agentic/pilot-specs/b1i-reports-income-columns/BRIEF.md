@@ -24,3 +24,8 @@ Reports "Time by app" pie (all periods): the legend has no chevrons and the slic
 User approved the table and removed cards ("looks good"). One change: the "Of which paid work" column values (rows and
 Total) are shown in a light green instead of yellow. Everything else as built. Light green must be readable on the
 dark and light themes. The income column's colours stay as they are.
+
+## Addendum 2026-10-27 (PM, user decision after trying the agentic build; agentic only)
+User: the Day table must have NO Total row, as on the regular side (a single-row table shows no Total row). Revert
+that ruling of the B1i run for Day (and use the same rule the regular side uses for any one-row table). Preference,
+not a defect. Everything else as built.

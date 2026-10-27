@@ -88,22 +88,23 @@ public sealed partial class ReportsPage
         // extended to all five categories 2026-08-05). Sums the values as
         // displayed, which keeps it consistent with business rule 10 for free: a day where
         // every plan is off already contributes 0/0 to those two cells, so it can't inflate
-        // the total here while being excluded everywhere else in Reports. Shown for a
-        // single-row table too (B1i: every period has a Total row carrying the EUR figures).
+        // the total here while being excluded everywhere else in Reports. Not shown for a
+        // single-row table (user preference 2026-10-27: a one-row table shows no Total row).
         // Tasks and Score are summed too (2026-08-05 request: "per row summary should contain
         // score summary"). Both were deliberately blank before, on the reasoning that a summed
         // "12/14" reads as a ratio it isn't and that a period score sitting one column from the
         // sidebar's running balance invites confusing the two. The user overrode that, and the
         // score total is the more useful figure — it's the same number the card above shows,
         // which is now guaranteed rather than hoped for: both fold ReportData.DailyRows.
-        AddTotalsRow(grid, columns,
-            [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1, (Brush?)null),
-             .. CategoryColumns.Select((c, i) =>
-                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
-             (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), totalCol, (Brush?)null),
-             (rows.Sum(s => s.Score).ToString(), scoreCol, (Brush?)null),
-             (CentsText(netTotalCents), netCol, IncomeBrush(netTotalCents / 100.0)),
-             (CentsText(paidTotalCents), paidCol, PaidWorkBrush())]);
+        if (rows.Count > 1)
+            AddTotalsRow(grid, columns,
+                [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1, (Brush?)null),
+                 .. CategoryColumns.Select((c, i) =>
+                     (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
+                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), totalCol, (Brush?)null),
+                 (rows.Sum(s => s.Score).ToString(), scoreCol, (Brush?)null),
+                 (CentsText(netTotalCents), netCol, IncomeBrush(netTotalCents / 100.0)),
+                 (CentsText(paidTotalCents), paidCol, PaidWorkBrush())]);
         return grid;
     }
 
@@ -216,10 +217,10 @@ public sealed partial class ReportsPage
         }
 
         // Same totals footer as DayTable — here the Total column can be summed too, since it's
-        // already this row's own categories added up. No row-count guard: Month/Year always render
-        // several buckets, and a zero-bucket table never reaches this method at all (Render
-        // substitutes a "No activity logged yet" message instead).
-        if (buckets.Count > 0)
+        // already this row's own categories added up. Same one-row rule as DayTable (user preference
+        // 2026-10-27): a single bucket shows no Total row. A zero-bucket table never reaches this
+        // method (Render substitutes a "No activity logged yet" message instead).
+        if (buckets.Count > 1)
             AddTotalsRow(grid, columns,
                 [($"{buckets.Sum(b => b.Done)}/{buckets.Sum(b => b.Total)}", 1, (Brush?)null),
                  .. CategoryColumns.Select((c, i) =>

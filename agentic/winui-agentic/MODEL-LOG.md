@@ -54,3 +54,4 @@
 - planner outcome: ok (SPEC.md; per-day income feasible, no stop)
 - coder: sonnet -- SPEC is explicit (files, rounding helper, colour index fix); not a timing/focus class. Gets lead rulings on SPEC open questions + paid-column light-green addendum.
 - planner outcome: ok; coder outcome: ok (precheck green 0 warnings, 362/362; paid-column light green addendum included). QA deferred by user ruling.
+2026-10-27 B1i Day total-row removal agentic lead: sonnet -- one-rule revert; outcome: ok (coder sonnet; precheck green 0 warnings, 362/362; QA deferred by user ruling)
