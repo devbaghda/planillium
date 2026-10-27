@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Planillium.App.Services;
@@ -10,7 +13,9 @@ namespace Planillium.App.Dialogs;
 /// (Replace remaining, Add plan; 2026-10-13 AI layer). Lives inside the host dialog — a second
 /// ContentDialog can't open on top of one — and shows one of four things: a hint to add a key
 /// (manual copy/paste below still works), the Ask button, the one-time "what gets sent" notice,
-/// or progress with a Cancel. A failure shows its plain-language reason and leaves the manual path
+/// or progress with a Cancel. While a reply is pending the progress shows a live "Waiting m:ss" counter
+/// and, once Claude starts writing, how many tasks have arrived so far (G4, 2026-10-27); the counter
+/// freezes into a "Waited m:ss" line when the reply ends, fails or is cancelled. A failure shows its plain-language reason and leaves the manual path
 /// untouched; nothing here changes any data — the reply goes through the host's normal validation.
 /// </summary>
 public sealed class AiAskPanel : StackPanel
@@ -30,7 +35,14 @@ public sealed class AiAskPanel : StackPanel
     };
     private readonly Border _notice = new() { Padding = new Thickness(12), CornerRadius = new CornerRadius(6), Visibility = Visibility.Collapsed };
     private readonly StackPanel _runRow = new() { Orientation = Orientation.Horizontal, Spacing = 10, Visibility = Visibility.Collapsed };
+    private readonly TextBlock _progress = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _elapsed = new() { FontSize = 12, Opacity = 0.8 };
+    private readonly TextBlock _waited = new() { FontSize = 12, Opacity = 0.8, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+    private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly Stopwatch _clock = new();
     private CancellationTokenSource? _cts;
+    private ReplyProgress? _replyProgress;
+    private const string AskingText = "Asking Claude… this can take a minute or two.";
 
     /// <param name="prompt">The prompt as it should be sent right now (empty = nothing to send yet).</param>
     /// <param name="blocker">Returns a reason not to ask right now (e.g. the reply box already holds text that a new answer would overwrite), or null.</param>
@@ -62,9 +74,19 @@ public sealed class AiAskPanel : StackPanel
         noticeBody.Children.Add(noticeButtons);
         _notice.Child = noticeBody;
 
+        // Ids for UI Automation; the progress line is a polite live region (announced when it changes —
+        // a new task count — not every second, which is why the counter itself is not one).
+        AutomationProperties.SetAutomationId(_progress, "AiProgress");
+        AutomationProperties.SetLiveSetting(_progress, AutomationLiveSetting.Polite);
+        AutomationProperties.SetAutomationId(_elapsed, "AiElapsed");
+        AutomationProperties.SetAutomationId(_waited, "AiWaited");
+        var runText = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 300 };
+        runText.Children.Add(_progress);
+        runText.Children.Add(_elapsed);
         _runRow.Children.Add(_ring);
-        _runRow.Children.Add(new TextBlock { Text = "Asking Claude… this can take a minute or two.", VerticalAlignment = VerticalAlignment.Center });
+        _runRow.Children.Add(runText);
         _runRow.Children.Add(_cancel);
+        _tick.Tick += (_, _) => ShowProgress();
 
         _ask.Click += (_, _) =>
         {
@@ -81,12 +103,13 @@ public sealed class AiAskPanel : StackPanel
             _ = RunAsync();
         };
         decline.Click += (_, _) => { _notice.Visibility = Visibility.Collapsed; _ask.Visibility = Visibility.Visible; };
-        _cancel.Click += (_, _) => _cts?.Cancel();
+        _cancel.Click += (_, _) => { StopClock("Stopped after {0} — request cancelled."); _cts?.Cancel(); };
 
         Children.Add(_hint);
         Children.Add(_ask);
         Children.Add(_notice);
         Children.Add(_runRow);
+        Children.Add(_waited);
         Children.Add(_status);
         Refresh();
     }
@@ -100,7 +123,42 @@ public sealed class AiAskPanel : StackPanel
     }
 
     /// <summary>Stops a running request (e.g. the host dialog is closing).</summary>
-    public void CancelRunning() => _cts?.Cancel();
+    public void CancelRunning()
+    {
+        if (_cts == null) return;
+        StopClock("Stopped after {0} — request cancelled.");
+        _cts.Cancel();
+    }
+
+    private static string Clock(TimeSpan t) => $"{(int)t.TotalMinutes}:{t.Seconds:00}";
+
+    private void ShowProgress()
+    {
+        var tasks = _replyProgress?.Tasks ?? 0;
+        var chars = _replyProgress?.Chars ?? 0;
+        var line = tasks > 0 ? $"Claude is writing the reply: {tasks} task{(tasks == 1 ? "" : "s")} so far."
+                 : chars > 0 ? "Claude has started writing the reply…"
+                 : AskingText;
+        if (_progress.Text != line)
+        {
+            _progress.Text = line;
+            if (FrameworkElementAutomationPeer.FromElement(_progress) is { } peer)
+                peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+        var shown = "Waiting " + Clock(_clock.Elapsed);
+        if (_elapsed.Text != shown) _elapsed.Text = shown;
+    }
+
+    /// <summary>Freezes the counter (first call wins: a Cancel click keeps its own moment and wording even
+    /// though the request itself unwinds a moment later).</summary>
+    private void StopClock(string outcome)
+    {
+        if (!_clock.IsRunning) return;
+        _clock.Stop();
+        _tick.Stop();
+        _waited.Text = string.Format(outcome, Clock(_clock.Elapsed));
+        _waited.Visibility = Visibility.Visible;
+    }
 
     private void Fail(string message)
     {
@@ -111,26 +169,36 @@ public sealed class AiAskPanel : StackPanel
     private async Task RunAsync()
     {
         _status.Visibility = Visibility.Collapsed;
+        _waited.Visibility = Visibility.Collapsed;
         _ask.Visibility = Visibility.Collapsed;
+        _replyProgress = new ReplyProgress();
+        var progress = _replyProgress;
+        _clock.Restart();
+        ShowProgress();
+        _tick.Start();
         _runRow.Visibility = Visibility.Visible;
         _cts = new CancellationTokenSource();
         try
         {
             var client = AiSettings.CreateClient();
-            var reply = await client.CompleteAsync(_prompt(), _cts.Token);
+            var reply = await client.CompleteAsync(_prompt(), _cts.Token, progress.Feed);
+            StopClock("Waited {0} — Claude answered.");
             // Text typed into the reply box while Claude was answering must not be overwritten.
             if (_blocker?.Invoke() is { } why) Fail(why + " Claude's answer was discarded.");
             else await _onReply(reply);
         }
         catch (AiException ex) when (ex.Kind == AiFailure.Cancelled) { /* the user asked for it — say nothing */ }
-        catch (AiException ex) { Fail(ex.Message); }
+        catch (AiException ex) { StopClock("Waited {0} — no usable answer."); Fail(ex.Message); }
         catch (Exception ex)
         {
+            StopClock("Waited {0} — no usable answer.");
             Log.Error("AiAskPanel", ex);
             Fail("Something went wrong talking to the AI service.");
         }
         finally
         {
+            StopClock("Stopped after {0}.");
+            _replyProgress = null;
             _cts.Dispose();
             _cts = null;
             _runRow.Visibility = Visibility.Collapsed;

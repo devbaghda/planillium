@@ -15,6 +15,12 @@ public sealed class AiException(AiFailure kind, string message) : Exception(mess
     public AiFailure Kind { get; } = kind;
 }
 
+/// <summary>Where the time of one successful reply went (G4, 2026-10-27): until the server answered,
+/// until Claude's first words arrived, and in all; plus how big the reply was. Sizes and times only —
+/// never any text.</summary>
+public sealed record AiTiming(TimeSpan ToHeaders, TimeSpan ToFirstText, TimeSpan Total, int ReplyChars,
+    int? InputTokens, int? OutputTokens);
+
 /// <summary>
 /// Minimal Anthropic Messages API client (2026-10-13 AI layer). Plain C# — no WinUI types — so it is
 /// unit-testable against a local stub server. Streams the reply (server-sent events) so a long plan
@@ -57,8 +63,13 @@ public sealed class AiClient
         _baseUrl = (string.IsNullOrWhiteSpace(baseUrl) ? fromEnv : baseUrl)?.TrimEnd('/');
     }
 
+    /// <summary>Timing of the last successful <see cref="CompleteAsync"/> on this client (null before one).</summary>
+    public AiTiming? LastTiming { get; private set; }
+
     /// <summary>Sends <paramref name="prompt"/> as a single user message and returns Claude's full reply text.</summary>
-    public async Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
+    /// <param name="onText">Called with each piece of the reply as it streams in (G4: lets the dialog show
+    /// progress). Runs on a background thread; the returned reply is the same either way.</param>
+    public async Task<string> CompleteAsync(string prompt, CancellationToken ct = default, Action<string>? onText = null)
     {
         if (_baseUrl is null)
             throw new AiException(AiFailure.ScratchBlocked,
@@ -87,6 +98,9 @@ public sealed class AiClient
 
             idle.CancelAfter(IdleTimeout);
             using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, idle.Token).ConfigureAwait(false);
+            var toHeaders = clock.Elapsed;
+            TimeSpan? toFirstText = null;
+            int? inputTokens = null, outputTokens = null;
             if (!resp.IsSuccessStatusCode)
                 throw await FailureFor(resp, idle.Token).ConfigureAwait(false);
 
@@ -110,10 +124,19 @@ public sealed class AiClient
                 switch ((string?)evt?["type"])
                 {
                     case "content_block_delta":
-                        if (evt?["delta"]?["text"] is JsonValue t && t.TryGetValue<string>(out var piece)) text.Append(piece);
+                        if (evt?["delta"]?["text"] is JsonValue t && t.TryGetValue<string>(out var piece))
+                        {
+                            toFirstText ??= clock.Elapsed;
+                            text.Append(piece);
+                            onText?.Invoke(piece);
+                        }
+                        break;
+                    case "message_start":
+                        inputTokens = TokenCount(evt?["message"]?["usage"]?["input_tokens"]) ?? inputTokens;
                         break;
                     case "message_delta":
                         stopReason = (string?)evt?["delta"]?["stop_reason"] ?? stopReason;
+                        outputTokens = TokenCount(evt?["usage"]?["output_tokens"]) ?? outputTokens;
                         break;
                     case "error":
                         throw new AiException(AiFailure.Server,
@@ -127,6 +150,10 @@ public sealed class AiClient
                     "Claude's reply was cut off (too long). Try asking for a smaller change.");
             if (text.Length == 0)
                 throw new AiException(AiFailure.BadResponse, "Claude sent an empty reply.");
+            LastTiming = new AiTiming(toHeaders, toFirstText ?? clock.Elapsed, clock.Elapsed, text.Length, inputTokens, outputTokens);
+            Log.Info($"AiClient: reply {text.Length} chars, tokens in/out {inputTokens?.ToString() ?? "?"}/{outputTokens?.ToString() ?? "?"}; " +
+                     $"server answered {toHeaders.TotalMilliseconds:F0} ms, first text {LastTiming.ToFirstText.TotalMilliseconds:F0} ms, " +
+                     $"total {clock.Elapsed.TotalMilliseconds:F0} ms");
             return text.ToString();
         }
         catch (AiException) { throw; }
@@ -162,6 +189,9 @@ public sealed class AiClient
             throw new AiException(AiFailure.Timeout, "No answer within 30 seconds. Check your internet connection and try again.");
         }
     }
+
+    private static int? TokenCount(JsonNode? n) =>
+        n is JsonValue v && v.TryGetValue<int>(out var i) ? i : null;
 
     private static async Task<AiException> FailureFor(HttpResponseMessage resp, CancellationToken ct)
     {

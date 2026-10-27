@@ -39,7 +39,9 @@ your last done task (even if that day is already past, in which case they show a
 from the new list. With an API key set (Settings → AI), an **Ask Claude** button in this dialog does
 the copy-and-paste for you and goes straight to the preview; it never writes over text already in
 the reply box (clear the box first), and nothing is changed until you confirm. Without a key, or if
-the request fails, the manual copy-and-paste still works.
+the request fails, the manual copy-and-paste still works. While Claude is answering, the dialog shows
+how long you have been waiting and how many new tasks have arrived so far; a long plan typically takes
+a minute or two, almost all of it Claude writing the reply.
 
 Each plan can include:
 
@@ -283,6 +285,8 @@ tool, not a cloud-first collaboration app. Specifically:
   earnings, tags and settings are never sent. The key is kept in the Windows credential store, never
   in config.json, and "Remove key" in Settings → AI deletes it. "Clear all my data" does not remove
   the key. The first use shows a one-time notice. Add plan still waits for you to press Import.
+  While a request runs you see a live "Waiting m:ss" counter, a "N tasks so far" line once Claude
+  starts writing, and a Cancel request button; when it ends the counter stays as "Waited m:ss".
 
 ## Tips for getting the most out of it
 
