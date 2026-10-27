@@ -51,6 +51,9 @@ public sealed partial class ReportsPage
             : eur < 0 ? "SystemFillColorCriticalBrush"
             : "SystemFillColorCautionBrush"];
 
+    /// <summary>Paid-work column: always light green (per-theme value in ThemeSync's Fixed table).</summary>
+    private static Brush PaidBrush() => (Brush)Application.Current.Resources["PaidWorkBrush"];
+
     /// <summary>Thin alias kept so every call site in this file doesn't need renaming —
     /// see CategoryStyle.BrushKey (Services/CategoryStyle.cs) for the actual single
     /// source of truth, now shared with MainWindow.Tracker's tray pill too.</summary>

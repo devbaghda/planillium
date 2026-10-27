@@ -67,7 +67,7 @@ public sealed partial class ReportsPage
                 else if (c == columns - 2)
                     tb.Foreground = IncomeBrush(money.Income);
                 else if (c == columns - 1)
-                    tb.Foreground = IncomeBrush(money.Paid);
+                    tb.Foreground = PaidBrush();
                 else if (!isToday)
                     tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
@@ -95,7 +95,7 @@ public sealed partial class ReportsPage
                  (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), columns - 4, null),
                  (rows.Sum(s => s.Score).ToString(), columns - 3, null),
                  (MainWindow.FormatEur(periodTotals.Income), columns - 2, IncomeBrush(periodTotals.Income)),
-                 (MainWindow.FormatEur(periodTotals.Paid), columns - 1, IncomeBrush(periodTotals.Paid))]);
+                 (MainWindow.FormatEur(periodTotals.Paid), columns - 1, PaidBrush())]);
         return grid;
     }
 
@@ -182,7 +182,7 @@ public sealed partial class ReportsPage
                     // so the one figure people actually look for is found the same way in both.
                     Foreground = c == columns - 3 ? ScoreBrush(b.Score)
                         : c == columns - 2 ? IncomeBrush(b.Income)
-                        : c == columns - 1 ? IncomeBrush(b.Paid)
+                        : c == columns - 1 ? PaidBrush()
                         : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 };
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
@@ -202,7 +202,7 @@ public sealed partial class ReportsPage
                  (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), columns - 4, null),
                  (buckets.Sum(b => b.Score).ToString(), columns - 3, null),
                  (MainWindow.FormatEur(periodTotals.Income), columns - 2, IncomeBrush(periodTotals.Income)),
-                 (MainWindow.FormatEur(periodTotals.Paid), columns - 1, IncomeBrush(periodTotals.Paid))]);
+                 (MainWindow.FormatEur(periodTotals.Paid), columns - 1, PaidBrush())]);
         return grid;
     }
 

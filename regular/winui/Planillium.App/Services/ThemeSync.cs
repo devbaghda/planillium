@@ -84,6 +84,8 @@ public static class ThemeSync
         ["SystemFillColorSuccessBrush"] = (Color.FromArgb(0xFF, 0x0F, 0x7B, 0x0F), Color.FromArgb(0xFF, 0x6C, 0xCB, 0x5F)),
         ["SystemFillColorCautionBrush"] = (Color.FromArgb(0xFF, 0x9D, 0x5D, 0x00), Color.FromArgb(0xFF, 0xFC, 0xE1, 0x00)),
         ["SystemFillColorCriticalBackgroundBrush"] = (Color.FromArgb(0xFF, 0xFD, 0xE7, 0xE9), Color.FromArgb(0xFF, 0x44, 0x27, 0x26)),
+        // B1i follow-up (2026-10-27, user preference): "Of which paid work" column, light green on dark, readable green on light.
+        ["PaidWorkBrush"] = (Color.FromArgb(0xFF, 0x1F, 0x7A, 0x3A), Color.FromArgb(0xFF, 0xA3, 0xE6, 0xA1)),
         ["TextOnAccentFillColorPrimaryBrush"] = (Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF), Color.FromArgb(0xFF, 0, 0, 0)),
     };
 
