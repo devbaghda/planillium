@@ -137,12 +137,11 @@ Reporting summarizes progress and highlights where effort was spent. This helps 
 
 Reports cover the current calendar period: the weekly view runs from this Monday through Sunday, the monthly view spans this calendar month, and the yearly view spans this year — not a rolling look-back over the last several days.
 
-The Day/Week/Month/Year selector governs everything above the diary: the score card, the summary
-table, top distractions, time by app, and the insights. The score card reads "SCORE EARNED —
-THIS WEEK" (or whichever period you've picked) and shows the points that period's activity
+The Day/Week/Month/Year selector governs everything above the diary: the summary
+table, top distractions, time by app, and the insights. The table's Score column shows the points that period's activity
 added up to — which is not the same as the BALANCE in the sidebar, since that is a running total
-across all time and also subtracts anything you've spent on entertainment time. Underneath it, a two-figure row shows the period's INCOME LOST OR GAINED, based on the potential monthly
-income you set in Settings, and beside it the part of that which came from paid work (already inside the first figure, not added to it). Finishing plan tasks earns money back: on a day you're counted as losing
+across all time and also subtracts anything you've spent on entertainment time. The table's last two columns, INCOME LOST/GAINED and OF WHICH PAID WORK, show the money side: income lost or gained is based on the potential monthly
+income you set in Settings, and the paid-work column is the part of it that came from paid work (already inside the first figure, not added to it). Each row shows its own day, week or month; the Total row shows the figure for the whole period. Finishing plan tasks earns money back: on a day you're counted as losing
 income, the share of that day's planned tasks you completed (3 of 4 = 75%) is credited against it.
 Top Distractions shows the same per-hour value on each row: that app or
 site's hours and its EUR cost, in two aligned columns. The diary section at the
@@ -150,11 +149,11 @@ bottom is separate and always works one day at a time. Payable tags (Studioshoo 
 
 The summary table carries the same columns on every period view: tasks done, one column for each
 of the five categories your time is sorted into (on-plan, off-plan, neutral, paid and idle), that
-row's own Total, and its Score. The Total is all five categories added together — so it is all the
+row's own Total, its Score, and the two money columns (income lost/gained and of which paid work). The Total is all five categories added together — so it is all the
 time tracked in that day or period, not just the productive-versus-distracted pair; neutral time
 (anything that is neither) is usually the largest share of it. The table then ends with a Total row
 summing every column, including the score, so it reads in both directions without adding anything
-up by hand. That score total is the same figure as the score card above the table, by construction.
+up by hand. The money totals are the period's own figures; a row's cents can differ from the Total by one cent because each row is rounded separately.
 Days where every plan is off contribute no time to any of it, matching how they're already excluded
 from the rest of Reports, but a task you did complete on a day off still earns its score.
 

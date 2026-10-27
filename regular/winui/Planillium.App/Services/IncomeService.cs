@@ -176,6 +176,65 @@ public sealed class IncomeService : IDisposable
                + PaidEarnings(periodStart, today).Sum(e => e.Eur);
     }
 
+    /// <summary>The figures <see cref="SumForPeriod"/> and <see cref="PaidEarnings"/> add up, split by day
+    /// (B1i, 2026-10-27): for each date <paramref name="from"/>..today, Income = that day's ledger delta
+    /// (today: the live preview) + its plan-completion credit + its paid-work earnings, and Paid = the paid-work
+    /// earnings alone. Same ingredients as SumForPeriod, just not yet added across days, so the days of a period
+    /// sum to that period's figure (up to floating-point rounding). Dates before <see cref="StartDate"/> carry 0.</summary>
+    public Dictionary<DateOnly, (double Income, double Paid)> DailyFigures(ScoreService score, DateOnly from)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var yesterday = today.AddDays(-1);
+        var result = new Dictionary<DateOnly, (double Income, double Paid)>();
+        void Add(DateOnly d, double income, double paid)
+        {
+            result.TryGetValue(d, out var cur);
+            result[d] = (cur.Income + income, cur.Paid + paid);
+        }
+        if (from < StartDate) from = StartDate;
+        if (from > today) return result;
+
+        var unemployedDays = new HashSet<DateOnly>();
+        using (var cmd = _db.CreateCommand())
+        {
+            cmd.CommandText = "SELECT date, delta_eur, employed FROM income_ledger WHERE date >= $from AND date <= $to";
+            cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
+            cmd.Parameters.AddWithValue("$to", yesterday.ToIsoDate());
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var d = DateOnly.Parse(r.GetString(0));
+                Add(d, r.GetDouble(1), 0);
+                if (r.GetInt32(2) == 0) unemployedDays.Add(d);
+            }
+        }
+        Add(today, TodayPreview(), 0);
+        if (!ConfigService.IsEmployed()) unemployedDays.Add(today);
+
+        foreach (var d in unemployedDays)
+        {
+            var (total, done) = score.DayTaskCounts(d);
+            if (total > 0) Add(d, DailyRate(d) * done / total, 0);
+        }
+
+        foreach (var tag in PaidTags.All())
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT date, COALESCE(SUM(duration_min), 0) FROM time_diary " +
+                              "WHERE tag=$t AND date >= $from AND date <= $to GROUP BY date";
+            cmd.Parameters.AddWithValue("$t", tag.Value);
+            cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
+            cmd.Parameters.AddWithValue("$to", today.ToIsoDate());
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var eur = r.GetInt32(1) / 60.0 * tag.HourlyEur;
+                if (r.GetInt32(1) > 0) Add(DateOnly.Parse(r.GetString(0)), eur, eur);
+            }
+        }
+        return result;
+    }
+
     /// <summary>One payable tag's share of a period: diary minutes carrying that tag × its hourly value.</summary>
     public sealed record PaidEarning(PaidTag Tag, int Minutes)
     {

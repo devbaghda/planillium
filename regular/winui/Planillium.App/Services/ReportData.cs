@@ -47,7 +47,10 @@ public static class ReportData
         public int OffMin => Minutes.Off;
     }
 
-    public sealed record BucketStat(string Label, CategoryMinutes Minutes, int Score, int Done, int Total)
+    /// <summary>Income/Paid (B1i): the bucket's lost/gained income and its paid-work part, EUR, folded from
+    /// the per-day figures when the caller supplies them; 0 otherwise.</summary>
+    public sealed record BucketStat(string Label, CategoryMinutes Minutes, int Score, int Done, int Total,
+        double Income = 0, double Paid = 0)
     {
         public int OnMin => Minutes.On;
         public int OffMin => Minutes.Off;
@@ -134,7 +137,8 @@ public static class ReportData
     /// queries (month-as-weeks vs year-as-months) living in one 82-line method with a
     /// period-check branch was exactly the "two unrelated code paths in one function"
     /// shape the code-quality checklist flags (audit finding #5).</summary>
-    public static List<BucketStat> MonthBuckets(SqliteConnection conn, ScoreService score)
+    public static List<BucketStat> MonthBuckets(SqliteConnection conn, ScoreService score,
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid)>? daily = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var start = PeriodStart(ReportPeriod.Month, today);
@@ -147,14 +151,15 @@ public static class ReportData
             },
             // Every week of the month gets a row, even one with no activity, so the month's
             // shape stays visible.
-            keepEmpty: true);
+            keepEmpty: true, daily);
     }
 
     /// <summary>Folds <see cref="DailyRows"/> into labelled buckets — the one implementation
     /// behind both bucket tables, which were near-identical apart from how a date maps to a
     /// bucket and how that bucket is labelled.</summary>
     private static List<BucketStat> Bucket(SqliteConnection conn, ScoreService score, DateOnly from,
-        Func<DateOnly, string> keyOf, Func<string, string> labelOf, bool keepEmpty)
+        Func<DateOnly, string> keyOf, Func<string, string> labelOf, bool keepEmpty,
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid)>? daily = null)
     {
         var buckets = new SortedDictionary<string, BucketStat>();
         foreach (var r in DailyRows(conn, score, from))
@@ -162,19 +167,24 @@ public static class ReportData
             var key = keyOf(r.Date);
             var b = buckets.TryGetValue(key, out var cur)
                 ? cur : new BucketStat(labelOf(key), CategoryMinutes.Zero, 0, 0, 0);
+            var inc = daily != null && daily.TryGetValue(r.Date, out var f) ? f : (Income: 0.0, Paid: 0.0);
             buckets[key] = b with
             {
                 Minutes = b.Minutes.Plus(r.Minutes),
                 Score = b.Score + r.Score,
                 Done = b.Done + r.Done,
                 Total = b.Total + r.Total,
+                Income = b.Income + inc.Income,
+                Paid = b.Paid + inc.Paid,
             };
         }
         // The Year view drops months with nothing in them at all: a fresh install would
         // otherwise render eleven empty rows, which reads as broken rather than as simply
         // empty. The Month view keeps its empty weeks, so the month's shape stays visible.
+        // B1i: a month carrying an income figure is not "nothing" - dropping it would make the
+        // rows stop adding up to the Total row.
         return [.. buckets.Values.Where(b => keepEmpty ||
-            b.Minutes.TotalMin > 0 || b.Score != 0 || b.Total > 0)];
+            b.Minutes.TotalMin > 0 || b.Score != 0 || b.Total > 0 || b.Income != 0 || b.Paid != 0)];
     }
 
     /// <summary>Calendar-month buckets for this year, January through the current
@@ -185,7 +195,8 @@ public static class ReportData
     /// the year come from diary_daily_rollup instead — the two never overlap (a date
     /// only gets a rollup row once its raw rows are pruned), so summing both sources
     /// is safe.</summary>
-    public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score)
+    public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score,
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid)>? daily = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         // Per-date (not per-month) so a day-off date is handled before it's folded into its
@@ -193,7 +204,7 @@ public static class ReportData
         // once inside DailyRows rather than repeated here.
         return Bucket(conn, score, PeriodStart(ReportPeriod.Year, today),
             d => d.ToString("yyyy-MM", CultureInfo.InvariantCulture),
-            MonthLabel, keepEmpty: false);
+            MonthLabel, keepEmpty: false, daily);
     }
 
     /// <summary>Everything the score card and the insights panel need, aggregated over the

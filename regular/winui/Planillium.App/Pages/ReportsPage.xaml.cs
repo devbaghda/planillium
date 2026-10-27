@@ -146,10 +146,12 @@ public sealed partial class ReportsPage : Page
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
             using var income = new IncomeService(db);
             var incomeSum = income.SumForPeriod(_period, score);
-            var earnings = income.PaidEarningsForPeriod(_period);
-
-            Body.Children.Add(Card(ScoreCard(totals, periodName)));
-            Body.Children.Add(Card(IncomeStrip(incomeSum, earnings.Sum(e => e.Eur), periodName)));
+            var earned = income.PaidEarningsForPeriod(_period).Sum(e => e.Eur);
+            // B1i (2026-10-27): the Score card and the income card row are gone; the two EUR figures
+            // are columns of the table below, one value per row, folded from the same per-day figures.
+            // The Total row shows the period figures themselves (what the cards used to show).
+            var daily = income.DailyFigures(score, ReportData.PeriodStart(_period, today));
+            var incomeTotals = (Income: incomeSum, Paid: earned);
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -157,11 +159,11 @@ public sealed partial class ReportsPage : Page
             // 2026-08-05) and the card would otherwise clip the last of them off in silence on a
             // narrow window — see Scrollable's own comment for the measurement.
             if (_period is ReportPeriod.Day or ReportPeriod.Week)
-                Body.Children.Add(Card(Scrollable(DayTable(weekStats))));
+                Body.Children.Add(Card(Scrollable(DayTable(weekStats, daily, incomeTotals))));
             else
             {
                 var buckets = _period == ReportPeriod.Month
-                    ? ReportData.MonthBuckets(db.Conn, score) : ReportData.YearBuckets(db.Conn, score);
+                    ? ReportData.MonthBuckets(db.Conn, score, daily) : ReportData.YearBuckets(db.Conn, score, daily);
                 // Month always has at least this-week's row seeded in,
                 // but Year only gets rows for months that actually have
                 // data — a brand-new install (or a period with zero
@@ -169,7 +171,7 @@ public sealed partial class ReportsPage : Page
                 // which reads as broken rather than simply empty.
                 Body.Children.Add(buckets.Count == 0
                     ? Dim("No activity logged yet.")
-                    : Card(Scrollable(BucketTable(buckets))));
+                    : Card(Scrollable(BucketTable(buckets, incomeTotals))));
             }
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────
@@ -207,65 +209,6 @@ public sealed partial class ReportsPage : Page
                 TextWrapping = TextWrapping.Wrap,
             });
         }
-    }
-
-    /// <summary>Points earned over the selected period. "EARNED" is in the caption on purpose:
-    /// this is what the period's activity added up to, which is not the sidebar's BALANCE — that
-    /// is a running total across all time and also nets off entertainment purchases. Two similar
-    /// numbers a glance apart is exactly the confusion this page has already had reported once
-    /// (the 2026-07-23 drift-days report).</summary>
-    private static StackPanel ScoreCard(ReportData.PeriodTotals totals, string periodName)
-    {
-        var card = new StackPanel { Spacing = 2 };
-        card.Children.Add(Caption($"SCORE EARNED — {periodName}"));
-        card.Children.Add(new TextBlock
-        {
-            Text = totals.Score.ToString(),
-            FontSize = 44,
-            FontWeight = FontWeights.Bold,
-            Foreground = ScoreBrush(totals.Score),
-        });
-        // Day-offs joined this line 2026-08-13, folded into the existing period-scoped card
-        // rather than a separate one, after the first attempt (a standalone always-three-numbers
-        // card) was corrected: "everything besides the diary should update based on the chosen
-        // timescale... the same about the day-offs statistics", "we do not need an additional
-        // card for it". Manually marked via Schedule's "Day off" button only — never a plan's
-        // recurring weekday rest days (see ScoreService.ManuallyMarkedDaysOff).
-        var dayOffLabel = totals.DayOffs == 1 ? "1 day off marked" : $"{totals.DayOffs} days off marked";
-        card.Children.Add(Dim($"{totals.Done}/{totals.Total} tasks · " +
-                              $"{ReportData.FmtHours(totals.OnMin)} on-plan · " +
-                              $"{ReportData.FmtHours(totals.OffMin)} off-plan · {dayOffLabel}"));
-        return card;
-    }
-
-    /// <summary>The two money figures for the period side by side, in EUR (B1, 2026-10-23 request):
-    /// the lost/gained-income figure and the part of it earned from
-    /// paid work. Paid work is already inside the first figure, so the note says so — the two are
-    /// not meant to be added. B1e (2026-10-27): the two larger duplicate cards that used to follow
-    /// were removed; this strip is the only place these figures show.</summary>
-    private static Grid IncomeStrip(double sum, double earned, string periodName)
-    {
-        var grid = new Grid { ColumnSpacing = 24 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        StackPanel Col(string caption, double v, string note)
-        {
-            var p = new StackPanel { Spacing = 2 };
-            p.Children.Add(Caption(caption));
-            p.Children.Add(new TextBlock
-            {
-                Text = MainWindow.FormatEur(v), FontSize = 28, FontWeight = FontWeights.Bold,
-                Foreground = IncomeBrush(v),
-            });
-            p.Children.Add(Dim(note));
-            return p;
-        }
-        var left = Col($"INCOME LOST OR GAINED — {periodName}", sum, "Includes paid work.");
-        var right = Col($"OF WHICH PAID WORK — {periodName}", earned, "Part of the figure on the left, not added to it.");
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(left);
-        grid.Children.Add(right);
-        return grid;
     }
 
     /// <summary>Rule-of-thumb suggestions, over the same period as everything else above the
