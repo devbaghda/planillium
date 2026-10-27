@@ -1,52 +1,30 @@
-VERDICT: PASS WITH CAVEATS - workflow=agentic feature=B1g money-box keys defectsQa=0
+VERDICT: PASS - workflow=agentic feature=B1e defectsQa=0
 
-Build: worktree `D:\CLAUDE\Planillium\.claude\worktrees\qa-b1g` = HEAD 81c1535 + coder's uncommitted MoneyBox.cs, MoneyFormat.cs, SettingsPage.xaml.cs. Debug `-warnaserror --no-incremental`: 0 errors (warnings are errors). Tests not re-run (precheck 362/362 on coder tree, brief). Run: scratch MENTOR_ROOT (scratchpad\qa_b1g\root, empty DB, fixture salary 2925, Studioshoo 1600), MENTOR_INSTANCE_SUFFIX=verify, AI URL to dead local port. Real SendInput clicks and keys. Script `qa/b1g_run.py`, output `qa/b1g_run.out`, screenshot `qa/b1g_end.png`. Time used: about 8 of 20 min.
-Caveat: line 8 only partly run (full B1-B1f A/B/C matrix not run, by PM scope).
-
-## Acceptance (SAL = Previous salary, TAG = Studioshoo box)
+Build: HEAD 0148917, worktree .claude/worktrees/qa-b1e-ag (detached), Debug, scratch MENTOR_ROOT, MENTOR_INSTANCE_SUFFIX=verify, AI base URL stub dead-port. No real data, own PID killed. Time used ~8 of 15 min.
 
 | Line | Result | Evidence |
 |---|---|---|
-| 1 Type 2500 + Esc | PASS (SAL, TAG) | box 2 925 / 1 600, focus on Nav (no money box), stored unchanged, status "Change discarded; ..." |
-| 2 Empty + Esc | PASS (SAL, TAG) | same as 1 |
-| 3 abc + Esc; spaces + Esc | PASS (SAL, TAG) | same as 1 |
-| 4 -5 + Enter | PASS (SAL, TAG) | box -5, focus still in the box, "Amounts can't be negative." under box and "Not saved: ..." in status, stored unchanged |
-| 5 -5 + Esc (direct, and after the refused Enter) | PASS (SAL, TAG) | box shows saved amount, focus Nav, negative message gone, stored unchanged |
-| 6 12 digits, exits Enter / Esc / Tab / click blank / click other box | PASS (SAL, TAG, 5 exits each) | while typed the box shows 999 999 999 999 and "Amount is too large (9 digits at most)."; after every exit the box shows the saved amount, stored unchanged; status "Not saved: Amount is too large ... saved amount is back" (Esc: "Change discarded"). Enter/Esc/click blank park focus on Nav; Tab goes to next control (Employed toggle / Remove), click other box goes to that box |
-| 7 valid + Enter saves and parks; Esc in add line clears and leaves | PASS | SAL 3025 and TAG 1700 saved, box shows them, focus Nav; add line Esc from name and from amount field: both fields empty, focus Nav, no tag added |
-| 8 earlier lines / build / standing checks | PASS WITH CAVEATS | build clean; standing checks below all PASS; full B1-B1f regression not run (scope) |
+| 1 Four periods: Score card, then "Income lost or gained" + "Of which paid work" row; no Unearned income / Earnings card | PASS | UIA text dump + PrintWindow screenshot for Day, Week, Month, Year (qa/b1e_run.out, qa/b1e_Day|Week|Month|Year.png). Score caption y=251, strip y=377 in all four; no text containing UNEARNED INCOME, EARNINGS FROM PAID WORK, EXTRA INCOME or NO INCOME LOST |
+| 2 Kept figures unchanged in value and wording | PASS (limited) | Wording seen: "INCOME LOST OR GAINED - <PERIOD>", "Total for the period. Paid work is already inside this figure.", "OF WHICH PAID WORK - <PERIOD>", "No time tagged with a payable tag in this period."; diff does not touch IncomeSummaryStrip; the only edit is dropping the unused credit variable (`_`). Values checked on an empty DB only (e.g. Day -EUR94,35, paid EUR0,00); no before/after comparison with seeded data run |
+| 3 No gap or leftover heading; table follows directly | PASS | Strip bottom y=450, period heading (TODAY/THIS WEEK/...) y=487 in all four, the same spacing as the other sections; Day screenshot shows the strip followed by the heading and table, no empty block |
+| 4 Sibling check | PASS | grep over all .cs/.xaml (excluding obj): no IncomeCard / EarningsCard left. Only remaining "UNEARNED INCOME" is the sidebar label `IncomeLabel` in MainWindow.xaml (not a Reports card, not in the change's scope; sidebar shows "LOST INCOME" at runtime) |
+| 5 Strict build, tests, standing checks | PASS | `dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental`: 0 warnings, 0 errors (56 s). `dotnet test`: 362/362 passed |
 
-## Standing input-box checks (app-qa-checks 5), scope from diff
+Extra cases (qa-extra.md): not run (brief scoped to acceptance 1-4 plus build/test; no input-box matrix, no input boxes touched by the diff).
 
-| Check | Result | Evidence |
-|---|---|---|
-| empty + Tab (SAL, TAG) | PASS | saved amount back, focus to next control, "Empty amount not saved" |
-| abc + click blank (SAL, TAG) | PASS | saved amount back, focus Nav |
-| empty + Enter, abc + Enter (B1d Enter) (SAL, TAG) | PASS | saved amount back, focus Nav, stored unchanged |
-| -5 + Tab, -5 + click blank (SAL, TAG) | PASS | old rule holds: -5 kept with message, not saved |
-| Add line: refused mouse Add (empty amount) then Esc | PASS | hint "Monthly net needs a number." shown, then line cleared, hint gone, no tag |
-| Add line: Enter adds and parks | PASS | tag zed 500 added, focus Nav |
+Defects: none.
 
-44/44 checks PASS, one trial each (key-handling logic, not timing-dependent).
+Security: no new input, network or storage surface; change only removes UI cards and two private helper methods. No real data touched.
 
-## Defects
-None.
+Untestable: none.
 
-## Security
-No real data touched (scratch root asserted inside scratchpad); no key or network call (AI URL to 127.0.0.1:9); only own PID killed. The live user instance (PID 17404) was left alone. Diff adds no file, network or secret handling.
+Extra observations:
+- The "Includes X earned back by completing plan tasks" and "per off-plan hour" lines lived only inside the removed card; they are gone from the Reports page by design of the request. Not a defect, noted in case the user wanted them elsewhere.
+- Week and Month views were taken with an empty DB, so tables show zero rows.
 
-## Untestable
-None. Not run by scope: full b1f_regress A/B/C matrix.
+New cases:
+- Reports, seeded diary with paid-tag time, all four periods: kept strip values equal pre-change values (before/after comparison).
 
-## Extra observations
-- First launch aborted after 3 checks: another app (non-ASCII edit window, not Planillium) took the foreground; the guard refused the click. Script now re-fronts the app before each box entry; the whole run was repeated clean.
-- "Nowhere" focus is reported by UIA as the Nav element, as in earlier rounds.
-- Esc in an unedited box (no change) not separately checked; code shows no status message in that case.
-
-## New cases
-- Saved money box, type 999999999999: message "Amount is too large" visible while typed; after Enter/Esc/Tab/click blank/click other box the box shows the saved amount, nothing saved.
-- Saved money box, type -5, Enter (stays with message), then Esc: box shows saved amount, cursor leaves, negative message gone.
-
-## Lessons
-- During a run another app can take the foreground: re-front the app before each case, not only at launch; the fg guard turns it into an abort, not a stray keystroke (good), but costs a re-run.
-- One script, one launch, both boxes x all exits fit in under 3 min (~3.5 s per check): a scoped matrix from the diff is cheap enough to always cover every exit.
+Lessons:
+- Reports page can be verified in ~1 min by one launch + UIA text dump per period; first-text-y comparisons (score, strip, section heading) prove order and gap without a screenshot read.
+- qa/b1e_run.py is reusable for any Reports layout change.

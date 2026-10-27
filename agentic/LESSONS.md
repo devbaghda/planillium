@@ -39,3 +39,6 @@
 - Fix Esc/Enter/Tab/click behaviour for each (exit x input kind) row before coding; a silent input cap is an unmessaged refusal and the cut value can get saved.
 - Leave/revert logic reads the box's current text, not state cached from the last change event (WinUI updates it late).
 - A page-level key handler that swallows a key must pass it through when the focused control has its own rule for it.
+- Reports layout check: one launch + UIA text dump per period (~1 min); compare y of score caption, strip and section heading for order and gap (qa/b1e_run.py reusable).
+- Card captions are built in C# in upper case with the period name: search case-insensitively, read the builder.
+- After removing a card, discard unused tuple values with `_` (keep the calculation, stay /warnaserror clean); grep all callers before deleting a shared helper.

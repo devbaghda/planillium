@@ -1,3 +1,9 @@
+# B1e Reports cleanup -- QA plan (start 15:42, limit 15 min)
+- P strict build in worktree qa-b1e-ag + dotnet test: 1 run, ~2.5 min (earlier rounds: 1m35 build + test).
+- C1 qa/b1e_run.py, one launch (MENTOR_PAGE=reports, scratch root, suffix verify): for Day/Week/Month/Year select period via UIA, dump Text elements with rects, screenshot; check order Score -> Income lost or gained / Of which paid work -> table heading, no UNEARNED INCOME / EARNINGS FROM PAID WORK text, gap between strip and table heading. 1 trial per period (deterministic render); ~4 s/period + 10 s launch = ~1 min.
+- C2 sibling grep (IncomeCard/EarningsCard/captions in all pages) ~0.5 min.
+- Report ~3 min. Total ~8 min.
+
 # B1g money-box keys -- QA plan (start 10:32, limit 20 min hard, ends 10:52)
 - P build Debug in worktree qa-b1g (HEAD + 3 copied files): 1 run, ~2 min (measured earlier rounds).
 - C1 qa/b1g_run.py, one launch: salary + Studioshoo box: L1-L3 Esc (4 inputs), L4 -5 Enter, L5 -5 Esc (after Enter and direct), L6 12 digits x 5 exits (Enter/Esc/Tab/click blank/click other box), standing empty/abc/-5 x Tab/click/Enter, L7 valid Enter; then add-line Esc (name, amount), refused mouse Add+Esc, Enter in add line. 1 trial each (key logic, not timing-dependent); ~3 s/step x ~60 steps + 30 s launch = ~4 min.
@@ -15,3 +21,4 @@ case f (B1-B1d regression) NOT RUN: time limit reached (20 min)
 20:40:54 case f part C (b1f_regress.py C, standing input-box matrix, 144 checks planned) | lines C x79 reached (SAL 36, TAG 36, NewPaidTagName 7) | 72 PASS / 7 FAIL (all 7 SALARY FOCUS after Esc or Enter in Previous salary box), timed out at 540 s before end, no SUMMARY line; 65 of 144 not run | minutes elapsed 12.5 of 14 (start 20:28:23), STOPPED at limit
 10:35 P build Debug -warnaserror worktree: 0 errors, 1 run (needed for the binary), 1m35s; elapsed 3 of 20
 10:38 C1 b1g_run.py: L1-L7 both boxes + standing exits + add-line/B1d regression, 44 checks, 1 trial each (key logic, not timing-dependent; first launch aborted by a foreground steal from another app, re-run whole script 2m43s); 44/44 PASS; elapsed 7 of 20. C2 not needed.
+15:52 case P+C1+C2 (build, tests, Reports 4 periods, sibling grep) lines 1-5; 1 trial each (deterministic render); 8/8 UI checks PASS, build 0 warn, 362/362; ~8 of 15 min
