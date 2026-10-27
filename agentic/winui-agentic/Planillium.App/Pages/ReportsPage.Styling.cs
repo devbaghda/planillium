@@ -63,6 +63,13 @@ public sealed partial class ReportsPage
             sum >= 0 ? "SystemFillColorSuccessBrush"
             : "SystemFillColorCriticalBrush"];
 
+    /// <summary>Brush key of the "Of which paid work" column colour (light green, any value incl. zero).
+    /// Theme-aware through <see cref="ThemeSync"/> (#7BD88F on dark, #1E8E3E on light), the same way
+    /// every other brush read from Application resources follows the app's theme.</summary>
+    private const string PaidWorkBrushKey = "PaidWorkTextBrush";
+
+    private static Brush PaidWorkBrush() => (Brush)Application.Current.Resources[PaidWorkBrushKey];
+
     /// <summary>Thin alias kept so every call site in this file doesn't need renaming —
     /// see CategoryStyle.BrushKey (Services/CategoryStyle.cs) for the actual single
     /// source of truth, now shared with MainWindow.Tracker's tray pill too.</summary>

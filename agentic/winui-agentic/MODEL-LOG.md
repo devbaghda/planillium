@@ -47,3 +47,10 @@
 - coder outcome: ok (precheck green 0 warnings, 362/362; ReportsPage.xaml.cs, ReportsPage.Income.cs; docs)
 - qa: sonnet -- visual/UIA read of 4 periods + build/tests, no focus class; scope fixed from diff, 15 min budget.
 - qa outcome: ok (PASS, 0 defects, ~8 of 15 min; values checked on empty DB only)
+2026-10-27 B1i lead: sonnet -- explicit spec, regular side showed no blocker; outcome: ok
+## B1i reports income columns + A2 pie legend 2026-10-27
+- designer: not launched -- columns appended to existing tables, legend/colour change is bounded; planner specs it.
+- planner: opus -- business-rule caution (per-day income must sum to period figure incl. today/credit/paid), A2 wording ambiguous (what "legend chevrons" means).
+- planner outcome: ok (SPEC.md; per-day income feasible, no stop)
+- coder: sonnet -- SPEC is explicit (files, rounding helper, colour index fix); not a timing/focus class. Gets lead rulings on SPEC open questions + paid-column light-green addendum.
+- planner outcome: ok; coder outcome: ok (precheck green 0 warnings, 362/362; paid-column light green addendum included). QA deferred by user ruling.

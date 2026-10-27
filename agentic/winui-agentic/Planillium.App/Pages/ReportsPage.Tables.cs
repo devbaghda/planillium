@@ -10,7 +10,11 @@ namespace Planillium.App.Pages;
 // The day/bucket summary tables — see ReportsPage.xaml.cs for the file split.
 public sealed partial class ReportsPage
 {
-    private static Grid DayTable(List<ReportData.DayStat> weekStats)
+    /// <summary>Money cell text and colour for whole cents: integer cents, so a cell is never "-€0.00".</summary>
+    private static string CentsText(long cents) => MainWindow.FormatEur(cents / 100.0);
+
+    private static Grid DayTable(List<ReportData.DayStat> weekStats,
+        Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, long paidTotalCents)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var rows = _period == ReportPeriod.Day
@@ -23,17 +27,24 @@ public sealed partial class ReportsPage
         // bar rows make the same one with labels as short as "shower".
         //
         // Columns: Day, Tasks, then one per category (2026-08-05 request), then the row's own
-        // Total and Score. Score stays last, where it has always been.
-        var columns = 4 + CategoryColumns.Length;
+        // Total and Score, then the two EUR columns (B1i).
+        var columns = 6 + CategoryColumns.Length;
+        var (totalCol, scoreCol, netCol, paidCol) = MoneyColumns();
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
             { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
         AddHeaderRow(grid, ["Day", "Tasks",
-            .. CategoryColumns.Select(c => c.Label), "Total", "Score"]);
+            .. CategoryColumns.Select(c => c.Label), "Total", "Score",
+            "Income lost/gained", "Of which paid work"]);
 
-        foreach (var s in rows)
+        // Row cents add up exactly to the totals shown (running-total rounding, see EurCents).
+        var netRows = EurCents.SplitRows([.. rows.Select(s => daily[s.Date].Net)], netTotalCents);
+        var paidRows = EurCents.SplitRows([.. rows.Select(s => daily[s.Date].Paid)], paidTotalCents);
+
+        for (var ri = 0; ri < rows.Count; ri++)
         {
+            var s = rows[ri];
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition());
             var isToday = s.Date == today;
@@ -49,6 +60,8 @@ public sealed partial class ReportsPage
                 .. CategoryColumns.Select(c => ReportData.FmtHours(s.Minutes.Of(c.Category))),
                 ReportData.FmtHours(s.Minutes.TotalMin),
                 s.Score.ToString(),
+                CentsText(netRows[ri]),
+                CentsText(paidRows[ri]),
             ];
             for (var c = 0; c < cells.Length; c++)
             {
@@ -58,8 +71,12 @@ public sealed partial class ReportsPage
                     FontWeight = isToday ? FontWeights.SemiBold : FontWeights.Normal,
                     TextWrapping = c == 0 ? TextWrapping.Wrap : TextWrapping.NoWrap,
                 };
-                if (c == cells.Length - 1)
+                if (c == scoreCol)
                     tb.Foreground = ScoreBrush(s.Score);
+                else if (c == netCol)
+                    tb.Foreground = IncomeBrush(netRows[ri] / 100.0);
+                else if (c == paidCol)
+                    tb.Foreground = PaidWorkBrush();
                 else if (!isToday)
                     tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
@@ -71,22 +88,31 @@ public sealed partial class ReportsPage
         // extended to all five categories 2026-08-05). Sums the values as
         // displayed, which keeps it consistent with business rule 10 for free: a day where
         // every plan is off already contributes 0/0 to those two cells, so it can't inflate
-        // the total here while being excluded everywhere else in Reports. Skipped for the
-        // single-row Day period, where a "total" of one row is just noise.
+        // the total here while being excluded everywhere else in Reports. Shown for a
+        // single-row table too (B1i: every period has a Total row carrying the EUR figures).
         // Tasks and Score are summed too (2026-08-05 request: "per row summary should contain
         // score summary"). Both were deliberately blank before, on the reasoning that a summed
         // "12/14" reads as a ratio it isn't and that a period score sitting one column from the
         // sidebar's running balance invites confusing the two. The user overrode that, and the
         // score total is the more useful figure — it's the same number the card above shows,
         // which is now guaranteed rather than hoped for: both fold ReportData.DailyRows.
-        if (rows.Count > 1)
-            AddTotalsRow(grid, columns,
-                [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1),
-                 .. CategoryColumns.Select((c, i) =>
-                     (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2)),
-                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), columns - 2),
-                 (rows.Sum(s => s.Score).ToString(), columns - 1)]);
+        AddTotalsRow(grid, columns,
+            [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1, (Brush?)null),
+             .. CategoryColumns.Select((c, i) =>
+                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
+             (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), totalCol, (Brush?)null),
+             (rows.Sum(s => s.Score).ToString(), scoreCol, (Brush?)null),
+             (CentsText(netTotalCents), netCol, IncomeBrush(netTotalCents / 100.0)),
+             (CentsText(paidTotalCents), paidCol, PaidWorkBrush())]);
         return grid;
+    }
+
+    /// <summary>Column indices after the category columns, named once for both tables:
+    /// row Total, Score, Income lost/gained, Of which paid work.</summary>
+    private static (int Total, int Score, int Net, int Paid) MoneyColumns()
+    {
+        var c = CategoryColumns.Length;
+        return (2 + c, 3 + c, 4 + c, 5 + c);
     }
 
     /// <summary>The category columns both summary tables carry — the shared
@@ -100,7 +126,8 @@ public sealed partial class ReportsPage
     /// "Total" label and whichever column totals the caller supplies (by column index — the
     /// two tables have different column layouts, and only some columns are summable at all).
     /// One implementation so the two can't drift apart in weight, spacing or label.</summary>
-    private static void AddTotalsRow(Grid grid, int columnCount, params (string Text, int Column)[] cells)
+    private static void AddTotalsRow(Grid grid, int columnCount,
+        params (string Text, int Column, Brush? Foreground)[] cells)
     {
         var sepRow = grid.RowDefinitions.Count;
         grid.RowDefinitions.Add(new RowDefinition());
@@ -117,7 +144,7 @@ public sealed partial class ReportsPage
 
         var totalRow = grid.RowDefinitions.Count;
         grid.RowDefinitions.Add(new RowDefinition());
-        void Cell(string text, int column)
+        void Cell(string text, int column, Brush? foreground)
         {
             var tb = new TextBlock
             {
@@ -125,14 +152,16 @@ public sealed partial class ReportsPage
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.NoWrap,
             };
+            if (foreground is not null) tb.Foreground = foreground;
             Grid.SetColumn(tb, column); Grid.SetRow(tb, totalRow);
             grid.Children.Add(tb);
         }
-        Cell("Total", 0);
-        foreach (var (text, column) in cells) Cell(text, column);
+        Cell("Total", 0, null);
+        foreach (var (text, column, foreground) in cells) Cell(text, column, foreground);
     }
 
-    private static Grid BucketTable(List<ReportData.BucketStat> buckets)
+    private static Grid BucketTable(List<ReportData.BucketStat> buckets,
+        Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, long paidTotalCents)
     {
         // Same shared alignment grid as DayTable above — which also means switching Week↔Month
         // no longer shifts the figures sideways, since the two tables' first columns were 110
@@ -140,16 +169,23 @@ public sealed partial class ReportsPage
         // Tasks and Score columns as well as the categories (2026-08-05 request) — the Day/Week
         // table has carried both all along, and a Month or Year row that can't tell you what it
         // scored is the summary missing the one figure the whole app is built around.
-        var columns = 4 + CategoryColumns.Length;
+        var columns = 6 + CategoryColumns.Length;
+        var (totalCol, scoreCol, netCol, paidCol) = MoneyColumns();
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
             { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
         AddHeaderRow(grid, ["Period", "Tasks",
-            .. CategoryColumns.Select(c => c.Label), "Total", "Score"]);
+            .. CategoryColumns.Select(c => c.Label), "Total", "Score",
+            "Income lost/gained", "Of which paid work"]);
 
-        foreach (var b in buckets)
+        // EUR per row = the per-day figures over the bucket's dates; cents add up to the totals shown.
+        var netRows = EurCents.SplitRows([.. buckets.Select(b => RowNet(b, daily))], netTotalCents);
+        var paidRows = EurCents.SplitRows([.. buckets.Select(b => RowPaid(b, daily))], paidTotalCents);
+
+        for (var bi = 0; bi < buckets.Count; bi++)
         {
+            var b = buckets[bi];
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition());
             string[] cells =
@@ -159,6 +195,8 @@ public sealed partial class ReportsPage
                 .. CategoryColumns.Select(c => ReportData.FmtHours(b.Minutes.Of(c.Category))),
                 ReportData.FmtHours(b.Minutes.TotalMin),
                 b.Score.ToString(),
+                CentsText(netRows[bi]),
+                CentsText(paidRows[bi]),
             ];
             for (var c = 0; c < cells.Length; c++)
             {
@@ -167,8 +205,9 @@ public sealed partial class ReportsPage
                     Text = cells[c],
                     // Score keeps the same green/amber/red reading it has in the Day/Week table,
                     // so the one figure people actually look for is found the same way in both.
-                    Foreground = c == cells.Length - 1
-                        ? ScoreBrush(b.Score)
+                    Foreground = c == scoreCol ? ScoreBrush(b.Score)
+                        : c == netCol ? IncomeBrush(netRows[bi] / 100.0)
+                        : c == paidCol ? PaidWorkBrush()
                         : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 };
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
@@ -182,12 +221,31 @@ public sealed partial class ReportsPage
         // substitutes a "No activity logged yet" message instead).
         if (buckets.Count > 0)
             AddTotalsRow(grid, columns,
-                [($"{buckets.Sum(b => b.Done)}/{buckets.Sum(b => b.Total)}", 1),
+                [($"{buckets.Sum(b => b.Done)}/{buckets.Sum(b => b.Total)}", 1, (Brush?)null),
                  .. CategoryColumns.Select((c, i) =>
-                     (ReportData.FmtHours(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 2)),
-                 (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), columns - 2),
-                 (buckets.Sum(b => b.Score).ToString(), columns - 1)]);
+                     (ReportData.FmtHours(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
+                 (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), totalCol, (Brush?)null),
+                 (buckets.Sum(b => b.Score).ToString(), scoreCol, (Brush?)null),
+                 (CentsText(netTotalCents), netCol, IncomeBrush(netTotalCents / 100.0)),
+                 (CentsText(paidTotalCents), paidCol, PaidWorkBrush())]);
         return grid;
+    }
+
+    /// <summary>A bucket's income (paid work included): its dates' per-day figures added up.
+    /// Indexer lookup on purpose: a missing date throws into Render's catch instead of reading as 0.</summary>
+    private static double RowNet(ReportData.BucketStat b, Dictionary<DateOnly, (double Net, double Paid)> daily)
+    {
+        double sum = 0;
+        for (var d = b.From; d <= b.To; d = d.AddDays(1)) sum += daily[d].Net;
+        return sum;
+    }
+
+    /// <summary>A bucket's paid-work earnings: its dates' per-day paid figures added up.</summary>
+    private static double RowPaid(ReportData.BucketStat b, Dictionary<DateOnly, (double Net, double Paid)> daily)
+    {
+        double sum = 0;
+        for (var d = b.From; d <= b.To; d = d.AddDays(1)) sum += daily[d].Paid;
+        return sum;
     }
 
     private static void AddHeaderRow(Grid grid, params string[] headers)

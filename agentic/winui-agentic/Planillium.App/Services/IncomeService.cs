@@ -241,6 +241,67 @@ public sealed class IncomeService : IDisposable
         return (posted + todayPreview + credit + todayCredit + paid, credit + todayCredit);
     }
 
+    /// <summary>Per-day parts of <see cref="SumForPeriodWithCredit"/>'s Net (paid work included) and of
+    /// <see cref="PaidEarnings"/>, <paramref name="from"/>..today inclusive. Same terms as the period
+    /// figure, split by day, so the days add up to it (up to float addition order). Two grouped
+    /// reads instead of per-day range calls (Reports has a slow-load history).</summary>
+    public Dictionary<DateOnly, (double Net, double Paid)> DailyIncome(DateOnly from, ScoreService score)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var yesterday = today.AddDays(-1);
+
+        var posted = new Dictionary<DateOnly, double>();
+        if (from <= yesterday)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT date, delta_eur FROM income_ledger WHERE date >= $from AND date <= $to";
+            cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", inv));
+            cmd.Parameters.AddWithValue("$to", yesterday.ToString("yyyy-MM-dd", inv));
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                posted[DateOnly.ParseExact(r.GetString(0), "yyyy-MM-dd", inv)] = Convert.ToDouble(r.GetValue(1), inv);
+        }
+
+        // Minutes per (date, tag); the clamp to LedgerStart is the one PaidEarnings applies.
+        var minutes = new Dictionary<(DateOnly, string), int>();
+        var paidFrom = from < LedgerStart ? LedgerStart : from;
+        if (paidFrom <= today)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT date, tag, SUM(duration_min) FROM time_diary " +
+                              "WHERE date >= $from AND date <= $to GROUP BY date, tag";
+            cmd.Parameters.AddWithValue("$from", paidFrom.ToString("yyyy-MM-dd", inv));
+            cmd.Parameters.AddWithValue("$to", today.ToString("yyyy-MM-dd", inv));
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                if (r.IsDBNull(1)) continue;
+                minutes[(DateOnly.ParseExact(r.GetString(0), "yyyy-MM-dd", inv), r.GetString(1))] =
+                    Convert.ToInt32(r.GetValue(2), inv);
+            }
+        }
+
+        var tags = PaidTags.All();
+        var result = new Dictionary<DateOnly, (double Net, double Paid)>();
+        for (var d = from; d <= today; d = d.AddDays(1))
+        {
+            double paid = 0;
+            if (d >= LedgerStart)
+                foreach (var tag in tags)   // per entry, duplicates included, like PaidEarnings
+                    if (minutes.TryGetValue((d, tag.Value), out var m) && m > 0)
+                        paid += new PaidEarning(tag, m).Eur;
+
+            double net;
+            if (d < today)
+                net = (posted.TryGetValue(d, out var p) ? p : 0) + CreditRange(d, d, score);
+            else
+                net = TodayPreview() + TodayCredit(score);
+            result[d] = (net + paid, paid);
+        }
+        return result;
+    }
+
     /// <summary>Sum of posted income for a reporting period, plus today's live preview (backwards compatible).</summary>
     public double SumForPeriod(ReportPeriod period)
     {

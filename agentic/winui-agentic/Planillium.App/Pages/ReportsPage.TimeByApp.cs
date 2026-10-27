@@ -438,7 +438,7 @@ public sealed partial class ReportsPage
             row.IsTabStop = true;
             var chevron = new FontIcon
             {
-                Glyph = "",
+                Glyph = "",   // Segoe Fluent Icons ChevronRight; an escape, never a literal private-use char
                 FontSize = 12,
                 Margin = new Thickness(4, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -496,20 +496,32 @@ public sealed partial class ReportsPage
             "No AppUsage field for this diary category."),
     };
 
-    /// <summary>Fill for one pie slice: the hue stays the slice's dominant category (so the legend
-    /// still means something), but each further slice of the same category is stepped lighter so
-    /// neighbouring wedges are told apart. Slices not in the list (e.g. "(no detail)") get the base shade.</summary>
+    /// <summary>Fixed, theme-independent mid-tone palette for pie slices (A2, 2026-10-27): distinct
+    /// hues, none a pure red/green/yellow so a wedge is not read as off-plan/on-plan/idle.</summary>
+    private static readonly Windows.UI.Color[] SlicePalette =
+    [
+        Microsoft.UI.ColorHelper.FromArgb(255, 0x4E, 0x79, 0xA7),  // blue
+        Microsoft.UI.ColorHelper.FromArgb(255, 0xF2, 0x8E, 0x2B),  // orange
+        Microsoft.UI.ColorHelper.FromArgb(255, 0x76, 0xB7, 0xB2),  // teal
+        Microsoft.UI.ColorHelper.FromArgb(255, 0xB0, 0x7A, 0xA1),  // purple
+        Microsoft.UI.ColorHelper.FromArgb(255, 0xFF, 0x9D, 0xA7),  // pink
+        Microsoft.UI.ColorHelper.FromArgb(255, 0x9C, 0x75, 0x5F),  // brown
+        Microsoft.UI.ColorHelper.FromArgb(255, 0xA0, 0xCB, 0xE8),  // light blue
+        Microsoft.UI.ColorHelper.FromArgb(255, 0xFF, 0xBE, 0x7D),  // light orange
+    ];
+
+    /// <summary>Fill for one pie slice: its position in the slice list picks a palette colour, so
+    /// neighbouring wedges differ and a list swatch matches its wedge. A slice not in the list
+    /// ("(no detail)", list row only) takes the next colour after the last wedge. The category
+    /// meaning stays in the stacked bars and the category key.</summary>
     private static Brush SliceBrush(List<PieSlices.Slice> slices, PieSlices.Slice slice)
     {
-        var baseBrush = (SolidColorBrush)Application.Current.Resources[CategoryBrushKey(slice.DominantCategory)];
         var idx = slices.IndexOf(slice);
-        var rank = 0;
-        for (var i = 0; i < idx; i++)
-            if (slices[i].DominantCategory == slice.DominantCategory) rank++;
-        return new SolidColorBrush(baseBrush.Color) { Opacity = Math.Max(0.35, 1.0 - 0.18 * rank) };
+        if (idx < 0) idx = slices.Count;
+        return new SolidColorBrush(SlicePalette[idx % SlicePalette.Length]);
     }
 
-    /// <summary>Color key for pie slices and stacked bars — reads from
+    /// <summary>Color key for the stacked bars — reads from
     /// StackedCategories, so this can never drift from what the visuals
     /// actually use.</summary>
     private static StackPanel TimeByAppLegend()

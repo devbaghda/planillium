@@ -82,6 +82,9 @@ public static class ThemeSync
         ["SubtleFillColorSecondaryBrush"] = (Color.FromArgb(0x09, 0, 0, 0), Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),
         ["SystemFillColorCriticalBrush"] = (Color.FromArgb(0xFF, 0xC4, 0x2B, 0x1C), Color.FromArgb(0xFF, 0xFF, 0x99, 0xA4)),
         ["SystemFillColorSuccessBrush"] = (Color.FromArgb(0xFF, 0x0F, 0x7B, 0x0F), Color.FromArgb(0xFF, 0x6C, 0xCB, 0x5F)),
+        // Reports "Of which paid work" column (B1i): light green on dark, darker green on light.
+        // Key name lives in ReportsPage.PaidWorkBrushKey.
+        ["PaidWorkTextBrush"] = (Color.FromArgb(0xFF, 0x1E, 0x8E, 0x3E), Color.FromArgb(0xFF, 0x7B, 0xD8, 0x8F)),
         ["SystemFillColorCautionBrush"] = (Color.FromArgb(0xFF, 0x9D, 0x5D, 0x00), Color.FromArgb(0xFF, 0xFC, 0xE1, 0x00)),
         ["SystemFillColorCriticalBackgroundBrush"] = (Color.FromArgb(0xFF, 0xFD, 0xE7, 0xE9), Color.FromArgb(0xFF, 0x44, 0x27, 0x26)),
         ["TextOnAccentFillColorPrimaryBrush"] = (Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF), Color.FromArgb(0xFF, 0, 0, 0)),

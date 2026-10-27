@@ -13,7 +13,7 @@ namespace Planillium.App.Pages;
 // This page's code-behind is split across several files by responsibility
 // (all still the one ReportsPage type — partial class, not separate objects):
 //   ReportsPage.xaml.cs      — this file: period selector, the main Render
-//                              pipeline, score/drift/insights cards
+//                              pipeline, insights panel
 //   ReportsPage.Tables.cs    — the day/bucket summary tables
 //   ReportsPage.TimeByApp.cs — distraction list + "time by app" bars
 //   ReportsPage.Diary.cs     — the time-diary section (search, mark, edit)
@@ -157,9 +157,13 @@ public sealed partial class ReportsPage : Page
             using var income = new IncomeService(db);
             var (incomeNet, _) = income.SumForPeriodWithCredit(_period, score);
 
-            Body.Children.Add(Card(ScoreCard(totals, periodName)));
-            var earnings = income.PaidEarningsForPeriod(_period);
-            Body.Children.Add(Card(IncomeSummaryStrip(incomeNet, earnings, periodName)));
+            // EUR columns of the summary table (B1i). The Total cells keep the figures the removed
+            // cards showed (period net rounded to the cent; unrounded paid sum); the row cells are
+            // the per-day parts, rounded so they add up to those totals (EurCents).
+            var paidSum = income.PaidEarningsForPeriod(_period).Sum(e => e.Eur);
+            var daily = income.DailyIncome(ReportData.PeriodStart(_period, today), score);
+            var netTotalCents = EurCents.Of(Math.Round(incomeNet, 2));
+            var paidTotalCents = EurCents.Of(paidSum);
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -167,11 +171,16 @@ public sealed partial class ReportsPage : Page
             // 2026-08-05) and the card would otherwise clip the last of them off in silence on a
             // narrow window — see Scrollable's own comment for the measurement.
             if (_period is ReportPeriod.Day or ReportPeriod.Week)
-                Body.Children.Add(Card(Scrollable(DayTable(weekStats))));
+                Body.Children.Add(Card(Scrollable(DayTable(weekStats, daily, netTotalCents, paidTotalCents))));
             else
             {
+                // Year keeps a month with no activity when it has income or paid work: the ledger
+                // posts every day, and dropping such a month would break "rows add up to the Total".
                 var buckets = _period == ReportPeriod.Month
-                    ? ReportData.MonthBuckets(db.Conn, score) : ReportData.YearBuckets(db.Conn, score);
+                    ? ReportData.MonthBuckets(db.Conn, score)
+                    : ReportData.YearBuckets(db.Conn, score, keepEmpty: true)
+                        .Where(b => b.HasActivity || RowNet(b, daily) != 0 || RowPaid(b, daily) != 0)
+                        .ToList();
                 // Month always has at least this-week's row seeded in,
                 // but Year only gets rows for months that actually have
                 // data — a brand-new install (or a period with zero
@@ -179,7 +188,7 @@ public sealed partial class ReportsPage : Page
                 // which reads as broken rather than simply empty.
                 Body.Children.Add(buckets.Count == 0
                     ? Dim("No activity logged yet.")
-                    : Card(Scrollable(BucketTable(buckets))));
+                    : Card(Scrollable(BucketTable(buckets, daily, netTotalCents, paidTotalCents))));
             }
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────
@@ -199,7 +208,8 @@ public sealed partial class ReportsPage : Page
                 Body.Children.Add(Dim("No activity logged yet."));
             else
             {
-                // The legend shows category colours and their meaning
+                // The legend shows the stacked-bar category colours and their meaning
+                // (pie wedges have their own per-slice palette since A2)
                 // (on-plan, off-plan, neutral, paid, idle) — without it,
                 // the only way to know what a colour means is to already
                 // know it (2026-07-09 audit finding #18).
@@ -221,35 +231,6 @@ public sealed partial class ReportsPage : Page
                 TextWrapping = TextWrapping.Wrap,
             });
         }
-    }
-
-    /// <summary>Points earned over the selected period. "EARNED" is in the caption on purpose:
-    /// this is what the period's activity added up to, which is not the sidebar's BALANCE — that
-    /// is a running total across all time and also nets off entertainment purchases. Two similar
-    /// numbers a glance apart is exactly the confusion this page has already had reported once
-    /// (the 2026-07-23 drift-days report).</summary>
-    private static StackPanel ScoreCard(ReportData.PeriodTotals totals, string periodName)
-    {
-        var card = new StackPanel { Spacing = 2 };
-        card.Children.Add(Caption($"SCORE EARNED — {periodName}"));
-        card.Children.Add(new TextBlock
-        {
-            Text = totals.Score.ToString(),
-            FontSize = 44,
-            FontWeight = FontWeights.Bold,
-            Foreground = ScoreBrush(totals.Score),
-        });
-        // Day-offs joined this line 2026-08-13, folded into the existing period-scoped card
-        // rather than a separate one, after the first attempt (a standalone always-three-numbers
-        // card) was corrected: "everything besides the diary should update based on the chosen
-        // timescale... the same about the day-offs statistics", "we do not need an additional
-        // card for it". Manually marked via Schedule's "Day off" button only — never a plan's
-        // recurring weekday rest days (see ScoreService.ManuallyMarkedDaysOff).
-        var dayOffLabel = totals.DayOffs == 1 ? "1 day off marked" : $"{totals.DayOffs} days off marked";
-        card.Children.Add(Dim($"{totals.Done}/{totals.Total} tasks · " +
-                              $"{ReportData.FmtHours(totals.OnMin)} on-plan · " +
-                              $"{ReportData.FmtHours(totals.OffMin)} off-plan · {dayOffLabel}"));
-        return card;
     }
 
     /// <summary>Rule-of-thumb suggestions, over the same period as everything else above the

@@ -42,3 +42,10 @@
 - Reports layout check: one launch + UIA text dump per period (~1 min); compare y of score caption, strip and section heading for order and gap (qa/b1e_run.py reusable).
 - Card captions are built in C# in upper case with the period name: search case-insensitively, read the builder.
 - After removing a card, discard unused tuple values with `_` (keep the calculation, stay /warnaserror clean); grep all callers before deleting a shared helper.
+
+## Money columns / icons (B1i)
+- Split a period figure into row values by running-total cent rounding, last total pinned to the figure shown elsewhere, so rows add up to the Total to the cent.
+- Never drop money-carrying rows for having no activity (Year empty-month filter); give shared row builders an optional switch, keep the default so exports do not change.
+- A per-theme colour in page code goes in ThemeSync.Fixed with one key constant, not a RequestedTheme check.
+- An icon that shows nothing may be an empty Glyph string: check by code point, write glyphs as \u escapes.
+- When a column is added after a "last column" colour test (c == cells.Length - 1), switch it to a named index.

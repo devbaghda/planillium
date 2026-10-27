@@ -47,10 +47,16 @@ public static class ReportData
         public int OffMin => Minutes.Off;
     }
 
-    public sealed record BucketStat(string Label, CategoryMinutes Minutes, int Score, int Done, int Total)
+    /// <summary><paramref name="From"/>..<paramref name="To"/> is the contiguous run of dates the bucket
+    /// folded (every bucket is one), so per-day figures can be summed per row (B1i).</summary>
+    public sealed record BucketStat(string Label, CategoryMinutes Minutes, int Score, int Done, int Total,
+        DateOnly From, DateOnly To)
     {
         public int OnMin => Minutes.On;
         public int OffMin => Minutes.Off;
+
+        /// <summary>Any minutes, score or planned task: the one predicate the Year view uses to drop empty months.</summary>
+        public bool HasActivity => Minutes.TotalMin > 0 || Score != 0 || Total > 0;
     }
 
     public sealed class AppUsage
@@ -161,9 +167,10 @@ public static class ReportData
         {
             var key = keyOf(r.Date);
             var b = buckets.TryGetValue(key, out var cur)
-                ? cur : new BucketStat(labelOf(key), CategoryMinutes.Zero, 0, 0, 0);
+                ? cur : new BucketStat(labelOf(key), CategoryMinutes.Zero, 0, 0, 0, r.Date, r.Date);
             buckets[key] = b with
             {
+                To = r.Date,   // dates arrive ascending
                 Minutes = b.Minutes.Plus(r.Minutes),
                 Score = b.Score + r.Score,
                 Done = b.Done + r.Done,
@@ -173,8 +180,7 @@ public static class ReportData
         // The Year view drops months with nothing in them at all: a fresh install would
         // otherwise render eleven empty rows, which reads as broken rather than as simply
         // empty. The Month view keeps its empty weeks, so the month's shape stays visible.
-        return [.. buckets.Values.Where(b => keepEmpty ||
-            b.Minutes.TotalMin > 0 || b.Score != 0 || b.Total > 0)];
+        return [.. buckets.Values.Where(b => keepEmpty || b.HasActivity)];
     }
 
     /// <summary>Calendar-month buckets for this year, January through the current
@@ -184,8 +190,9 @@ public static class ReportData
     /// Database.DiaryRetentionDays is only its fallback default), so earlier months of
     /// the year come from diary_daily_rollup instead — the two never overlap (a date
     /// only gets a rollup row once its raw rows are pruned), so summing both sources
-    /// is safe.</summary>
-    public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score)
+    /// is safe. <paramref name="keepEmpty"/> keeps months with no activity too (the Reports page
+    /// then drops only those with no income either); default false keeps the exports unchanged.</summary>
+    public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score, bool keepEmpty = false)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         // Per-date (not per-month) so a day-off date is handled before it's folded into its
@@ -193,7 +200,7 @@ public static class ReportData
         // once inside DailyRows rather than repeated here.
         return Bucket(conn, score, PeriodStart(ReportPeriod.Year, today),
             d => d.ToString("yyyy-MM", CultureInfo.InvariantCulture),
-            MonthLabel, keepEmpty: false);
+            MonthLabel, keepEmpty);
     }
 
     /// <summary>Everything the score card and the insights panel need, aggregated over the
