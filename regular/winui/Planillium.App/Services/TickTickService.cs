@@ -31,6 +31,9 @@ public sealed class TickTickService
 
     private static async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url)
     {
+        // Every TickTick API call goes through here: a scratch run (test copy on a MENTOR_ROOT data
+        // folder) is refused before any request is built (G7, 2026-10-27).
+        if (AppPaths.IsScratch) throw new InvalidOperationException(TickTickAuth.ScratchOffMessage);
         var token = AccessToken ?? throw new InvalidOperationException("No TickTick token.");
         var resp = await Send(method, url, token);
         if (resp.StatusCode != HttpStatusCode.Unauthorized) return resp;

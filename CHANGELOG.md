@@ -36,6 +36,7 @@ going forward; the original Python/Tkinter version is retired.
   using that same per-hour rate.
 
 **Fixes**
+- **Test copies can no longer reach your real AI key or TickTick account (G7).** A copy of the app started on a scratch data folder (Debug build with MENTOR_ROOT, as used for testing) no longer reads, overwrites or deletes the real AI key or TickTick secret and tokens stored in Windows; anything saved there is kept in memory until the copy closes. Its AI calls go only to a local test server (PLANILLIUM_AI_BASE_URL) or are refused with a message, and TickTick connect/sync is refused with a message. The normal app is unchanged.
 - **Plans page cards no longer crowd the plan name.** The plan text now has the full card width; "Briefing", "Excluded days…" and "Teach on-plan apps…" moved under a "More" menu beside "+ Add task", "Replace remaining…" and "Archive".
 - **Euro figures were several times too high.** An hour of work is now valued at your monthly income
   ÷ 168 h (≈ €16 at €2,700) instead of spreading every calendar day over the off-plan hours.

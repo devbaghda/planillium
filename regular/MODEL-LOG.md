@@ -6,3 +6,5 @@
 2026-10-27 B1i generalist: sonnet -- explicit spec, bounded table+card change; stop-and-report on per-day rule; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
 2026-10-27 B1i colour tweak (paid column light green) regular: pending after agentic finishes
 2026-10-27 B1i colour tweak regular: sonnet -- one colour, needs theme-aware choice; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
+2026-10-27 G7 generalist: opus -- security class (real secrets), cross-cutting guard; outcome: ok (built, precheck green 229/229; QA deferred by user ruling)
+2026-10-27 G7 generalist model check: opus confirmed sufficient (security class, cross-cutting guard over secret reads); outcome: ok

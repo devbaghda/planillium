@@ -34,8 +34,18 @@ public static class CredentialStore
         public string? TargetAlias; public string? UserName;
     }
 
+    // Scratch runs (AppPaths.IsScratch — a test copy on a MENTOR_ROOT data folder) never touch Windows
+    // Credential Manager: Read, Write and Delete all go to this in-memory store instead, so a test copy
+    // can't read the user's real AI key / TickTick secret and tokens, can't overwrite them, and can't
+    // delete them ("Remove key", "Disconnect", "Clear all my data"). Whatever a scratch run saves lives
+    // only until it exits (G7, 2026-10-27).
+    private static readonly Dictionary<string, string> ScratchSecrets = new();
+
     public static string? Read(string key)
     {
+        if (AppPaths.IsScratch)
+            lock (ScratchSecrets) return ScratchSecrets.TryGetValue(key, out var v) ? v : null;
+
         // Only the two forms actually documented above: current name, and the
         // pre-rename name for a token an older build already wrote. Two more —
         // the bare service name and the bare key — used to be checked too with
@@ -68,6 +78,11 @@ public static class CredentialStore
     public static bool Write(string key, string value)
     {
         if (string.IsNullOrEmpty(value)) return false;
+        if (AppPaths.IsScratch)
+        {
+            lock (ScratchSecrets) ScratchSecrets[key] = value;
+            return true;
+        }
         var blobBytes = System.Text.Encoding.Unicode.GetBytes(value);  // UTF-16LE, no BOM
         var blob = Marshal.AllocCoTaskMem(blobBytes.Length);
         try
@@ -123,6 +138,11 @@ public static class CredentialStore
     /// finding R11-13) — logged now, matching the pattern Write already uses on failure.</summary>
     public static void Delete(string key)
     {
+        if (AppPaths.IsScratch)
+        {
+            lock (ScratchSecrets) ScratchSecrets.Remove(key);
+            return;
+        }
         foreach (var target in new[] { $"{key}@{Service}", $"{key}@{LegacyService}" })
         {
             if (CredDeleteW(target, 1 /* CRED_TYPE_GENERIC */, 0)) continue;

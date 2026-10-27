@@ -46,6 +46,10 @@ public static class TickTickAuth
     // Disconnect() below and (via SettingsPage) "Clear all my data," so both delete
     // paths agree on what "disconnected" actually means (2026-07-18 audit finding
     // R10-02: previously nothing in the app could remove these once written).
+    /// <summary>What a scratch run (AppPaths.IsScratch) says instead of contacting TickTick (G7).</summary>
+    internal const string ScratchOffMessage =
+        "TickTick is off in this test copy (scratch data folder). Nothing was sent.";
+
     internal static readonly string[] CredentialKeys =
         { "ticktick_client_secret", "ticktick_access_token", "ticktick_refresh_token" };
 
@@ -86,6 +90,10 @@ public static class TickTickAuth
     /// </summary>
     public static async Task<(bool Ok, string Message)> AuthorizeAsync()
     {
+        // Scratch run (test copy on a MENTOR_ROOT data folder): no browser to ticktick.com, no token
+        // request — the real TickTick service is never contacted (G7, 2026-10-27).
+        if (AppPaths.IsScratch)
+            return (false, ScratchOffMessage);
         if (!IsConfigured)
             return (false, "Enter the client ID and client secret first.");
 
@@ -275,6 +283,11 @@ public static class TickTickAuth
 
     private static async Task<JsonDocument?> TokenRequestAsync(Dictionary<string, string> form)
     {
+        if (AppPaths.IsScratch)   // G7: never call the real token endpoint from a test copy
+        {
+            Log.Warn("TickTickAuth", "token request refused: scratch data folder (MENTOR_ROOT)");
+            return null;
+        }
         try
         {
             var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ClientId}:{ClientSecret}"));

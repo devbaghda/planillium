@@ -45,11 +45,8 @@ public static class AppPaths
             // be at test-run time. That's indistinguishable from a legitimate recompute after
             // the fact, so the historical extent of this is not something a query can recover
             // — see CONTEXT.md for what was and wasn't cleaned up.
-#if DEBUG || PLANILLIUM_TESTS
-            var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
-            if (!string.IsNullOrEmpty(env) && Directory.Exists(env))
-                return _root = env;
-#endif
+            if (ScratchRoot() is { } scratch)
+                return _root = scratch;
 
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
@@ -66,6 +63,28 @@ public static class AppPaths
 #endif
                 );
         }
+    }
+
+    /// <summary>
+    /// True when this run uses a scratch data folder given by MENTOR_ROOT (a test copy — QA or the
+    /// user trying a build), i.e. exactly when <see cref="Root"/> takes the MENTOR_ROOT branch. A scratch
+    /// run must never read or use the user's real secrets or contact the real AI / TickTick services
+    /// (G7, 2026-10-27): CredentialStore, AiClient, TickTickAuth and TickTickService key their guards
+    /// on this. Always false in a Release app build,
+    /// where MENTOR_ROOT is never read, so a normal run is unchanged.
+    /// </summary>
+    public static bool IsScratch => ScratchRoot() != null;
+
+    /// <summary>The MENTOR_ROOT folder when it is honoured (Debug / test builds, folder exists), else null.
+    /// The one place that condition lives, shared by <see cref="Root"/> and <see cref="IsScratch"/>.</summary>
+    private static string? ScratchRoot()
+    {
+#if DEBUG || PLANILLIUM_TESTS
+        var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
+        if (!string.IsNullOrEmpty(env) && Directory.Exists(env))
+            return env;
+#endif
+        return null;
     }
 
     public static string ActivePlansDir => Path.Combine(Root, "plans", "active");

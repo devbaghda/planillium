@@ -303,6 +303,13 @@ compaction. General versions of several now also live in the global `windows-app
   date stages date-dependent behaviour that is otherwise very hard to reach (2026-08-04). Where
   realistic *content* is needed (Reports layout, bar widths), copy the real `progress.db` into the
   scratch root — reading real data is fine, and every write then lands on the copy.
+- **A scratch `MENTOR_ROOT` now also isolates secrets (G7, 2026-10-27, regular side).** Before G7 a scratch
+  copy read the real AI key and TickTick secret/tokens from Windows Credential Manager (and its "Clear all my
+  data" / "Remove key" would have deleted them). Now `AppPaths.IsScratch` (the same condition that picks
+  MENTOR_ROOT as the data root; always false in Release) routes `CredentialStore` to an in-memory store, makes
+  `AiClient` call only the `PLANILLIUM_AI_BASE_URL` stub (no stub = clear refusal, nothing sent) and refuses
+  every TickTick connect, token and API call. Any new secret or external call must key on `IsScratch` too.
+  Not covered (not a secret or service): Windows toasts and the "start with Windows" registry entry.
 - **Copying a SQLite database is not copying one file.** `progress.db-wal` and `-shm` hold recent
   writes; copying only the `.db` into a root that already has an older instance's sidecars makes
   SQLite replay *those* over your copy, and the app opens what looks like an empty database with

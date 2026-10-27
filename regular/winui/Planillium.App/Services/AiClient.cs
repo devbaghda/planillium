@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace Planillium.App.Services;
 
-public enum AiFailure { NoKey, Auth, RateLimited, Server, Network, Timeout, BadResponse, Cancelled }
+public enum AiFailure { NoKey, Auth, RateLimited, Server, Network, Timeout, BadResponse, Cancelled, ScratchBlocked }
 
 /// <summary>An AI call that didn't produce a usable reply. <see cref="Exception.Message"/> is already
 /// plain language for the dialog; it never contains the API key.</summary>
@@ -34,7 +34,8 @@ public sealed class AiClient
 
     private readonly string _apiKey;
     private readonly string _model;
-    private readonly string _baseUrl;
+    /// <summary>Null only in a scratch run with no stub address: then no call is made at all (G7).</summary>
+    private readonly string? _baseUrl;
 
     public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromSeconds(120);
     public TimeSpan TotalCap { get; init; } = TimeSpan.FromMinutes(6);
@@ -45,16 +46,24 @@ public sealed class AiClient
         _model = string.IsNullOrWhiteSpace(model) ? DefaultModel : model.Trim();
         // The env override exists for stub-server testing only. In a Release build it is not even read,
         // so nothing in the environment can redirect the real key to another server.
-        var fromEnv = ProductionBase;
+        string? fromEnv = null;
 #if DEBUG || PLANILLIUM_TESTS
         if (Environment.GetEnvironmentVariable(BaseUrlEnv) is { Length: > 0 } env) fromEnv = env;
 #endif
-        _baseUrl = (string.IsNullOrWhiteSpace(baseUrl) ? fromEnv : baseUrl).TrimEnd('/');
+        // A scratch run (test copy on a MENTOR_ROOT data folder) never falls back to the real service: it
+        // talks only to the stub named by PLANILLIUM_AI_BASE_URL, or to nothing (G7, 2026-10-27). A normal
+        // run keeps the production address as before.
+        fromEnv ??= AppPaths.IsScratch ? null : ProductionBase;
+        _baseUrl = (string.IsNullOrWhiteSpace(baseUrl) ? fromEnv : baseUrl)?.TrimEnd('/');
     }
 
     /// <summary>Sends <paramref name="prompt"/> as a single user message and returns Claude's full reply text.</summary>
     public async Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
     {
+        if (_baseUrl is null)
+            throw new AiException(AiFailure.ScratchBlocked,
+                "AI is off in this test copy (scratch data folder): set " + BaseUrlEnv +
+                " to a local stub server to use it. Nothing was sent.");
         if (string.IsNullOrWhiteSpace(_apiKey)) throw new AiException(AiFailure.NoKey, "No API key is set.");
 
         var body = new JsonObject
