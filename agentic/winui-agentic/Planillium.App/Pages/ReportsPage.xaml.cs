@@ -155,13 +155,11 @@ public sealed partial class ReportsPage : Page
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
 
             using var income = new IncomeService(db);
-            var (incomeNet, incomeCredit) = income.SumForPeriodWithCredit(_period, score);
+            var (incomeNet, _) = income.SumForPeriodWithCredit(_period, score);
 
             Body.Children.Add(Card(ScoreCard(totals, periodName)));
             var earnings = income.PaidEarningsForPeriod(_period);
             Body.Children.Add(Card(IncomeSummaryStrip(incomeNet, earnings, periodName)));
-            Body.Children.Add(Card(IncomeCard(incomeNet, incomeCredit, periodName, totals.OffMin, earnings.Sum(e => e.Eur))));
-            Body.Children.Add(Card(EarningsCard(earnings, periodName)));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));

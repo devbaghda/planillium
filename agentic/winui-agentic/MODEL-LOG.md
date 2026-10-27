@@ -40,3 +40,9 @@
 - qa: opus planned (key/focus class, sonnet missed focus defects before) -- not launched: brief has no `QA budget:`; BUDGET-REQUEST relayed to PM.
 - qa: opus -- key/focus class; scope picked from diff. Budget 20 min granted by PM (acceptance 1-7 in salary box + one tag box, every exit, short Add-line/B1d-Enter regression; no full A/B/C matrix).
 - qa outcome: ok (PASS WITH CAVEATS, 44 checks, 0 defects, ~8 of 20 min; full A/B/C matrix scoped out)
+2026-10-27 B1e lead: sonnet -- explicit spec, mechanical removal; outcome: pending
+## B1e reports duplicate cards 2026-10-27
+- planner/designer: not launched -- bounded removal, no new screen; BRIEF + ACCEPTANCE are implementation-ready.
+- coder: sonnet -- explicit removal spec, no timing/focus class; keep calculations, remove dead card code only.
+- coder outcome: ok (precheck green 0 warnings, 362/362; ReportsPage.xaml.cs, ReportsPage.Income.cs; docs)
+- qa: sonnet -- visual/UIA read of 4 periods + build/tests, no focus class; scope fixed from diff, 15 min budget.
