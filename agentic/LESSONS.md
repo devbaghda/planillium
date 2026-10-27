@@ -67,3 +67,5 @@
 - Raising a non-streaming token cap means re-checking the request timeout (reply time ~ tokens/50 s); show durations from one constant, never repeated text.
 - To remove a ContentDialog scrollbar raise the ScrollViewer MaxHeight AND override ContentDialogMaxHeight; read xamlRoot.Size when the dialog is built.
 - A subagent can exit without a handback: check for its output file, rerun once.
+- Restyle to a screenshot: diff the target against the existing builder first; when buttons move into a menu keep their UIA names, keep the long name when the label is shortened.
+- Verify a Stop/Cancel by tracing the token to HttpClient.SendAsync, not by its label.

@@ -66,3 +66,5 @@
 2026-10-27 G4 designer: not launched -- A4/A5 are size tweaks to existing dialogs; A3 skipped (no derivable target look, question to PM)
 2026-10-27 G4 planner: sonnet -- bounded: one constant + two dialog sizes, explicit brief; outcome: ok (first run ended without handback, rerun delivered SPEC.md)
 2026-10-27 G4 coder: sonnet -- SPEC explicit (cap 16000 + timeout 360 s, notice font sizes, dialog height clamp); layout sizes are estimates, no QA this batch; outcome: ok (precheck green 0 warnings, 362/362; commit 065fed7; QA deferred by user ruling)
+2026-10-27 G4 round 2 planner: sonnet -- A3 from screenshot (bounded look change on one page), timeout/cancel verify; outcome: ok (SPEC-2.md)
+2026-10-27 G4 round 2 coder: sonnet -- SPEC-2 explicit (button row to DropDownButton, one constant, tooltip); UIA names kept; outcome: ok (precheck green 0 warnings, 362/362; commit d6e53c7; QA deferred)
