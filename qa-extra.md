@@ -6,3 +6,7 @@ Cases found by QA beyond the checklist. Every QA runs them as extra lines; folde
   Tab / click blank / click other box the box shows the saved amount, nothing saved. Run on REGULAR (not yet checked).
 - 2026-10-27 (B1g): saved money box, type -5, Enter (stays, message), then Esc: box shows saved amount, cursor leaves,
   negative message gone. Run on REGULAR only if the user extends the Esc rule to it (regular Esc does nothing today).
+- 2026-10-27 (B1h, regular QA): saved money box (salary or tag): save a new amount with Enter, then type a different
+  number and press Esc: box shows the newly saved amount, not the one loaded at startup.
+- 2026-10-27 (B1h, regular QA, needs a product decision first): scratch/verify instance Settings must not show "AI: Key
+  saved" / "TickTick: Connected" from the real Credential Manager (O1; same item as "scratch app reaches real credentials").
