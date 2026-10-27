@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix: Ask Claude can now return a long reply (a rewrite of a 34-task plan was cut off at 8000 tokens). The reply limit is now 16000 tokens and Planillium waits up to 6 minutes (was 2) before giving up; the "Gives up after ..." line and the timeout message say 6 minutes. A reply that still hits the limit shows the same "cut off" message.
+- Change: the one-time Anthropic notice in Ask Claude is set in smaller type (body 11.5, headings 12, last line 11, was 13) and takes less space.
+- Change: the Replace remaining tasks dialog is wider (760) and taller on a large window, so its vertical scrollbar no longer shows at default size; on a small window it still scrolls and the buttons stay visible.
+
 - Fix: a test copy of the app (started with MENTOR_ROOT set) no longer reads, saves or deletes your real AI key or TickTick credentials in Windows Credential Manager, and never contacts Anthropic or TickTick (the local test stub still works). In such a copy, "Ask Claude" shows "AI is off in this test copy...", Settings -> AI refuses to save a key with the same reason, and TickTick "Save & authorize" says "TickTick is off in this test copy..." without opening the browser. Normal runs are unchanged.
 
 - Change: Reports summary table (Day, Week, Month, Year) has two new columns after Score: "Income lost/gained" (red when negative, green otherwise) and "Of which paid work" (light green). Day and Week show one row per day, Month one per week, Year one per month; the Total row shows the period figure and the rows add up to it to the cent. The Score card and the "Income lost or gained / Of which paid work" row above the table are gone (the "days off marked" count went with the Score card). A table with a single row (Day, a Monday-only Week, a Month with one week, a Year with one month) shows no Total row; two or more rows keep it. Year also lists a month that has income but no logged activity.

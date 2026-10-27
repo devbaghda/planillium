@@ -16,7 +16,7 @@ namespace Planillium.App.Dialogs;
 public static class ReplaceRemainingDialog
 {
     // Same width constants and reasoning as AddPlanDialog.
-    private const double DialogWidth = 640;
+    private const double DialogWidth = 760;
     private const double DialogContentWidth = DialogWidth - 64;
 
     private const string ApplyFailedMessage =
@@ -242,10 +242,11 @@ public static class ReplaceRemainingDialog
         panel.Children.Add(error);
 
         var dialog = DialogControls.Build(xamlRoot, "Replace remaining tasks",
-            new ScrollViewer { Content = panel, MaxHeight = 560 },
+            new ScrollViewer { Content = panel, MaxHeight = Math.Min(720, Math.Max(320, xamlRoot.Size.Height - 230)) },
             primaryButtonText: "Preview", closeButtonText: "Cancel",
             defaultButton: ContentDialogButton.Primary);
         dialog.Resources["ContentDialogMaxWidth"] = DialogWidth;
+        dialog.Resources["ContentDialogMaxHeight"] = 900.0;
         open = dialog;
         ai.Attach(dialog);
         // Focus on open: the change field, so the user types first.

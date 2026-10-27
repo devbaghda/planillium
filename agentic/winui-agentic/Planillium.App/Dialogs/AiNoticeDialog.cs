@@ -18,19 +18,19 @@ internal static class AiNoticeDialog
     /// reported through the two callbacks; nothing is stored here.</summary>
     public static StackPanel Build(string noticeBullet, Action accept, Action decline)
     {
-        var panel = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
+        var panel = new StackPanel { Spacing = 6, Visibility = Visibility.Collapsed };
 
-        var title = Body("Before Planillium asks Claude", semiBold: true);
+        var title = Body("Before Planillium asks Claude", semiBold: true, size: 12);
         var intro = Body("Planillium will send the prompt you can see in this window to Anthropic, the company " +
                          "behind Claude, using your own API key. Nothing else leaves your computer — no diary, " +
                          "scores, earnings, tags or settings.");
-        var sentHeading = Body("What is sent", semiBold: true);
+        var sentHeading = Body("What is sent", semiBold: true, size: 12);
         var bullet = Body("•  " + noticeBullet);
         var keyLine = Body("Your key is only used to sign the request. What you send is handled under " +
                            "Anthropic's own terms and privacy policy. Claude's reply changes nothing in " +
                            "Planillium until you confirm it yourself.");
         var once = Body("You will only be asked this once. You can always use the copy-and-paste way instead.",
-            secondary: true, size: 12);
+            secondary: true, size: 11);
 
         var acceptBtn = new Button { Content = "Accept and continue", Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         AutomationProperties.SetName(acceptBtn, "Accept and continue");
@@ -52,7 +52,7 @@ internal static class AiNoticeDialog
         return panel;
     }
 
-    private static TextBlock Body(string text, bool semiBold = false, bool secondary = false, double size = 13)
+    private static TextBlock Body(string text, bool semiBold = false, bool secondary = false, double size = 11.5)
     {
         var block = new TextBlock
         {

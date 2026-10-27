@@ -39,7 +39,7 @@ public static class AiMessages
         AiFailure.RateLimited429 => "Anthropic is limiting requests right now (too many, or no credit left on the account). Wait a minute and try again.",
         AiFailure.ServerError5xx => "Anthropic had a problem on its side. Try again in a few minutes.",
         AiFailure.BadRequest400 => "Anthropic could not accept this request — it may be too long.",
-        AiFailure.Timeout => "Claude took longer than 2 minutes, so the request was stopped.",
+        AiFailure.Timeout => $"Claude took longer than {AiClient.TimeoutMinutesText}, so the request was stopped.",
         AiFailure.Network => "Planillium could not reach Anthropic. Check your internet connection.",
         AiFailure.Cancelled => "Stopped. Nothing was changed.",
         AiFailure.Truncated => "Claude's reply was cut off before it finished, so it was not used.",
@@ -106,9 +106,19 @@ public static class AiSettings
 /// </summary>
 public sealed class AiClient
 {
-    public const int MaxTokens = 8000;
+    public const int MaxTokens = 16000;
     public const string ApiVersion = "2023-06-01";
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(120);
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(360);
+
+    /// <summary>The timeout as shown to the user ("6 minutes"); follows <see cref="DefaultTimeout"/>.</summary>
+    public static string TimeoutMinutesText
+    {
+        get
+        {
+            int m = (int)Math.Round(DefaultTimeout.TotalMinutes);
+            return m == 1 ? "1 minute" : m + " minutes";
+        }
+    }
 
     private readonly HttpClient _http;
     private readonly string _baseUrl;

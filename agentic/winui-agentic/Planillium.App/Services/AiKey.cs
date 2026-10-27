@@ -8,7 +8,7 @@ namespace Planillium.App.Services;
 public static class AiKey
 {
     // One shared client for every AI call, as TickTick does. No overall timeout here: AiClient
-    // applies its own 120 s limit so that a user Stop and a timeout can be told apart.
+    // applies its own limit (AiClient.DefaultTimeout) so that a user Stop and a timeout can be told apart.
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     public static bool Has() => !string.IsNullOrEmpty(Read());

@@ -61,7 +61,7 @@ internal sealed class AiAskControls
         _progressText = new TextBlock { FontSize = 13, Foreground = ThemeBrush("TextFillColorPrimaryBrush") };
         var givesUp = new TextBlock
         {
-            Text = "Gives up after 2 minutes.",
+            Text = $"Gives up after {Services.AiClient.TimeoutMinutesText}.",
             FontSize = 12,
             Foreground = ThemeBrush("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
@@ -100,7 +100,7 @@ internal sealed class AiAskControls
     /// not greyed, when no key is saved.</summary>
     public Button Ask { get; }
 
-    /// <summary>Progress row: bar, "Asking Claude… N s", "Gives up after 2 minutes." and Stop.
+    /// <summary>Progress row: bar, "Asking Claude… N s", "Gives up after 6 minutes." (AiClient.TimeoutMinutesText) and Stop.
     /// Collapsed unless a call runs.</summary>
     public StackPanel Progress { get; }
 
