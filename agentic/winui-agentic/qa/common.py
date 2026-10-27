@@ -3,17 +3,21 @@ warnings.filterwarnings("ignore")
 from pywinauto import Application, Desktop
 from pywinauto.keyboard import send_keys
 
-WT = r"D:\CLAUDE\Planillium\.claude\worktrees\qa-ag\agentic\winui-agentic"
-EXE = WT + r"\Planillium.App\bin\x64\Debug\net8.0-windows10.0.19041.0\Planillium.App.exe"
-ROOT = r"D:\CLAUDE\Planillium\.claude\worktrees\qa-ag\_scratch_root"
-CFG = ROOT + r"\config.json"
+WT = "D:/CLAUDE/Planillium/.claude/worktrees/qa-ag/agentic/winui-agentic"
+EXE = WT + "/Planillium.App/bin/x64/Debug/net8.0-windows10.0.19041.0/Planillium.App.exe"
+ROOT = "D:/CLAUDE/Planillium/.claude/worktrees/qa-ag/_scratch_root"
+CFG = ROOT + "/config.json"
 
 def make_root():
     if os.path.isdir(ROOT): shutil.rmtree(ROOT)
     for d in ("data", r"plans\active", r"plans\queued", r"plans\archive"): os.makedirs(os.path.join(ROOT, d))
-    json.dump({"income": {"potential_monthly_net_eur": 2925, "employed": False},
+    json.dump({"end_of_day_summary_time": "23:59", "income": {"potential_monthly_net_eur": 2925, "employed": False},
                "paid_tags": [{"tag": "Studioshoo", "label": "Studioshoo", "monthly_net_eur": 1600}]},
               open(CFG, "w"), indent=2)
+
+    import datetime
+    d = datetime.date.today().isoformat()
+    json.dump({"last_kickoff": d, "last_review": d}, open(ROOT + "/data/winui_state.json", "w"))
 
 def cfg():
     return json.load(open(CFG, encoding="utf-8"))

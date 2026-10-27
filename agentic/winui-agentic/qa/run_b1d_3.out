@@ -1,0 +1,42 @@
+C5-salary->blank: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->heading: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->label: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->button: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->title: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-tag->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-addline->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+income: {'potential_monthly_net_eur': 2925, 'employed': False}
+SUMMARY
+C5-salary->blank PASS
+C5-salary->heading PASS
+C5-salary->label PASS
+C5-salary->button PASS
+C5-salary->title PASS
+C5-tag->blank PASS
+C5-tag->heading PASS
+C5-tag->label PASS
+C5-tag->button PASS
+C5-tag->title PASS
+C5-addline->blank PASS
+C5-addline->heading PASS
+C5-addline->label PASS
+C5-addline->button PASS
+C5-addline->title PASS
+C5-none->blank PASS
+C5-none->heading PASS
+C5-none->label PASS
+C5-none->button PASS
+C5-none->title PASS

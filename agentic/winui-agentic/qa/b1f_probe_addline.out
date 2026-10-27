@@ -1,0 +1,9 @@
+rects {'name': <RECT L329, T694, R489, B753>, 'rate': <RECT L497, T694, R647, B753>, 'add': <RECT L655, T721, R705, B753>, 'pane': <RECT L329, T179, R988, B764>}
+point bottom-mid (658, 714) hit ('SectionScroll', '', 'pane')
+    [(0.0, 'NewPaidTagName', '9'), (0.12, 'NewPaidTagName', '99'), (0.25, 'NewPaidTagName', '999')]
+point above-add (680, 702) hit ('SectionScroll', '', 'pane')
+    [(0.0, 'NewPaidTagName', '9999'), (0.12, 'NewPaidTagName', '99999'), (0.25, 'NewPaidTagName', '999999')]
+point right-of-add (735, 737) hit ('SectionScroll', '', 'pane')
+    [(0.0, 'Nav', ''), (0.12, 'Nav', ''), (0.25, 'Nav', '')]
+point below-line (369, 765) hit ('Nav', '', 'custom')
+    [(0.0, '', ''), (0.12, '', ''), (0.25, '', '')]

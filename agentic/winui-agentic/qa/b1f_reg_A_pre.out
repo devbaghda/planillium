@@ -1,0 +1,37 @@
+fixture: 2925 [('studioshoo', 1600)]
+radios ['Follow Windows (recommended)', 'Light', 'Dark']
+A-radio hold=0.00: PASS -- Dark selected=1 state='dark'; Follow selected=1 state='default'
+A-radio hold=0.12: PASS -- Dark selected=1 state='dark'; Follow selected=1 state='default'
+A-radio hold=0.25: PASS -- Dark selected=1 state='dark'; Follow selected=1 state='default'
+slider rect (L459, T582, R721, B637) value 100.0
+A-slider hold=0.00: FAIL -- start=100.0 after track click=55.0 after drag to right end=55.0 state=55
+A-slider hold=0.12: FAIL -- start=55.0 after track click=55.0 after drag to right end=55.0 state=55
+A-slider hold=0.25: FAIL -- start=55.0 after track click=55.0 after drag to right end=55.0 state=55
+A-textbox drag selection: FAIL -- selected '', box focused=True
+A-textbox still saves: PASS -- user_name='QA'
+A-textbox double-click selects word: PASS -- selected 'QA'
+A-toggle hold=0.00: PASS -- state 0->1->0 employed True->False
+A-toggle hold=0.12: PASS -- state 0->1->0 employed True->False
+A-toggle hold=0.25: PASS -- state 0->1->0 employed True->False
+GraceMin Spinner
+A-numberbox type+Tab: PASS -- reminder_grace_minutes=7
+A-numberbox Up arrow: PASS -- after Up+Tab=8
+A-numberbox spin button: none visible in UIA after focus (compact mode)
+A-hours textbox drag selection: PASS -- selected '08:30'
+A-multiline drag selection + save: PASS -- selected 'alpha\r'; alpha saved=True
+DataInfo (L459, T348, R1114, B404) 'Planillium v1.2.0\nShared data folder: C:\\Users\\devba\\AppData'
+A-selectable TextBlock drag selection: FAIL -- selected ''
+A-right-click context menu on selectable text: FAIL -- menu items ['Select All', 'Select All', 'System']
+A-blank click in Data: PASS -- focus=('DataInfo', 'Planillium v1.2.0\nShared data folder: C:\\Users\\devba\\AppData\\Local\\Temp\\claude\\d--CLAUDE-Planillium\\eb855074-fe02-405f-98a4-f990b76f2f3d\\scratchpad\\qa_b1f\\root_reg_pre', 'text')
+AI model text 
+A-AI model box drag selection: FAIL -- selected ''
+A-section list clicks: PASS -- [('General', True), ('Income', True), ('Hours and reminders', True), ('Scoring', True), ('Activity keywords', True), ('Idle-answer library', True), ('TickTick', True), ('AI', True), ('Data', True), ('Income', True)]
+A-wheel scroll: PASS -- RulesOn top 392 -> 392 (pane (L459, T309, R1118, B894))
+==== SUMMARY: 22 checks, 7 FAIL
+FAIL A-slider hold=0.00 -- start=100.0 after track click=55.0 after drag to right end=55.0 state=55
+FAIL A-slider hold=0.12 -- start=55.0 after track click=55.0 after drag to right end=55.0 state=55
+FAIL A-slider hold=0.25 -- start=55.0 after track click=55.0 after drag to right end=55.0 state=55
+FAIL A-textbox drag selection -- selected '', box focused=True
+FAIL A-selectable TextBlock drag selection -- selected ''
+FAIL A-right-click context menu on selectable text -- menu items ['Select All', 'Select All', 'System']
+FAIL A-AI model box drag selection -- selected ''

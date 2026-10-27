@@ -1,0 +1,79 @@
+A-enter-salary-'': PASS -- box after Enter='2\u2009925' stored=2925 focus=[('Pane', '')] msgs=[('Empty amount not saved; the saved amount is back in the box.', 'SaveStatus')] | then typed 7 -> box='2\u2009925' stored=2925
+    after later Tab: box='2\u2009925' stored=2925 focus=[('Pane', ''), ('ListItem', 'Income')]
+A-enter-salary-'abc': PASS -- box after Enter='2\u2009925' stored=2925 focus=[('Pane', '')] msgs=[('Empty amount not saved; the saved amount is back in the box.', 'SaveStatus')] | then typed 7 -> box='2\u2009925' stored=2925
+    after later Tab: box='2\u2009925' stored=2925 focus=[('Pane', ''), ('ListItem', 'Income')]
+A-enter-salary-'   ': PASS -- box after Enter='2\u2009925' stored=2925 focus=[('Pane', '')] msgs=[('Empty amount not saved; the saved amount is back in the box.', 'SaveStatus')] | then typed 7 -> box='2\u2009925' stored=2925
+    after later Tab: box='2\u2009925' stored=2925 focus=[('Pane', ''), ('ListItem', 'Income')]
+A-enter-tag-'': PASS -- box after Enter='1\u2009600' stored=1600 focus=[('Pane', '')] msgs=[('Empty amount not saved; the saved amount is back in the box.', 'SaveStatus')] | then typed 7 -> box='1\u2009600' stored=1600
+    after later Tab: box='1\u2009600' stored=1600 focus=[('Pane', ''), ('ListItem', 'Income')]
+A-enter-tag-'abc': PASS -- box after Enter='1\u2009600' stored=1600 focus=[('Pane', '')] msgs=[('Empty amount not saved; the saved amount is back in the box.', 'SaveStatus')] | then typed 7 -> box='1\u2009600' stored=1600
+    after later Tab: box='1\u2009600' stored=1600 focus=[('Pane', ''), ('ListItem', 'Income')]
+A-enter-tag-'   ': PASS -- box after Enter='1\u2009600' stored=1600 focus=[('Pane', '')] msgs=[('Empty amount not saved; the saved amount is back in the box.', 'SaveStatus')] | then typed 7 -> box='1\u2009600' stored=1600
+    after later Tab: box='1\u2009600' stored=1600 focus=[('Pane', ''), ('ListItem', 'Income')]
+B-refused-add-then-esc/click: PASS -- focus after refused Add click=[('Pane', '')] name before='asd' after Esc='' msgs=[] | after blank click name='' msgs=[]
+B2-refused-enter-then-esc: PASS -- name='' amt='' msgs=[] focus=[('Pane', '')]
+B3-no-name: PASS -- tags=['Studioshoo'] msgs=[('Give the new tag a name (letters or digits).', 'NewPaidTagHint'), ('Give the new tag a name (letters or digits).', 'SaveStatus')]
+C5-salary->blank: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->heading: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->label: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->button: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-salary->title: PASS -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-tag->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-tag->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt=''
+C5-addline->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+income: {'potential_monthly_net_eur': 2925, 'employed': False}
+D-enter-salary: PASS -- stored=1234567 box='1\u2009234\u2009567' focusedEdits=[]
+D-minus-salary: PASS -- typed='-500' after Tab='-500' msgs=[("Amounts can't be negative.", ''), ("Not saved: Amounts can't be negative.", 'SaveStatus')] stored=1234567
+D-enter-tag: PASS -- stored=1234567 box='1\u2009234\u2009567' focusedEdits=[]
+D-minus-tag: PASS -- typed='-500' after Tab='-500' msgs=[("Amounts can't be negative.", ''), ("Not saved: Amounts can't be negative.", 'SaveStatus')] stored=1234567
+D-no-spinners: PASS -- spinner-like elements=0
+E-tab-to-Add-then-Enter: PASS -- focus on Tab#2=[('Pane', ''), ('Button', 'Add')] tags=['Studioshoo', 'tabby'] focus now=[('Pane', '')]
+final {"end_of_day_summary_time": "23:59", "income": {"potential_monthly_net_eur": 2000, "employed": false}, "paid_tags": [{"tag": "Studioshoo", "label": "Studioshoo", "monthly_net_eur": 2000}, {"tag": "tabby", "label": "tabby", "monthly_net_eur": 250}]}
+SUMMARY
+A-enter-salary-'' PASS
+A-enter-salary-'abc' PASS
+A-enter-salary-'   ' PASS
+A-enter-tag-'' PASS
+A-enter-tag-'abc' PASS
+A-enter-tag-'   ' PASS
+B-refused-add-then-esc/click PASS
+B2-refused-enter-then-esc PASS
+B3-no-name PASS
+C5-salary->blank PASS
+C5-salary->heading PASS
+C5-salary->label PASS
+C5-salary->button PASS
+C5-salary->title PASS
+C5-tag->blank PASS
+C5-tag->heading PASS
+C5-tag->label PASS
+C5-tag->button PASS
+C5-tag->title PASS
+C5-addline->blank PASS
+C5-addline->heading PASS
+C5-addline->label PASS
+C5-addline->button PASS
+C5-addline->title PASS
+C5-none->blank PASS
+C5-none->heading PASS
+C5-none->label PASS
+C5-none->button PASS
+C5-none->title PASS
+D-enter-salary PASS
+D-minus-salary PASS
+D-enter-tag PASS
+D-minus-tag PASS
+D-no-spinners PASS
+E-tab-to-Add-then-Enter PASS

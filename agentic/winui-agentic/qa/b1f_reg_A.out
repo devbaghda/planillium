@@ -1,0 +1,30 @@
+fixture: 2925 [('studioshoo', 1600)]
+radios ['Follow Windows (recommended)', 'Light', 'Dark']
+A-radio hold=0.00: PASS -- Dark selected=1 state='dark'; Follow selected=1 state='default'
+A-radio hold=0.12: PASS -- Dark selected=1 state='dark'; Follow selected=1 state='default'
+A-radio hold=0.25: PASS -- Dark selected=1 state='dark'; Follow selected=1 state='default'
+slider rect (L381, T504, R643, B559) value 100.0
+A-slider hold=0.00: PASS -- start=100.0 after track click at 30%=55.0 after thumb drag to right end=100.0 state=100
+A-slider hold=0.12: PASS -- start=100.0 after track click at 30%=55.0 after thumb drag to right end=100.0 state=100
+A-slider hold=0.25: PASS -- start=100.0 after track click at 30%=55.0 after thumb drag to right end=100.0 state=100
+A-textbox drag selection: PASS -- selected 'Alexande', box focused=True
+A-textbox still saves: PASS -- user_name='QA'
+A-textbox double-click selects word: PASS -- selected 'QA'
+A-toggle hold=0.00: PASS -- state 0->1->0 employed True->False
+A-toggle hold=0.12: PASS -- state 0->1->0 employed True->False
+A-toggle hold=0.25: PASS -- state 0->1->0 employed True->False
+GraceMin Spinner
+A-numberbox type+Tab: PASS -- reminder_grace_minutes=7
+A-numberbox Up arrow: PASS -- after Up+Tab=8
+A-numberbox spin button: none visible in UIA after focus (compact mode)
+A-hours textbox drag selection: PASS -- selected '08:30'
+A-multiline drag selection + save: PASS -- selected 'alpha\r'; alpha saved=True
+DataInfo (L381, T270, R1036, B326) 'Planillium v1.2.0\nShared data folder: C:\\Users\\devba\\AppData'
+A-selectable TextBlock drag selection: PASS -- selected 'Planillium v1.2.0'
+A-right-click context menu on selectable text: PASS -- menu items ['Copy', 'Select All', 'Copy', 'Select All', 'System']
+A-blank click in Data: PASS -- focus=('DataInfo', 'Planillium v1.2.0\nShared data folder: C:\\Users\\devba\\AppData\\Local\\Temp\\claude\\d--CLAUDE-Planillium\\eb855074-fe02-405f-98a4-f990b76f2f3d\\scratchpad\\qa_b1f\\root_reg', 'text')
+AI model text claude-test-model
+A-AI model box drag selection: PASS -- selected 'claude-test-model'
+A-section list clicks: PASS -- [('General', True), ('Income', True), ('Hours and reminders', True), ('Scoring', True), ('Activity keywords', True), ('Idle-answer library', True), ('TickTick', True), ('AI', True), ('Data', True), ('Income', True)]
+A-wheel scroll: PASS -- RulesOn top 314 -> 314 (pane (L381, T231, R1040, B816))
+==== SUMMARY: 22 checks, 0 FAIL

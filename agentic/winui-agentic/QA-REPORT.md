@@ -1,60 +1,49 @@
-VERDICT: PASS - workflow=agentic feature=b1b-money-boxes defectsQa=0
+TIME-LIMIT: 14, 5/6 cases done (case f partial: part B done, part C 79 of 144 checks run, not finished)
+VERDICT: FAIL - workflow=agentic feature=b1f-focus-jump defectsQa=7 ; commit tested e82135f (Debug, strict build 0 warn/0 err, worktree agent-ae63c0d098943cf5f, scratch MENTOR_ROOT, suffix verify, real SendInput mouse/keys). Round 1 and round 2 cases a-e: PASS (see earlier rows). Round 3 (case f, this run): B1d-9 to end of part B 24/24 PASS; part C 72 PASS / 7 FAIL (all 7 are one behaviour: focus stays in the Previous salary box after Esc or Enter, see f-C).
 
-Re-run after fix commit e3993aa (D1 from the previous report). Isolated worktree `.claude/worktrees/qa-ag` (removed after), Debug x64, scratch MENTOR_ROOT, MENTOR_INSTANCE_SUFFIX=verify, driven by UI Automation + real keystrokes/clipboard paste, config.json read from disk after each step. No real data touched. Full checklist re-run, not only line 7.
+| Case | Lines | Trials (reason) | Result |
+|---|---|---|---|
+| a. edge strip after click in New-tag box, holds 0/50/250 ms, typed "9" in same trial | 1, 5 | 54 + 60 (timing-dependent, holds varied) | PASS 0/114 jumps, "9" never landed |
+| b. edge strip after tag-amount / salary / Studioshoo | 2, 5 | 72 (2 holds x 2 reps x 6 pts x 3 sources) | PASS 0/72 |
+| c. first click after window inactive (edge) | 3, 5 | 24 | PASS 0/24 |
+| d. wheel scroll then edge click | 4, 5 | 48 | PASS 0/48 |
+| e. interior smoke (12 pts) | 1-5 | 1 pass x 12 points (+ inactive-first-click interior) | PASS |
+| f. B1-B1d regression, part A and B up to B1d-8 (earlier round) | 6 | script's own trials, 1 pass each | PASS 114 / 0 FAIL |
+| f. B1d-9 to end of part B (own runner qa/b1f_run_b1d9.py, output qa/b1f_reg_f2_B1d9.out) | 6 | 1 trial per line (deterministic loop of 3 inputs x 4 leave paths x 2 boxes) | PASS 24 / 0 FAIL |
+| f-C. standing input-box matrix (part C, qa/b1f_reg_f2_C.out) | 6 | 1 trial per check; run killed by timeout at 540 s after 79 of 144 checks (SAL 36, TAG 36, NewPaidTagName 7) | 72 PASS / 7 FAIL (all SALARY FOCUS, see below); 65 checks NOT RUN: time limit |
 
-## Build and tests
-- Strict build `dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental`: 0 warnings, 0 errors.
-- `dotnet test`: 346/346 passed (includes `B1bMinusTests.cs`, now in the test project; content identical to QA's file apart from line endings).
+Case f totals: 210 PASS, 7 FAIL, 65 of 144 part C checks NOT RUN (time limit at 14 min).
 
-## Per-line results (all observed live)
-| Line | Result | Evidence |
-|---|---|---|
-| 1 Type 3000, don't leave: config still 2925 | PASS | box "3 000", config 2925 after 1 s |
-| 2 Tab: config 3000, box "3 000" | PASS | config 3000, box thin-space "3 000" |
-| 3 Type 3100 + Enter: config 3100 | PASS | config 3100; Tab after Enter did not rewrite the file (mtime unchanged) |
-| 4 Same for payable tag box | PASS | typing: 1600 unchanged; Tab: 1700; Enter: 1800 |
-| 5 New-tag amount box: no save before Add | PASS | typed 700, Enter, Tab: config unchanged, tag not added; after Add the new tag holds 700 |
-| 6 Click Income heading, type "9": nothing changes | PASS | salary box then Income heading then "9": config unchanged, box unchanged; typed 3200 then heading then 9: config 3200, no 9 in box; tag box + "Paid work" heading: unchanged |
-| 7 Minus: hint, no minus kept, hint clears on next valid key / leave | PASS | see D1 re-test below; hint "Amounts can't be negative." visible in UIA tree and in screenshot (`qa/d1_hint_visible.png`) in all three box kinds |
-| 8 Empty/invalid entry on leave | PASS | empty salary, "abc", empty tag box: values kept in config, app alive, no crash |
-| 9 Thin-space, no spinners | PASS | "14 000" shown, 0 spinner buttons |
-| 10 Build clean, tests pass, suite covers 1-4, 7 | PASS | 0 warnings, 346/346; UI scripts `qa/run_b1b.py`, `qa/run_line5.py`, `qa/run_d1.py` cover 1-8 |
+Failing lines (part C, Previous salary box, focus check "SALARY FOCUS"):
+1. C Previous salary empty esc: FAIL. Typed "", box shows "", "Empty amount not saved; the saved amount" shown, stored 2925 / 1600 correct, focus left in the Previous salary box.
+2. C Previous salary spaces esc: FAIL. Same pattern, typed "   ".
+3. C Previous salary text esc: FAIL. Same pattern, typed "abc".
+4. C Previous salary minus enter: FAIL. Typed "-5", message "Not saved: Amounts can't be negative.", stored 2925, focus stays in the Previous salary box after Enter.
+5. C Previous salary minus esc: FAIL. Typed "-5", message shown, focus stays in the box.
+6. C Previous salary long esc: FAIL. Typed 12 digits, box shows 999 999 999 999, no message, stored 2925, focus stays in the box.
+7. C Previous salary valid esc: FAIL. Typed 2500, box shows 2 500, stored 2925 (valid value not saved after Esc, script expects the check only for non-Esc exits), focus stays in the box.
 
-## D1 re-test (line 7), run for salary box, payable-tag box and new-tag amount box
-- Type "5" then "-": hint visible at 0.1 s, 0.5 s, 1.5 s and 3.5 s (stays), box shows "5": PASS (all three boxes).
-- Next minus-free keystroke ("0"): hint gone, box "50": PASS (all three).
-- Minus then Backspace: hint shown, then cleared by the Backspace: PASS (all three).
-- Double minus "--": hint shown, no minus in box: PASS (all three).
-- Leaving via Tab: hint cleared: PASS. Leaving by clicking the Income heading: hint cleared: PASS (all three).
-- Paste "-500" -> box "500" with hint; paste "5-0" -> "50" with hint; paste "--" into empty box -> "" with hint; paste of a valid "123" after a minus -> hint cleared, box "123": PASS.
-- Typing "-1-2-" (ends with minus): box "12", hint shown; typing "-1-2" (ends with digit): hint clear: PASS.
-- Info only: an arrow key (Left) with the hint showing keeps the hint (no text change); minus then Enter in an empty box keeps the hint and does not crash or change the saved value. Both are reasonable and not against the checklist.
-- Harness sanity: a plain text box accepted "a-b", so the minus keystroke is really delivered.
+Note on the 7 FAILs: the script's own rule says focus must not stay in the Previous salary box, except after clicking the other box. All 7 are Esc (plus Enter on a refused minus). Whether Esc should release focus is a behaviour question the checklist does not settle. I did not infer it from code. PM to decide: either a defect (fix: Esc or refused Enter parks focus) or a script-rule change. Stored values were never wrong in any of the 7.
 
-## Defects
-None.
+Defects: defectsQa=7 counts the 7 failing lines above. They are one behaviour; if the PM rules Esc may keep focus, defectsQa becomes 0 and the verdict PASS WITH CAVEATS (65 part C checks not run).
 
-## Coder's suggested extra checks (re-run)
-Click heading then type 9: PASS. Enter then Tab saves once: PASS. Section switch commits the box (typed 3333, switched to General, config 3333): PASS. Remove while tag box focused: PASS (tag removed, app alive). Close window while a box is focused (typed 4444, Close): config 4444, app alive in tray: PASS.
+Defects: none beyond the above. Security: change is focus/pointer/layout only (SectionContent padding, release claim); no input, path, secret or data surface found in earlier rounds; nothing new in this round.
 
-## Security (diff e3993aa on top of 5d2a46a, then touched file `Controls/MoneyBox.cs`; applied by hand, `/security-review` not run)
-- Injection, auth, secrets/crypto, deserialisation, supply chain, data exposure: none found (a one-field UI flag fix; no input reaches SQL, shell, paths or network; no dependency or config change).
-- Input validation: none found; garbage, pasted minus signs and empty entries leave saved values untouched.
-- Business-logic abuse, resource abuse: none found.
+Untestable: none.
 
-## Untestable
-None.
+Extra observations:
+- Part C not finished. The 144-check matrix needs about 7 s per check (about 17 min), not the 5 min planned; the 540 s timeout stopped it at check 79. The remaining 65 are (NewPaidTagName rest, NewPaidTagRate 36) and were not run.
+- Killed by timeout: the script's final kill() did not run, but no Planillium.App.exe from the worktree remained (checked). The live Release Planillium.App.exe (pid 17404, regular\winui) was not touched.
+- Previous salary empty + Esc leaves the box empty while stored stays 2925 (message shown). The script excludes this from its check, so it is not a FAIL; noted for the PM.
+- Outputs: qa/b1f_reg_f2_B1d9.out (24 PASS), qa/b1f_reg_f2_C.out (72 PASS, 7 FAIL, no SUMMARY line).
 
-## Extra observations
-- Not a defect, harness-related: a fresh scratch root shows a "Good morning" dialog about 50 s after launch that steals keyboard focus; it made two paste lines look failed in an early QA run until the dialog was dismissed (screenshot `qa/d1_fail_after_dashdash.png`). Later runs wait for and dismiss it first. The app itself behaved correctly.
-- Empty/invalid entry on leave leaves the box empty while config keeps the old value, until the page is reopened. Matches "as before B1b"; not counted.
-- Process kill with unsaved text not tested (loses it by design).
+New cases (for qa-extra.md):
+1. Previous salary box, type "-5" or text or spaces, then press Esc: focus should leave the box (script rule); observed focus stays in the box. Decide expected behaviour first.
+2. Previous salary box, empty, then Esc: box shows empty while saved amount is 2925; message says the saved amount is kept. Expected: box shows the saved amount or the message only, PM to decide.
+3. Previous salary box, 12 digits, then Esc: no message, box shows 999 999 999 999 with stored unchanged. Expected: refusal message or clamp, PM to decide.
 
-## Files
-`D:\CLAUDE\Planillium\agentic\winui-agentic\qa\` : `common.py`, `run_b1b.py`, `run_line5.py`, `run_d1.py` (D1 edge cases; env `LOOPS` limits boxes), `dbg_paste.py`, `B1bMinusTests.cs`, screenshots `d1_hint_visible.png`, `d1_paste.png`, `d1_fail_after_dashdash.png`. Scripts expect worktree `D:\CLAUDE\Planillium\.claude\worktrees\qa-ag`, removed.
-
-## Lessons
-- Two paste lines failed intermittently only in long runs; the cause was a timed "Good morning" dialog stealing focus, not the product. Rule: when a UIA step fails only late in a run, take a screenshot and check for popups before calling a defect; wait for and dismiss timed dialogs at the start of a scratch run.
-- Bisecting with an env-var switch (`LOOPS`) isolated the trigger quickly; note substring matching on the switch value ("tag" matched "newtag") nearly misled the bisect, so use exact list membership.
-- Reading the fix in code looked plausible; only the live hint timing check (0.1 s to 3.5 s polling plus screenshot) proves a "show while X" line.
-- Windows path length: keep the worktree short under `.claude/worktrees/`.
+Lessons (round 3):
+(1) Budget again short for the regression: part C alone needs about 17 min at 7 s per check; the BUDGET-REQUEST should have said so at start. Put the planned minutes per script item in the brief.
+(2) Reusing helpers without editing the regression script worked: exec the helper section of b1f_regress.py up to the "A: controls" marker, then run one part's block with the same launch/kill wrapper (qa/b1f_run_b1d9.py). Reuse this for any item-level start.
+(3) Capture output to qa/*.out with PYTHONIOENCODING=utf-8 - done for both runs, nothing lost.
+(4) Stop at the limit first: timeout 540 s ended the run at 20:40:29, inside the 14 min limit (20:42:23).

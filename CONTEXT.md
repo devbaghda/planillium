@@ -119,60 +119,21 @@ settings (no secrets) · `plans/{active,queued,archive}/` · `data/progress.db` 
 
 ## 7. Still open
 
-0. **(opened 2026-10-01) Eight-item batch, both workflows — regular app visuals OK'd by user 2026-10-02; agentic app review in progress (fixes logged in its own docs)** of
-   pie, diary multi-select filters, Top Distractions columns and the away dialog, in both apps.
-   Details and QA outcomes: `context/todos.md` 2026-10-01. Pushed 2026-10-09 with 44f6f19 (cdf0640, 45e51c9).
-   Also awaiting review, same day, **uncommitted** (both apps): pie-legend alignment fix (chevron slot
-   always reserved), previous-salary default 2700 -> 2925, and **payable tags** (Studioshoo 1600/month,
-   addable in Settings -> Income; earnings offset the income figure and have their own Reports card) --
-   `context/todos.md` 2026-10-01, `DECISIONS.md` rule 14. None QA'd; built directly, not through the
-   agentic pipeline. Regular Release build relaunched; run only ONE of regular/agentic at a time -- both use the
-   same real `data/progress.db`, so two trackers would double-log the diary.
-0a. **(opened 2026-10-09) "Replace remaining tasks" + Plans-card layout fix -- built, QA'd (both PASS WITH CAVEATS, 0 QA defects), committed 44f6f19 and pushed to origin/master 2026-10-09 (this also pushed the earlier eight-item-batch commits cdf0640/45e51c9).**
-   Dashboard rows logged for both sides (tokens/time null: sides were interleaved). Start day = right after last done
-   task, not clamped to today (user decision, `DECISIONS.md` rule 15). Card layout: regular = text full width + Add task /
-   Replace remaining / Archive row + "More" menu; agentic = wrapping button row (separate design on purpose; nothing
-   from one side goes to the other). **Still for the user to check live** (QA couldn't drive the UI): card at 900 DIP
-   width, Cancel leaves plan unchanged, all-done refusal, preview finish dates -- in both apps, one app at a time.
-   Currently NO app instance running. **Left uncommitted on purpose:** the payable-tags code (item 0), plus `CLAUDE.md`
-   and `agentic/winui-agentic/PILOT.md` edits not from this work. Details: `context/todos.md` 2026-10-09.
-1. **(opened 2026-09-01) `FlashContentRefresh` COMException on wake.** Caught, harmless so far,
-   cause not investigated — possibly two queued ticks firing close together after timer suspension
-   during sleep. *Rec:* revisit if a visible glitch or a less-harmless failure accompanies it.
-2. **(opened 2026-08-14) How the 08-14 archive move happened is unconfirmed** — an archived plan
-   at 11/23 tasks (short of the 100% Archive requirement) turned up back in active; moved back, DB
-   intact. *Rec:* watch for a recurrence.
-3. **(opened 2026-08-13) The 08:00–11:28 gap on 08-13 never produced a diary row — cause
-   unconfirmed** (ruled out as the test-data cleanup). *Rec:* revisit if it recurs.
-4. **(opened 2026-08-07, narrowed 2026-09-22) `IdleReturnDialog` Category/Tag fields and
-   `EditDiaryEntryDialog` quick-pick chips still not live-UIA-verified** — opening either requires
-   simulating a click into a data-editing control, which the auto-mode classifier itself blocks
-   ("Modify Shared Resources"), so this stays code-inspection-only by design, same as item 7 below.
-   *2026-09-22 UIA pass confirmed the rest of the old item-4 list live*: 08-13's narrowed diary
-   columns/Auto scrollbar, Reports DayOffs figure ("5 days off marked"), the diary Mark-tag toolbar
-   row (Routine/Documents/Studioshoo/Selfdev/Procrastination all rendering real tag names), and
-   08-17's Schedule collapsible per-plan cards (`Group` elements report `"<plan>, expanded"`).
-5. **(opened 2026-08-05) Diary midnight rollover never observed actually happening** — needs the
-   clock to cross midnight with the app sitting on Reports. *Rec:* if Diary still shows yesterday
-   some morning, check the assignment at the top of `BuildDiarySection` first.
-6. **(standing, not a bug) Scoring Settings' 12 inputs are live-checked (present/reachable at both
-   window extremes) but their values are never edited live** — that writes `config.json` and
-   restarts the tracker, so verification stays code-inspection-only by design. Revisit only if
-   this verification approach changes.
-7. **(opened 2026-09-18, fork 2026-09-22; restructured 2026-10-01) Two-workflow pilot — running.**
-    `agentic/winui-agentic/` is the agentic twin (source forked 2026-09-22; documents split 2026-10-01 —
-    own CONTEXT/DECISIONS/context, see `agentic/winui-agentic/PILOT.md`). Agents:
-    `.claude/agents/planillium-{designer,planner,coder,qa}.md` — Designer+Planner write one joint
-    SPEC, Coder implements, **one QA agent tests both sides** against the same `ACCEPTANCE.md`.
-    Close-out for every feature, both sides: QA run → orchestrator logs a Dashboard row
-    (`https://claude.ai/artifact/1CJiroBcpychcmgmYApXTr`) with tokens from
-    `MASTERMIND/src/pilot_metrics/pilot_metrics.py`. Handoff diagram:
-    `https://claude.ai/artifact/81B78ayvAVq8g9QxgGADnz`. Past outcomes: `context/todos.md`.
+One line per item; full detail and history in `context/open-items.md` (grep the item number or date).
 
-0b. **(opened 2026-10-13) AI layer + replace-remaining v2 -- built both sides, QA PASS WITH CAVEATS (0 defects), local commits only (not pushed).** Live UI checks owed in both apps (one at a time, scratch data): Settings -> AI (save/test/remove key), Ask Claude in both dialogs (Stop/Cancel, notice, blocked message with text in the reply box, whitespace-only box allowed, byte-identical plan file after failure). Details: `context/todos.md` 2026-10-13; rule 16 in `DECISIONS.md`.
-   Done 2026-10-13: never-overwrite rule + re-check after notice and after answer (regular de9b185, agentic c7b1420), agentic test-analyzer errors fixed (485eeac; strict build clean both sides, tests 197 / 299), Dashboard rows (replace-remaining-v2, ai-layer; tokens/time null -- no clean window), MANUAL.md, Release rebuilt and relaunched. Open: push when asked; agentic CONTEXT.md section 2 not refreshed by its Coder; "Clear all my data" leaves the key.
-
-   Process changes 2026-10-13: QA agent (`.claude/agents/planillium-qa.md`, local-only) now must run the app against a scratch `MENTOR_ROOT` + UIA and may not PASS UI lines by inspection; workflow agents must be launched foreground-only (CLAUDE.md rule; hook `~/.claude/hooks/sequential-agents.sh` registered in settings.json 2026-10-13 with user approval, widened to any `<project>-designer|planner|coder|qa`). Test counts differ by side (regular 197, agentic 299) because each side writes its own tests -- not a quality signal. Regular Test connection now has Stop + 30 s cap (f954892; was 6 min worst case; agentic has Stop + 120 s). LIVE QA (2026-10-13, QA drove both apps itself via UIA + stub server, scratch data): regular PASS WITH CAVEATS 0 defects (351ff5e); agentic first run FAIL 1 defect D1 (reason vanished after AI fill), fixed by Coder 0f3923d (310 tests), re-run PASS WITH CAVEATS 0 defects. Not live-driven: 120 s/6 min caps in the Ask dialogs (regular), v1 lines 9/11-13/15. Cosmetic leftovers: agentic reason sits below the fold, stale neutral note after edit; regular Add plan shows no reason for garbage until Import. User still to do the final eyes-on check. DECIDED 2026-10-13: QA owns ALL tests (Coders/builder write none), reports build+test counts per side, adds security checks modelled on Anthropic's /security-review, UNTESTABLE only for 3 stated reasons, every agent report ends with Lessons (orchestrator files them). Global: `~/.claude/reference/app-qa-checks.md`, feature-workflow rule 3a; agent files updated (local-only). Existing 199/310 tests stay as QA-owned baselines until QA's first shared suite replaces them. Next QA run: drive the skipped lines (120 s/6 min caps via stub, v1 lines 9/11-13/15, key removed while dialog open).
+- **0 (2026-10-01)** Eight-item batch (pie, diary filters, Top Distractions, away dialog) + payable tags / salary default — regular visuals OK'd, agentic pie legend was failing; payable-tags code was left uncommitted at the time.
+- **0a (2026-10-09)** Replace remaining tasks + Plans-card layout — built, QA'd, pushed 44f6f19; live checks owed in both apps.
+- **1 (2026-09-01)** `FlashContentRefresh` COMException on wake — caught, harmless; revisit if a visible glitch accompanies it.
+- **2 (2026-08-14)** An archived plan at 11/23 tasks turned up in active — cause unconfirmed; watch.
+- **3 (2026-08-13)** 08:00–11:28 diary gap on 08-13 — cause unconfirmed; revisit if it recurs.
+- **4 (2026-08-07)** `IdleReturnDialog` / `EditDiaryEntryDialog` fields not live-UIA-verified (code-inspection only by design).
+- **5 (2026-08-05)** Diary midnight rollover never observed.
+- **6 (standing)** Scoring Settings' 12 inputs checked present, values never edited live (by design).
+- **7 (2026-09-18)** Two-workflow pilot running — method in `~/.claude/reference/feature-workflow.md`; past outcomes `context/todos.md`.
+- **0b (2026-10-13)** AI layer + replace-remaining v2 — built, QA'd, local commits; live checks done for regular, agentic Ask failed on the 8000-token cap (A1, open).
+- **0c (2026-10-21)** Vision: autonomous / self-learning Planillium — idea only; decisions (a)-(e) recorded in detail; still undecided: spending cap, push rule, backup/preview/undo for data changes.
+- **0d (2026-10-23)** User's request batches: B1 Reports/Settings DONE; B1b + B1c DONE 2026-10-25 (local commits, not pushed); B1d DONE 2026-10-25 both sides (regular 18283fc PASS WITH CAVEATS, agentic 58597a2 PASS after 2 rounds; local, not pushed; dashboard rows written, `defectsUser` awaiting user's eyes-on of both apps; caveat C1 caption click puts cursor in box -- awaiting user decision; scratch app reaches real AI key/TickTick credentials -- proposed own batch); B2 Diary (3-7), B3 data/performance (8, 9, slow Ask), B4 Today dot (11) + A1-A5/R1 fixes queued. Tab out of add-line amount box = KEEP (user, 2026-10-25). Open: regular caveats ("500 123" shows "= --/h", stale "Saved.", mouse-clicked Add leaves focus on the button). UPDATE 2026-10-26 (later): user tried agentic B1d on a scratch copy: all lines OK except line 5 -- blank-pane click after the new-tag box sometimes sends the cursor to the salary box (agentic only; regular 0 of 4). Defect b1d-ag-03 on both dashboards; B1f (agentic-only fix, `agentic/winui-agentic/pilot-specs/b1f-focus-jump/`): fix 1 d2d30b0 missed a 4 px right-edge strip (QA FAIL), fix 2 e82135f QA'd 2026-10-26: click-jump fixed (0 jumps in 258 edge trials), accepted on that evidence; local, not pushed. B1f QA overran (~70 extra min, final verdict FAIL on an unrelated item): the 7 fails are all Previous-salary-box Esc / refused-Enter behaviour (part C input-box matrix, never run on the B1d build; 65 of 144 part-C checks never ran). USER RULINGS 2026-10-27 for the next agentic fix batch (not yet briefed): (1) Esc in a money box leaves the box and clears its contents, same as the regular version (check regular's exact behaviour first); (2) "-5"+Enter keeps cursor and message; (3) empty+Esc shows the saved amount; (4) 12 digits refused with a message. B1f close-out still owed: WINDOW.txt `end:`, dashboard run rows, defect b1d-ag-03 status on both dashboards, qa-extra.md. QA rules tightened 2026-10-26 (global agent defs, journaled): plan with measured minutes first, one trial per distinct action, no re-test of passed checks, regression scope from the diff, QA never Haiku, PM declines extensions without a new fact. User ruled QA trial counts follow case complexity, not a fixed 20+. Scratch-app launch note: MENTOR_ROOT works in Debug builds only (Release ignores it). UPDATE 2026-10-26: user OK'd B1d on the regular app (C1 kept as is); agentic app not yet tried; B1e (Reports: remove the two duplicate money cards, all periods) requested, briefs written, not built -- see `context/open-items.md` "Decisions and status 2026-10-26".
+- **Process (2026-10-25)** Lessons loop added: `regular/LESSONS-INBOX.md` and `agentic/LESSONS-INBOX.md` (PM-written) are merged into each side's `LESSONS.md` by its head; QA standing checks in `~/.claude/reference/app-qa-checks.md` §5.
 
 ## 8. Next steps
 

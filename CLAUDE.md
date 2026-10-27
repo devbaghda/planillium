@@ -10,7 +10,7 @@ letting either one absorb the other's job.
 > `~/.claude/CLAUDE.md` and load automatically alongside this file. Everything below is what's
 > specific to Planillium.
 
-@CONTEXT.md
+<!-- CONTEXT.md is deliberately NOT @-imported (2026-10-25): subagents inherit this file, and the root CONTEXT.md is the regular side's record -- importing it leaked it into agentic agents. The main session and the regular generalist read it explicitly (see "Session start"). -->
 
 ## Session start
 **Read `CONTEXT.md` in full at the start of every session, before doing anything else** —
@@ -68,11 +68,17 @@ progress — that's the part with no substitute.
   `ProjectReference` without first confirming `dotnet build` on this machine can actually handle
   a `UseWinUI=true` transitive reference (it couldn't as of 2026-07-09).
 
-## Workflow agents run in the foreground only
-Launch every `planillium-*` agent (designer, planner, coder, qa) with `run_in_background: false`, one at a time, 
-and never start the other side while one is running. The Agent tool defaults to background, which is how QA and 
-the Planner overlapped on 2026-10-13 and made that feature's token/time numbers unmeasurable. 
-(`~/.claude/hooks/sequential-agents.sh` enforces this; registered in settings.json 2026-10-13.)
+## Workflow agents (company model, 2026-10-25)
+Features run through the global `workflow-generalist` (regular side, `regular/winui/`) and `workflow-lead`
+(agentic side, `agentic/winui-agentic/`); method in `~/.claude/reference/feature-workflow.md`. The four
+`planillium-*` agents are retired (archived in `.claude/agents-retired/`, gitignored) — their project rules
+now live here and apply to every `workflow-*` agent working on Planillium:
+- **Foreground only, one at a time**, never both sides at once (`sequential-agents.sh` enforces; keeps token/time numbers clean).
+- **Own side only.** Never read the other side's source, spec or write-ups for the feature (contamination rule).
+- **Real data is off limits:** `data/`, `config.json`, `plans/` and the live `Planillium.App.exe` (under `bind\Release`) are never read, written or run against.
+- **Build strict:** `dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental` from `<side>/Planillium.App/`, then `dotnet test --no-build` from `<side>/Planillium.App.Tests/`. Test project source-links plain C# files; no `ProjectReference` to the WinUI app.
+- **Builders don't write tests; QA does.** QA must run in an isolated worktree, build Debug, and run the app against a scratch `MENTOR_ROOT` (empty DB, no `progress.db*` copied) with `MENTOR_INSTANCE_SUFFIX=verify`, driven by UI Automation (`PrintWindow` flag 2 for screenshots). AI calls go to a local `HttpListener` stub via `PLANILLIUM_AI_BASE_URL`; never a real key. Kill only the process it started. UI lines are PASS only if seen happening; otherwise UNTESTABLE.
+- UNTESTABLE is allowed only for: would touch real data · needs credentials/hardware unavailable · code-only line. Slow is not a reason.
 
 ## Verifying UI fixes without breaking things
 - The global no-mutating-real-data rule applies here as: **never simulate clicks/keystrokes that
@@ -109,10 +115,10 @@ The global rules on doc currency and the `CONTEXT.md` + `context/*.md` split sch
   before changing anything in the areas it covers; fetch `context/*.md` on demand by grepping for a
   header, not read end-to-end. Keep them separate: a new business rule or a lesson learned the hard
   way goes in `DECISIONS.md`; a shipped fix or feature, once it resolves, goes in
-  `context/todos.md`; an open item stays in `CONTEXT.md` §7 until it resolves.
+  `context/todos.md`; an open item stays open until it resolves — `CONTEXT.md` §7 is a one-line-per-item index, the full detail lives in `context/open-items.md` (add/edit there, keep the index line in step).
 - Docs to update in the same pass as a shipped fix or feature: add a dated entry to
   `context/todos.md` (terse — it's an index, not an archive) and cut the matching item from
-  `CONTEXT.md` §7 if it was tracked there; plus `CHANGELOG.md` (Unreleased) and `MANUAL.md` if the
+  `CONTEXT.md` §7 and `context/open-items.md` if it was tracked there; plus `CHANGELOG.md` (Unreleased) and `MANUAL.md` if the
   change is user-visible.
 - **`CONTEXT.md`'s compaction threshold is 400 lines**, declared in its own header where the Stop
   hook reads it (must stay on one line — `Compaction threshold: 400 lines` — for the hook's regex
@@ -120,7 +126,7 @@ The global rules on doc currency and the `CONTEXT.md` + `context/*.md` split sch
   under-reported this file by ~60). Over threshold means compact **in the same pass**. Since the
   2026-09-14 split, the file should stay well under 400 by design — bulk content lives in
   `DECISIONS.md`/`context/*.md`, which are never compacted. If it's approaching 400 again, the
-  first move is checking whether something that grew inline (e.g. §7 Still open) belongs in
+  first move is checking whether something that grew inline (e.g. §7 Still open — now an index; detail in `context/open-items.md`) belongs in
   `context/todos.md` once resolved, not shrinking prose that's still current.
 - Skills this repo has sharpened and should keep sharpening: `windows-app-auditor`,
   `windows-app-tester` — WinUI layout quirks, UIA verification technique, the

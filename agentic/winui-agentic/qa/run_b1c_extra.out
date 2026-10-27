@@ -1,0 +1,20 @@
+X1-lone-minus: PASS -- box='-' hints=1 cfg=2925
+X2-enter-invalid-keeps-focus: PASS -- focus=['Previous salary ? monthly net (?)'] cfg=2925 hints=1
+X3-minus-zero: PASS -- box='-0' hints=1 cfg=2925
+X4-empty-no-message: PASS -- box='' hints=0
+X5-mid-minus: PASS -- typed 5-0 -> box='-50' hints=1
+X6-unicode-minus: PASS -- typed U+2212 5 -> box='-5' hints=1
+readout: ['= —/h', '= €9,52/h']
+X7-section-switch-invalid: PASS -- cfg=2925 alive=True
+log tail:
+D:/CLAUDE/Planillium/.claude/worktrees/qa-ag/_scratch_root/data\mentor-winui.log
+2026-10-25 20:34:31 [INFO] Planillium v1.2.0 starting
+
+SUMMARY
+('X1-lone-minus', 'PASS', "box='-' hints=1 cfg=2925")
+('X2-enter-invalid-keeps-focus', 'PASS', "focus=['Previous salary — monthly net (€)'] cfg=2925 hints=1")
+('X3-minus-zero', 'PASS', "box='-0' hints=1 cfg=2925")
+('X4-empty-no-message', 'PASS', "box='' hints=0")
+('X5-mid-minus', 'PASS', "typed 5-0 -> box='-50' hints=1")
+('X6-unicode-minus', 'PASS', "typed U+2212 5 -> box='-5' hints=1")
+('X7-section-switch-invalid', 'PASS', 'cfg=2925 alive=True')

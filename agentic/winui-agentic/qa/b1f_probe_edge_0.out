@@ -1,0 +1,7 @@
+pane (L485, T335, R1144, B920) window (L208, T208, R1388, B988) extra tags 0
+point x=right-1 top      (1143, 393) hit=('SectionScroll', '', 'pane')  salary-focus-or-9-landed 9/12  by hold: {0.0: 0, 0.05: 3, 0.12: 3, 0.25: 3}
+point x=right-2 mid      (1142, 627) hit=('SectionScroll', '', 'pane')  salary-focus-or-9-landed 9/12  by hold: {0.0: 0, 0.05: 3, 0.12: 3, 0.25: 3}
+point x=right-4 bottom   (1140, 900) hit=('SectionScroll', '', 'pane')  salary-focus-or-9-landed 9/12  by hold: {0.0: 0, 0.05: 3, 0.12: 3, 0.25: 3}
+point x=right-6 mid      (1138, 627) hit=('SectionScroll', '', 'pane')  salary-focus-or-9-landed 0/12  by hold: {0.0: 0, 0.05: 0, 0.12: 0, 0.25: 0}
+point x=right-10 mid     (1134, 627) hit=('SectionScroll', '', 'pane')  salary-focus-or-9-landed 0/12  by hold: {0.0: 0, 0.05: 0, 0.12: 0, 0.25: 0}
+final config 2925 [('Studioshoo', 1600)]

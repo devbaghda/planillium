@@ -1,0 +1,13 @@
+pane (L303, T153, R962, B738) window (L26, T26, R1206, B806) extra tags 5
+point x=right-1 top      (961, 211) hit=('SectionScroll', '', 'pane')  salary-focus-or-9-landed 9/12  by hold: {0.0: 0, 0.05: 3, 0.12: 3, 0.25: 3}
+point x=right-2 mid      (960, 445) hit=('VerticalScrollBar', 'Vertical', 'scroll bar')  salary-focus-or-9-landed 0/12  by hold: {0.0: 0, 0.05: 0, 0.12: 0, 0.25: 0}
+Traceback (most recent call last):
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_probe_edge.py", line 23, in <module>
+    eclick(src, hold); time.sleep(1.0)
+    ^^^^^^^^^^^^^^^^^
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_lib.py", line 124, in eclick
+    click(x, (r.top + r.bottom) // 2, hold)
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_lib.py", line 98, in click
+    if not inside(x, y): raise Abort("click outside window %r" % ((x, y),))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+b1f_lib.Abort: click outside window (0, 0)

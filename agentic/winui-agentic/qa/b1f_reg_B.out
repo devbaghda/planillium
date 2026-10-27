@@ -1,0 +1,114 @@
+fixture: 2925 [('studioshoo', 1600)]
+B1-6 14000 formatting/save: PASS -- box '14\u2009000' saved 14000
+B1-8 no spinners in Income: PASS -- []
+B1b-1/B1c-1/2 Previous salary Enter: PASS -- typing-only stored=2925 after Enter=3000 focus=[] 9-changed=False
+B1c-3 Previous salary Tab: PASS -- stored=3100 focus=('EmployedToggle', 'Currently employed', 'toggle switch')
+B1c-4 Previous salary click blank: PASS -- stored=3200 focus=('Nav', '', 'custom')
+B1c-4 Previous salary click other box: PASS -- stored=3300 focus=('', 'Studioshoo ? monthly net (?)', 'edit')
+B1b-1/B1c-1/2 Studioshoo Enter: PASS -- typing-only stored=1600 after Enter=3000 focus=[] 9-changed=False
+B1c-3 Studioshoo Tab: PASS -- stored=3100 focus=('', 'Remove', 'button')
+B1c-4 Studioshoo click blank: PASS -- stored=3200 focus=('Nav', '', 'custom')
+B1c-4 Studioshoo click other box: PASS -- stored=3300 focus=('', 'Previous salary ? monthly net (?)', 'edit')
+B1c-7/10 Previous salary minus: PASS -- box '-500' msg ["Amounts can't be negative."]; after Tab box '-500' msg ["Amounts can't be negative."]; stored 2925 [('studioshoo', 1600)]
+B1c-7/10 Studioshoo minus: PASS -- box '-500' msg ["Amounts can't be negative."]; after Tab box '-500' msg ["Amounts can't be negative."]; stored 2925 [('studioshoo', 1600)]
+B1d-1/2 amount '' Add by mouse: PASS -- hint 'Monthly net needs a number.' tags ['studioshoo']
+B1d-4 Esc after refused ('',mouse): PASS -- name '' hint ''
+B1d-1/2 amount '' Add by enter: PASS -- hint 'Monthly net needs a number.' tags ['studioshoo']
+B1d-4 Esc after refused ('',enter): PASS -- name '' hint ''
+B1d-1/2 amount 'abc' Add by mouse: PASS -- hint 'Monthly net needs a number.' tags ['studioshoo']
+B1d-4 Esc after refused ('abc',mouse): PASS -- name '' hint ''
+B1d-1/2 amount 'abc' Add by enter: PASS -- hint 'Monthly net needs a number.' tags ['studioshoo']
+B1d-4 Esc after refused ('abc',enter): PASS -- name '' hint ''
+B1d-1/2 amount '0' Add by mouse: PASS -- hint 'Amount must be more than 0.' tags ['studioshoo']
+B1d-4 Esc after refused ('0',mouse): PASS -- name '' hint ''
+B1d-1/2 amount '0' Add by enter: PASS -- hint 'Amount must be more than 0.' tags ['studioshoo']
+B1d-4 Esc after refused ('0',enter): PASS -- name '' hint ''
+B1d-4 click blank after refused mouse Add: PASS -- name '' hint '' focus ('Nav', '', 'custom')
+B1d-4 click heading after refused mouse Add: PASS -- name '' hint '' focus ('Nav', '', 'custom')
+B1d-3 Tab keeps add line: PASS -- kept ('zed', '500') tags ['studioshoo'] focus ('', 'Add', 'button')
+B1d-8 mouse Add adds and parks: PASS -- tags [('studioshoo', 1600), ('zed', 500)] focus ('Nav', '', 'custom')
+B1d-8 typed 9 after mouse Add: PASS -- unchanged
+B1c-5 Enter in NewPaidTagName adds: PASS -- tags ['studioshoo', 'e1'] focus ('Nav', '', 'custom')
+B1c-5 Enter in NewPaidTagRate adds: PASS -- tags ['studioshoo', 'e2'] focus ('Nav', '', 'custom')
+B1d-4 Esc clears: PASS -- name ''
+B1d-4 click outside clears: PASS -- name '' focus ('Nav', '', 'custom')
+B1d-5 Previous salary -> blank hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> blank hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> blank hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> label hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> label hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> label hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> paidwork-heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> paidwork-heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> paidwork-heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> blank hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> blank hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> blank hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> label hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> label hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> label hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> paidwork-heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> paidwork-heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Studioshoo -> paidwork-heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> blank hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> blank hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> blank hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> label hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> label hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> label hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> paidwork-heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> paidwork-heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagName -> paidwork-heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> blank hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> blank hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> blank hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> label hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> label hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> label hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> paidwork-heading hold=0.00: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> paidwork-heading hold=0.12: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 NewPaidTagRate -> paidwork-heading hold=0.25: PASS -- focus ('Nav', '', 'custom') 9-changed False
+B1d-5 Previous salary -> button(toggle): PASS -- focus ('EmployedToggle', 'Currently employed', 'toggle switch') 9-changed False
+B1d-5 Studioshoo -> button(toggle): PASS -- focus ('EmployedToggle', 'Currently employed', 'toggle switch') 9-changed False
+B1d-5 NewPaidTagName -> button(toggle): PASS -- focus ('EmployedToggle', 'Currently employed', 'toggle switch') 9-changed False
+B1d-6 500 123 in Previous salary: PASS -- box '500\u2009123' readouts ['= ?2\xa0976,92/h', '= ?9,52/h']
+B1d-6 500 123 in Studioshoo: PASS -- box '500\u2009123' readouts ['= ?17,41/h', '= ?2\xa0976,92/h']
+B1d-6 500 123 in NewPaidTagRate: PASS -- box '500\u2009123' readouts ['= ?17,41/h', '= ?9,52/h']
+B1d-7 Saved cleared by refusal: PASS -- after save 'Income settings saved.'; after refusal 'Monthly net needs a number.'
+B1d-9 Previous salary '' leave by tab: PASS -- box '2\u2009925' stored 2925 focus ('EmployedToggle', 'Currently employed', 'toggle switch')
+B1d-9 Previous salary '' leave by enter: PASS -- box '2\u2009925' stored 2925 focus ('Nav', '', 'custom')
+B1d-9 Previous salary '' leave by blank: PASS -- box '2\u2009925' stored 2925 focus ('Nav', '', 'custom')
+B1d-9 Previous salary '' leave by other: PASS -- box '2\u2009925' stored 2925 focus ('', 'Studioshoo ? monthly net (?)', 'edit')
+B1d-9 Previous salary 'abc' leave by tab: PASS -- box '2\u2009925' stored 2925 focus ('EmployedToggle', 'Currently employed', 'toggle switch')
+B1d-9 Previous salary 'abc' leave by enter: PASS -- box '2\u2009925' stored 2925 focus ('Nav', '', 'custom')
+B1d-9 Previous salary 'abc' leave by blank: PASS -- box '2\u2009925' stored 2925 focus ('Nav', '', 'custom')
+B1d-9 Previous salary 'abc' leave by other: PASS -- box '2\u2009925' stored 2925 focus ('', 'Studioshoo ? monthly net (?)', 'edit')
+B1d-9 Previous salary '   ' leave by tab: PASS -- box '2\u2009925' stored 2925 focus ('EmployedToggle', 'Currently employed', 'toggle switch')
+B1d-9 Previous salary '   ' leave by enter: PASS -- box '2\u2009925' stored 2925 focus ('Nav', '', 'custom')
+B1d-9 Previous salary '   ' leave by blank: PASS -- box '2\u2009925' stored 2925 focus ('Nav', '', 'custom')
+B1d-9 Previous salary '   ' leave by other: PASS -- box '2\u2009925' stored 2925 focus ('', 'Studioshoo ? monthly net (?)', 'edit')
+B1d-9 Studioshoo '' leave by tab: PASS -- box '1\u2009600' stored 1600 focus ('', 'Remove', 'button')
+B1d-9 Studioshoo '' leave by enter: PASS -- box '1\u2009600' stored 1600 focus ('Nav', '', 'custom')
+B1d-9 Studioshoo '' leave by blank: PASS -- box '1\u2009600' stored 1600 focus ('Nav', '', 'custom')
+B1d-9 Studioshoo '' leave by other: PASS -- box '1\u2009600' stored 1600 focus ('', 'Previous salary ? monthly net (?)', 'edit')
+B1d-9 Studioshoo 'abc' leave by tab: PASS -- box '1\u2009600' stored 1600 focus ('', 'Remove', 'button')
+B1d-9 Studioshoo 'abc' leave by enter: PASS -- box '1\u2009600' stored 1600 focus ('Nav', '', 'custom')
+B1d-9 Studioshoo 'abc' leave by blank: PASS -- box '1\u2009600' stored 1600 focus ('Nav', '', 'custom')
+B1d-9 Studioshoo 'abc' leave by other: PASS -- box '1\u2009600' stored 1600 focus ('', 'Previous salary ? monthly net (?)', 'edit')
+B1d-9 Studioshoo '   ' leave by tab: PASS -- box '1\u2009600' stored 1600 focus ('', 'Remove', 'button')
+B1d-9 Studioshoo '   ' leave by enter: PASS -- box '1\u2009600' stored 1600 focus ('Nav', '', 'custom')
+B1d-9 Studioshoo '   ' leave by blank: PASS -- box '1\u2009600' stored 1600 focus ('Nav', '', 'custom')
+B1d-9 Studioshoo '   ' leave by other: PASS -- box '1\u2009600' stored 1600 focus ('', 'Previous salary ? monthly net (?)', 'edit')
+==== SUMMARY: 112 checks, 0 FAIL

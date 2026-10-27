@@ -23,3 +23,8 @@ Agentic app showed the same behaviour as regular for items 1-3 above.
    ANSWERED (user, 2026-10-25): leaving a box with a negative value behaves like leaving with a positive one --
    the text STAYS in the box (not reverted), the message stays visible, and the saved value is unchanged (nothing
    saved while invalid). Supersedes the "assumed" line above.
+
+## Addendum 2026-10-25 (user, eyes-on of regular B1c)
+Empty amount in the add line saved a tag "asd" with 0 (screenshot). ACCEPTANCE line 6 requires it to be refused
+(nothing added, message). Fix in the next batch (B1d). Everything else checked OK: add line, Enter keeps/leaves
+as specified, minus.

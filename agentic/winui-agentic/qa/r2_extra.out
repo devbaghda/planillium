@@ -1,0 +1,127 @@
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt''-esc: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt''-blank: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt''-heading: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt''-label: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt''-salarybox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Previous salary ? monthly net (?)']) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt''-tagbox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Studioshoo ? monthly net (?)']) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'abc'-esc: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'abc'-blank: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'abc'-heading: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'abc'-label: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'abc'-salarybox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Previous salary ? monthly net (?)']) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'abc'-tagbox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Studioshoo ? monthly net (?)']) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'0'-esc: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'0'-blank: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'0'-heading: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'0'-label: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'0'-salarybox: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], ['Previous salary ? monthly net (?)']) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B@1tags-amt'0'-tagbox: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], ['Studioshoo ? monthly net (?)']) tags=1 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+B-enter-refusal-then-esc@1tags: PASS -- name='' hints=[]
+FILL asd win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+FILL good1 win (L234, T234, R1414, B1014) name (L511, T716, R671, B775) rate (L679, T716, R829, B775)
+add-works-after-refusal@1tags: PASS -- tags=['Studioshoo', 'good1'] focus=[('Pane', '')]
+FILL x0 win (L234, T234, R1414, B1014) name (L511, T783, R671, B842) rate (L679, T783, R829, B842)
+FILL x1 win (L234, T234, R1414, B1014) name (L511, T850, R671, B909) rate (L679, T850, R829, B909)
+FILL x2 win (L234, T234, R1414, B1014) name (L511, T879, R671, B938) rate (L679, T879, R829, B938)
+FILL x3 win (L234, T234, R1414, B1014) name (L511, T879, R671, B938) rate (L679, T879, R829, B938)
+FILL asd win (L234, T234, R1414, B1014) name (L511, T879, R671, B938) rate (L679, T879, R829, B938)
+B@6tags-amt''-esc: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt''-blank: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt''-heading: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt''-label: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt''-salarybox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Previous salary ? monthly net (?)']) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt''-tagbox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Studioshoo ? monthly net (?)']) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'abc'-esc: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'abc'-blank: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'abc'-heading: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'abc'-label: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'abc'-salarybox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Previous salary ? monthly net (?)']) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'abc'-tagbox: PASS -- before=('asd', '', ['Monthly net needs a number.'], []) after=('', '', [], ['Studioshoo ? monthly net (?)']) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'0'-esc: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'0'-blank: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'0'-heading: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'0'-label: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], []) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'0'-salarybox: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], ['Previous salary ? monthly net (?)']) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B@6tags-amt'0'-tagbox: PASS -- before=('asd', '0', ['Amount must be more than 0.'], []) after=('', '', [], ['Studioshoo ? monthly net (?)']) tags=6 sal=2925
+FILL asd win (L234, T234, R1414, B1014) name (L0, T0, R0, B0) rate (L0, T0, R0, B0)
+B-enter-refusal-then-esc@6tags: PASS -- name='' hints=[]
+FILL asd win (L234, T234, R1414, B1014) name (L511, T839, R671, B898) rate (L679, T839, R829, B898)
+FILL good6 win (L234, T234, R1414, B1014) name (L511, T839, R671, B898) rate (L679, T839, R829, B898)
+add-works-after-refusal@6tags: PASS -- tags=['Studioshoo', 'good1', 'x0', 'x1', 'x2', 'x3', 'good6'] focus=[('Pane', '')]
+SUMMARY
+B@1tags-amt''-esc PASS
+B@1tags-amt''-blank PASS
+B@1tags-amt''-heading PASS
+B@1tags-amt''-label PASS
+B@1tags-amt''-salarybox PASS
+B@1tags-amt''-tagbox PASS
+B@1tags-amt'abc'-esc PASS
+B@1tags-amt'abc'-blank PASS
+B@1tags-amt'abc'-heading PASS
+B@1tags-amt'abc'-label PASS
+B@1tags-amt'abc'-salarybox PASS
+B@1tags-amt'abc'-tagbox PASS
+B@1tags-amt'0'-esc PASS
+B@1tags-amt'0'-blank PASS
+B@1tags-amt'0'-heading PASS
+B@1tags-amt'0'-label PASS
+B@1tags-amt'0'-salarybox PASS
+B@1tags-amt'0'-tagbox PASS
+B-enter-refusal-then-esc@1tags PASS
+add-works-after-refusal@1tags PASS
+B@6tags-amt''-esc PASS
+B@6tags-amt''-blank PASS
+B@6tags-amt''-heading PASS
+B@6tags-amt''-label PASS
+B@6tags-amt''-salarybox PASS
+B@6tags-amt''-tagbox PASS
+B@6tags-amt'abc'-esc PASS
+B@6tags-amt'abc'-blank PASS
+B@6tags-amt'abc'-heading PASS
+B@6tags-amt'abc'-label PASS
+B@6tags-amt'abc'-salarybox PASS
+B@6tags-amt'abc'-tagbox PASS
+B@6tags-amt'0'-esc PASS
+B@6tags-amt'0'-blank PASS
+B@6tags-amt'0'-heading PASS
+B@6tags-amt'0'-label PASS
+B@6tags-amt'0'-salarybox PASS
+B@6tags-amt'0'-tagbox PASS
+B-enter-refusal-then-esc@6tags PASS
+add-works-after-refusal@6tags PASS

@@ -1,0 +1,16 @@
+rects {'name': <RECT L381, T746, R541, B805>, 'rate': <RECT L549, T746, R699, B805>, 'add': <RECT L707, T773, R757, B805>, 'pane': <RECT L381, T231, R1040, B816>}
+point bottom-mid (710, 766) hit ('SectionScroll', '', 'pane')
+    [(0.0, 'NewPaidTagName', '9'), (0.12, 'NewPaidTagName', '99'), (0.25, 'NewPaidTagName', '999')]
+point above-add (732, 754) hit ('SectionScroll', '', 'pane')
+    [(0.0, 'NewPaidTagName', '9999'), (0.12, 'NewPaidTagName', '99999'), (0.25, 'NewPaidTagName', '999999')]
+point right-of-add (787, 789) hit ('SectionScroll', '', 'pane')
+Traceback (most recent call last):
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_probe_addline.py", line 29, in <module>
+    eclick(fe("NewPaidTagName"), hold); time.sleep(1.0); click(x, y, hold); time.sleep(.5)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_lib.py", line 124, in eclick
+    click(x, (r.top + r.bottom) // 2, hold)
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_lib.py", line 98, in click
+    if not inside(x, y): raise Abort("click outside window %r" % ((x, y),))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+b1f_lib.Abort: click outside window (0, 0)

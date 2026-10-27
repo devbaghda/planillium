@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "C:\Users\devba\AppData\Local\Programs\Python\Python311\Lib\site-packages\pywinauto\application.py", line 958, in connect
+    wait_until(timeout, retry_interval, self.is_process_running, value=True)
+  File "C:\Users\devba\AppData\Local\Programs\Python\Python311\Lib\site-packages\pywinauto\timings.py", line 375, in wait_until
+    raise err
+pywinauto.timings.TimeoutError: timed out
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_regress.py", line 356, in <module>
+    p = launch()
+        ^^^^^^^^
+  File "D:\CLAUDE\Planillium\.claude\worktrees\agent-a05e67cf83977ee1f\agentic\winui-agentic\qa\b1f_lib.py", line 50, in launch
+    WIN[0] = Application(backend="uia").connect(process=p.pid).top_window()
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\devba\AppData\Local\Programs\Python\Python311\Lib\site-packages\pywinauto\application.py", line 960, in connect
+    raise ProcessNotFoundError('Process with PID={} not found!'.format(self.process))
+pywinauto.application.ProcessNotFoundError: Process with PID=19832 not found!

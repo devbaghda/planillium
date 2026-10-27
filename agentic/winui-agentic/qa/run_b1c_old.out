@@ -1,0 +1,52 @@
+start 2925 [1600] 2 925 1 600
+1: PASS -- after Enter: config=3000 focusedEdits=[]; typed 9 -> box='3\u2009000' config=3000
+2: PASS -- cfg=[1700] focusedEdits=[], typed 9 -> box='1\u2009700' config=[1700]
+3: PASS -- after Tab config=3100 focusedEdits=[]
+4: PASS -- blank click salary: cfg=3300 focus=[] box='3\u2009300' | click other box: cfg=3300 focus=['Studioshoo ? monthly net (?)'] | blank click tag: cfg=[1750] focus=[] box='1\u2009750'
+5: PASS -- tags=[{'tag': 'zed', 'label': 'zed', 'monthly_net_eur': 500}, {'tag': 'zed2', 'label': 'zed2', 'monthly_net_eur': 500}, {'tag': 'zed3', 'label': 'zed3', 'monthly_net_eur': 500}] focusAfterNameEnter=[] focusAfterRateEnter=[]
+6: PASS -- minus: rateEnter added=False hint=True status="Amounts can't be negative."; nameEnter added=False hint=True status="Amounts can't be negative."; empty rate: rateEnter status='Monthly net needs a number.' nameEnter status='Monthly net needs a number.' tags=4->4
+   dbg salary [('Previous', '-500'), ('Studiosh', '1\u2009750'), ('zed — mo', '500'), ('zed2 — m', '500'), ('zed3 — m', '500'), ('New paya', ''), ('Monthly ', '')] [387] ['Previous salary — monthly net (€)']
+7-salary: PASS -- box='-500' hints=1 config=3300 (was 3300)
+8-salary: PASS -- box='-50\u2009070' hints=1 config=3300
+10-tab-salary: PASS -- after Tab box='-50\u2009070' hints=1 config=3300 focus=[]
+9-salary: PASS -- after deleting minus box='50\u2009070' hints=0
+   saved after Enter: 50070
+10-click-salary: PASS -- after blank click box='-8' hints=1 config=50070 focus=[]
+   restore: rect (L433, T326, R673, B385) win (L156, T156, R1336, B936) focus before []
+   after click focus ['Previous salary — monthly net (€)']
+   pre-enter salary 1 234 ['Previous salary — monthly net (€)']
+   restored salary 1 234 1234 []
+   dbg tag [('Previous', '1\u2009234'), ('Studiosh', '-500'), ('zed — mo', '500'), ('zed2 — m', '500'), ('zed3 — m', '500'), ('New paya', ''), ('Monthly ', '')] [624] ['Studioshoo — monthly net (€)']
+7-tag: PASS -- box='-500' hints=1 config=1750 (was 1750)
+8-tag: PASS -- box='-50\u2009070' hints=1 config=1750
+10-tab-tag: PASS -- after Tab box='-50\u2009070' hints=1 config=1750 focus=[]
+9-tag: PASS -- after deleting minus box='50\u2009070' hints=0
+   saved after Enter: 50070
+10-click-tag: PASS -- after blank click box='-8' hints=1 config=50070 focus=[]
+   restore: rect (L433, T563, R673, B622) win (L156, T156, R1336, B936) focus before []
+   after click focus ['Studioshoo — monthly net (€)']
+   pre-enter tag 1 234 ['Studioshoo — monthly net (€)']
+   restored tag 1 234 1234 []
+10-click-box: PASS -- salary box='-9' hints=1 cfg=1234 focus=['Studioshoo ? monthly net (?)']
+13: PASS -- box='14\u2009000' spinners=0 cfg=14000
+after Remove focus: [] alive True
+final cfg {'end_of_day_summary_time': '23:59', 'income': {'potential_monthly_net_eur': 14000, 'employed': False}, 'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1234}, {'tag': 'zed', 'label': 'zed', 'monthly_net_eur': 500}, {'tag': 'zed2', 'label': 'zed2', 'monthly_net_eur': 500}]}
+SUMMARY
+('1', 'PASS', "after Enter: config=3000 focusedEdits=[]; typed 9 -> box='3\\u2009000' config=3000")
+('2', 'PASS', "cfg=[1700] focusedEdits=[], typed 9 -> box='1\\u2009700' config=[1700]")
+('3', 'PASS', 'after Tab config=3100 focusedEdits=[]')
+('4', 'PASS', "blank click salary: cfg=3300 focus=[] box='3\\u2009300' | click other box: cfg=3300 focus=['Studioshoo — monthly net (€)'] | blank click tag: cfg=[1750] focus=[] box='1\\u2009750'")
+('5', 'PASS', "tags=[{'tag': 'zed', 'label': 'zed', 'monthly_net_eur': 500}, {'tag': 'zed2', 'label': 'zed2', 'monthly_net_eur': 500}, {'tag': 'zed3', 'label': 'zed3', 'monthly_net_eur': 500}] focusAfterNameEnter=[] focusAfterRateEnter=[]")
+('6', 'PASS', 'minus: rateEnter added=False hint=True status="Amounts can\'t be negative."; nameEnter added=False hint=True status="Amounts can\'t be negative."; empty rate: rateEnter status=\'Monthly net needs a number.\' nameEnter status=\'Monthly net needs a number.\' tags=4->4')
+('7-salary', 'PASS', "box='-500' hints=1 config=3300 (was 3300)")
+('8-salary', 'PASS', "box='-50\\u2009070' hints=1 config=3300")
+('10-tab-salary', 'PASS', "after Tab box='-50\\u2009070' hints=1 config=3300 focus=[]")
+('9-salary', 'PASS', "after deleting minus box='50\\u2009070' hints=0")
+('10-click-salary', 'PASS', "after blank click box='-8' hints=1 config=50070 focus=[]")
+('7-tag', 'PASS', "box='-500' hints=1 config=1750 (was 1750)")
+('8-tag', 'PASS', "box='-50\\u2009070' hints=1 config=1750")
+('10-tab-tag', 'PASS', "after Tab box='-50\\u2009070' hints=1 config=1750 focus=[]")
+('9-tag', 'PASS', "after deleting minus box='50\\u2009070' hints=0")
+('10-click-tag', 'PASS', "after blank click box='-8' hints=1 config=50070 focus=[]")
+('10-click-box', 'PASS', "salary box='-9' hints=1 cfg=1234 focus=['Studioshoo — monthly net (€)']")
+('13', 'PASS', "box='14\\u2009000' spinners=0 cfg=14000")

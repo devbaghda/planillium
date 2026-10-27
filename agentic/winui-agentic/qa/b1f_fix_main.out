@@ -1,0 +1,481 @@
+fixture config: 2925 [('studioshoo', 1600)]
+window (L78, T78, R1258, B858) pane (L355, T205, R1014, B790) blank points [('top-right', 989, 263), ('top-mid', 745, 258), ('right-of-toggle', 954, 354), ('right-of-addline', 974, 589), ('left-gap-tag/addline', 367, 552), ('left-gap-salary/toggle', 363, 315), ('mid-toggle/paidwork', 615, 394), ('bottom-left', 370, 770), ('bottom-mid', 684, 740), ('bottom-right', 989, 780), ('right-mid', 999, 497)]
+OK   c1     name   hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c1     name   hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2newamt newamt hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2salary salary hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.12 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.00 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2tag  tag    hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=bottom-right             srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=bottom-mid               srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=bottom-right             srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=top-mid                  srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=top-right                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=right-of-addline         srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=bottom-right             srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=right-mid                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=bottom-mid               srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=right-of-addline         srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=bottom-left              srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=right-of-toggle          srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=right-mid                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=right-mid                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=bottom-right             srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=bottom-left              srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=top-right                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=bottom-mid               srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=right-of-toggle          srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=bottom-left              srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=bottom-mid               srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=right-of-toggle          srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=top-right                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=top-mid                  srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=right-mid                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=top-mid                  srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.12 pt=right-of-toggle          srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=bottom-left              srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.05 pt=right-of-addline         srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=top-mid                  srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.00 pt=right-of-addline         srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2toggle toggle hold=0.25 pt=top-right                srcfocus=True focus=('EmployedToggle', 'Currently employed', 'toggle switch') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=bottom-right             srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=right-of-addline         srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=bottom-left              srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=right-mid                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=bottom-right             srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=top-right                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=bottom-left              srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=top-mid                  srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=top-right                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=bottom-left              srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=right-of-addline         srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=right-of-toggle          srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=top-right                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=right-of-addline         srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=top-mid                  srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=bottom-right             srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=right-of-toggle          srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=bottom-mid               srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=top-mid                  srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=right-of-toggle          srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=bottom-mid               srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=bottom-left              srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=bottom-right             srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=top-mid                  srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.00 pt=right-mid                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=right-mid                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.12 pt=bottom-mid               srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=right-of-toggle          srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.25 pt=right-mid                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=right-of-addline         srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=top-right                srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c2list list   hold=0.05 pt=bottom-mid               srcfocus=True focus=('', 'Income', 'list item') jumped=False editfocus=[] changed=False  
+OK   c3     name   hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.00 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.12 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     name   hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     tag    hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.00 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3     newamt hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True back=True
+OK   c3act  name   hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  name   hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.12 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  tag    hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.00 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c3act  newamt hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  away=True
+OK   c4     name   hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.05 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     name   hold=0.05 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.00 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.12 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.25 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.25 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.12 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.00 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.05 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.00 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.05 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.00 pt=bottom-mid               srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.25 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.25 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.05 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     tag    hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.05 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.25 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.25 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.05 pt=right-mid                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.05 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.05 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.05 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=right-of-toggle          srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.00 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.00 pt=bottom-left              srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.25 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=left-gap-tag/addline     srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.05 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=bottom-right             srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.25 pt=right-of-addline         srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.25 pt=top-mid                  srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.00 pt=mid-toggle/paidwork      srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.12 pt=left-gap-salary/toggle   srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+OK   c4     newamt hold=0.00 pt=top-right                srcfocus=True focus=('Nav', '', 'custom') jumped=False editfocus=[] changed=False  
+==== SUMMARY (case, source): trials, failures, source-focus-misses
+('c1', 'name') [44, 0, 0] focus after blank click: {'Nav': 44}
+('c2newamt', 'newamt') [44, 0, 0] focus after blank click: {'Nav': 44}
+('c2salary', 'salary') [44, 0, 0] focus after blank click: {'Nav': 44}
+('c2tag', 'tag') [44, 0, 0] focus after blank click: {'Nav': 44}
+('c2toggle', 'toggle') [44, 0, 0] focus after blank click: {'Currently employed': 44}
+('c2list', 'list') [44, 0, 0] focus after blank click: {'Income': 44}
+('c3', 'name') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c3', 'tag') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c3', 'newamt') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c3act', 'name') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c3act', 'tag') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c3act', 'newamt') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c4', 'name') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c4', 'tag') [22, 0, 0] focus after blank click: {'Nav': 22}
+('c4', 'newamt') [22, 0, 0] focus after blank click: {'Nav': 22}
+final config: 2925 [('studioshoo', 1600)]

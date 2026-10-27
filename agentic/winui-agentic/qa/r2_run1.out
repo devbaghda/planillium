@@ -1,0 +1,135 @@
+start cfg 2925 [1600] 2 925 1 600 fg True
+1@1tags: PASS -- Add-click: added=False msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | Enter-in-name: tags=1 msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | cfg has asd=False | hint elems=1 inWindow=[True] | foc=['New payable tag']
+2@1tags: PASS -- amount box after typing abc=''; Add-click tags=1 newmsgs=[]; Enter-name tags=1; Enter-in-amount tags=1; visible msgs=['Diary time carrying one of these tags counts as paid work: h', 'Monthly net needs a number.', 'No name set ? Follow Windows ? 100% ? autostart off', 'Monthly net needs a number.']
+3a-tab-keeps: PASS -- after Tab name='zed' amount='500' tags=['Studioshoo'] focus=[('Pane', ''), ('Button', 'Add')]
+3b-add-works: PASS -- tags=['Studioshoo', 'zed'] rates=[1600, 500] name box='' amount box='' focus=[('Pane', '')]
+8: PASS -- tags=['Studioshoo', 'zed', 'ok1'] focus after mouse Add=[('Pane', '')]
+4: PASS -- Esc: ('', '', ['Studioshoo', 'zed', 'ok1'], [('Pane', '')]) | blank click: ('', '', ['Studioshoo', 'zed', 'ok1'], [('Pane', '')])
+6-salary: PASS -- box='500\u2009123' readouts=['= ?2\xa0976,92/h', '= ?9,52/h', '= ?2,98/h', '= ?2,38/h']
+6-tag: PASS -- box='500\u2009123' readouts=['= ?2\xa0976,92/h', '= ?2\xa0976,92/h', '= ?2,98/h', '= ?2,38/h']
+6-newamt: PASS -- box='500\u2009123' readouts=['= ?2\xa0976,92/h', '= ?2\xa0976,92/h', '= ?2,98/h', '= ?2,38/h']
+after 500123: cfg 500123 [500123, 500, 400]
+7: PASS -- after save: ['Income settings saved.'] ; after refused add: [] ; all msgs=[('Diary time carrying one of these tags counts as paid work: hours ? (monthly ? 168 h). It is added to the income figure and shown as its own Earnings block in Reports. A new name here also becomes a diary tag.', ''), ('Monthly net needs a number.', 'NewPaidTagHint'), ('No name set ? Follow Windows ? 100% ? autostart off', 'SumGeneral'), ('Monthly net needs a number.', 'SaveStatus')]
+9-salary-tab-'': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-tab-'abc': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-tab-'   ': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-enter-'': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-enter-'abc': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-enter-'   ': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-blank-'': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-blank-'abc': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-blank-'   ': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=[]
+9-salary-otherbox-'': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=['Studioshoo ? monthly net (?)']
+9-salary-otherbox-'abc': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=['Studioshoo ? monthly net (?)']
+9-salary-otherbox-'   ': PASS -- box='3\u2009111' stored=3111 (exp 3111) msgs=[] focus=['Studioshoo ? monthly net (?)']
+9-tag-tab-'': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-tab-'abc': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-tab-'   ': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-enter-'': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-enter-'abc': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-enter-'   ': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-blank-'': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-blank-'abc': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-blank-'   ': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=[]
+9-tag-otherbox-'': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=['Previous salary ? monthly net (?)']
+9-tag-otherbox-'abc': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=['Previous salary ? monthly net (?)']
+9-tag-otherbox-'   ': PASS -- box='1\u2009600' stored=1600 (exp 1600) msgs=[] focus=['Previous salary ? monthly net (?)']
+9-tag-zero: PASS -- box='0' stored=[1600, 500, 400] msgs=[('Amount must be more than 0.', ''), ('Not saved: Amount must be more than 0.', 'SaveStatus')]
+5-salary->blank: PASS -- focusedEdits=[] salaryBox='3222' cfgSalary=3222 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-salary->heading: PASS -- focusedEdits=[] salaryBox='3222' cfgSalary=3222 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-salary->label: PASS -- focusedEdits=[] salaryBox='3222' cfgSalary=3222 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-salary->button: PASS -- focusedEdits=[] salaryBox='3222' cfgSalary=3222 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-salary->button: PASS -- focusedEdits=[] salaryBox='3222' cfgSalary=3222 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', ''), ('Button', 'Currently employed')]
+5-tag->blank: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1650' cfgTags=[1650, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-tag->heading: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1650' cfgTags=[1650, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-tag->label: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1650' cfgTags=[1650, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-tag->button: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1650' cfgTags=[1650, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-tag->button: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1650' cfgTags=[1650, 500] newName='' newAmt='' allfocus=[('Pane', ''), ('Button', 'Currently employed')]
+5-addline->blank: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-addline->heading: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-addline->label: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-addline->button: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-addline->button: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', ''), ('Button', 'Currently employed')]
+5-none->blank: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-none->heading: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-none->label: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-none->button: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', '')]
+5-none->button: PASS -- focusedEdits=[] salaryBox='3111' cfgSalary=3111 tagBox='1600' cfgTags=[1600, 500] newName='' newAmt='' allfocus=[('Pane', ''), ('Button', 'Currently employed')]
+income cfg: {'potential_monthly_net_eur': 3111, 'employed': False}
+1@3tags: PASS -- Add-click: added=False msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | Enter-in-name: tags=3 msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | cfg has asd=False | hint elems=1 inWindow=[True] | foc=['New payable tag']
+2@3tags: PASS -- amount box after typing abc=''; Add-click tags=3 newmsgs=[]; Enter-name tags=3; Enter-in-amount tags=3; visible msgs=['Diary time carrying one of these tags counts as paid work: h', 'Monthly net needs a number.', 'No name set ? Follow Windows ? 100% ? autostart off', 'Monthly net needs a number.']
+1@5tags: PASS -- Add-click: added=False msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | Enter-in-name: tags=5 msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | cfg has asd=False | hint elems=1 inWindow=[True] | foc=['New payable tag']
+2@5tags: PASS -- amount box after typing abc=''; Add-click tags=5 newmsgs=[]; Enter-name tags=5; Enter-in-amount tags=5; visible msgs=['Diary time carrying one of these tags counts as paid work: h', 'Monthly net needs a number.', 'No name set ? Follow Windows ? 100% ? autostart off', 'Monthly net needs a number.']
+add-line-minus@5tags: PASS -- hints=1 rects=['(L511, T922, R1166, B938)'] window='(L234, T234, R1414, B1014)'
+add-line-zero@5tags: PASS -- hints=1 rects=['(L511, T922, R1166, B938)']
+   standing newname base=(3111, [1600, 500], 5) spaces=('                    ', 3111, [1600, 500], 5) long=('9999999999999999999999999999999999999999', 3111, [1600, 500], 5, ['New payable tag'])
+   standing newamt base=(3111, [1600, 500], 5) spaces=('', 3111, [1600, 500], 5) long=('999\u2009999\u2009999', 3111, [1600, 500], 5, ['Monthly net (€)'])
+   standing salary base=(3111, [1600, 500], 5) spaces=('3\u2009111', 3111, [1600, 500], 5) long=('999\u2009999\u2009999', 999999999, [1600, 500], 5, [])
+   standing tag base=(3111, [1600, 500], 5) spaces=('1\u2009600', 3111, [1600, 500], 5) long=('999\u2009999\u2009999', 3111, [999999999, 500], 5, [])
+final cfg {"end_of_day_summary_time": "23:59", "income": {"potential_monthly_net_eur": 3111, "employed": false}, "paid_tags": [{"tag": "Studioshoo", "label": "Studioshoo", "monthly_net_eur": 1600}, {"tag": "zed", "label": "zed", "monthly_net_eur": 500}, {"tag": "ok1", "label": "ok1", "monthly_net_eur": 400}, {"tag": "t3", "label": "t3", "monthly_net_eur": 100}, {"tag": "t4", "label": "t4", "monthly_net_eur": 100}]}
+SUMMARY
+1@1tags PASS
+2@1tags PASS
+3a-tab-keeps PASS
+3b-add-works PASS
+8 PASS
+4 PASS
+6-salary PASS
+6-tag PASS
+6-newamt PASS
+7 PASS
+9-salary-tab-'' PASS
+9-salary-tab-'abc' PASS
+9-salary-tab-'   ' PASS
+9-salary-enter-'' PASS
+9-salary-enter-'abc' PASS
+9-salary-enter-'   ' PASS
+9-salary-blank-'' PASS
+9-salary-blank-'abc' PASS
+9-salary-blank-'   ' PASS
+9-salary-otherbox-'' PASS
+9-salary-otherbox-'abc' PASS
+9-salary-otherbox-'   ' PASS
+9-tag-tab-'' PASS
+9-tag-tab-'abc' PASS
+9-tag-tab-'   ' PASS
+9-tag-enter-'' PASS
+9-tag-enter-'abc' PASS
+9-tag-enter-'   ' PASS
+9-tag-blank-'' PASS
+9-tag-blank-'abc' PASS
+9-tag-blank-'   ' PASS
+9-tag-otherbox-'' PASS
+9-tag-otherbox-'abc' PASS
+9-tag-otherbox-'   ' PASS
+9-tag-zero PASS
+5-salary->blank PASS
+5-salary->heading PASS
+5-salary->label PASS
+5-salary->button PASS
+5-salary->button PASS
+5-tag->blank PASS
+5-tag->heading PASS
+5-tag->label PASS
+5-tag->button PASS
+5-tag->button PASS
+5-addline->blank PASS
+5-addline->heading PASS
+5-addline->label PASS
+5-addline->button PASS
+5-addline->button PASS
+5-none->blank PASS
+5-none->heading PASS
+5-none->label PASS
+5-none->button PASS
+5-none->button PASS
+1@3tags PASS
+2@3tags PASS
+1@5tags PASS
+2@5tags PASS
+add-line-minus@5tags PASS
+add-line-zero@5tags PASS
+standing-newname INFO
+standing-newamt INFO
+standing-salary INFO
+standing-tag INFO

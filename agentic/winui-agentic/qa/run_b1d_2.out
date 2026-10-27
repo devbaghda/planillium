@@ -1,0 +1,79 @@
+A-enter-salary-'': FAIL -- box after Enter='' stored=2925 focus=[('Pane', ''), ('Edit', 'Previous salary ? monthly net (?)')] msgs=[('Not saved: type an amount.', 'SaveStatus')] | then typed 7 -> box='7' stored=2925
+    after later Tab: box='7' stored=7 focus=[('Pane', ''), ('Button', 'Currently employed')]
+A-enter-salary-'abc': FAIL -- box after Enter='' stored=2925 focus=[('Pane', ''), ('Edit', 'Previous salary ? monthly net (?)')] msgs=[('Not saved: type an amount.', 'SaveStatus')] | then typed 7 -> box='7' stored=2925
+    after later Tab: box='7' stored=7 focus=[('Pane', ''), ('Button', 'Currently employed')]
+A-enter-salary-'   ': FAIL -- box after Enter='' stored=2925 focus=[('Pane', ''), ('Edit', 'Previous salary ? monthly net (?)')] msgs=[('Not saved: type an amount.', 'SaveStatus')] | then typed 7 -> box='7' stored=2925
+    after later Tab: box='7' stored=7 focus=[('Pane', ''), ('Button', 'Currently employed')]
+A-enter-tag-'': FAIL -- box after Enter='' stored=1600 focus=[('Pane', ''), ('Edit', 'Studioshoo ? monthly net (?)')] msgs=[('Not saved: type an amount.', 'SaveStatus')] | then typed 7 -> box='7' stored=1600
+    after later Tab: box='7' stored=7 focus=[('Pane', ''), ('Button', 'Remove')]
+A-enter-tag-'abc': FAIL -- box after Enter='' stored=1600 focus=[('Pane', ''), ('Edit', 'Studioshoo ? monthly net (?)')] msgs=[('Not saved: type an amount.', 'SaveStatus')] | then typed 7 -> box='7' stored=1600
+    after later Tab: box='7' stored=7 focus=[('Pane', ''), ('Button', 'Remove')]
+A-enter-tag-'   ': FAIL -- box after Enter='' stored=1600 focus=[('Pane', ''), ('Edit', 'Studioshoo ? monthly net (?)')] msgs=[('Not saved: type an amount.', 'SaveStatus')] | then typed 7 -> box='7' stored=1600
+    after later Tab: box='7' stored=7 focus=[('Pane', ''), ('Button', 'Remove')]
+B-refused-add-then-esc/click: FAIL -- focus after refused Add click=[('Pane', '')] name before='asd' after Esc='asd' msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')] | after blank click name='asd' msgs=[('Monthly net needs a number.', 'NewPaidTagHint'), ('Monthly net needs a number.', 'SaveStatus')]
+B2-refused-enter-then-esc: FAIL -- name='' amt='' msgs=[('Monthly net needs a number.', 'SaveStatus')] focus=[('Pane', '')]
+B3-no-name: PASS -- tags=['Studioshoo'] msgs=[('Give the new tag a name (letters or digits).', 'NewPaidTagHint'), ('Give the new tag a name (letters or digits).', 'SaveStatus')]
+C5-salary->blank: FAIL -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt='100'
+C5-salary->heading: FAIL -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt='100'
+C5-salary->label: FAIL -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt='100'
+C5-salary->button: FAIL -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt='100'
+C5-salary->title: FAIL -- focusedEdits=[] salaryBox='3222' cfg=3222 tagBox='1600' cfg=[1600] newName='' newAmt='100'
+C5-tag->blank: FAIL -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt='100'
+C5-tag->heading: FAIL -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt='100'
+C5-tag->label: FAIL -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt='100'
+C5-tag->button: FAIL -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt='100'
+C5-tag->title: FAIL -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1650' cfg=[1650] newName='' newAmt='100'
+C5-addline->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-addline->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->blank: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->heading: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->label: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->button: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+C5-none->title: PASS -- focusedEdits=[] salaryBox='2925' cfg=2925 tagBox='1600' cfg=[1600] newName='' newAmt=''
+income: {'potential_monthly_net_eur': 2925, 'employed': False}
+D-enter-salary: PASS -- stored=1234567 box='1\u2009234\u2009567' focusedEdits=[]
+D-minus-salary: PASS -- typed='-500' after Tab='-500' msgs=[("Amounts can't be negative.", ''), ("Not saved: Amounts can't be negative.", 'SaveStatus')] stored=1234567
+D-enter-tag: PASS -- stored=1234567 box='1\u2009234\u2009567' focusedEdits=[]
+D-minus-tag: PASS -- typed='-500' after Tab='-500' msgs=[("Amounts can't be negative.", ''), ("Not saved: Amounts can't be negative.", 'SaveStatus')] stored=1234567
+D-no-spinners: PASS -- spinner-like elements=0
+E-tab-to-Add-then-Enter: PASS -- focus on Tab#2=[('Pane', ''), ('Button', 'Add')] tags=['Studioshoo', 'tabby'] focus now=[('Pane', '')]
+final {"end_of_day_summary_time": "23:59", "income": {"potential_monthly_net_eur": 2000, "employed": false}, "paid_tags": [{"tag": "Studioshoo", "label": "Studioshoo", "monthly_net_eur": 2000}, {"tag": "tabby", "label": "tabby", "monthly_net_eur": 250}]}
+SUMMARY
+A-enter-salary-'' FAIL
+A-enter-salary-'abc' FAIL
+A-enter-salary-'   ' FAIL
+A-enter-tag-'' FAIL
+A-enter-tag-'abc' FAIL
+A-enter-tag-'   ' FAIL
+B-refused-add-then-esc/click FAIL
+B2-refused-enter-then-esc FAIL
+B3-no-name PASS
+C5-salary->blank FAIL
+C5-salary->heading FAIL
+C5-salary->label FAIL
+C5-salary->button FAIL
+C5-salary->title FAIL
+C5-tag->blank FAIL
+C5-tag->heading FAIL
+C5-tag->label FAIL
+C5-tag->button FAIL
+C5-tag->title FAIL
+C5-addline->blank PASS
+C5-addline->heading PASS
+C5-addline->label PASS
+C5-addline->button PASS
+C5-addline->title PASS
+C5-none->blank PASS
+C5-none->heading PASS
+C5-none->label PASS
+C5-none->button PASS
+C5-none->title PASS
+D-enter-salary PASS
+D-minus-salary PASS
+D-enter-tag PASS
+D-minus-tag PASS
+D-no-spinners PASS
+E-tab-to-Add-then-Enter PASS
