@@ -108,9 +108,9 @@ public sealed class AiClient
 {
     public const int MaxTokens = 16000;
     public const string ApiVersion = "2023-06-01";
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(360);
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(240);
 
-    /// <summary>The timeout as shown to the user ("6 minutes"); follows <see cref="DefaultTimeout"/>.</summary>
+    /// <summary>The timeout as shown to the user ("4 minutes"); follows <see cref="DefaultTimeout"/>.</summary>
     public static string TimeoutMinutesText
     {
         get

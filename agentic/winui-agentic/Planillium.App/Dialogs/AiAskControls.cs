@@ -69,6 +69,7 @@ internal sealed class AiAskControls
         var bar = new ProgressBar { IsIndeterminate = true };
         var stop = new Button { Content = "Stop", VerticalAlignment = VerticalAlignment.Bottom };
         AutomationProperties.SetName(stop, "Stop");
+        ToolTipService.SetToolTip(stop, "Stop waiting and cancel the request. Nothing is changed.");
         stop.Click += (_, _) => _cts?.Cancel();
 
         var text = new StackPanel { Spacing = 4 };
@@ -100,7 +101,7 @@ internal sealed class AiAskControls
     /// not greyed, when no key is saved.</summary>
     public Button Ask { get; }
 
-    /// <summary>Progress row: bar, "Asking Claude… N s", "Gives up after 6 minutes." (AiClient.TimeoutMinutesText) and Stop.
+    /// <summary>Progress row: bar, "Asking Claude… N s", "Gives up after 4 minutes." (AiClient.TimeoutMinutesText) and Stop.
     /// Collapsed unless a call runs.</summary>
     public StackPanel Progress { get; }
 

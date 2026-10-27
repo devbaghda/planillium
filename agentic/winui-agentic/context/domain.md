@@ -150,7 +150,7 @@ diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
   remaining and Add plan), `Dialogs/AiNoticeDialog.cs` (the one-time notice, inline).
 - Request: `POST {base}/v1/messages`, headers `x-api-key` and `anthropic-version: 2023-06-01`, body
   `{model, max_tokens, messages:[{role:user, content: prompt}]}`. `max_tokens` 16000 (`AiClient.MaxTokens`, raised from 8000 on 2026-10-27; Test connection 16).
-  Timeout 6 minutes (`AiClient.DefaultTimeout` 360 s, raised from 2 minutes; the two visible strings follow it through `AiClient.TimeoutMinutesText`); Stop cancels. A reply cut off at `max_tokens` is refused.
+  Timeout 4 minutes (`AiClient.DefaultTimeout` 240 s, raised from 2 minutes; the two visible strings follow it through `AiClient.TimeoutMinutesText`); Stop cancels. A reply cut off at `max_tokens` is refused.
 - Base URL: production `https://api.anthropic.com`; `PLANILLIUM_AI_BASE_URL` overrides it only in
   DEBUG/test builds.
 - Settings -> AI: key box (write-only), Save, Test connection (uses the saved key and model), Remove

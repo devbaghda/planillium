@@ -27,7 +27,7 @@
                      Title="Couldn't save that change"
                      Message="The database was briefly busy — try again in a moment."
                      Margin="0,0,0,12"/>
-            <StackPanel x:Name="ActiveList" Spacing="10"/>
+            <StackPanel x:Name="ActiveList" Spacing="12"/>
             <TextBlock Text="QUEUED IDEAS" FontSize="11" FontWeight="SemiBold"
                        CharacterSpacing="60" Margin="2,26,0,8"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
