@@ -62,3 +62,7 @@
 2026-10-27 G2 designer: not launched -- chooser + paging buttons reuse existing Diary controls; planner specs wording/placement.
 2026-10-27 G2 planner: opus -- item 4 is a root-cause investigation (cross-cutting, capture path) + ambiguous "-" semantics per field; outcome: ok (SPEC.md + item 4 finding)
 2026-10-27 G2 coder: sonnet -- SPEC explicit (2 files, pure logic in DiaryFilter.cs), no focus/timing class; lead rulings: keep 300-row cap (lifting widens Select all = marking), category "-" strictly empty, Clear filters resets chooser; outcome: ok (precheck green 0 warnings, 362/362; commit cac0f66)
+2026-10-27 G4 lead: sonnet -- routes; A3 may stop for a question; outcome: ok (A3 skipped, question to PM; planner reran once after silent exit)
+2026-10-27 G4 designer: not launched -- A4/A5 are size tweaks to existing dialogs; A3 skipped (no derivable target look, question to PM)
+2026-10-27 G4 planner: sonnet -- bounded: one constant + two dialog sizes, explicit brief; outcome: ok (first run ended without handback, rerun delivered SPEC.md)
+2026-10-27 G4 coder: sonnet -- SPEC explicit (cap 16000 + timeout 360 s, notice font sizes, dialog height clamp); layout sizes are estimates, no QA this batch; outcome: ok (precheck green 0 warnings, 362/362; commit 065fed7; QA deferred by user ruling)

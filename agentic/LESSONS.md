@@ -62,3 +62,8 @@
 - Check hidden caps (300-row search cap) before specifying paging; lifting one widens Select all.
 - Odd-value investigation: trace capture, then storage, then the read-time parser.
 - Seed a ComboBox SelectedIndex before wiring SelectionChanged; a filter set reassigned per render needs a getter, not a captured reference.
+
+## AI reply cap / dialogs (G4)
+- Raising a non-streaming token cap means re-checking the request timeout (reply time ~ tokens/50 s); show durations from one constant, never repeated text.
+- To remove a ContentDialog scrollbar raise the ScrollViewer MaxHeight AND override ContentDialogMaxHeight; read xamlRoot.Size when the dialog is built.
+- A subagent can exit without a handback: check for its output file, rerun once.
