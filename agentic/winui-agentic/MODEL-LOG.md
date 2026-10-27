@@ -40,7 +40,7 @@
 - qa: opus planned (key/focus class, sonnet missed focus defects before) -- not launched: brief has no `QA budget:`; BUDGET-REQUEST relayed to PM.
 - qa: opus -- key/focus class; scope picked from diff. Budget 20 min granted by PM (acceptance 1-7 in salary box + one tag box, every exit, short Add-line/B1d-Enter regression; no full A/B/C matrix).
 - qa outcome: ok (PASS WITH CAVEATS, 44 checks, 0 defects, ~8 of 20 min; full A/B/C matrix scoped out)
-2026-10-27 B1e lead: sonnet -- explicit spec, mechanical removal; outcome: pending
+2026-10-27 B1e lead: sonnet -- explicit spec, mechanical removal; outcome: ok (coder sonnet; precheck green 0 warnings, 362/362; commit 054a660; QA deferred by user ruling)
 ## B1e reports duplicate cards 2026-10-27
 - planner/designer: not launched -- bounded removal, no new screen; BRIEF + ACCEPTANCE are implementation-ready.
 - coder: sonnet -- explicit removal spec, no timing/focus class; keep calculations, remove dead card code only.
@@ -55,3 +55,10 @@
 - coder: sonnet -- SPEC is explicit (files, rounding helper, colour index fix); not a timing/focus class. Gets lead rulings on SPEC open questions + paid-column light-green addendum.
 - planner outcome: ok; coder outcome: ok (precheck green 0 warnings, 362/362; paid-column light green addendum included). QA deferred by user ruling.
 2026-10-27 B1i Day total-row removal agentic lead: sonnet -- one-rule revert; outcome: ok (coder sonnet; precheck green 0 warnings, 362/362; QA deferred by user ruling)
+2026-10-27 G7 lead: sonnet -- lead only routes; members chosen by lead (security class -> opus advised); outcome: ok (coder sonnet; precheck green 0 warnings, 362/362; commit 054a660; QA deferred by user ruling)
+2026-10-27 G7 planner: opus -- security class, real secrets; outcome: ok (SPEC.md, guard in CredentialStore, 7 files)
+2026-10-27 G7 coder: sonnet -- SPEC explicit (files, allow-list, messages), bounded 7-file edit; rulings: autostart out of scope, TickTick status text unchanged; outcome: ok (coder sonnet; precheck green 0 warnings, 362/362; commit 054a660; QA deferred by user ruling)
+2026-10-27 G2 lead: sonnet -- routes only; outcome: ok (planner opus, coder sonnet; precheck green 0 warnings, 362/362; commit cac0f66; QA deferred by user ruling)
+2026-10-27 G2 designer: not launched -- chooser + paging buttons reuse existing Diary controls; planner specs wording/placement.
+2026-10-27 G2 planner: opus -- item 4 is a root-cause investigation (cross-cutting, capture path) + ambiguous "-" semantics per field; outcome: ok (SPEC.md + item 4 finding)
+2026-10-27 G2 coder: sonnet -- SPEC explicit (2 files, pure logic in DiaryFilter.cs), no focus/timing class; lead rulings: keep 300-row cap (lifting widens Select all = marking), category "-" strictly empty, Clear filters resets chooser; outcome: ok (precheck green 0 warnings, 362/362; commit cac0f66)

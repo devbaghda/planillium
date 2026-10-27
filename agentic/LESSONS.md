@@ -49,3 +49,16 @@
 - A per-theme colour in page code goes in ThemeSync.Fixed with one key constant, not a RequestedTheme check.
 - An icon that shows nothing may be an empty Glyph string: check by code point, write glyphs as \u escapes.
 - When a column is added after a "last column" colour test (c == cells.Length - 1), switch it to a named index.
+
+## Secrets / scratch safety (G7)
+- Guard secrets at the single store (read, write AND delete), keyed on a runtime check (MENTOR_ROOT non-empty), never Debug-only; search deletes/writes, not only reads.
+- Put a shared check in a file the test project already links (AppPaths.cs); name allow-list exceptions by their existing constant.
+- Log.Info takes one argument, Log.Warn (context, message): check the signature before copying a call.
+
+## Diary filters / paging (G2)
+- Before adding a "no value" filter entry, check what the getter returns for empty (AppNames.Group returns "—", not null): map the placeholder to null first.
+- Read NOT NULL/default markers before defining "no value" (category is always set; unmatched = neutral): raise it as an open question.
+- A "-" sentinel kept in the same set as real entries must be exempt from the prune step.
+- Check hidden caps (300-row search cap) before specifying paging; lifting one widens Select all.
+- Odd-value investigation: trace capture, then storage, then the read-time parser.
+- Seed a ComboBox SelectedIndex before wiring SelectionChanged; a filter set reassigned per render needs a getter, not a captured reference.
