@@ -288,6 +288,17 @@
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                 </StackPanel>
+
+                <!-- G3 (2026-10-28): every bulk change to past data (the Diary's bulk Mark today)
+                     goes through one door that keeps the old values; this lists the kept changes,
+                     each with its own Undo. Filled in code (LoadChangeHistory) when shown. -->
+                <StackPanel x:Name="HistoryPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
+                    <TextBlock Text="Change history" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Bulk changes to past data, newest first — the last 20, each kept for 30 days. Undo puts back the old values of that one change. Rows changed since (edited, split, re-marked or deleted) are skipped and keep their newer values. A backup of your data is saved before every bulk change and every undo; the last 5 are kept in the data folder's backups subfolder."/>
+                    <StackPanel x:Name="HistoryList" Spacing="8"/>
+                </StackPanel>
             </Grid>
         </ScrollViewer>
 
@@ -376,6 +387,14 @@
                     <StackPanel Padding="0,4">
                         <TextBlock Text="Data" FontWeight="SemiBold" FontSize="13"/>
                         <TextBlock Text="Export or clear what's stored" FontSize="11"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Change history">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Change history" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="Undo a bulk change" FontSize="11"
                                    TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>

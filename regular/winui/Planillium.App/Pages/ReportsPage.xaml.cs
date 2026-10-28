@@ -116,6 +116,8 @@ public sealed partial class ReportsPage : Page
         // The two timer callbacks point into that tree, so they are released with it.
         _diaryLiveRefreshAction = null;
         _diarySearchDebounceAction = null;
+        _diaryRerenderAction = null;
+        _diaryNoticeBar = null;
         _diaryRowBuilder = null;
         _returnOffset = RootScroller.VerticalOffset;
         Body.Children.Clear();

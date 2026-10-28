@@ -108,16 +108,6 @@ public sealed partial class ReportsPage
     private static readonly TimeSpan DiaryLiveRefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DiarySearchDebounceInterval = TimeSpan.FromMilliseconds(250);
 
-    // selectedIds (below, local to BuildDiarySection) is rebuilt from scratch on every full
-    // Render() — mirroring its count here at the one place it already changes
-    // (UpdateMarkToolbar) lets MainWindow's day-change watcher check "is there a bulk
-    // selection in progress" without restructuring selectedIds itself. Same shape as
-    // TaskNoteView.AnyEditInProgress: a forced background refresh can rebuild this page's
-    // whole tree with no user action behind it, which would otherwise silently drop a
-    // selection the same way an unsaved note almost was (2026-07-24 audit finding #3).
-    private int _diarySelectedCount;
-    internal bool HasActiveDiarySelection => _diarySelectedCount > 0;
-
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
     /// everything still retained (ConfigService.DiaryRetentionDays(),
@@ -160,8 +150,13 @@ public sealed partial class ReportsPage
         // Mark-selected toolbar — built once (not on every keystroke) so
         // its buttons don't get re-wired constantly; UpdateMarkToolbar()
         // just flips enabled/label state as the selection changes.
-        var selectedIds = new HashSet<long>();
+        // G3: the ticks live in a page-level static (like the filters) and are no longer cleared
+        // by Mark, so they stay until the user changes them.
+        var selectedIds = _diarySelectedIds;
         var lastRows = new List<ReportData.DiaryEntry>();
+        // G3: the "Marked N rows as X" message with its Undo sits right above the toolbar it
+        // answers, not at the top of the page where it would be scrolled out of sight.
+        Body.Children.Add(BuildDiaryChangeNotice());
         var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons) = BuildDiaryMarkToolbar();
 
         var diaryResults = BuildDiaryResultsArea();
@@ -179,10 +174,17 @@ public sealed partial class ReportsPage
         void UpdateMarkToolbar()
         {
             var n = selectedIds.Count;
-            _diarySelectedCount = n;
-            selectedLabel.Text = n > 0 ? $"{n} selected" : "";
-            markOnBtn.IsEnabled = markOffBtn.IsEnabled = markNeutralBtn.IsEnabled = n > 0;
-            foreach (var (_, btn) in tagMarkButtons) btn.IsEnabled = n > 0;
+            // G3: Mark acts on the ticked rows when there are any, otherwise on EVERY row matching
+            // the current filters/search — not just the ones built on screen so far — and each
+            // button says how many rows that is.
+            var target = n > 0 ? n : lastRows.Count;
+            selectedLabel.Text = n > 0 ? $"{FormatCount(n)} selected"
+                : lastRows.Count > 0 ? $"Mark applies to all {FormatCount(lastRows.Count)} matches" : "";
+            foreach (var btn in new[] { markOnBtn, markOffBtn, markNeutralBtn }.Concat(tagMarkButtons.Select(t => t.Btn)))
+            {
+                btn.Content = $"{btn.Tag} ({FormatCount(target)})";
+                btn.IsEnabled = target > 0 && !_diaryBulkBusy;
+            }
 
             syncingSelectAll = true;
             selectAllBox.IsEnabled = lastRows.Count > 0;
@@ -334,7 +336,10 @@ public sealed partial class ReportsPage
             // G2: the old 300-row cap on wide (search / All time) results is gone — paging below
             // now reaches every match ("Show all"), and rows are only built as they are revealed.
             lastRows = filteredList;
-            selectedIds.RemoveWhere(id => !filteredList.Any(e => e.Id == id));
+            // A set, not filteredList.Any per tick: ticks now persist (G3), so thousands of ticked
+            // rows against thousands of matches would otherwise cost millions of comparisons.
+            var inView = filteredList.Select(e => e.Id).ToHashSet();
+            selectedIds.RemoveWhere(id => !inView.Contains(id));
             UpdateMarkToolbar();
             // A genuine scope change (different day/search/filters/all-time) starts the reveal
             // count fresh; the periodic live-refresh timer re-running this same method with an
@@ -390,11 +395,22 @@ public sealed partial class ReportsPage
             Render();
         };
 
-        markOnBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OnPlan, selectedIds, lastRows, RenderDiaryResults);
-        markOffBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OffPlan, selectedIds, lastRows, RenderDiaryResults);
-        markNeutralBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.Neutral, selectedIds, lastRows, RenderDiaryResults);
+        // G3: every bulk mark goes through DataChangeDoor (confirm → backup → write with old
+        // values → Undo). The row list is read at click time: ticked rows if any, else all matches.
+        List<ReportData.DiaryEntry> MarkTargets() =>
+            selectedIds.Count > 0 ? lastRows.Where(r => selectedIds.Contains(r.Id)).ToList() : lastRows.ToList();
+        void Refresh() { RenderDiaryResults(); }
+        HashSet<long> ShownIds() => lastRows.Select(r => r.Id).ToHashSet();
+        markOnBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.OnPlan,
+            MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+        markOffBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.OffPlan,
+            MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+        markNeutralBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.Neutral,
+            MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
         foreach (var (tagValue, btn) in tagMarkButtons)
-            btn.Click += (_, _) => MarkSelectedDiaryRowsTag(tagValue, selectedIds, lastRows, RenderDiaryResults);
+            btn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryTag, tagValue,
+                MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+        _diaryRerenderAction = RenderDiaryResults;
 
         selectAllBox.Checked += (_, _) =>
         {
@@ -591,15 +607,23 @@ public sealed partial class ReportsPage
             FontSize = 12,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };
-        var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
-        var markOffBtn = new Button { Content = "Mark off-plan", IsEnabled = false };
-        var markNeutralBtn = new Button { Content = "Mark neutral", IsEnabled = false };
+        // Tag holds the base label; UpdateMarkToolbar appends the row count (G3).
+        var markOnBtn = new Button { Content = "Mark on-plan", Tag = "Mark on-plan", IsEnabled = false };
+        var markOffBtn = new Button { Content = "Mark off-plan", Tag = "Mark off-plan", IsEnabled = false };
+        var markNeutralBtn = new Button { Content = "Mark neutral", Tag = "Mark neutral", IsEnabled = false };
         markToolbar.Children.Add(selectAllBox);
         markToolbar.Children.Add(selectedLabel);
         markToolbar.Children.Add(markOnBtn);
         markToolbar.Children.Add(markOffBtn);
         markToolbar.Children.Add(markNeutralBtn);
-        Body.Children.Add(markToolbar);
+        // G3: the buttons now carry a row count, which widens both rows — scroll sideways on a
+        // narrow window instead of clipping the last buttons (same treatment as the filter row).
+        Body.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = markToolbar,
+        });
 
         // Second row, its own independent axis (2026-08-07 request) — kept off the row
         // above rather than appended to it: on-plan/off-plan/neutral plus five tags plus
@@ -621,7 +645,7 @@ public sealed partial class ReportsPage
         var tagMarkButtons = new List<(string? Tag, Button Btn)>();
         foreach (var (label, value) in DiaryTag.Options)
         {
-            var btn = new Button { Content = $"Mark {label}", IsEnabled = false };
+            var btn = new Button { Content = $"Mark {label}", Tag = $"Mark {label}", IsEnabled = false };
             tagToolbar.Children.Add(btn);
             tagMarkButtons.Add((value, btn));
         }
@@ -630,10 +654,17 @@ public sealed partial class ReportsPage
         // exception, same reasoning EditDiaryEntryDialog's combo puts "(none)" first in a
         // dropdown (scanned top-down) but this button belongs at the end of a row (scanned
         // left-right, common actions first).
-        var clearTagBtn = new Button { Content = "Clear tag", IsEnabled = false };
+        var clearTagBtn = new Button { Content = "Clear tag", Tag = "Clear tag", IsEnabled = false };
         tagToolbar.Children.Add(clearTagBtn);
         tagMarkButtons.Add((null, clearTagBtn));
-        Body.Children.Add(tagToolbar);
+        // G3: the buttons now carry a row count, which widens both rows — scroll sideways on a
+        // narrow window instead of clipping the last buttons (same treatment as the filter row).
+        Body.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = tagToolbar,
+        });
 
         return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons);
     }
@@ -693,100 +724,6 @@ public sealed partial class ReportsPage
         _diaryLiveRefresh ??= new System.Threading.Timer(
             _ => DispatcherQueue.TryEnqueue(() => _diaryLiveRefreshAction?.Invoke()),
             null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
-
-    /// <summary>The bulk "mark selected rows as on/off-plan/neutral" action — pulled out of
-    /// BuildDiarySection as its own self-contained DB-transaction block (code-quality audit
-    /// finding #7); takes the handful of closures it actually needs as parameters rather than
-    /// capturing the whole method's local state.</summary>
-    private void MarkSelectedDiaryRows(string category, HashSet<long> selectedIds,
-        List<ReportData.DiaryEntry> lastRows, Action renderDiaryResults)
-    {
-        if (selectedIds.Count == 0) return;
-        try
-        {
-            using var db = new Database();
-            var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var affectedDates = new HashSet<DateOnly>();
-            // All-or-nothing: this used to write each selected row as its
-            // own separate statement with no shared transaction, so a
-            // failure partway through a multi-row selection (an ordinary
-            // "database briefly busy" moment, since the background
-            // tracker writes to the same file) could relabel some rows
-            // and silently leave others untouched, with no error shown
-            // (2026-07-14 round-6 audit finding #4 — found independently
-            // by two review passes).
-            db.RunInTransaction(() =>
-            {
-                foreach (var id in selectedIds)
-                {
-                    var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row is null || row.Id != id) continue;
-                    // row.Tag passed through unchanged — this bulk action only ever
-                    // re-categorizes (on/off-plan/neutral), it was never meant to touch tags.
-                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc, row.Tag);
-                    var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
-                    if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
-                    affectedDates.Add(row.Date);
-                }
-            });
-            foreach (var keyword in learned)
-                ConfigService.LearnActivityRule(keyword, category);
-            if (learned.Count > 0)
-                (App.MainWindow as MainWindow)?.RestartTracker();
-            // A bulk re-category can span several different days — recompute each
-            // affected day's score so none of them keep showing a stale figure
-            // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
-            // re-category into a reported failure.
-            ScoreService.TryRecalculateDayScores(db, affectedDates, "ReportsPage.MarkSelected.RecalculateScore");
-            (App.MainWindow as MainWindow)?.RefreshScore();
-        }
-        catch (Exception ex)
-        {
-            Log.Error("ReportsPage.MarkSelected", ex);
-            SaveErrorBar.IsOpen = true;
-        }
-        selectedIds.Clear();
-        renderDiaryResults();
-    }
-
-    /// <summary>The bulk "mark selected rows with a tag" action (2026-08-07 request) — same
-    /// shape as <see cref="MarkSelectedDiaryRows"/> one level down the axis: that one
-    /// re-categorizes and passes tag through unchanged, this one re-tags and passes category
-    /// through unchanged. <paramref name="tag"/> is null for "Clear tag." Deliberately doesn't
-    /// share a helper with MarkSelectedDiaryRows despite the near-identical loop — category
-    /// changes also touch the idle-answer/activity-rule learning and trigger a score
-    /// recalculation, neither of which applies to a tag (DiaryTag.cs: "Never read by
-    /// ScoreService, purely descriptive"), so folding them into one parameterized method would
-    /// mean either axis carrying dead branches for the other's concerns.</summary>
-    private void MarkSelectedDiaryRowsTag(string? tag, HashSet<long> selectedIds,
-        List<ReportData.DiaryEntry> lastRows, Action renderDiaryResults)
-    {
-        if (selectedIds.Count == 0) return;
-        try
-        {
-            using var db = new Database();
-            // Same all-or-nothing reasoning as MarkSelectedDiaryRows — a multi-row bulk write
-            // failing partway through must not leave some rows re-tagged and others not.
-            db.RunInTransaction(() =>
-            {
-                foreach (var id in selectedIds)
-                {
-                    var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row is null || row.Id != id) continue;
-                    // row.Cat passed through unchanged — this bulk action only ever touches
-                    // the tag axis, it was never meant to re-categorize.
-                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, row.Cat, row.Desc, tag);
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error("ReportsPage.MarkSelectedTag", ex);
-            SaveErrorBar.IsOpen = true;
-        }
-        selectedIds.Clear();
-        renderDiaryResults();
-    }
 
     // ── diary ────────────────────────────────────────────────────────────
 

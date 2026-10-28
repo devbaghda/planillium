@@ -229,6 +229,30 @@ public sealed class Database : IDisposable
             "  date TEXT NOT NULL UNIQUE," +
             "  text TEXT NOT NULL" +
             ");" +
+            // G3 (2026-10-28): the change history behind DataChangeDoor — one change_log row
+            // per bulk change, one change_log_rows row per row it actually changed, holding
+            // that row's old value (what Undo restores) and its full state right after the
+            // write (how Undo tells a row edited since from one left alone). Kept to the
+            // last 20 changes within 30 days (DECISIONS rule 19).
+            "CREATE TABLE IF NOT EXISTS change_log (" +
+            "  id         INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  ts         TEXT    NOT NULL," +
+            "  label      TEXT    NOT NULL," +
+            "  tbl        TEXT    NOT NULL," +
+            "  field      TEXT    NOT NULL," +
+            "  new_value  TEXT," +
+            "  row_count  INTEGER NOT NULL," +
+            "  undone_at  TEXT," +
+            "  restored   INTEGER," +
+            "  skipped    INTEGER" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS change_log_rows (" +
+            "  change_id  INTEGER NOT NULL," +
+            "  row_id     INTEGER NOT NULL," +
+            "  old_value  TEXT," +
+            "  after_sig  TEXT    NOT NULL," +
+            "  PRIMARY KEY (change_id, row_id)" +
+            ");" +
             // Read-only reporting views — nothing in either app queries
             // these, they exist purely so an external tool (Power Query,
             // Excel, a BI dashboard) can point straight at progress.db
@@ -438,7 +462,9 @@ public sealed class Database : IDisposable
         RunInTransaction(() =>
         {
             using var cmd = CreateCommand();
-            cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup;";
+            // The change history (G3) holds old diary values too, so it goes with the diary.
+            cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup; " +
+                              "DELETE FROM change_log_rows; DELETE FROM change_log;";
             cmd.ExecuteNonQuery();
         });
         VacuumAndCheckpoint();
@@ -448,6 +474,9 @@ public sealed class Database : IDisposable
     {
         "task_completions", "task_overrides", "plan_days_off", "task_notes",
         "score_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
+        // G3: the bulk-change history (old diary values) is user data like the rest — exported
+        // with it, counted and wiped by "Clear all my data".
+        "change_log", "change_log_rows",
     };
 
     /// <summary>Total row count across every user-data table — for the "Clear all my

@@ -133,6 +133,12 @@ ticktick_sync    (id, plan_day, task_text, ticktick_task_id, ticktick_proj_id, p
   UNIQUE (plan_day, task_text)
 time_diary       (id, date, start_time, end_time, duration_min, category, window, description)
   -- category: on_plan | off_plan | neutral | idle | paid
+change_log       (id, ts, label, tbl, field, new_value, row_count, undone_at, restored, skipped)
+change_log_rows  (change_id, row_id, old_value, after_sig)  PK (change_id, row_id)
+  -- G3 (2026-10-28) DataChangeDoor history: one row per bulk change / per changed row; old_value
+  -- is what Undo restores, after_sig the row's full state after the write (Undo skips a row whose
+  -- state differs = changed since). Last 20 changes within 30 days. Backups: data/backups/
+  -- progress-yyyy-MM-dd_HHmmss.db, newest 5 kept; deleted by every Settings "Clear" action.
 diary_daily_rollup (date PK, on_min, off_min, neutral_min, paid_min, ...)
   -- written just before a day's raw time_diary rows age out (90-day retention, user-
   -- configurable in Settings), keeps

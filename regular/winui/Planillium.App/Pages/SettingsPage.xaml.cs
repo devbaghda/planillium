@@ -34,7 +34,7 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        _panels = [GeneralPanel, HoursPanel, IncomePanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, AiPanel, DataPanel];
+        _panels = [GeneralPanel, HoursPanel, IncomePanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, AiPanel, DataPanel, HistoryPanel];
         if (_panels.Length != SectionList.Items.Count)
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
@@ -117,6 +117,7 @@ public sealed partial class SettingsPage : Page
         _lastSection = SectionList.SelectedIndex;
         for (var i = 0; i < _panels.Length; i++)
             _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
+        if (_panels[_lastSection] == HistoryPanel) LoadChangeHistory();
         SectionScroll.ChangeView(null, 0, null, disableAnimation: true);
     }
 
@@ -1148,7 +1149,8 @@ public sealed partial class SettingsPage : Page
         {
             Text = $"Deletes {diaryRows} diary session(s) and {rollupDays} day(s) of " +
                    "rolled-up totals — the tracked window-activity record. Your plans, " +
-                   "task completions, notes, and score are not affected. This cannot be undone.",
+                   "task completions, notes, and score are not affected. The change history and the " +
+                   "automatic backups saved before bulk changes are deleted too. This cannot be undone.",
             TextWrapping = TextWrapping.Wrap,
         });
         var deleteExportsBox = new CheckBox
@@ -1186,7 +1188,11 @@ public sealed partial class SettingsPage : Page
         {
             using var db = new Database();
             db.ClearActivityHistory();
-            if (deleteExports) ThrowIfExportFilesRemain(DeleteExportFiles(exportNames));
+            // G3: the automatic backups taken before bulk changes are full copies of the
+            // database — leaving them would quietly keep what this button promises to remove.
+            var failed = DataChangeDoor.DeleteBackups();
+            if (deleteExports) failed.AddRange(DeleteExportFiles(exportNames));
+            ThrowIfExportFilesRemain(failed);
         }, "Activity history cleared.", "your activity history", "SettingsPage.ClearHistory");
     }
 
@@ -1298,7 +1304,8 @@ public sealed partial class SettingsPage : Page
 
         var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear my reflections?",
             $"Deletes {count} evening-review reflection(s). Your plans, task " +
-            "completions, activity diary, and score are not affected. This cannot be undone.",
+            "completions, activity diary, and score are not affected. The automatic backups saved " +
+            "before bulk changes are deleted too, since they hold a copy. This cannot be undone.",
             primaryButtonText: "Clear reflections", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
@@ -1307,6 +1314,8 @@ public sealed partial class SettingsPage : Page
             using var db = new Database();
             using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
             score.ClearReflections();
+            // G3: the automatic backups hold the reflections too (see ClearHistory_Click).
+            ThrowIfExportFilesRemain(DataChangeDoor.DeleteBackups());
         }, "Reflections cleared.", "your reflections", "SettingsPage.ClearReflections");
     }
 
@@ -1350,7 +1359,7 @@ public sealed partial class SettingsPage : Page
             "reflections, TickTick sync links, and the activity diary — plus the debug " +
             "log, your saved TickTick connection (client ID, secret, and tokens), and " +
             "any report.html/report.csv/full-export.json you've exported to the data " +
-            "folder. Your plan definitions and the other settings on this page " +
+            "folder, the change history and the automatic backups saved before bulk changes. Your plan definitions and the other settings on this page " +
             "(including your name) are not touched — use the Plans page to archive " +
             "or remove a plan. This cannot be undone.",
             primaryButtonText: "Clear everything", closeButtonText: "Cancel");
@@ -1366,7 +1375,9 @@ public sealed partial class SettingsPage : Page
             // Manager survived every "clear all my data" run with no way to remove them
             // short of opening Credential Manager by hand (2026-07-18 audit finding R10-02).
             TickTickAuth.Disconnect();
-            ThrowIfExportFilesRemain(DeleteExportFiles(ExportFiles.All));
+            var failed = DataChangeDoor.DeleteBackups();   // G3: see ClearHistory_Click
+            failed.AddRange(DeleteExportFiles(ExportFiles.All));
+            ThrowIfExportFilesRemain(failed);
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
         RefreshTickTickStatus();
     }

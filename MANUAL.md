@@ -173,6 +173,8 @@ The diary's Category, App, Page and Tag filters are tick-lists: tick several to 
 
 Each of those four filter lists starts with a "-" entry: tick it to see the entries that have no value for that field (never categorized, no tag, no page, no app). It combines with the other ticks and filters. Next to the search box, a chooser sets which field the search looks in: All fields (the default), App, Page, Description, Category or Tag.
 
+**Marking many rows at once.** The Mark buttons under the filters (on-plan, off-plan, neutral, and the tags) work on every entry that matches your current filters and search — not only the ones loaded on screen. If you tick some rows, they work on the ticked rows only. Each button shows how many rows it will touch, e.g. "Mark off-plan (2 401)". Before anything changes, a dialog shows how many rows have no value yet (will be filled), how many have another value (will be overwritten), how many already have it (unchanged), and the total; "Mark N rows" goes ahead, Cancel changes nothing. A backup copy of your data is saved first (the data folder's `backups` subfolder keeps the last 5). Afterwards a message says "Marked N rows as X" with an Undo button. Settings ▸ Change history lists your last 20 bulk changes (kept 30 days), each with its own Undo. Undo puts every row back exactly as it was before that change; rows you changed since (edited, split, re-marked or deleted) are left alone and the message says how many. Rows that no longer match your filters after marking leave the list (the message counts them); your ticks stay until you change them. Marking a category also teaches the tracker each row's app or page as a keyword (as before); Undo does not remove learned keywords — do that in Settings ▸ Activity keywords.
+
 The diary list itself only loads a batch of entries at a time (40 up front) rather than the whole
 matching history at once, so a long search or a busy day still stays responsive. Under the list,
 "Showing N of M" says how many are on screen, and the links reveal more: 50, 100, 500 or 1000 more at a
@@ -273,7 +275,9 @@ tool, not a cloud-first collaboration app. Specifically:
   data table the app keeps (completions, reschedules/day-offs, notes, score history,
   reflections, TickTick sync links, the activity diary, and the debug log) in one go, along with
   any report or export file (report.html, report.csv, full-export.json) sitting in your data
-  folder — it never touches your plan definitions themselves, which are archived or removed from
+  folder. All three "Clear" actions also delete the automatic backups saved before bulk changes
+  (they are full copies of your data), and clearing activity history also clears the change
+  history. "Clear all my data" never touches your plan definitions themselves, which are archived or removed from
   the Plans page instead.
 - **TickTick.** If you connect a TickTick account, your task titles, project names, and due dates
   are sent to and from TickTick's own servers so the two stay in sync — that's the one place data

@@ -14,3 +14,5 @@
 - 2026-10-27 G4b ask-wait-cancel | PM chose sonnet (small bounded change) | outcome: ok (built, precheck green 229/229; QA deferred)
 - 2026-10-27 G5 memory | PM chose opus (cause unknown, needs investigation) | outcome: ok
 2026-10-27 G5 generalist model check: opus confirmed sufficient (unknown cause, memory investigation + measurement); outcome: ok
+- 2026-10-28 G3 bulk mark + safe door | PM chose opus (new data-change service, touches real-data class, cause of vanishing marks unknown) | outcome: ok (built, precheck green 229/229; QA not run per brief)
+2026-10-28 G3 generalist model check: opus confirmed sufficient (new data-change service with backup/undo, unknown cause of vanishing marks); outcome: ok
