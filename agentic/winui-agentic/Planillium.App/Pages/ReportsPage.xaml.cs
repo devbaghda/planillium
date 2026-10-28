@@ -88,16 +88,38 @@ public sealed partial class ReportsPage : Page
     {
         base.OnNavigatedTo(e);
         Render();
+        // The tree was released on leaving (OnNavigatedFrom), so the rebuilt page would start at
+        // the top; put the scroll position back where the user left it, after layout.
+        if (_savedScrollOffset > 0)
+        {
+            RootScroller.UpdateLayout();
+            RootScroller.ChangeView(null, _savedScrollOffset, null, true);
+        }
     }
+
+    // Vertical scroll position of the page when it was left (G5): the hidden page no longer
+    // keeps its tree, so the offset is kept here instead.
+    private double _savedScrollOffset;
 
     // NavigationCacheMode="Enabled" keeps this page instance alive (and its
     // diary live-refresh timer running) even after navigating away — stop
     // it here so it doesn't keep querying the DB every 30s while the page
     // is cached but not on screen.
+    //
+    // G5 (2026-10-28): also release the whole built tree. OnNavigatedTo always calls Render(),
+    // which rebuilds it from scratch, so the kept tree was never reused — it only held memory
+    // (up to ~1.2 GB measured with the diary's "Show all" in All time) while the page was hidden.
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
+        _savedScrollOffset = RootScroller.VerticalOffset;
         _diaryLiveRefresh?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+        _diarySearchDebounce?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+        _diaryLiveRefreshAction = null;
+        _diarySearchDebounceAction = null;
+        Body.Children.Clear();
+        DiaryBody.Children.Clear();
+        _appDrillPieList = null;
     }
 
     private void ExportHtml_Click(object sender, RoutedEventArgs e)
@@ -125,7 +147,9 @@ public sealed partial class ReportsPage : Page
             {
                 _period = p;
                 _appDrillPath.Clear();  // Reset pie drill path on period change
-                Render();
+                // The diary does not depend on the period: rebuild only the sections above it
+                // (G5 — a full rebuild here dropped and rebuilt every diary row per switch).
+                RenderPeriodSections();
             }
         };
     }
@@ -136,6 +160,15 @@ public sealed partial class ReportsPage : Page
     /// the original day-change fix covered those two pages but missed this structurally
     /// identical one, which anchors its entire Day/Week/Month/Year view on DateTime.Today).</summary>
     internal void Render()
+    {
+        RenderPeriodSections();
+        RenderDiary();
+    }
+
+    /// <summary>Everything above the diary — the parts that follow the period selector and the
+    /// pie drill path (G5 split, 2026-10-28). Period switches and pie drill/Back call only this,
+    /// so the diary's rows, filter lists and toolbar are not thrown away and rebuilt.</summary>
+    private void RenderPeriodSections()
     {
         Body.Children.Clear();
         SaveErrorBar.IsOpen = false;
@@ -219,13 +252,34 @@ public sealed partial class ReportsPage : Page
 
             Body.Children.Add(Section($"INSIGHTS — {periodName}"));
             Body.Children.Add(Card(InsightsPanel(totals, db.Conn, score)));
-
-            BuildDiarySection(today, score);
         }
         catch (Exception ex)
         {
             Log.Error("ReportsPage.Render", ex);
             Body.Children.Add(new TextBlock
+            {
+                Text = Log.Friendly("Couldn't load your report data", ex),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+    }
+
+    /// <summary>The time-diary section, in its own panel (DiaryBody) below the period sections.
+    /// Opens its own Database/ScoreService, as RenderPeriodSections does.</summary>
+    private void RenderDiary()
+    {
+        DiaryBody.Children.Clear();
+        try
+        {
+            var plans = PlanStore.LoadActivePlans();
+            using var db = new Database();
+            using var score = new ScoreService(plans, db);
+            BuildDiarySection(DateOnly.FromDateTime(DateTime.Today), score);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReportsPage.RenderDiary", ex);
+            DiaryBody.Children.Add(new TextBlock
             {
                 Text = Log.Friendly("Couldn't load your report data", ex),
                 TextWrapping = TextWrapping.Wrap,

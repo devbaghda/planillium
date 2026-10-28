@@ -68,3 +68,11 @@
 2026-10-27 G4 coder: sonnet -- SPEC explicit (cap 16000 + timeout 360 s, notice font sizes, dialog height clamp); layout sizes are estimates, no QA this batch; outcome: ok (precheck green 0 warnings, 362/362; commit 065fed7; QA deferred by user ruling)
 2026-10-27 G4 round 2 planner: sonnet -- A3 from screenshot (bounded look change on one page), timeout/cancel verify; outcome: ok (SPEC-2.md)
 2026-10-27 G4 round 2 coder: sonnet -- SPEC-2 explicit (button row to DropDownButton, one constant, tooltip); UIA names kept; outcome: ok (precheck green 0 warnings, 362/362; commit d6e53c7; QA deferred)
+- 2026-10-27 G5 memory | PM chose opus for lead (cause unknown; regular STATUS: do not share) | outcome: pending
+## G5 memory 2026-10-27
+- designer: not launched -- no new screen, nothing visible may change.
+- planner: opus -- cause unknown, needs measurement + cross-cutting root-cause (diary list virtualization, Reports caches, live refresh); costly if wrong.
+- planner run 1 outcome: stalled (interrupted, no SPEC.md, no files); relaunched unchanged on opus with background-measuring instruction.
+- planner run 2 outcome: ok (SPEC.md + qa/g5_measure.py; 5 ranked causes; ~32 min)
+- coder: opus -- ItemsRepeater virtualization + split render + hidden-page release: layout/timing class, cross-cutting on Reports (LESSONS: layout is opus); lead rulings: measure at this side's default page (40), no forced GC, fix 5 lazy flyouts kept (repairs empty-flyout defect; flagged to PM).
+- coder outcome: ok (fixes 1-5; precheck green 0 warnings, 362/362; All time 128 -> 87 MB private WS, 16 switches 1428 -> 80 MB, hidden page 933 -> 101 MB)

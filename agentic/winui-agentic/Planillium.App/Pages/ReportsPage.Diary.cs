@@ -85,11 +85,6 @@ public sealed partial class ReportsPage
     private const string AllPages = "All pages";
     private const string AllTags = "All tags";
 
-    // Track the previous app and page option sets to decide whether to rebuild checkbox lists
-    // (2026-10-01): if the options haven't changed, only update IsChecked to preserve scroll/focus.
-    private static List<string> _previousAppsInView = new();
-    private static List<string> _previousPagesInView = new();
-
     // The debounce timer itself is created once and reused across renders
     // (NavigationCacheMode="Enabled" reuses this page instance, and
     // BuildDiarySection runs on every Render — page nav, period switch, diary
@@ -152,7 +147,7 @@ public sealed partial class ReportsPage
         // calendar date rolling over gets applied to the diary (see _diaryFollowsToday).
         if (_diaryFollowsToday) _diaryDate = today;
 
-        Body.Children.Add(DiaryHeader());
+        DiaryBody.Children.Add(DiaryHeader());
 
         // Reflections (the evening review's one-line answers) were
         // previously write-only — saved but never shown back anywhere in
@@ -160,7 +155,7 @@ public sealed partial class ReportsPage
         // the diary is currently viewing, same as everything else on this
         // section.
         if (_diarySearch.Trim().Length == 0 && score.LoadReflection(_diaryDate) is { Length: > 0 } reflection)
-            Body.Children.Add(ReflectionCallout(reflection));
+            DiaryBody.Children.Add(ReflectionCallout(reflection));
 
         var (searchBox, searchFieldBox) = BuildDiarySearchBox();
         var (categoryBtn, appBtn, pageBtn, tagBtn, allTimeBox, clearFiltersBtn, categoryFlyoutContent, tagFlyoutContent, appFlyoutContent, pageFlyoutContent) = BuildDiaryFilterRow();
@@ -169,7 +164,7 @@ public sealed partial class ReportsPage
         // below, right along with the list itself.
         var subtotalText = Dim("");
         subtotalText.Margin = new Thickness(0, 0, 0, 6);
-        Body.Children.Add(subtotalText);
+        DiaryBody.Children.Add(subtotalText);
 
         // Mark-selected toolbar — built once (not on every keystroke) so
         // its buttons don't get re-wired constantly; UpdateMarkToolbar()
@@ -384,24 +379,43 @@ public sealed partial class ReportsPage
             }
         }
 
-        void RenderDiaryResults()
+        // G5: the App/Page filter option lists last computed by RenderDiaryResults, used to fill
+        // the flyout when it opens; and what the open panel currently holds (null = closed/empty).
+        var appOptions = new List<string>();
+        var pageOptions = new List<string>();
+        List<string>? appPanelOptions = null;
+        List<string>? pagePanelOptions = null;
+
+        // G5: the rows RenderDiaryResults last loaded for its scope, so the live refresh can skip
+        // a rebuild when nothing new was logged (see _diaryLiveRefreshAction below).
+        var loadedRows = new List<ReportData.DiaryEntry>();
+
+        // "All time" (2026-07-23) reuses exactly the wide range free-text search already
+        // used, just without requiring a search term — so a filter combo alone (e.g. "just
+        // show me every Telegram/Liza Ponomarenko entry") can scope past the single day the
+        // date nav is showing.
+        List<ReportData.DiaryEntry> LoadScopeRows()
         {
-            diaryResults.Children.Clear();
-            var q = _diarySearch.Trim();
-            var searching = q.Length > 0;
-            // "All time" (2026-07-23) reuses exactly the wide range free-text search already
-            // used, just without requiring a search term — so a filter combo alone (e.g. "just
-            // show me every Telegram/Liza Ponomarenko entry") can scope past the single day the
-            // date nav is showing.
-            var wideRange = searching || _diaryAllTime;
+            var wide = _diarySearch.Trim().Length > 0 || _diaryAllTime;
             // Matches the date-picker's own MinDate and Database.PruneAndRollupDiary's
             // actual cutoff (rows older than today − N are pruned, so today − N is the
             // oldest day still genuinely present) — this used to be one day short,
             // silently excluding the single oldest day still on disk (round-5 audit
             // finding #6).
-            var rows = wideRange
+            return wide
                 ? ReportData.DiaryInRange(today.AddDays(-ConfigService.DiaryRetentionDays()), today)
                 : ReportData.DiaryInRange(_diaryDate, _diaryDate);
+        }
+
+        void RenderDiaryResults() => RenderDiaryResultsFrom(LoadScopeRows());
+
+        void RenderDiaryResultsFrom(List<ReportData.DiaryEntry> rows)
+        {
+            loadedRows = rows;
+            diaryResults.Children.Clear();
+            var q = _diarySearch.Trim();
+            var searching = q.Length > 0;
+            var wideRange = searching || _diaryAllTime;
 
             // Rebuild the app/page filters' options from what's actually in the current scope
             // (today, or the whole range) rather than a fixed list — re-syncs all three boxes'
@@ -451,12 +465,21 @@ public sealed partial class ReportsPage
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
             _diaryAppFilter = DiaryFilter.PruneToAvailable(_diaryAppFilter, appsInView);
-            // Only rebuild if the option set changed; otherwise just sync IsChecked to preserve scroll/focus
-            if (DiaryFilter.SameOptionSet(_previousAppsInView, appsInView, StringComparer.OrdinalIgnoreCase))
-                SyncAppCheckboxes();
-            else
-                RebuildAppCheckboxList(appFlyoutContent, appsInView);
-            _previousAppsInView = appsInView;
+            // G5: the checkbox list is built only while its flyout is open (Opening/Closed below).
+            // If it is open now (a checkbox click re-rendered), rebuild it only if the option set
+            // changed; otherwise just sync IsChecked to preserve scroll/focus (2026-10-01 rule),
+            // keyed on what the open panel actually holds.
+            appOptions = appsInView;
+            if (appPanelOptions != null)
+            {
+                if (DiaryFilter.SameOptionSet(appPanelOptions, appsInView, StringComparer.OrdinalIgnoreCase))
+                    SyncAppCheckboxes();
+                else
+                {
+                    RebuildAppCheckboxList(appFlyoutContent, appsInView);
+                    appPanelOptions = appsInView;
+                }
+            }
 
             var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
@@ -465,12 +488,18 @@ public sealed partial class ReportsPage
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
             _diaryPageFilter = DiaryFilter.PruneToAvailable(_diaryPageFilter, pagesInView);
-            // Only rebuild if the option set changed; otherwise just sync IsChecked to preserve scroll/focus
-            if (DiaryFilter.SameOptionSet(_previousPagesInView, pagesInView, StringComparer.OrdinalIgnoreCase))
-                SyncPageCheckboxes();
-            else
-                RebuildPageCheckboxList(pageFlyoutContent, pagesInView);
-            _previousPagesInView = pagesInView;
+            // Same open-only rule as the App list above.
+            pageOptions = pagesInView;
+            if (pagePanelOptions != null)
+            {
+                if (DiaryFilter.SameOptionSet(pagePanelOptions, pagesInView, StringComparer.OrdinalIgnoreCase))
+                    SyncPageCheckboxes();
+                else
+                {
+                    RebuildPageCheckboxList(pageFlyoutContent, pagesInView);
+                    pagePanelOptions = pagesInView;
+                }
+            }
 
             // Update all button texts and sync checkbox states for fixed filters (category/tag)
             // re-sync means updating IsChecked and button text
@@ -584,6 +613,35 @@ public sealed partial class ReportsPage
         BuildCategoryCheckboxList(categoryFlyoutContent);
         BuildTagCheckboxList(tagFlyoutContent);
 
+        // G5: the App/Page lists can hold one checkbox per distinct page in scope (thousands in
+        // All time), so they are built only while their flyout is open and emptied on close.
+        if (appBtn.Flyout is Flyout appFlyout)
+        {
+            appFlyout.Opening += (_, _) =>
+            {
+                RebuildAppCheckboxList(appFlyoutContent, appOptions);
+                appPanelOptions = appOptions;
+            };
+            appFlyout.Closed += (_, _) =>
+            {
+                appFlyoutContent.Children.Clear();
+                appPanelOptions = null;
+            };
+        }
+        if (pageBtn.Flyout is Flyout pageFlyout)
+        {
+            pageFlyout.Opening += (_, _) =>
+            {
+                RebuildPageCheckboxList(pageFlyoutContent, pageOptions);
+                pagePanelOptions = pageOptions;
+            };
+            pageFlyout.Closed += (_, _) =>
+            {
+                pageFlyoutContent.Children.Clear();
+                pagePanelOptions = null;
+            };
+        }
+
         RenderDiaryResults();
 
         // Unlike the category/app/page boxes, this needs a full Render() (not just
@@ -681,7 +739,16 @@ public sealed partial class ReportsPage
         // Only re-poll while today's rows are actually in scope with no search active — a
         // past-only day view is finished history (nothing new will ever appear), and a search
         // already re-renders itself on its own typing debounce above.
-        _diaryLiveRefreshAction = RenderDiaryResults;
+        //
+        // G5: a tick that finds exactly the rows already shown (DiaryEntry is a record, so
+        // SequenceEqual compares every field) changes nothing on screen, so it returns without
+        // rebuilding the list; otherwise it renders from the rows it just loaded (no second query).
+        _diaryLiveRefreshAction = () =>
+        {
+            var rows = LoadScopeRows();
+            if (rows.SequenceEqual(loadedRows)) return;
+            RenderDiaryResultsFrom(rows);
+        };
         EnsureDiaryLiveRefreshTimer();
         SyncLiveRefresh();
     }
@@ -715,7 +782,7 @@ public sealed partial class ReportsPage
         Grid.SetColumn(searchBox, 1);
         row.Children.Add(fieldBox);
         row.Children.Add(searchBox);
-        Body.Children.Add(row);
+        DiaryBody.Children.Add(row);
         return (searchBox, fieldBox);
     }
 
@@ -794,7 +861,7 @@ public sealed partial class ReportsPage
         // and the "All time" checkbox can be clipped off-screen with no way to reach them
         // (2026-07-24 audit finding #1, a regression from the App/Page column split). Same
         // HorizontalScrollBarVisibility="Auto" treatment as diaryScroller below, just for one row.
-        Body.Children.Add(new ScrollViewer
+        DiaryBody.Children.Add(new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -835,7 +902,7 @@ public sealed partial class ReportsPage
         markToolbar.Children.Add(markOnBtn);
         markToolbar.Children.Add(markOffBtn);
         markToolbar.Children.Add(markNeutralBtn);
-        Body.Children.Add(markToolbar);
+        DiaryBody.Children.Add(markToolbar);
 
         // Second row, its own independent axis (2026-08-07 request) — kept off the row
         // above rather than appended to it: on-plan/off-plan/neutral plus five tags plus
@@ -869,7 +936,7 @@ public sealed partial class ReportsPage
         var clearTagBtn = new Button { Content = "Clear tag", IsEnabled = false };
         tagToolbar.Children.Add(clearTagBtn);
         tagMarkButtons.Add((null, clearTagBtn));
-        Body.Children.Add(tagToolbar);
+        DiaryBody.Children.Add(tagToolbar);
 
         return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons);
     }
@@ -909,7 +976,7 @@ public sealed partial class ReportsPage
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = diaryResults,
         };
-        Body.Children.Add(diaryScroller);
+        DiaryBody.Children.Add(diaryScroller);
         return diaryResults;
     }
 
@@ -1356,8 +1423,22 @@ public sealed partial class ReportsPage
         // comment). RenderDiaryResults already resets it to the default on an actual scope
         // change before this method is ever called.
         var shown = _diaryShowAll ? diary.Count : Math.Min(_diaryRowsShown, diary.Count);
+
+        // G5 (2026-10-28): the revealed rows go through an ItemsRepeater, which creates a row
+        // only when it comes into the diary scroller's viewport (plus a small cache) and drops it
+        // when it leaves. Building every revealed row eagerly in this StackPanel cost about
+        // 0.5 MB per row — "Show all" on the 300-row cap held ~160 MB of rows of which ~15 are
+        // ever on screen. Same rows, order, spacing (4) and paging row as before.
+        var revealed = new System.Collections.ObjectModel.ObservableCollection<ReportData.DiaryEntry>();
         for (var i = 0; i < shown; i++)
-            list.Children.Add(BuildRow(diary[i]));
+            revealed.Add(diary[i]);
+        var repeater = new ItemsRepeater
+        {
+            Layout = new StackLayout { Spacing = 4 },
+            ItemTemplate = new DiaryRowFactory(BuildRow),
+            ItemsSource = revealed,
+        };
+        list.Children.Add(repeater);
 
         // One batch at a time, not the whole rest in one go (2026-07-28 request) — a busy
         // search/date-range match can leave hundreds of rows hidden behind this button, and
@@ -1374,7 +1455,7 @@ public sealed partial class ReportsPage
             if (pagingRow != null) list.Children.Remove(pagingRow);
             var next = Math.Min(shown + count, diary.Count);
             for (var i = shown; i < next; i++)
-                list.Children.Add(BuildRow(diary[i]));
+                revealed.Add(diary[i]);
             shown = next;
             _diaryRowsShown = next;
             AddPagingRowIfNeeded();
@@ -1406,5 +1487,22 @@ public sealed partial class ReportsPage
         }
         AddPagingRowIfNeeded();
         return list;
+    }
+
+    /// <summary>Builds one diary row per realized item of the diary's ItemsRepeater (G5).
+    /// Rows are not reused: each row's handlers capture its own entry, so a recycled row is
+    /// removed from the repeater and dropped (the repeater leaves recycling to the factory;
+    /// an element left in place would stay in its Children for good), and a fresh one is
+    /// built when the entry comes back into view. BuildRow reads selection state as it builds,
+    /// so a row created late still shows the right checked state.</summary>
+    private sealed partial class DiaryRowFactory(Func<ReportData.DiaryEntry, Grid> buildRow) : IElementFactory
+    {
+        public UIElement GetElement(ElementFactoryGetArgs args) => buildRow((ReportData.DiaryEntry)args.Data);
+
+        public void RecycleElement(ElementFactoryRecycleArgs args)
+        {
+            if (args.Parent is Panel panel)
+                panel.Children.Remove(args.Element);
+        }
     }
 }

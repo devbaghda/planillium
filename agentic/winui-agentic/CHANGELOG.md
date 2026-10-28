@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: Reports uses far less memory with a long time diary. Measured on a test copy with 9300 diary entries: opening Reports with "All time" on went from 128 MB to 87 MB; after "Show all" and switching periods it stays near 70-80 MB (was up to 1.4 GB), and leaving Reports gives the memory back (was 0.9-1.2 GB held while on another page). The diary list now creates only the rows on screen (more as you scroll); switching Day/Week/Month/Year or opening a pie slice no longer rebuilds the diary; the 30-second live refresh does nothing when no new entry was logged; Reports is rebuilt when you come back to it and returns to where you had scrolled. Rows, totals, "Showing N of M", Show more/Show all and the 300-row cap are unchanged. The App and Page filter lists are built when you open them; they no longer show up empty after a period switch.
 - Fix: Ask Claude can now return a long reply (a rewrite of a 34-task plan was cut off at 8000 tokens). The reply limit is now 16000 tokens and Planillium waits up to 4 minutes (was 2) before giving up; the "Gives up after ..." line and the timeout message say 4 minutes. A reply that still hits the limit shows the same "cut off" message.
 - Change: the one-time Anthropic notice in Ask Claude is set in smaller type (body 11.5, headings 12, last line 11, was 13) and takes less space.
 - Change: the Replace remaining tasks dialog is wider (760) and taller on a large window, so its vertical scrollbar no longer shows at default size; on a small window it still scrolls and the buttons stay visible.

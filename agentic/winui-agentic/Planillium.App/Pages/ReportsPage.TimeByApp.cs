@@ -177,7 +177,7 @@ public sealed partial class ReportsPage
                     // Save the parent app name that we're about to pop from the path
                     var parentAppName = ReportsPage._appDrillPath[ReportsPage._appDrillPath.Count - 1];
                     ReportsPage._appDrillPath.RemoveAt(ReportsPage._appDrillPath.Count - 1);
-                    Render();
+                    RenderPeriodSections();
 
                     // After re-render, restore focus to the row for the parent app we just came back from
                     if (ReportsPage._appDrillPieList != null)
@@ -239,7 +239,7 @@ public sealed partial class ReportsPage
                     wedge.Tapped += (_, _) =>
                     {
                         ReportsPage._appDrillPath.Add(slice.Name);
-                        Render();
+                        RenderPeriodSections();
                     };
                 }
                 canvas.Children.Add(wedge);
@@ -293,7 +293,7 @@ public sealed partial class ReportsPage
                     wedge.Tapped += (_, _) =>
                     {
                         ReportsPage._appDrillPath.Add(slice.Name);
-                        Render();
+                        RenderPeriodSections();
                     };
                 }
 
@@ -450,14 +450,14 @@ public sealed partial class ReportsPage
             row.Tapped += (_, _) =>
             {
                 ReportsPage._appDrillPath.Add(slice.Name);
-                Render();
+                RenderPeriodSections();
             };
             row.KeyDown += (_, e) =>
             {
                 if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
                 {
                     ReportsPage._appDrillPath.Add(slice.Name);
-                    Render();
+                    RenderPeriodSections();
                     e.Handled = true;
                 }
             };

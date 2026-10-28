@@ -41,6 +41,9 @@
                  switches (2026-07-14 round-6 audit finding #25). -->
             <RadioButtons x:Name="PeriodBar" MaxColumns="4" Margin="0,0,0,4"/>
             <StackPanel x:Name="Body" Spacing="0"/>
+            <!-- The diary lives in its own panel (G5, 2026-10-28) so a period switch or pie
+                 drill rebuilds only Body, not the diary rows, filters and toolbar. -->
+            <StackPanel x:Name="DiaryBody" Spacing="0"/>
         </StackPanel>
     </ScrollViewer>
 </Page>
