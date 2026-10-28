@@ -17,3 +17,8 @@ Lead rulings on SPEC open questions (2026-10-28):
 2. No forced garbage collection; structural fixes only. If memory still climbs after the fixes, report the numbers.
 3. Fix 5 (filter lists built when the flyout opens) stays; it also repairs the empty App/Page flyout after a period switch. Flagged to the PM as a visible change.
 4. QA note kept for later; no QA this round.
+
+Round 2 (2026-10-28, PM relaying the user):
+- User OK: keep the filter-list fix (fix 5).
+- Investigate the ~24 MB slow private-bytes creep over the 15-min measuring run (127 -> 151 MB); fix if the cause is clear and low-risk, else report it. Same precheck, no QA, no push, local commit.
+Split: no planner -- one bounded investigate-then-fix job on the same files and script; the coder (opus) measures, decides and records the cause in SPEC.md section 10.

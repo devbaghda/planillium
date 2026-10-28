@@ -233,3 +233,44 @@ Same script and data (`py qa/g5_measure.py all after`, Debug, scratch root only;
 
 P1 met (F is below C; G/H flat). P2 met (I private bytes 141 vs A 104). Remainder: Reports with the large DB sits within ~10-15 MB of the empty-app figures (83-87 MB), i.e. the framework baseline. Private bytes still creep ~24 MB over the 15-minute run (127 -> 151), small and not investigated further (no forced GC, lead ruling 2).
 Deviation from section 4 fix 1: `RecycleElement` removes the element from the repeater (ItemsRepeater leaves recycling to a custom factory; doing nothing would keep every row ever realized as a child).
+
+## 10. Round 2: the 24 MB private-bytes creep (coder, 2026-10-28)
+
+Question: is the 127 -> 151 MB private-bytes rise over the 15-minute `g5_measure.py` run a leak?
+**Answer: no.** It is the .NET garbage-collected heap filling and emptying (a sawtooth) plus a one-time
+native rise from period switches that levels off. Decision: **no code change.**
+
+Method: `qa/g5_creep.py <scenario>` (new, same scratch root/data as section 2, same safety): one
+scenario per launch, 15 minutes, a reading every 30 s of private WS, private bytes, and the committed
+private memory split into the .NET GC reservation (the largest private reservation, >= 1 GB, found
+with `VirtualQueryEx`) vs everything else (WinUI/native heaps, SQLite). No external tools needed.
+Logs: `qa/g5_scratch/creep_runs.log`, `g5c_r1_<scenario>.json`. Debug build of commit 603dcb4.
+
+| Scenario (15 min, 31 readings) | Private bytes first -> last (min..max) | GC heap committed min..max | Native committed first -> last (2nd half) |
+|---|---|---|---|
+| today: Today page only, no Reports | 102.9 -> 97.0 (96.9..104.0) | 2.1..5.8 | 78.7 -> 74.6 (73.3..75.5) |
+| rep_today: Reports Week, diary = today | 112.5 -> 123.1 (112.5..123.2) | 2.7..4.4 | 87.9 -> 100.1 (99.3..100.2) |
+| rep_alltime: Reports Week, All time, idle | 135.6 -> 135.0 (129.0..147.7) | **9.5..28.1** | 98.8 -> 100.9 (99.1..100.9) |
+| switch: All time, Day/Week/Month/Year every 3 s (293 switches) | 136.8 -> 144.1 (135.8..149.2) | 9.6..21.6 | 99.9 -> 110.3 (104.0..110.3) |
+
+Reading:
+1. **GC sawtooth, All time only.** With All time on, each 30-s live-refresh tick loads the whole scope
+   (~9300 `DiaryEntry` records, a few MB of strings) to compare with what is shown, then drops it
+   (fix 3). The GC heap climbs from ~10 to ~28 MB over about 3 minutes and is then collected back to
+   ~10 MB (readings at 6.0, 9.0 min). Without All time (today, rep_today) the GC heap stays 2..6 MB.
+   This is the "creep": the original run's 151 MB at H +4 min sat near a sawtooth top (rep_alltime
+   peaks 147.7) and fell to 141 MB one minute later (step I).
+2. **Native rise from switching levels off.** 293 period switches add ~6-10 MB of native memory in the
+   first 2 minutes (100 -> 107..110), then it stays in a 104..110 band for the next 13 minutes and
+   ~240 switches: freed trees are reused, nothing accumulates per switch.
+3. **Idle is flat.** Today alone: no growth (slight fall). rep_today: one step of +9 MB at ~5 min
+   (same moment the window's working set was trimmed), then flat for 10 minutes; not repeated.
+4. Nothing grows with time in any scenario after its first minutes; no handler, timer or static list
+   keeps dropped elements (code read: `ReportsPage.xaml.cs`, `.Diary.cs` timers and closures, statics
+   are fixed-size filter sets and the drill path; the two `System.Threading.Timer`s are created once).
+
+Not done, and why: the sawtooth could be removed by having the All-time tick ask the database for a
+cheap fingerprint (row count, max id, sum of minutes, last end time) instead of loading every row.
+That changes when a refresh happens (an edit that keeps all four values would not show until the next
+render) for a transient ~18 MB the GC already returns, so it is not "low-risk, nothing visible".
+Left as an option for the user/lead; no forced GC (lead ruling 2).

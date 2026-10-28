@@ -76,3 +76,5 @@
 - planner run 2 outcome: ok (SPEC.md + qa/g5_measure.py; 5 ranked causes; ~32 min)
 - coder: opus -- ItemsRepeater virtualization + split render + hidden-page release: layout/timing class, cross-cutting on Reports (LESSONS: layout is opus); lead rulings: measure at this side's default page (40), no forced GC, fix 5 lazy flyouts kept (repairs empty-flyout defect; flagged to PM).
 - coder outcome: ok (fixes 1-5; precheck green 0 warnings, 362/362; All time 128 -> 87 MB private WS, 16 switches 1428 -> 80 MB, hidden page 933 -> 101 MB)
+- round 2 coder (24 MB private-bytes creep): opus -- root-cause hunt, unknown cause, timing/lifetime class; planner skipped (bounded, same files/script); fix only if clear and low-risk.
+- round 2 coder outcome: ok (not a leak: GC sawtooth from All-time refresh + native rise from switching that levels off; 4 x 15-min scenario runs, qa/g5_creep.py; no code change; SPEC section 10)
