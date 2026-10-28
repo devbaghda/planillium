@@ -80,3 +80,5 @@
 - Attribute a cause cheaply by rerunning one scenario with one input shrunk (30 vs 2600 pages).
 - Long builds/app runs/measurements run in the background writing a log; poll under 2 min per call (a foreground run stalled the G5 planner).
 - Edit CRLF files with the Edit tool or byte-level replace; Python text mode or sed -i turns CRLF into LF.
+- A leak is a bottom level that keeps climbing: run one scenario per launch for 15 min, sample every 30 s, split .NET-managed vs native (largest private reserved block via VirtualQueryEx); a sawtooth or plateau is not a leak.
+- A "low-risk" fix that changes when the screen refreshes is a visible change: report it as an option, do not apply it.
