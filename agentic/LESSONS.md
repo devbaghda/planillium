@@ -69,3 +69,14 @@
 - A subagent can exit without a handback: check for its output file, rerun once.
 - Restyle to a screenshot: diff the target against the existing builder first; when buttons move into a menu keep their UIA names, keep the long name when the label is shortened.
 - Verify a Stop/Cancel by tracing the token to HttpClient.SendAsync, not by its label.
+
+## Memory (G5)
+- Measure before fixing: a script that launches on a scratch root and logs private working set AND private bytes per step (Windows trims a hidden window's working set); ctypes GetProcessMemoryInfo, no psutil.
+- Long row lists go in an ItemsRepeater (only on-screen rows built); a custom IElementFactory must remove the element in RecycleElement or every row ever shown is kept.
+- A partial change (period switch, pie drill) re-renders only its own panel; a whole-page rebuild per click costs 80-150 MB of late-freed trees.
+- Live refresh compares the loaded rows with the shown ones and skips the rebuild when equal.
+- A cached page clears its panels and stops its timers on leaving, rebuilds and restores scroll on return.
+- Never walk the full WinUI UIA tree repeatedly in a measuring run: it inflates the app's own memory (1.5-3 GB); find elements once, reuse.
+- Attribute a cause cheaply by rerunning one scenario with one input shrunk (30 vs 2600 pages).
+- Long builds/app runs/measurements run in the background writing a log; poll under 2 min per call (a foreground run stalled the G5 planner).
+- Edit CRLF files with the Edit tool or byte-level replace; Python text mode or sed -i turns CRLF into LF.

@@ -68,7 +68,7 @@
 2026-10-27 G4 coder: sonnet -- SPEC explicit (cap 16000 + timeout 360 s, notice font sizes, dialog height clamp); layout sizes are estimates, no QA this batch; outcome: ok (precheck green 0 warnings, 362/362; commit 065fed7; QA deferred by user ruling)
 2026-10-27 G4 round 2 planner: sonnet -- A3 from screenshot (bounded look change on one page), timeout/cancel verify; outcome: ok (SPEC-2.md)
 2026-10-27 G4 round 2 coder: sonnet -- SPEC-2 explicit (button row to DropDownButton, one constant, tooltip); UIA names kept; outcome: ok (precheck green 0 warnings, 362/362; commit d6e53c7; QA deferred)
-- 2026-10-27 G5 memory | PM chose opus for lead (cause unknown; regular STATUS: do not share) | outcome: pending
+- 2026-10-27 G5 memory | PM chose opus for lead (cause unknown; regular STATUS: do not share) | outcome: ok (planner opus run 2 after a stall, coder opus; precheck green 0 warnings, 362/362; commit 603dcb4; no QA by brief)
 ## G5 memory 2026-10-27
 - designer: not launched -- no new screen, nothing visible may change.
 - planner: opus -- cause unknown, needs measurement + cross-cutting root-cause (diary list virtualization, Reports caches, live refresh); costly if wrong.
