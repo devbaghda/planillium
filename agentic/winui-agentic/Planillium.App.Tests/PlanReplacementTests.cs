@@ -355,7 +355,7 @@ public sealed class PlanReplacementTests
         Assert.Contains("Ticked tasks (fixed, do not repeat):", prompt);
         Assert.Contains("```json", prompt);
         Assert.Contains("Every task title must be unique and must\nnot match any ticked task above.", prompt);
-        Assert.Contains("\"day\": 2,", prompt);
+        Assert.Contains("[2,\"Short task title\"", prompt); // G10: compact form, was "day": 2,
     }
 
     [Fact]
@@ -384,8 +384,8 @@ public sealed class PlanReplacementTests
         Assert.Contains("Use {remaining_list} and {change_text} here", prompt);
         Assert.Contains("{start_day} is literal", prompt);
         Assert.Contains("Day 1: Done {done_list}", prompt);
-        Assert.Contains("\"name\": \"Plan {start_day}\"", prompt);
-        Assert.Contains("\"day\": 7,", prompt);
+        Assert.Contains("\"name\":\"Plan {start_day}\"", prompt); // G10: compact form
+        Assert.Contains("[7,\"Short task title\"", prompt);
     }
 
     [Fact]

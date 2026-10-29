@@ -305,6 +305,10 @@ public static class PlanReplyCheck
         var raw = replyText.Trim();
         if (raw.Length == 0) return "Paste Claude's reply first.";
 
+        // G10: a compact-form reply is checked as the standard plan it expands to.
+        var compactProblem = CompactPlan.Normalize(raw, out raw);
+        if (compactProblem is not null) return compactProblem;
+
         var fence = System.Text.RegularExpressions.Regex.Match(raw,
             "```(?:json)?\\s*(\\{.*?\\})\\s*```", System.Text.RegularExpressions.RegexOptions.Singleline);
         var json = fence.Success ? fence.Groups[1].Value

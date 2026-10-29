@@ -20,6 +20,8 @@ public static class StartupService
     {
         get
         {
+            // G10: a scratch run (MENTOR_ROOT set) never reads the real machine-wide Run value.
+            if (AppPaths.IsScratchRun) return false;
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RunKey);
@@ -35,6 +37,13 @@ public static class StartupService
 
     public static void SetEnabled(bool enabled)
     {
+        // G10: a scratch run never writes or deletes the real Run value (incl. the legacy-name sweep).
+        // Keyed on the env var alone, not #if DEBUG, so a Release build fails closed too.
+        if (AppPaths.IsScratchRun)
+        {
+            Log.Info("StartupService.SetEnabled: skipped, scratch data folder (MENTOR_ROOT set)");
+            return;
+        }
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);

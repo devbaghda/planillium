@@ -496,6 +496,9 @@ public static class AddPlanDialog
             return "Paste Claude's reply first.";
 
         var raw = replyText.Trim();
+        // G10: a compact-form reply is imported as the standard plan it expands to.
+        var compactProblem = CompactPlan.Normalize(raw, out raw);
+        if (compactProblem is not null) return compactProblem;
         var fence = Regex.Match(raw, "```(?:json)?\\s*(\\{.*?\\})\\s*```", RegexOptions.Singleline);
         var json = fence.Success ? fence.Groups[1].Value
                  : raw.StartsWith('{') ? raw : null;

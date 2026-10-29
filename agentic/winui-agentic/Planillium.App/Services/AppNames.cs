@@ -100,6 +100,31 @@ public static class AppNames
         return Normalise.TryGetValue(raw, out var clean) ? clean : raw;
     }
 
+    /// <summary>The single App-filter entry that collects rows whose "app" is really a window title
+    /// without a dash (G10, 2026-10-29).</summary>
+    public const string OtherGroup = "Other";
+
+    /// <summary>
+    /// The value the Diary App filter lists and matches for a row: <see cref="Group"/>, except that a
+    /// window title with no dash separator whose text is not a known program name (browsers, messengers,
+    /// Office/Adobe/VS Code/File Explorer names and the clean names in <c>Normalise</c>) is
+    /// <see cref="OtherGroup"/>. "—" (empty title) is returned unchanged. The row's own App column
+    /// still shows <see cref="Group"/>.
+    /// </summary>
+    public static string FilterGroup(string window)
+    {
+        var g = Group(window);
+        if (g == "—" || IsTelegramMarked(window)) return g;
+        if (SplitParts(NormaliseTitle(window)).Length > 1) return g; // has a dash: last part is the program
+        return IsKnownProgram(g) ? g : OtherGroup;
+    }
+
+    private static bool IsKnownProgram(string name) =>
+        Browsers.Contains(name) || Messengers.Contains(name) || FileSubApps.Contains(name) ||
+        VsCodeNames.Contains(name) || Normalise.ContainsKey(name) ||
+        Normalise.ContainsValue(name) ||
+        name.Equals("File Explorer", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Chat / site / project / filename sub-item, or null.</summary>
     public static string? Sub(string window)
     {

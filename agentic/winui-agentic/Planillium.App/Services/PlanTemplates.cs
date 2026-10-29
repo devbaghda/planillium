@@ -12,84 +12,35 @@ I need to become functional in {subject} as fast as possible. I'm not a beginner
 at life or at learning hard things — I'm a beginner in this specific skill. Act as
 a {claude_role} with 10+ years of hands-on experience in {area_of_interest}. Treat
 me like a capable professional who has no time to waste, not like a student.
-Write the plan itself as if you were mentoring me through it in person: for
-each day, don't just list a task — tell me why it matters at this exact
-point, what a beginner in {subject} typically gets wrong right there, and
-what "doing it right" actually looks like, the way a real mentor corrects you
-before you form a bad habit rather than after.
+Write the plan the way a mentor would: for each task say why it matters at this
+point, what a beginner typically gets wrong there, and what doing it right looks like.
 
-Before any plan, give me a short, blunt briefing:
-1. The 3 highest-leverage things that produce ~80% of real-world results in
-   {subject}. Be specific, not generic.
-2. What to completely ignore — the stuff that feels productive but doesn't move
-   the needle for someone who needs to be functional, not credentialed.
-3. What most learners waste months on that I can skip entirely, and why.
-4. A realistic time estimate to reach "functional" (able to do real work
-   unsupervised) — no optimism, no sandbagging either.
+Before any plan, work out a short, blunt briefing: (1) the 3 highest-leverage things that
+produce ~80% of real-world results in {subject}; (2) what to ignore completely; (3) what
+learners waste months on that I can skip; (4) a realistic time estimate to "functional"
+(able to do real work unsupervised), no optimism and no sandbagging. Do NOT write the
+briefing in the chat: it goes only inside the JSON, in "b" below.
 
-Then build a day-by-day plan to get me there in the shortest realistic time.
-Rules for the plan:
-- Every day mixes theory with immediate hands-on practice — no day is pure
-  passive learning.
-- Difficulty escalates day over day, each day building on what I actually
-  practiced, not a generic curriculum order.
-- Include real practical outputs (small builds, drills, exercises), not just
-  "read about X".
-- Be honest if a day needs less time or more time than others — don't pad for
-  symmetry.
+Then build a day-by-day plan to get me there in the shortest realistic time. Every day mixes
+theory with immediate hands-on practice, difficulty escalates day over day, and there are
+real practical outputs (small builds, drills, exercises). Be honest if a day needs less or
+more time than others; several tasks may share a day. Categories: theory, practice,
+project, review.
 
-After the briefing, output ONLY the plan as a single JSON code block (```json
-... ```), with nothing else inside the fence. Repeat the 4-point briefing
-inside the JSON too (structured, not prose) so it's saved permanently with
-the plan, not just visible here in chat. Match this exact schema:
+To keep your reply short and fast, answer with ONLY one compact JSON code block
+(```json ... ```): no text before or after it, no line breaks or indentation inside it, and
+brief text in every field (a sentence or two). Use exactly this compact format:
 
-{
-  "id": "kebab-case-slug",
-  "name": "Short plan title",
-  "color": "#3b82f6",
-  "total_days": 14,
-  "briefing": {
-    "high_leverage": ["The 3 highest-leverage things, one per string"],
-    "ignore_completely": "What to completely ignore and why",
-    "common_time_wasters": "What most learners waste months on that can be skipped",
-    "realistic_timeline": "The honest time estimate to reach functional, with reasoning"
-  },
-  "phases": [
-    {
-      "name": "Phase name (e.g. Foundations, Applied practice, Stress-testing)",
-      "tasks": [
-        {
-          "day": 1,
-          "task": "Short task title",
-          "detail": "Concrete instructions: exactly what to do, for how long, and what 'done' looks like.",
-          "mentor_note": "Why this matters right now, the mistake beginners make at this exact step, and what doing it right looks like.",
-          "category": "theory | practice | project | review",
-          "duration_min": 60,
-          "tools": ["The specific apps/tools/websites needed to actually do this task"]
-        }
-      ]
-    }
-  ]
-}
+{"cf":1,"id":"kebab-case-slug","name":"Short plan title","color":"#3b82f6","days":14,"b":[["leverage 1","leverage 2","leverage 3"],"what to ignore and why","time wasters to skip","realistic timeline"],"p":[["Phase name",[[1,"Short task title","detail: what to do, for how long, what done looks like","mentor note: why now, the usual mistake, what right looks like","practice",60,["App or site"]],[2,"Next task","detail","mentor note","theory",45,[]]]],["Next phase",[]]]}
 
-Multiple tasks can share the same "day" if they belong together in one
-session. Use "category": "theory" for concept learning, "practice" for
-drills/exercises, "project" for a built artifact, "review" for consolidation/
-spaced repetition days. Keep "detail" to the concrete how-to (what to do,
-for how long, what "done" looks like); put the mentor commentary — why it
-matters right now, the mistake beginners make at this exact step, what
-right looks like — in "mentor_note", so both are visible together for every
-task, not buried back in the briefing.
+Each task is an array: [day, title, detail, mentor note, category, minutes, tools]. Put the
+concrete how-to in detail and the mentor commentary in the mentor note.
 
-For every task, list in "tools" the specific applications, tools, or websites I'll
-actually have open to do it — real names, e.g. "VS Code", "Anki", "Chrome - Coursera",
-"Excel", not generic categories like "a code editor" or "the internet". This list gets
-imported straight into my tracking app's on-plan activity list, so name things precisely
-enough that they won't also match unrelated apps I use for other reasons — "Chrome -
-Coursera" not bare "Chrome", "Spotify" only if focus-music is actually part of doing the
-task, never just "Browser" or "Terminal" alone if I use those constantly for other things
-too. Leave "tools" as an empty list for a task that's genuinely not tied to any
-particular app (e.g. a purely physical or offline exercise).
+In "tools" (the 7th item of a task) list the specific applications, tools or websites I'll actually
+have open for it, real names such as "VS Code", "Anki", "Chrome - Coursera", "Excel" - never generic
+("a code editor", "the internet"), never a bare "Chrome", "Browser" or "Terminal" that I also use for
+unrelated things. The list is imported into my tracking app's on-plan activity list, so be precise
+enough not to match unrelated apps. Use [] for a task that is not tied to any app (a purely offline exercise).
 """;
 
     public const string Goal = """
@@ -98,88 +49,39 @@ not naive about how hard real-world goals are — I want a plan, not a pep talk.
 Act as a {claude_role} with 10+ years of hands-on experience getting people
 through exactly this kind of goal in {area_of_interest}. Talk to me like an
 operator who has done this dozens of times for clients, not like a
-motivational speaker. Write the plan itself as if you were mentoring me
-through it in person: for each step, don't just list an action — tell me why
-it matters at this exact point, what people trying to {subject} typically
-get wrong right there, and what "doing it right" actually looks like, the
-way a real mentor corrects you before a mistake happens rather than after.
+motivational speaker. Write the plan the way a mentor would: for each step say why it
+matters at this point, what people trying to {subject} typically get wrong there, and what
+doing it right looks like.
 
-Before any plan, give me a short, blunt briefing:
-1. The 3 decisions or actions that determine ~80% of whether this succeeds,
-   fails, or drags on. Be specific to my situation, not generic advice.
-2. What to completely ignore — the research rabbit holes, comparison
-   shopping, or "just in case" prep that feels responsible but doesn't
-   actually move this forward.
-3. The mistakes or wasted time that trip up most people trying to {subject},
-   and how to route around them.
-4. A realistic timeline to get this done — call out anything outside my
-   control (approvals, waiting periods, other people's schedules) that sets a
-   floor on how fast this can go, and what's actually in my control to
-   compress.
+Before any plan, work out a short, blunt briefing: (1) the 3 decisions or actions that
+determine ~80% of whether this succeeds, fails or drags on, specific to my situation; (2) what
+to ignore completely (research rabbit holes, comparison shopping, "just in case" prep);
+(3) the mistakes or wasted time that trip up most people, and how to route around them;
+(4) a realistic timeline, calling out anything outside my control (approvals, waiting periods,
+other people's schedules) that sets a floor, and what I can compress. Do NOT write the
+briefing in the chat: it goes only inside the JSON, in "b" below.
 
-Then build a day-by-day plan to get there in the shortest realistic time.
-Rules for the plan:
-- Every step is a concrete action I can actually take that day (a call to
-  make, a document to gather, a decision to lock in) — not "consider" or
-  "think about".
-- Sequence dependencies correctly: never schedule something before its
-  prerequisite is actually done.
-- Call out any days that are just waiting on something external, and what I
-  should do in parallel instead of sitting idle.
-- Be honest if a step needs a single hour or several days — don't pad for
-  symmetry, and don't compress steps that genuinely take external processing
-  time.
+Then build a day-by-day plan to get there in the shortest realistic time. Every step is a
+concrete action I can take that day (a call to make, a document to gather, a decision to lock
+in), never "consider" or "think about"; sequence dependencies correctly; call out days that
+only wait on something external and what to do in parallel; be honest if a step needs one hour
+or several days. Several tasks may share a day. Categories: research, decision, logistics,
+execution.
 
-After the briefing, output ONLY the plan as a single JSON code block (```json
-... ```), with nothing else inside the fence. Repeat the 4-point briefing
-inside the JSON too (structured, not prose) so it's saved permanently with
-the plan, not just visible here in chat. Match this exact schema:
+To keep your reply short and fast, answer with ONLY one compact JSON code block
+(```json ... ```): no text before or after it, no line breaks or indentation inside it, and
+brief text in every field (a sentence or two). Use exactly this compact format:
 
-{
-  "id": "kebab-case-slug",
-  "name": "Short plan title",
-  "color": "#3b82f6",
-  "total_days": 30,
-  "briefing": {
-    "high_leverage": ["The 3 decisions/actions that determine 80% of the outcome, one per string"],
-    "ignore_completely": "What to completely ignore and why",
-    "common_time_wasters": "The mistakes/wasted time that trip up most people, and how to route around them",
-    "realistic_timeline": "The honest timeline, including what's outside your control vs. what compresses it"
-  },
-  "phases": [
-    {
-      "name": "Phase name (e.g. Research & decisions, Paperwork & logistics, Execution)",
-      "tasks": [
-        {
-          "day": 1,
-          "task": "Short task title",
-          "detail": "Concrete instructions: exactly what to do and what 'done' looks like.",
-          "mentor_note": "Why this matters right now, the mistake most people make at this exact step, and what doing it right looks like.",
-          "category": "research | decision | logistics | execution",
-          "duration_min": 60,
-          "tools": ["The specific apps/tools/websites needed to actually do this task"]
-        }
-      ]
-    }
-  ]
-}
+{"cf":1,"id":"kebab-case-slug","name":"Short plan title","color":"#3b82f6","days":30,"b":[["decision 1","decision 2","decision 3"],"what to ignore and why","mistakes to avoid","realistic timeline"],"p":[["Phase name",[[1,"Short task title","detail: what to do and what done looks like","mentor note: why now, the usual mistake, what right looks like","research",60,["App or site"]],[2,"Next task","detail","mentor note","decision",30,[]]]],["Next phase",[]]]}
 
-Multiple tasks can share the same "day" if they belong together. Use
-"category": "research" for information-gathering, "decision" for
-choices/comparisons to lock in, "logistics" for paperwork/admin/coordination,
-"execution" for the actual doing steps. Keep "detail" to the concrete how-to;
-put the mentor commentary — why it matters right now, the mistake most
-people make at this exact step, what right looks like — in "mentor_note", so
-both are visible together for every task.
+Each task is an array: [day, title, detail, mentor note, category, minutes, tools]. Put the
+concrete how-to in detail and the mentor commentary in the mentor note.
 
-For every task, list in "tools" the specific applications, tools, or websites I'll
-actually have open to do it — real names, e.g. "Chrome - IND.nl", "Gmail", "DigiD app",
-"Excel", not generic categories like "a website" or "email". This list gets imported
-straight into my tracking app's on-plan activity list, so name things precisely enough
-that they won't also match unrelated apps I use for other reasons — "Chrome - IND.nl"
-not bare "Chrome", never just "Browser" or "Email" alone if I use those constantly for
-other things too. Leave "tools" as an empty list for a task that's genuinely not tied to
-any particular app (e.g. a phone call or an in-person errand).
+In "tools" (the 7th item of a task) list the specific applications, tools or websites I'll actually
+have open for it, real names such as "Chrome - IND.nl", "Gmail", "DigiD app", "Excel" - never generic
+("a website", "email"), never a bare "Chrome", "Browser" or "Email" that I also use for unrelated
+things. The list is imported into my tracking app's on-plan activity list, so be precise enough not to
+match unrelated apps. Use [] for a task that is not tied to any app (a phone call, an in-person errand).
 """;
 
     /// <summary>Replace-remaining prompt (spec replace-remaining-tasks): Claude rewrites only the
@@ -203,33 +105,19 @@ Apply the requested change to every place it appears, including inside detail te
 and tools of tasks that were not otherwise touched. Keep the remaining work otherwise as it is,
 unless the change requires otherwise.
 
-Give me the remaining tasks as a single JSON code block (```json ... ```), with nothing else
-inside the fence. Number the days of the new tasks starting from day {start_day}, and keep
-whatever spacing between days makes sense for the work. Every task title must be unique and must
-not match any ticked task above. Match this shape:
+Number the days of the new tasks starting from day {start_day}, and keep whatever spacing between
+days makes sense for the work. Every task title must be unique and must
+not match any ticked task above.
 
-{
-  "name": "{plan_name}",
-  "phases": [
-    {
-      "name": "Phase name",
-      "tasks": [
-        {
-          "day": {start_day},
-          "task": "Short task title",
-          "detail": "Concrete instructions: exactly what to do, for how long, and what 'done' looks like.",
-          "mentor_note": "Why this matters right now, the mistake beginners make at this exact step, and what doing it right looks like.",
-          "category": "one word, for example practice or review",
-          "duration_min": 60,
-          "tools": ["The specific apps/tools/websites needed to actually do this task"]
-        }
-      ]
-    }
-  ]
-}
+To keep your reply short and fast, answer with ONLY one compact JSON code block (```json ... ```):
+no text before or after it, no line breaks or indentation inside it, and brief text in every field.
+Use exactly this compact format:
 
-For "tools", list only real, precise app or website names I'll have open for that task, and use
-an empty list where no particular app is needed.
+{"cf":1,"name":"{plan_name}","p":[["Phase name",[[{start_day},"Short task title","detail: what to do, for how long, what done looks like","mentor note: why now, the usual mistake, what right looks like","practice",60,["App or site"]]]]]}
+
+Each task is an array: [day, title, detail, mentor note, category (one word, for example practice or
+review), minutes, tools]. In tools list only real, precise app or website names I'll have open for
+that task, and use [] where no particular app is needed.
 """;
 
     /// <summary>The change text used when the "What should change?" field is empty or whitespace.</summary>
@@ -288,12 +176,10 @@ an empty list where no particular app is needed.
         string.IsNullOrWhiteSpace(value) ? "(none)" : value.Replace("\n", "\n    ");
 
     public const string Reformat = """
-I already have a plan for "{subject}" that I wrote myself. I want you to
-reformat it into a specific JSON structure so I can import it straight into
-my personal tracking app — don't rewrite my content, don't add new tasks,
-don't change my sequencing or timeline. Just restructure what I give you.
-Where something is ambiguous (a missing day number, a missing duration),
-make the most reasonable inference from context rather than inventing new
+I already have a plan for "{subject}" that I wrote myself. Reformat it into the JSON structure
+below so I can import it into my personal tracking app. Don't rewrite my content, don't add new
+tasks, don't change my sequencing or timeline. Where something is ambiguous (a missing day number,
+a missing duration), make the most reasonable inference from context rather than inventing new
 content that wasn't there.
 
 Here is my plan, exactly as I wrote it:
@@ -301,43 +187,20 @@ Here is my plan, exactly as I wrote it:
 {user_plan}
 ---
 
-Output ONLY the result as a single JSON code block (```json ... ```), with
-nothing else inside the fence, matching this exact schema:
+To keep your reply short and fast, answer with ONLY one compact JSON code block (```json ... ```):
+no text before or after it and no line breaks or indentation inside it. Use exactly this compact format:
 
-{
-  "id": "kebab-case-slug",
-  "name": "{subject}",
-  "color": "#3b82f6",
-  "total_days": 14,
-  "phases": [
-    {
-      "name": "Use my own phase/section names if I had them, otherwise group logically",
-      "tasks": [
-        {
-          "day": 1,
-          "task": "Short task title, using my own wording",
-          "detail": "The concrete instructions, from what I wrote — expand only for clarity, don't invent new steps.",
-          "category": "pick the closest fit: theory | practice | project | review | research | decision | logistics | execution — or omit the field if nothing fits",
-          "duration_min": 60,
-          "tools": ["Specific apps/tools/websites, only if my own text actually names or clearly implies them"]
-        }
-      ]
-    }
-  ]
-}
+{"cf":1,"id":"kebab-case-slug","name":"{subject}","color":"#3b82f6","days":14,"p":[["Phase name: mine if I had them, otherwise group logically",[[1,"Short task title, my own wording","detail from what I wrote, expanded only for clarity","","practice",60,["App or site"]]]]]}
 
-Only include a per-task "mentor_note" or a plan-level "briefing" block (same
-shape as those used elsewhere in this app: high_leverage, ignore_completely,
-common_time_wasters, realistic_timeline) if you genuinely have something
-useful to add beyond what I already wrote — don't pad either one out just to
-fill the field.
+Each task is an array: [day, title, detail, mentor note, category, minutes, tools]. Leave the mentor
+note "" and leave out the plan-level briefing ("b": [[high-leverage things],"ignore","time wasters",
+"timeline"]) unless you genuinely have something useful to add beyond what I wrote. Category: the
+closest of theory, practice, project, review, research, decision, logistics, execution, or "" if
+nothing fits.
 
-Same restraint for "tools": only fill it in where my own text already names or
-obviously implies a specific app/tool/website for that task — don't invent a
-plausible-sounding toolset for a step I didn't specify one for. Where you do include
-one, use the real name precisely enough that it won't also match unrelated apps (e.g.
-"Chrome - LinkedIn" not bare "Chrome") — this list gets imported straight into my
-tracking app's on-plan activity list. Omit "tools" entirely for a task where nothing
-in my text points to a specific tool.
+Tools: only where my own text names or clearly implies a specific app, tool or website for that task,
+and then its real name precise enough not to match unrelated apps ("Chrome - LinkedIn", not bare
+"Chrome") - the list is imported into my tracking app's on-plan activity list. Use [] for a task where
+nothing in my text points to a specific tool.
 """;
 }

@@ -523,7 +523,8 @@ public sealed partial class ReportsPage
             // what the row's App column shows. That placeholder is "no app" for the "-" entry.
             static string? AppValue(ReportData.DiaryEntry e)
             {
-                var g = AppNames.Group(e.Window);
+                // G10: dashless window titles are grouped under one "Other" entry (AppNames.FilterGroup).
+                var g = AppNames.FilterGroup(e.Window);
                 return g == "—" ? null : g;
             }
             bool MatchesApp(ReportData.DiaryEntry e) =>
@@ -545,7 +546,8 @@ public sealed partial class ReportsPage
                 .Where(a => a is { Length: > 0 })
                 .Cast<string>()
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
+                .OrderBy(a => a.Equals(AppNames.OtherGroup, StringComparison.OrdinalIgnoreCase) ? 1 : 0) // "Other" last
+                .ThenBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
             _diaryAppFilter = DiaryFilter.PruneToAvailable(_diaryAppFilter, appsInView);
             // G5: the checkbox list is built only while its flyout is open (Opening/Closed below).
             // If it is open now (a checkbox click re-rendered), rebuild it only if the option set

@@ -210,6 +210,7 @@
     box holds any non-whitespace text; the reason line says to clear it first. Replaces the spec's earlier
     "Ask again replaces silently" choice. Checked by `AiReplyBox.BlocksAsk` (`AiClient.cs`), and again after the first-use notice and when the answer arrives (text typed during the call discards the answer).
     **Reply cap and timeout (2026-10-27, G4):** `max_tokens` 16000 and timeout 4 minutes (240 s; user ruling 2026-10-27 after first setting 6 minutes; was 8000 / 2 minutes: a 34-task rewrite was cut off). A reply that really fills 16000 tokens (~270-320 s) can now time out; accepted, no streaming. Both are single constants; the "Gives up after ..." line and the Timeout message read `AiClient.TimeoutMinutesText`. Stay under ~21000 tokens (SDK 10-minute rule for non-streaming); a cap that is hit still shows the "cut off" message.
+    **Compact exchange (G10, 2026-10-29):** the four prompts (`PlanTemplates.cs`) ask for ONE minified JSON block in the compact form (marker `"cf":1`, tasks as arrays `[day,title,detail,mentor note,category,minutes,tools]`, briefing `b` only inside the JSON, phases `p`). `CompactPlan.Normalize` expands it to the standard long-key plan before the three existing checks (`AddPlanDialog.TryImport`, `PlanReplacement.ParseReplacement`, `PlanReplyCheck.Problem`), so preview and Apply are unchanged. A reply WITHOUT the marker is deliberately left to the old path, so a full-form plan (Load from .json, older prompt, existing tests) still imports; a marked but malformed reply gets a plain message and nothing is written. Any new prompt that expects a plan reply must use the compact form and be parsed through `CompactPlan.Normalize`.
 17. **One safe door for bulk writes to past diary rows (G3, 2026-10-29).** (The G3 REQUEST calls this
     "rule 19"; on this side it is rule 17.) Every bulk change to `time_diary` rows the user already has
     (Diary Mark on-plan/off-plan/neutral, tag buttons, any future bulk edit) goes through
@@ -301,6 +302,14 @@ compaction. General versions of several now also live in the global `windows-app
   fail cleanly with a message. Standing lesson: guard the delete and write paths of secrets too (a scratch
   "Disconnect" / "Clear all my data" would otherwise delete the user's real tokens), and guard once at the
   single store, not at each consumer.
+- **A run with `MENTOR_ROOT` set never reads, writes or deletes the real "Start with Windows" setting
+  (G10, 2026-10-29).** `StartupService` is the single place that touches the HKCU `...\Run` key; under
+  `AppPaths.IsScratchRun` `IsEnabled` is false and `SetEnabled` returns before any registry call (so the
+  legacy-name sweep cannot delete either). Not `#if DEBUG`; a normal run is unchanged. Reverses the G7
+  "autostart out of scope" ruling at the user's request. Standing lesson: when guarding a class of
+  machine-wide side effects, sweep for every sibling (Registry, SpecialFolder/AppData, env vars,
+  Process.Start, credential store) and record each as covered or justified; here the Run key was the only
+  uncovered one left.
 - Check `end_of_day_summary_time` before killing a live instance near EOD — killing it early can
   skip that day's evening-review popup entirely.
 - The live instance runs from `bin\x64\Release\...`, not Debug — confirm before trusting a Debug
