@@ -315,9 +315,36 @@
                                 HorizontalAlignment="Stretch" Click="ClearAllData_Click"
                                 Style="{StaticResource DangerButtonStyle}"/>
                     </Grid>
-                    <TextBlock Text="Export writes every stored row (tasks, notes, score history, activity diary, evening reflections) to one JSON file. Clearing activity history removes the tracked window-activity diary only; clearing reflections removes your evening-review answers only. &quot;Clear all my data&quot; removes everything at once — task completions, reschedules/day-offs, notes, score history, reflections, TickTick sync links, the activity diary, and the debug log — but never your plan definitions themselves (archive or delete those from the Plans page). Your plans, task completions, and score are always untouched by the two narrower buttons above."
+                    <TextBlock Text="Export writes every stored row (tasks, notes, score history, activity diary, evening reflections) to one JSON file. Clearing activity history removes the tracked window-activity diary only; clearing reflections removes your evening-review answers only. &quot;Clear all my data&quot; removes everything at once — task completions, reschedules/day-offs, notes, score history, reflections, TickTick sync links, the activity diary, and the debug log — but never your plan definitions themselves (archive or delete those from the Plans page). Your plans, task completions, and score are always untouched by the two narrower buttons above. Clearing activity history or all data also deletes the diary backups and the Change history."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                </StackPanel>
+
+                <!-- G3 (2026-10-29): the lasting door to Undo for bulk diary changes (DECISIONS rule 17).
+                     Rows are built in code (LoadChangeHistory); at most 20, newest first. -->
+                <StackPanel x:Name="ChangeHistoryPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed"
+                            AutomationProperties.AutomationId="settings-change-history-panel">
+                    <TextBlock Text="Change history" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock x:Name="ChangeHistoryIntro" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="The last 20 bulk changes to your diary, kept for 30 days. Undo puts back the old values of one change; rows you edited since are left as they are."/>
+                    <TextBlock x:Name="ChangeHistoryLoading" Text="Loading..." Visibility="Collapsed"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               AutomationProperties.AutomationId="settings-change-loading"/>
+                    <TextBlock x:Name="ChangeHistoryEmpty" TextWrapping="Wrap" Visibility="Collapsed"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               AutomationProperties.AutomationId="settings-change-empty"
+                               Text="No changes yet. When you mark many diary rows at once, the change shows up here with an Undo button."/>
+                    <InfoBar x:Name="ChangeHistoryError" Severity="Error" IsClosable="False" IsOpen="False"
+                             Title="Couldn't read the change history"
+                             AutomationProperties.AutomationId="settings-change-error">
+                        <InfoBar.ActionButton>
+                            <Button Content="Try again" Click="ChangeHistoryRetry_Click"
+                                    AutomationProperties.AutomationId="settings-change-retry"/>
+                        </InfoBar.ActionButton>
+                    </InfoBar>
+                    <StackPanel x:Name="ChangeHistoryList" Spacing="8"
+                                AutomationProperties.AutomationId="settings-change-history-list"/>
                 </StackPanel>
             </Grid>
         </ScrollViewer>
@@ -416,6 +443,15 @@
                     <StackPanel Padding="0,4">
                         <TextBlock Text="Data" FontWeight="SemiBold" FontSize="13"/>
                         <TextBlock Text="Export or clear what's stored" FontSize="11"
+                                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Change history"
+                              AutomationProperties.AutomationId="settings-section-change-history">
+                    <StackPanel Padding="0,4">
+                        <TextBlock Text="Change history" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="Undo recent bulk changes" FontSize="11"
                                    TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>

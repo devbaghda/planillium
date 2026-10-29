@@ -210,6 +210,21 @@
     box holds any non-whitespace text; the reason line says to clear it first. Replaces the spec's earlier
     "Ask again replaces silently" choice. Checked by `AiReplyBox.BlocksAsk` (`AiClient.cs`), and again after the first-use notice and when the answer arrives (text typed during the call discards the answer).
     **Reply cap and timeout (2026-10-27, G4):** `max_tokens` 16000 and timeout 4 minutes (240 s; user ruling 2026-10-27 after first setting 6 minutes; was 8000 / 2 minutes: a 34-task rewrite was cut off). A reply that really fills 16000 tokens (~270-320 s) can now time out; accepted, no streaming. Both are single constants; the "Gives up after ..." line and the Timeout message read `AiClient.TimeoutMinutesText`. Stay under ~21000 tokens (SDK 10-minute rule for non-streaming); a cap that is hit still shows the "cut off" message.
+17. **One safe door for bulk writes to past diary rows (G3, 2026-10-29).** (The G3 REQUEST calls this
+    "rule 19"; on this side it is rule 17.) Every bulk change to `time_diary` rows the user already has
+    (Diary Mark on-plan/off-plan/neutral, tag buttons, any future bulk edit) goes through
+    `Services/DiaryChangeService.cs`, never a direct UPDATE: (a) preview counts read fresh from the DB
+    (filled / overwritten / unchanged), shown in a confirm dialog; (b) a dated backup of `progress.db`
+    in `backups/` next to it, newest 5 kept, no write if the backup fails; (c) one transaction that
+    writes only the target column (`category` or `tag`, whitelisted) and logs each changed row's old
+    value plus a fingerprint of the row as written; (d) Undo (Diary result bar or Settings > Change
+    history) restores the old values and skips any row edited or removed since (fingerprint differs or
+    row gone), counted as "edited or removed since"; (e) history keeps the newest 20 changes, none
+    older than 30 days; keywords taught by a mark are recorded and Undo puts each back in the list it
+    was in before (only if still where the mark put it). Mark reaches every filter match, not just the
+    300 shown; tag buttons act on ticked rows only. Clear activity history / Clear all my data also
+    delete the backups and the history. Lead rulings 1-10 of 2026-10-29; SPEC section 8 questions
+    still open with the user.
 
 ### Standing lessons
 _The durable ones. Every entry here cost a real bug to learn; none may be dropped in a
@@ -396,6 +411,18 @@ compaction. General versions of several now also live in the global `windows-app
   field seeded once at class load is not the same as state that tracks "today" — Reports' diary
   date was static and so stayed pinned to yesterday overnight even though the day-change watcher
   faithfully re-rendered the page (2026-08-04).
+- **A "replace the placeholder" delete must name the placeholder's own state, not just its time
+  span (G3, 2026-10-29).** `DiaryWriter.ClearIdlePlaceholder`/`HasIdlePlaceholder` matched any row in
+  the gap, so a gap the user had already marked (category no longer Idle) was deleted and re-written
+  when the idle prompt was later answered or skipped — the user's mark "disappeared". Now both carry
+  `category = Idle`, and an answer on an already-marked gap adds nothing.
+- **Selection state and bulk actions must be keyed to the full filtered set, not the capped view
+  (G3).** Ticks were a local rebuilt on every Render, cleared after each mark, and pruned against the
+  300-row display list, so marks never reached rows past 300 and ticks vanished on refresh. Ticks now
+  live on the page and are pruned against the uncapped match list; Mark targets every match.
+- **A bulk write from a snapshot must write only the one column it changes (G3).** Writing a whole
+  row from a list built earlier overwrites anything that changed since; the door's UPDATE sets only
+  `category` or `tag`, by id, and Undo checks a fingerprint before restoring.
 
 **Design / simplicity**
 - **Prefer the closed form over a cache when the repetition has structure.** `PlanDayForDate`'s

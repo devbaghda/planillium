@@ -247,10 +247,10 @@ public sealed partial class MainWindow
         // that guard's blanket "return before RefreshScore()" caused as a side effect
         // (2026-07-24 audit finding #8).
         //
-        // Reports' diary bulk-selection has no equivalent persistence yet (selectedIds is
-        // torn down and rebuilt fresh by Render(), unlike notes) — same shape of problem,
-        // narrower fix: skip and retry next minute rather than silently drop the selection
-        // (2026-07-24 audit finding #3).
+        // Reports' diary ticks survive Render() since G3 (2026-10-29, page field _diaryTicks),
+        // but a day change re-scopes a "today" diary to the new day, and the prune then drops
+        // ticks that no longer match — so this still skips and retries next minute rather than
+        // silently drop the selection (2026-07-24 audit finding #3).
         if (ContentFrame.Content is ReportsPage { HasActiveDiarySelection: true }) return;
         _lastSeenDate = today;
 

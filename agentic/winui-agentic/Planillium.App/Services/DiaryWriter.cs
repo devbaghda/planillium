@@ -48,7 +48,8 @@ internal static class DiaryWriter
     /// of these immediately when a gap is first detected (2026-07-27), so answering it here
     /// must replace that row rather than insert a second, overlapping one. Never touches a
     /// real activity row or an already-answered idle row (different window/description),
-    /// only ever a placeholder still waiting for its real answer.</summary>
+    /// only ever a placeholder still waiting for its real answer. G3 (2026-10-29): and only
+    /// while its category is still 'idle' — a placeholder the user has marked is an answer.</summary>
     internal static void ClearIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end,
         SqliteTransaction? tx = null)
     {
@@ -56,10 +57,11 @@ internal static class DiaryWriter
         if (tx is not null) cmd.Transaction = tx;
         cmd.CommandText =
             "DELETE FROM time_diary WHERE date = $d AND window = $w " +
-            "AND description IN ($ph, $legacyPh) " +
+            "AND description IN ($ph, $legacyPh) AND category = $cat " +
             "AND NOT (end_time <= $s OR start_time >= $e)";
         cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
         cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$cat", DiaryCategory.Idle);
         cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
         cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
         cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
@@ -76,15 +78,43 @@ internal static class DiaryWriter
     /// two diary rows for one 12-minute gap, one real answer plus a leftover "unaccounted
     /// time" row) — the second one to reach here should find its placeholder already replaced
     /// by the first and skip instead of unconditionally logging another row.</summary>
-    internal static bool HasIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end)
+    internal static bool HasIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end,
+        SqliteTransaction? tx = null)
     {
         using var cmd = conn.CreateCommand();
+        if (tx is not null) cmd.Transaction = tx;
         cmd.CommandText =
             "SELECT EXISTS(SELECT 1 FROM time_diary WHERE date = $d AND window = $w " +
-            "AND description IN ($ph, $legacyPh) " +
+            "AND description IN ($ph, $legacyPh) AND category = $cat " +
             "AND NOT (end_time <= $s OR start_time >= $e))";
         cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
         cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$cat", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
+        cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());
+        cmd.Parameters.AddWithValue("$e", end.ToIsoTimeOfDay());
+        return Convert.ToInt64(cmd.ExecuteScalar()) != 0;
+    }
+
+    /// <summary>G3 (2026-10-29): true if a placeholder row overlapping [start, end) exists but
+    /// the user has already marked it (category no longer 'idle'). Both queries above now
+    /// require category = 'idle' — before that, answering or skipping the idle prompt deleted a
+    /// placeholder the user had bulk-marked and wrote a fresh row, so the mark "disappeared".
+    /// A marked placeholder counts as answered: the idle answer for its gap is not logged a
+    /// second time (that would double the minutes).</summary>
+    internal static bool HasMarkedIdlePlaceholder(SqliteConnection conn, DateTime start, DateTime end,
+        SqliteTransaction? tx = null)
+    {
+        using var cmd = conn.CreateCommand();
+        if (tx is not null) cmd.Transaction = tx;
+        cmd.CommandText =
+            "SELECT EXISTS(SELECT 1 FROM time_diary WHERE date = $d AND window = $w " +
+            "AND description IN ($ph, $legacyPh) AND category <> $cat " +
+            "AND NOT (end_time <= $s OR start_time >= $e))";
+        cmd.Parameters.AddWithValue("$d", start.ToIsoDate());
+        cmd.Parameters.AddWithValue("$w", DiaryCategory.Idle);
+        cmd.Parameters.AddWithValue("$cat", DiaryCategory.Idle);
         cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
         cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
         cmd.Parameters.AddWithValue("$s", start.ToIsoTimeOfDay());

@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Planillium.App.Dialogs;
 using Planillium.App.Services;
 
 namespace Planillium.App.Pages;
@@ -127,6 +128,29 @@ public sealed partial class ReportsPage
     private int _diarySelectedCount;
     internal bool HasActiveDiarySelection => _diarySelectedCount > 0;
 
+    // G3 (2026-10-29): the diary's ticks, a page field so they survive Render(), Mark and Undo
+    // (the page instance is cached). Before this they were a local of BuildDiarySection, rebuilt
+    // empty on every full Render, and Mark cleared them on purpose. They are pruned on every
+    // results render against the UNCAPPED filtered list, so a tick drops only when its row no
+    // longer exists or no longer matches the filters.
+    private readonly HashSet<long> _diaryTicks = new();
+
+    // G3: a preview, write or undo through the safe door is running — the Mark/tag buttons and
+    // the bar's Undo stay disabled until it finishes (survives a Render; the closures below are
+    // re-pointed at the current build of the section on every BuildDiarySection).
+    private bool _diaryDoorBusy;
+    private Action? _diaryRenderResultsAction;
+    private Action? _diaryUpdateToolbarAction;
+
+    // G3: the result bar's content, page-level so a re-render shows the same message until the
+    // user closes it, a new Mark/Undo replaces it, or the Reports page is left.
+    private sealed record DiaryResultState(InfoBarSeverity Severity, string Title, string Message,
+        bool Closable, long? UndoChangeId = null, bool Undoing = false);
+    private DiaryResultState? _diaryResult;
+    private InfoBar? _diaryResultBar;
+
+    private static string N0(int n) => n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>
     /// Diary search/list section — one day by default; searching widens to
     /// everything still retained (ConfigService.DiaryRetentionDays(),
@@ -169,9 +193,17 @@ public sealed partial class ReportsPage
         // Mark-selected toolbar — built once (not on every keystroke) so
         // its buttons don't get re-wired constantly; UpdateMarkToolbar()
         // just flips enabled/label state as the selection changes.
-        var selectedIds = new HashSet<long>();
+        // G3: the ticks are the page field (survive Render/Mark/Undo). lastRows = the rows
+        // listed (capped at 300 in a wide search); allFiltered = every match (M), uncapped —
+        // what Mark without ticks acts on and what the ticks are pruned against.
+        var selectedIds = _diaryTicks;
         var lastRows = new List<ReportData.DiaryEntry>();
+        var allFiltered = new List<ReportData.DiaryEntry>();
         var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons) = BuildDiaryMarkToolbar();
+        var categoryMarkButtons = new (Button Btn, string Word)[]
+        {
+            (markOnBtn, "on-plan"), (markOffBtn, "off-plan"), (markNeutralBtn, "neutral"),
+        };
 
         var diaryResults = BuildDiaryResultsArea();
 
@@ -251,18 +283,42 @@ public sealed partial class ReportsPage
             }
         }
 
+        // G3: T = ticks, M = every match (uncapped). Category buttons act on the ticks when
+        // T > 0, otherwise on all M matches, and say which in their text (SPEC Screen design §1).
         void UpdateMarkToolbar()
         {
-            var n = selectedIds.Count;
-            _diarySelectedCount = n;
-            selectedLabel.Text = n > 0 ? $"{n} selected" : "";
-            markOnBtn.IsEnabled = markOffBtn.IsEnabled = markNeutralBtn.IsEnabled = n > 0;
-            foreach (var (_, btn) in tagMarkButtons) btn.IsEnabled = n > 0;
+            var t = selectedIds.Count;
+            var m = allFiltered.Count;
+            _diarySelectedCount = t;
+            selectedLabel.Text = m == 0 ? "" : t == 0 ? "None ticked" : $"{N0(t)} ticked";
+
+            foreach (var (btn, word) in categoryMarkButtons)
+            {
+                string text, tip;
+                if (m == 0) { text = $"Mark {word}"; tip = "No entries to mark."; }
+                else if (t > 0) { text = $"Mark {N0(t)} ticked {word}"; tip = $"Marks only the {N0(t)} ticked rows."; }
+                else if (m == 1) { text = $"Mark 1 {word}"; tip = "Marks the 1 entry matching the current view."; }
+                else
+                {
+                    text = $"Mark all {N0(m)} {word}";
+                    tip = $"Marks all {N0(m)} entries matching the current filters and search, not only the rows shown.";
+                }
+                btn.Content = text;
+                AutomationProperties.SetName(btn, text);
+                btn.IsEnabled = m > 0 && !_diaryDoorBusy;
+                ToolTipService.SetToolTip(btn, _diaryDoorBusy ? "Working..." : tip);
+            }
+            foreach (var (_, btn) in tagMarkButtons)
+            {
+                btn.IsEnabled = t > 0 && !_diaryDoorBusy;
+                ToolTipService.SetToolTip(btn, _diaryDoorBusy ? "Working..." : null);
+            }
 
             syncingSelectAll = true;
+            var shownTicked = t == 0 ? 0 : lastRows.Count(r => selectedIds.Contains(r.Id));
             selectAllBox.IsEnabled = lastRows.Count > 0;
-            selectAllBox.IsChecked = lastRows.Count == 0 || n == 0 ? false
-                : n == lastRows.Count ? true
+            selectAllBox.IsChecked = lastRows.Count == 0 || t == 0 ? false
+                : shownTicked == lastRows.Count ? true
                 : null;
             syncingSelectAll = false;
         }
@@ -565,11 +621,17 @@ public sealed partial class ReportsPage
                               $"{ConfigService.DiaryStartTime().ToIsoTimeOfDay()}–" +
                               $"{ConfigService.DiaryEndTime().ToIsoTimeOfDay()}."
                             : "No diary entries on this day.")));
-                lastRows.Clear();
+                lastRows = new List<ReportData.DiaryEntry>();
+                allFiltered = new List<ReportData.DiaryEntry>();
                 selectedIds.Clear();
                 UpdateMarkToolbar();
                 return;
             }
+            // G3: prune ticks against EVERY match, before the 300 cap below — the old prune ran
+            // against the capped list, so a tick on a row past the cap silently vanished.
+            allFiltered = filteredList;
+            var matchIds = filteredList.Select(e => e.Id).ToHashSet();
+            selectedIds.RemoveWhere(id => !matchIds.Contains(id));
             if (wideRange && filteredList.Count > maxSearchResults)
             {
                 diaryResults.Children.Add(Dim(
@@ -578,7 +640,6 @@ public sealed partial class ReportsPage
                 filteredList = filteredList.Take(maxSearchResults).ToList();
             }
             lastRows = filteredList;
-            selectedIds.RemoveWhere(id => !filteredList.Any(e => e.Id == id));
             UpdateMarkToolbar();
             // A genuine scope change (different day/search/filters/all-time) starts the reveal
             // count fresh; the periodic live-refresh timer re-running this same method with an
@@ -670,11 +731,35 @@ public sealed partial class ReportsPage
             Render();
         };
 
-        markOnBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OnPlan, selectedIds, lastRows, RenderDiaryResults);
-        markOffBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.OffPlan, selectedIds, lastRows, RenderDiaryResults);
-        markNeutralBtn.Click += (_, _) => MarkSelectedDiaryRows(DiaryCategory.Neutral, selectedIds, lastRows, RenderDiaryResults);
+        // G3: every Mark goes through the safe door (preview → confirm → backup → logged write →
+        // Undo). Category: the ticks if any, else every match (M, uncapped). Tag: ticks only
+        // (lead ruling 1).
+        void StartMark(Button btn, ChangeColumn column, string? value, bool ticksOnly)
+        {
+            var t = selectedIds.Count;
+            if (ticksOnly && t == 0) return;
+            var ticked = t > 0;
+            var targets = ticked ? selectedIds.ToList() : allFiltered.Select(e => e.Id).ToList();
+            if (targets.Count == 0) return;
+            var scope = DiaryScopeDescription();
+            var scopeLine = ticked
+                ? (t == 1 ? "The 1 ticked entry." : $"The {N0(t)} ticked entries.")
+                : $"All {N0(targets.Count)} {(targets.Count == 1 ? "entry" : "entries")} matching your current view: {scope}.";
+            var scopeText = ticked
+                ? $"{N0(t)} ticked {(t == 1 ? "entry" : "entries")} - {scope}"
+                : scope;
+            _ = RunDiaryDoorAsync(btn, column, value, targets, scopeLine, scopeText);
+        }
+        markOnBtn.Click += (_, _) => StartMark(markOnBtn, ChangeColumn.Category, DiaryCategory.OnPlan, ticksOnly: false);
+        markOffBtn.Click += (_, _) => StartMark(markOffBtn, ChangeColumn.Category, DiaryCategory.OffPlan, ticksOnly: false);
+        markNeutralBtn.Click += (_, _) => StartMark(markNeutralBtn, ChangeColumn.Category, DiaryCategory.Neutral, ticksOnly: false);
         foreach (var (tagValue, btn) in tagMarkButtons)
-            btn.Click += (_, _) => MarkSelectedDiaryRowsTag(tagValue, selectedIds, lastRows, RenderDiaryResults);
+        {
+            var b = btn;
+            b.Click += (_, _) => StartMark(b, ChangeColumn.Tag, tagValue, ticksOnly: true);
+        }
+        _diaryRenderResultsAction = RenderDiaryResults;
+        _diaryUpdateToolbarAction = UpdateMarkToolbar;
 
         selectAllBox.Checked += (_, _) =>
         {
@@ -888,15 +973,21 @@ public sealed partial class ReportsPage
         // IsThreeState so it can show "some but not all selected" as a
         // dash rather than lying with a plain checked/unchecked state.
         var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
+        AutomationProperties.SetAutomationId(selectAllBox, "diary-select-all");
+        ToolTipService.SetToolTip(selectAllBox, "Ticks the rows shown. Mark without ticks already covers every match.");
         var selectedLabel = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 12,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };
+        AutomationProperties.SetAutomationId(selectedLabel, "diary-tick-label");
         var markOnBtn = new Button { Content = "Mark on-plan", IsEnabled = false };
         var markOffBtn = new Button { Content = "Mark off-plan", IsEnabled = false };
         var markNeutralBtn = new Button { Content = "Mark neutral", IsEnabled = false };
+        AutomationProperties.SetAutomationId(markOnBtn, "diary-mark-on");
+        AutomationProperties.SetAutomationId(markOffBtn, "diary-mark-off");
+        AutomationProperties.SetAutomationId(markNeutralBtn, "diary-mark-neutral");
         markToolbar.Children.Add(selectAllBox);
         markToolbar.Children.Add(selectedLabel);
         markToolbar.Children.Add(markOnBtn);
@@ -937,6 +1028,19 @@ public sealed partial class ReportsPage
         tagToolbar.Children.Add(clearTagBtn);
         tagMarkButtons.Add((null, clearTagBtn));
         DiaryBody.Children.Add(tagToolbar);
+
+        // G3: the result bar (running / success + Undo / undo result / errors), directly below
+        // the tag row so the Mark buttons never move when it opens or closes. Its content is the
+        // page-level _diaryResult, re-applied here on every build of the section.
+        var resultBar = new InfoBar { IsOpen = false, Margin = new Thickness(0, 0, 0, 8) };
+        AutomationProperties.SetAutomationId(resultBar, "diary-result-bar");
+        resultBar.Closed += (_, e) =>
+        {
+            if (e.Reason == InfoBarCloseReason.CloseButton) _diaryResult = null;
+        };
+        DiaryBody.Children.Add(resultBar);
+        _diaryResultBar = resultBar;
+        ApplyDiaryResult();
 
         return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons);
     }
@@ -997,98 +1101,287 @@ public sealed partial class ReportsPage
             _ => DispatcherQueue.TryEnqueue(() => _diaryLiveRefreshAction?.Invoke()),
             null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
 
-    /// <summary>The bulk "mark selected rows as on/off-plan/neutral" action — pulled out of
-    /// BuildDiarySection as its own self-contained DB-transaction block (code-quality audit
-    /// finding #7); takes the handful of closures it actually needs as parameters rather than
-    /// capturing the whole method's local state.</summary>
-    private void MarkSelectedDiaryRows(string category, HashSet<long> selectedIds,
-        List<ReportData.DiaryEntry> lastRows, Action renderDiaryResults)
+    // ── G3: the safe door, page side ─────────────────────────────────────
+    // The write itself is DiaryChangeService (plain C#, all-or-nothing, logged, undoable). The
+    // old per-page Mark wrote each row back from the page's snapshot of it (whole-row UPDATE),
+    // reached only the ≤300 listed rows, cleared the ticks, and taught keywords one config write
+    // at a time. Now: preview off the UI thread → confirm dialog → backup + write off the UI
+    // thread → result bar with Undo.
+
+    /// <summary>"{period}{filters}" as the dialog's scope line and the change history show it:
+    /// "Thu 29 Oct 2026" or "All time", then " - Category: Neutral", " - App: …", " - Page: …",
+    /// " - Tag: …", " - Search "q" in Window" for each active filter.</summary>
+    private static string DiaryScopeDescription()
     {
-        if (selectedIds.Count == 0) return;
-        try
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var q = _diarySearch.Trim();
+        var sb = new System.Text.StringBuilder(q.Length > 0 || _diaryAllTime
+            ? "All time"
+            : _diaryDate.ToString("ddd d MMM yyyy", inv));
+        static string Shown(string v) => v == DiaryFilter.NoValue ? DiaryFilter.NoValueLabel : v;
+        void Add(string name, IEnumerable<string> labels)
         {
-            using var db = new Database();
-            var learned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var affectedDates = new HashSet<DateOnly>();
-            // All-or-nothing: this used to write each selected row as its
-            // own separate statement with no shared transaction, so a
-            // failure partway through a multi-row selection (an ordinary
-            // "database briefly busy" moment, since the background
-            // tracker writes to the same file) could relabel some rows
-            // and silently leave others untouched, with no error shown
-            // (2026-07-14 round-6 audit finding #4 — found independently
-            // by two review passes).
-            db.RunInTransaction(() =>
-            {
-                foreach (var id in selectedIds)
-                {
-                    var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row is null || row.Id != id) continue;
-                    // row.Tag passed through unchanged — this bulk action only ever
-                    // re-categorizes (on/off-plan/neutral), it was never meant to touch tags.
-                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, category, row.Desc, row.Tag);
-                    var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
-                    if (keyword is { Length: > 0 } && keyword != "—") learned.Add(keyword);
-                    affectedDates.Add(row.Date);
-                }
-            });
-            foreach (var keyword in learned)
-                ConfigService.LearnActivityRule(keyword, category);
-            if (learned.Count > 0)
-                (App.MainWindow as MainWindow)?.RestartTracker();
-            // A bulk re-category can span several different days — recompute each
-            // affected day's score so none of them keep showing a stale figure
-            // (2026-07-17 request). Best-effort: doesn't turn an otherwise-successful
-            // re-category into a reported failure.
-            ScoreService.TryRecalculateDayScores(db, affectedDates, "ReportsPage.MarkSelected.RecalculateScore");
+            var list = labels.ToList();
+            if (list.Count > 0) sb.Append(" - ").Append(name).Append(": ").Append(string.Join(", ", list));
         }
-        catch (Exception ex)
+        Add("Category", _diaryCategoryFilter.OrderBy(v => v, StringComparer.Ordinal).Select(v =>
+            v == DiaryFilter.NoValue ? DiaryFilter.NoValueLabel
+            : Array.Find(DiaryCategory.EditableOptions, o => o.Value == v).Label ?? v));
+        Add("App", _diaryAppFilter.OrderBy(v => v, StringComparer.OrdinalIgnoreCase).Select(Shown));
+        Add("Page", _diaryPageFilter.OrderBy(v => v, StringComparer.OrdinalIgnoreCase).Select(Shown));
+        Add("Tag", _diaryTagFilter.OrderBy(v => v, StringComparer.Ordinal).Select(v =>
+            v == DiaryFilter.NoValue ? DiaryFilter.NoValueLabel : DiaryTag.LabelOf(v) ?? v));
+        if (q.Length > 0)
         {
-            Log.Error("ReportsPage.MarkSelected", ex);
-            SaveErrorBar.IsOpen = true;
+            var field = Array.Find(DiaryFilter.SearchFields, f => f.Field == _diarySearchField).Label ?? "All fields";
+            sb.Append(" - Search \"").Append(q).Append("\" in ").Append(field);
         }
-        selectedIds.Clear();
-        renderDiaryResults();
+        return sb.ToString();
     }
 
-    /// <summary>The bulk "mark selected rows with a tag" action (2026-08-07 request) — same
-    /// shape as <see cref="MarkSelectedDiaryRows"/> one level down the axis: that one
-    /// re-categorizes and passes tag through unchanged, this one re-tags and passes category
-    /// through unchanged. <paramref name="tag"/> is null for "Clear tag." Deliberately doesn't
-    /// share a helper with MarkSelectedDiaryRows despite the near-identical loop — category
-    /// changes also touch the idle-answer/activity-rule learning and trigger a score
-    /// recalculation, neither of which applies to a tag (DiaryTag.cs: "Never read by
-    /// ScoreService, purely descriptive"), so folding them into one parameterized method would
-    /// mean either axis carrying dead branches for the other's concerns.</summary>
-    private void MarkSelectedDiaryRowsTag(string? tag, HashSet<long> selectedIds,
-        List<ReportData.DiaryEntry> lastRows, Action renderDiaryResults)
+    private void SetDiaryDoorBusy(bool busy)
     {
-        if (selectedIds.Count == 0) return;
+        _diaryDoorBusy = busy;
+        _diaryUpdateToolbarAction?.Invoke();
+        ApplyDiaryResult();
+    }
+
+    private void ShowDiaryResult(DiaryResultState? state)
+    {
+        _diaryResult = state;
+        ApplyDiaryResult();
+    }
+
+    /// <summary>Pushes _diaryResult into the bar of the current build of the section (if one is
+    /// on screen). The Undo action button is rebuilt each time so its enabled state follows
+    /// _diaryDoorBusy.</summary>
+    private void ApplyDiaryResult()
+    {
+        var bar = _diaryResultBar;
+        if (bar is null) return;
+        var s = _diaryResult;
+        if (s is null) { bar.IsOpen = false; bar.ActionButton = null; return; }
+        bar.Severity = s.Severity;
+        bar.Title = s.Title;
+        bar.Message = s.Message;
+        bar.IsClosable = s.Closable;
+        if (s.UndoChangeId is long id)
+        {
+            var undo = new Button
+            {
+                Content = s.Undoing ? "Undoing..." : "Undo",
+                IsEnabled = !s.Undoing && !_diaryDoorBusy,
+            };
+            AutomationProperties.SetAutomationId(undo, "diary-result-undo");
+            undo.Click += (_, _) => _ = UndoFromDiaryBarAsync(id);
+            bar.ActionButton = undo;
+        }
+        else bar.ActionButton = null;
+        bar.IsOpen = true;
+    }
+
+    private static void FocusBack(Button btn)
+    {
+        try { if (btn.XamlRoot is not null) btn.Focus(FocusState.Programmatic); }
+        catch (Exception ex) { Log.Error("ReportsPage.DiaryDoor.FocusBack", ex); }
+    }
+
+    /// <summary>One bulk Mark through the door: preview (off the UI thread; "Checking N rows..."
+    /// after ~300 ms) → confirm dialog → backup + write (off the UI thread) → result bar.
+    /// Cancel writes nothing. The ticks are never touched here (addendum 3).</summary>
+    private async Task RunDiaryDoorAsync(Button clicked, ChangeColumn column, string? newValue,
+        IReadOnlyCollection<long> targets, string scopeLine, string scopeText)
+    {
+        if (_diaryDoorBusy || targets.Count == 0) return;
+        var word = DiaryChangeText.ValueWord(column, newValue);
+        var req = new ChangeRequest(column, newValue, targets, scopeText,
+            TeachKeywords: column == ChangeColumn.Category);
+        var before = _diaryResult;
+        SetDiaryDoorBusy(true);
         try
         {
-            using var db = new Database();
-            // Same all-or-nothing reasoning as MarkSelectedDiaryRows — a multi-row bulk write
-            // failing partway through must not leave some rows re-tagged and others not.
-            db.RunInTransaction(() =>
+            ChangePreview preview;
+            try
             {
-                foreach (var id in selectedIds)
-                {
-                    var row = lastRows.FirstOrDefault(e => e.Id == id);
-                    if (row is null || row.Id != id) continue;
-                    // row.Cat passed through unchanged — this bulk action only ever touches
-                    // the tag axis, it was never meant to re-categorize.
-                    db.UpdateDiaryEntry(id, row.Start, row.End, row.Dur, row.Cat, row.Desc, tag);
-                }
-            });
+                var task = Task.Run(() => { using var db = new Database(); return DiaryChangeService.Preview(db, req); });
+                if (await Task.WhenAny(task, Task.Delay(300)) != task)
+                    ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Informational,
+                        $"Checking {DiaryChangeText.Rows(targets.Count)}...", "", Closable: false));
+                preview = await task;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("ReportsPage.DiaryDoor.Preview", ex);
+                ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Error,
+                    "Couldn't check those rows - nothing was changed.", ex.Message, Closable: true));
+                return;
+            }
+            ShowDiaryResult(before);
+
+            var dialog = BuildDiaryDoorDialog(column, newValue, word, preview, scopeLine);
+            var answer = await DialogGate.ShowAsync(dialog);
+            if (answer != ContentDialogResult.Primary || preview.Total == 0) return;
+
+            ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Informational,
+                DiaryChangeText.RunningTitle(column, newValue, preview.Total),
+                "Backing up your diary first.", Closable: false));
+            try
+            {
+                var result = await Task.Run(() => { using var db = new Database(); return DiaryChangeService.Apply(db, req); });
+                ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Success,
+                    DiaryChangeText.DoneTitle(column, newValue, result.Changed),
+                    column == ChangeColumn.Category
+                        ? "A backup was made. Undo puts the old categories back and forgets the keywords this mark added."
+                        : "A backup was made. Undo puts the old tags back.",
+                    Closable: true,
+                    UndoChangeId: result.Changed > 0 ? result.ChangeId : null));
+                if (result.KeywordsChanged) (App.MainWindow as MainWindow)?.RestartTracker();
+            }
+            catch (BackupFailedException ex)
+            {
+                Log.Error("ReportsPage.DiaryDoor.Backup", ex);
+                ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Error, "Not marked - the backup failed",
+                    $"Your diary was left untouched. {ex.Message}", Closable: true));
+            }
+            catch (Exception ex)
+            {
+                Log.Error("ReportsPage.DiaryDoor.Apply", ex);
+                ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Error, "Couldn't mark those rows",
+                    $"Nothing was changed. {ex.Message}", Closable: true));
+            }
         }
         catch (Exception ex)
         {
-            Log.Error("ReportsPage.MarkSelectedTag", ex);
-            SaveErrorBar.IsOpen = true;
+            Log.Error("ReportsPage.DiaryDoor", ex);
         }
-        selectedIds.Clear();
-        renderDiaryResults();
+        finally
+        {
+            SetDiaryDoorBusy(false);
+            _diaryRenderResultsAction?.Invoke();
+            FocusBack(clicked);
+        }
     }
+
+    /// <summary>Undo from the result bar — same door, same skip rule as Settings ▸ Change
+    /// history. The ticks stay; a tick drops only if the restored value stops matching the filter.</summary>
+    private async Task UndoFromDiaryBarAsync(long changeId)
+    {
+        if (_diaryDoorBusy) return;
+        ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Informational, "Undoing...", "",
+            Closable: false, UndoChangeId: changeId, Undoing: true));
+        SetDiaryDoorBusy(true);
+        try
+        {
+            var r = await Task.Run(() => { using var db = new Database(); return DiaryChangeService.Undo(db, changeId); });
+            ShowDiaryResult(r.Restored == 0 && r.Skipped > 0
+                ? new DiaryResultState(InfoBarSeverity.Warning, "Nothing restored", DiaryChangeText.AllSkipped(r.Skipped), Closable: true)
+                : new DiaryResultState(InfoBarSeverity.Success, DiaryChangeText.UndoneTitle(r.Restored),
+                    r.Skipped > 0 ? DiaryChangeText.SomeSkipped(r.Skipped) : "", Closable: true));
+            if (r.KeywordsChanged) (App.MainWindow as MainWindow)?.RestartTracker();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReportsPage.DiaryDoor.Undo", ex);
+            ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Error, "Couldn't undo",
+                $"Nothing was changed. {ex.Message}", Closable: true));
+        }
+        finally
+        {
+            SetDiaryDoorBusy(false);
+            _diaryRenderResultsAction?.Invoke();
+        }
+    }
+
+    /// <summary>The confirm dialog (g3-confirm-dialog): scope line, the four-row count table that
+    /// always adds up (filled + overwritten = total; unchanged excluded), the safety note.
+    /// Default button is Cancel, so Enter/Esc never writes.</summary>
+    private ContentDialog BuildDiaryDoorDialog(ChangeColumn column, string? newValue, string word,
+        ChangePreview p, string scopeLine)
+    {
+        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var content = new StackPanel { Spacing = 10, MinWidth = 420 };
+
+        var scope = new TextBlock
+        {
+            Text = scopeLine, FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap,
+            MaxLines = 3, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        ToolTipService.SetToolTip(scope, scopeLine);
+        AutomationProperties.SetAutomationId(scope, "g3-confirm-scope");
+        content.Children.Add(scope);
+
+        var clearing = column == ChangeColumn.Tag && newValue is null;
+        var (filledLabel, overLabel, sameLabel) = column == ChangeColumn.Category
+            ? ("No category yet - will be filled", "Another category - will be overwritten", $"Already {word} - stays as it is")
+            : clearing
+                ? ("No tag yet", "Has a tag - will be cleared", "No tag - stays as it is")
+                : ("No tag yet - will be filled", "Another tag - will be overwritten", $"Already {word} - stays as it is");
+
+        var grid = new Grid { RowSpacing = 4, ColumnSpacing = 16 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var row = 0;
+        void AddCount(string id, string label, int value, bool bold)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var weight = bold ? FontWeights.SemiBold : FontWeights.Normal;
+            var l = new TextBlock { Text = label, FontSize = 14, FontWeight = weight, TextWrapping = TextWrapping.Wrap };
+            AutomationProperties.SetAutomationId(l, id);
+            AutomationProperties.SetName(l, $"{label}: {N0(value)}");
+            var n = new TextBlock
+            {
+                Text = N0(value), FontSize = 14, FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            Grid.SetRow(l, row); Grid.SetRow(n, row);
+            Grid.SetColumn(n, 1);
+            grid.Children.Add(l); grid.Children.Add(n);
+            row++;
+        }
+        AddCount("g3-confirm-filled", filledLabel, p.Filled, bold: false);
+        AddCount("g3-confirm-overwritten", overLabel, p.Overwritten, bold: p.Overwritten > 0);
+        AddCount("g3-confirm-unchanged", sameLabel, p.Unchanged, bold: false);
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var divider = new Border
+        {
+            Height = 1,
+            Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+        };
+        Grid.SetRow(divider, row); Grid.SetColumnSpan(divider, 2);
+        grid.Children.Add(divider);
+        row++;
+        AddCount("g3-confirm-total", "Rows that will change", p.Total, bold: true);
+        content.Children.Add(grid);
+
+        if (p.Total == 0)
+            content.Children.Add(new TextBlock
+            {
+                Text = clearing ? "None of these rows has a tag." : $"Every one of these rows is already {word}.",
+                TextWrapping = TextWrapping.Wrap,
+            });
+
+        var note = new TextBlock
+        {
+            Text = column == ChangeColumn.Category
+                ? "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history. " +
+                  "Marking also teaches Planillium the activity keywords of these rows; Undo forgets the ones this mark added."
+                : "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history.",
+            FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(note, "g3-confirm-note");
+        content.Children.Add(note);
+
+        var dialog = DialogControls.Build(XamlRoot,
+            DiaryChangeText.ConfirmTitle(column, newValue, p.Total),
+            content,
+            primaryButtonText: DiaryChangeText.PrimaryText(column, newValue, p.Total),
+            closeButtonText: "Cancel",
+            defaultButton: ContentDialogButton.Close,
+            isPrimaryButtonEnabled: p.Total > 0);
+        AutomationProperties.SetAutomationId(dialog, "g3-confirm-dialog");
+        return dialog;
+    }
+
 
     // ── diary ────────────────────────────────────────────────────────────
 

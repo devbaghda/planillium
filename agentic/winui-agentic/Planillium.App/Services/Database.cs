@@ -221,6 +221,36 @@ public sealed class Database : IDisposable
             "  date TEXT NOT NULL UNIQUE," +
             "  text TEXT NOT NULL" +
             ");" +
+            // G3 (2026-10-29): the safe door's change log — one change_history row per bulk
+            // write, its rows' old values + post-write fingerprints, and the keywords that
+            // write taught. Same file as time_diary so the log commits atomically with the
+            // change it describes. Not in ExportedTables (export output unchanged); emptied
+            // by ClearActivityHistory/ClearAllData. Owned by DiaryChangeService.
+            "CREATE TABLE IF NOT EXISTS change_history (" +
+            "  id         INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  ts         TEXT NOT NULL," +
+            "  kind       TEXT NOT NULL," +
+            "  new_value  TEXT," +
+            "  scope_text TEXT NOT NULL," +
+            "  row_count  INTEGER NOT NULL," +
+            "  undone_at  TEXT," +
+            "  restored   INTEGER," +
+            "  skipped    INTEGER" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS change_history_rows (" +
+            "  change_id   INTEGER NOT NULL," +
+            "  diary_id    INTEGER NOT NULL," +
+            "  old_value   TEXT," +
+            "  new_value   TEXT," +
+            "  fingerprint TEXT NOT NULL" +
+            ");" +
+            "CREATE INDEX IF NOT EXISTS idx_change_history_rows_change ON change_history_rows(change_id);" +
+            "CREATE TABLE IF NOT EXISTS change_history_keywords (" +
+            "  change_id   INTEGER NOT NULL," +
+            "  keyword     TEXT NOT NULL," +
+            "  taught_list TEXT NOT NULL," +
+            "  prior_list  TEXT" +
+            ");" +
             // Read-only reporting views — nothing in either app queries
             // these, they exist purely so an external tool (Power Query,
             // Excel, a BI dashboard) can point straight at progress.db
@@ -430,10 +460,34 @@ public sealed class Database : IDisposable
         RunInTransaction(() =>
         {
             using var cmd = CreateCommand();
-            cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup;";
+            cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup; " + ChangeHistoryDelete;
             cmd.ExecuteNonQuery();
         });
         VacuumAndCheckpoint();
+    }
+
+    /// <summary>G3: the change log holds old diary values (and so, indirectly, what was
+    /// tracked) — it goes with every clear that removes the diary itself.</summary>
+    private const string ChangeHistoryDelete =
+        "DELETE FROM change_history_rows; DELETE FROM change_history_keywords; DELETE FROM change_history;";
+
+    /// <summary>G3: empties the change log (DiaryChangeService.DeleteAllBackupsAndHistory).</summary>
+    public void ClearChangeHistory()
+    {
+        RunInTransaction(() =>
+        {
+            using var cmd = CreateCommand();
+            cmd.CommandText = ChangeHistoryDelete;
+            cmd.ExecuteNonQuery();
+        });
+    }
+
+    /// <summary>G3: number of entries in the change log — for the Clear dialogs' note.</summary>
+    public int CountChangeHistory()
+    {
+        using var cmd = CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM change_history";
+        return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
     private static readonly string[] ExportedTables =
@@ -467,7 +521,7 @@ public sealed class Database : IDisposable
         RunInTransaction(() =>
         {
             using var cmd = CreateCommand();
-            cmd.CommandText = string.Join(" ", ExportedTables.Select(t => $"DELETE FROM {t};"));
+            cmd.CommandText = string.Join(" ", ExportedTables.Select(t => $"DELETE FROM {t};")) + " " + ChangeHistoryDelete;
             cmd.ExecuteNonQuery();
         });
         VacuumAndCheckpoint();
@@ -619,6 +673,37 @@ public sealed class Database : IDisposable
         cmd.Parameters.AddWithValue("$tag", (object?)tag ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>G3 (2026-10-29): writes ONE column of one diary row — the safe door's bulk
+    /// write. Only <c>category</c> or <c>tag</c>, picked from a fixed whitelist (never
+    /// interpolated from input); every other column, <c>window</c> included, is left exactly as
+    /// it is, so a row edited between preview and write keeps that edit.</summary>
+    public void UpdateDiaryColumn(long id, string column, string? value) =>
+        UpdateDiaryColumn(column, new[] { (id, value) });
+
+    /// <summary>Batch form: one prepared command reused for every row (call inside
+    /// RunInTransaction for a bulk write).</summary>
+    public void UpdateDiaryColumn(string column, IEnumerable<(long Id, string? Value)> rows)
+    {
+        var col = column switch
+        {
+            "category" => "category",
+            "tag" => "tag",
+            _ => throw new ArgumentException($"Column '{column}' cannot be bulk-written.", nameof(column)),
+        };
+        using var cmd = CreateCommand();
+        cmd.CommandText = $"UPDATE time_diary SET {col}=$v WHERE id=$id";
+        var pv = cmd.Parameters.Add("$v", SqliteType.Text);
+        var pid = cmd.Parameters.Add("$id", SqliteType.Integer);
+        foreach (var (id, value) in rows)
+        {
+            if (col == "category" && value is null)
+                throw new ArgumentException("A diary row always has a category.", nameof(rows));
+            pv.Value = (object?)value ?? DBNull.Value;
+            pid.Value = id;
+            cmd.ExecuteNonQuery();
+        }
     }
 
     /// <summary>Same DELETE as main.py's _delete_diary_entry.</summary>

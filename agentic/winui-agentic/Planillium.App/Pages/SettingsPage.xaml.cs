@@ -36,7 +36,8 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        _panels = [GeneralPanel, IncomePanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, AIPanel, DataPanel];
+        _panels = [GeneralPanel, IncomePanel, HoursPanel, ScoringPanel, KeywordsPanel, IdlePanel, TickTickPanel, AIPanel, DataPanel,
+                   ChangeHistoryPanel];
         if (_panels.Length != SectionList.Items.Count)
             throw new InvalidOperationException(
                 $"Settings has {SectionList.Items.Count} menu entries but {_panels.Length} panels — " +
@@ -136,7 +137,213 @@ public sealed partial class SettingsPage : Page
             _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
         if (_panels[_lastSection] == AIPanel && AIStatus.Text.Length == 0 && AiKey.Has())
             SetAiStatus("A key is saved on this computer.", failure: false);
+        // G3: read fresh on every visit — a Mark made on the Diary since must show here.
+        if (_panels[_lastSection] == ChangeHistoryPanel) LoadChangeHistory();
         SectionScroll.ChangeView(null, 0, null, disableAnimation: true);
+    }
+
+    // ══ Change history (G3, 2026-10-29) ═════════════════════════════════════════════════════
+
+    /// <summary>Bumped on every load so a slow read that finishes after a newer one is dropped.</summary>
+    private int _changeHistoryLoad;
+
+    /// <summary>True while an Undo from this list runs: every row's Undo stays disabled (SPEC §4).</summary>
+    private bool _changeUndoBusy;
+
+    private void ChangeHistoryRetry_Click(object sender, RoutedEventArgs e) => LoadChangeHistory();
+
+    /// <summary>Reads the history off the UI thread (pruning to 20 / 30 days first) and shows the
+    /// Loading, Empty, Error or Populated state. Only runs when the section is the one open.</summary>
+    private async void LoadChangeHistory()
+    {
+        if (ChangeHistoryPanel.Visibility != Visibility.Visible) return;
+        var version = ++_changeHistoryLoad;
+        ChangeHistoryError.IsOpen = false;
+        ChangeHistoryEmpty.Visibility = Visibility.Collapsed;
+        ChangeHistoryList.Visibility = Visibility.Collapsed;
+        ChangeHistoryLoading.Visibility = Visibility.Visible;
+        IReadOnlyList<ChangeEntry> entries;
+        try
+        {
+            entries = await Task.Run(() =>
+            {
+                using var db = new Database();
+                return DiaryChangeService.History(db);
+            });
+        }
+        catch (Exception ex)
+        {
+            if (version != _changeHistoryLoad) return;
+            Log.Error("SettingsPage.ChangeHistory.Load", ex);
+            ChangeHistoryLoading.Visibility = Visibility.Collapsed;
+            ChangeHistoryError.Message = Log.Friendly("Couldn't read the change history", ex);
+            ChangeHistoryError.IsOpen = true;
+            return;
+        }
+        if (version != _changeHistoryLoad) return;
+        ChangeHistoryLoading.Visibility = Visibility.Collapsed;
+        ChangeHistoryList.Children.Clear();
+        if (entries.Count == 0)
+        {
+            ChangeHistoryIntro.Visibility = Visibility.Collapsed;
+            ChangeHistoryEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+        ChangeHistoryIntro.Visibility = Visibility.Visible;
+        foreach (var entry in entries) ChangeHistoryList.Children.Add(BuildChangeRow(entry));
+        ChangeHistoryList.Visibility = Visibility.Visible;
+    }
+
+    private static string HistoryWhen(DateTime at) =>
+        at.ToString("d MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string UndoneLine(DateTime undoneAt, int restored, int skipped) =>
+        restored == 0 && skipped > 0
+            ? $"Undone {HistoryWhen(undoneAt)} - nothing restored: all {DiaryChangeText.N0(skipped)} " +
+              $"row{(skipped == 1 ? " was" : "s were")} edited or removed since"
+            : $"Undone {HistoryWhen(undoneAt)} - {DiaryChangeText.Rows(restored)} restored" +
+              (skipped > 0 ? $", {DiaryChangeText.N0(skipped)} skipped (edited or removed since)" : "");
+
+    /// <summary>One card per change: title (same wording as the Diary success bar), when + scope +
+    /// kept-until, the Undone line when undone, and the Undo button on the right.</summary>
+    private Border BuildChangeRow(ChangeEntry entry)
+    {
+        var id = entry.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var tertiary = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
+
+        var title = new TextBlock
+        {
+            Text = DiaryChangeText.DoneTitle(entry.Column, entry.NewValue, entry.RowCount),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14, TextWrapping = TextWrapping.Wrap,
+        };
+        AutomationProperties.SetAutomationId(title, $"settings-change-title-{id}");
+        var when = new TextBlock
+        {
+            Text = $"{HistoryWhen(entry.At)} - {entry.ScopeText} - kept until " +
+                   entry.At.AddDays(DiaryChangeService.KeepDays).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture),
+            FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap,
+        };
+        var status = new TextBlock { FontSize = 12, Foreground = tertiary, TextWrapping = TextWrapping.Wrap };
+        AutomationProperties.SetAutomationId(status, $"settings-change-status-{id}");
+        var undone = entry.UndoneAt is not null;
+        if (undone)
+            status.Text = UndoneLine(entry.UndoneAt!.Value, entry.Restored ?? 0, entry.Skipped ?? 0);
+        else
+            status.Visibility = Visibility.Collapsed;
+
+        var left = new StackPanel { Spacing = 2 };
+        left.Children.Add(title);
+        left.Children.Add(when);
+        left.Children.Add(status);
+
+        var button = new Button
+        {
+            Content = undone ? "Undone" : "Undo",
+            IsEnabled = !undone && !_changeUndoBusy,
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = undone ? "undone" : null,
+        };
+        AutomationProperties.SetAutomationId(button, $"settings-change-undo-{id}");
+        AutomationProperties.SetName(button, undone ? "Undone" : $"Undo: {title.Text}");
+        button.Click += async (_, _) => await UndoFromHistoryAsync(entry.Id, button, status, secondary, tertiary);
+
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(left);
+        Grid.SetColumn(button, 1);
+        grid.Children.Add(button);
+
+        var card = new Border
+        {
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(12),
+            Child = grid,
+        };
+        AutomationProperties.SetAutomationId(card, $"settings-change-row-{id}");
+        return card;
+    }
+
+    /// <summary>Undo one change from the list, through the same door as the Diary bar. No confirm
+    /// dialog (SPEC §4): rows edited or removed since are skipped, and the result is shown.</summary>
+    private async Task UndoFromHistoryAsync(long changeId, Button button, TextBlock status, Brush secondary, Brush tertiary)
+    {
+        if (_changeUndoBusy) return;
+        _changeUndoBusy = true;
+        SetHistoryUndoButtonsEnabled(false);
+        button.Content = "Undoing...";
+        UndoResult result;
+        try
+        {
+            result = await Task.Run(() =>
+            {
+                using var db = new Database();
+                return DiaryChangeService.Undo(db, changeId);
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.ChangeHistory.Undo", ex);
+            var reason = Log.Friendly("Couldn't undo", ex);
+            status.Text = "Couldn't undo - nothing was changed.";
+            status.Foreground = secondary;
+            ToolTipService.SetToolTip(status, reason);
+            status.Visibility = Visibility.Visible;
+            button.Content = "Undo";
+            SaveStatus.Text = reason;
+            _changeUndoBusy = false;
+            SetHistoryUndoButtonsEnabled(true);
+            return;
+        }
+
+        status.Text = UndoneLine(DiaryChangeService.Now(), result.Restored, result.Skipped);
+        status.Foreground = tertiary;
+        ToolTipService.SetToolTip(status, null);
+        status.Visibility = Visibility.Visible;
+        button.Content = "Undone";
+        button.Tag = "undone";
+        AutomationProperties.SetName(button, "Undone");
+        SaveStatus.Text = DiaryChangeText.UndoSummary(result.Restored, result.Skipped);
+        if (result.KeywordsChanged)
+        {
+            // The forgotten keywords must leave the Keywords boxes too, or the next save there
+            // (it writes the boxes back whole) would teach them again.
+            RefreshKeywordBoxes();
+            RefreshSummaries();
+            (App.MainWindow as MainWindow)?.RestartTracker();
+        }
+        _changeUndoBusy = false;
+        SetHistoryUndoButtonsEnabled(true);
+    }
+
+    /// <summary>Enables every row's Undo that is not already undone (or disables all while one runs).</summary>
+    private void SetHistoryUndoButtonsEnabled(bool enabled)
+    {
+        foreach (var child in ChangeHistoryList.Children)
+            if (child is Border { Child: Grid g } && g.Children.OfType<Button>().FirstOrDefault() is { } b)
+                b.IsEnabled = enabled && b.Tag as string != "undone";
+    }
+
+    /// <summary>Re-reads only the three activity-keyword boxes from config (not the whole LoadRules,
+    /// which would also reset every other box in the section).</summary>
+    private void RefreshKeywordBoxes()
+    {
+        var was = _initialising;
+        _initialising = true;
+        try
+        {
+            var cfg = ConfigService.Root;
+            string Words(string key) =>
+                cfg.TryGetProperty("activity_rules", out var s) && s.TryGetProperty(key, out var arr)
+                    ? string.Join("\n", arr.EnumerateArray().Select(v => v.GetString() ?? "").Where(v => v.Length > 0))
+                    : "";
+            RulesOn.Text = Words(DiaryCategory.OnPlan);
+            RulesOff.Text = Words(DiaryCategory.OffPlan);
+            RulesNeutral.Text = Words(DiaryCategory.Neutral);
+        }
+        finally { _initialising = was; }
     }
 
     /// <summary>
@@ -1295,11 +1502,12 @@ public sealed partial class SettingsPage : Page
 
     private async void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
-        int diaryRows, rollupDays;
+        int diaryRows, rollupDays, backups, changes;
         try
         {
             using var db = new Database();
             (diaryRows, rollupDays) = db.CountActivityHistory();
+            (backups, changes) = DiaryChangeService.Counts(db);
         }
         catch (Exception ex)
         {
@@ -1307,7 +1515,9 @@ public sealed partial class SettingsPage : Page
             SaveStatus.Text = Log.Friendly("Couldn't read your activity history", ex);
             return;
         }
-        if (diaryRows == 0 && rollupDays == 0)
+        // G3: backups and the change history count too — otherwise an empty diary would leave
+        // the diary backups (full copies of the old diary) with no way to delete them.
+        if (diaryRows == 0 && rollupDays == 0 && backups == 0 && changes == 0)
         {
             SaveStatus.Text = "No activity history to clear.";
             return;
@@ -1350,6 +1560,7 @@ public sealed partial class SettingsPage : Page
             deleteExportsBox.Visibility = Visibility.Visible;
             confirmPanel.Children.Add(deleteExportsBox);
         }
+        AddClearBackupsNote(confirmPanel, backups, changes);
 
         var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear activity history?", confirmPanel,
             primaryButtonText: "Clear history", closeButtonText: "Cancel");
@@ -1367,8 +1578,30 @@ public sealed partial class SettingsPage : Page
         {
             using var db = new Database();
             db.ClearActivityHistory();
+            DiaryChangeService.DeleteAllBackupsAndHistory(db);
             if (deleteExports) ThrowIfExportFilesRemain(DeleteExportFiles(exportNames));
         }, "Activity history cleared.", "your activity history", "SettingsPage.ClearHistory");
+        LoadChangeHistory();
+    }
+
+    /// <summary>G3: the Clear dialogs' note about the diary backups and the Change history —
+    /// shown only when either exists.</summary>
+    private static void AddClearBackupsNote(StackPanel panel, int backups, int changes)
+    {
+        if (backups == 0 && changes == 0) return;
+        var text = backups > 0
+            ? $"This also deletes the {backups} diary backup{(backups == 1 ? "" : "s")} kept for Undo and the " +
+              "Change history, so earlier bulk changes can no longer be undone."
+            : "This also clears the Change history.";
+        var note = new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        AutomationProperties.SetAutomationId(note, "settings-clear-backups-note");
+        panel.Children.Add(note);
     }
 
     /// <summary>Deletes each named file from the data folder, best-effort — logs and
@@ -1507,11 +1740,12 @@ public sealed partial class SettingsPage : Page
     /// </summary>
     private async void ClearAllData_Click(object sender, RoutedEventArgs e)
     {
-        int rowCount;
+        int rowCount, backups, changes;
         try
         {
             using var db = new Database();
             rowCount = db.CountAllData();
+            (backups, changes) = DiaryChangeService.Counts(db);
         }
         catch (Exception ex)
         {
@@ -1519,14 +1753,17 @@ public sealed partial class SettingsPage : Page
             SaveStatus.Text = Log.Friendly("Couldn't read your data", ex);
             return;
         }
-        if (rowCount == 0)
+        if (rowCount == 0 && backups == 0 && changes == 0)
         {
             SaveStatus.Text = "No data to clear.";
             return;
         }
 
-        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear all my data?",
-            $"Deletes {rowCount} row(s) across every data table this app keeps — " +
+        var allPanel = new StackPanel { Spacing = 8 };
+        allPanel.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Text = $"Deletes {rowCount} row(s) across every data table this app keeps — " +
             "task completions, reschedules and day-offs, task notes, score history, " +
             "reflections, TickTick sync links, and the activity diary — plus the debug " +
             "log, your saved TickTick connection (client ID, secret, and tokens), and " +
@@ -1534,6 +1771,9 @@ public sealed partial class SettingsPage : Page
             "folder. Your plan definitions and the other settings on this page " +
             "(including your name) are not touched — use the Plans page to archive " +
             "or remove a plan. This cannot be undone.",
+        });
+        AddClearBackupsNote(allPanel, backups, changes);
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Clear all my data?", allPanel,
             primaryButtonText: "Clear everything", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
@@ -1541,6 +1781,7 @@ public sealed partial class SettingsPage : Page
         {
             using var db = new Database();
             db.ClearAllData();
+            DiaryChangeService.DeleteAllBackupsAndHistory(db);
             Log.Clear();
             // Previously only the ticktick_sync database table (plan-task ↔ TickTick-task
             // ID links) was cleared here — the actual credentials in Windows Credential
@@ -1550,6 +1791,7 @@ public sealed partial class SettingsPage : Page
             ThrowIfExportFilesRemain(DeleteExportFiles(ExportFiles.All));
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
         RefreshTickTickStatus();
+        LoadChangeHistory();
     }
 
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)

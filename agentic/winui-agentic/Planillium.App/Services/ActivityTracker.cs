@@ -264,6 +264,7 @@ public sealed class ActivityTracker : IDisposable
     {
         var end = idleStart.AddMinutes(idleMinutes);
         using var conn = AppPaths.OpenConnection();
+        if (GapAlreadyMarked(conn, idleStart, end)) return;
         DiaryWriter.ClearIdlePlaceholder(conn, idleStart, end);
         // DiaryCategory.Idle doubles as the "window" placeholder here — no real app was
         // in the foreground, so the diary row's window field is the same sentinel value
@@ -291,6 +292,7 @@ public sealed class ActivityTracker : IDisposable
             foreach (var (start, minutes, description, category, tag) in segments)
             {
                 var end = start.AddMinutes(minutes);
+                if (GapAlreadyMarked(conn, start, end, tx)) continue;
                 // Same placeholder-replacement reasoning as LogIdleAnswer above — the split
                 // dialog's segments collectively cover the same original placeholder range,
                 // so this clears whatever's left of it as each segment is written.
@@ -304,6 +306,19 @@ public sealed class ActivityTracker : IDisposable
             tx.Rollback();
             throw;
         }
+    }
+
+    /// <summary>G3 (2026-10-29, lead ruling 4): the gap's placeholder was already marked by the
+    /// user (bulk mark while the idle prompt was still open) and no unanswered one overlaps —
+    /// the mark is the answer, so the idle answer is not logged as a second row for the same
+    /// minutes.</summary>
+    private static bool GapAlreadyMarked(SqliteConnection conn, DateTime start, DateTime end,
+        SqliteTransaction? tx = null)
+    {
+        if (DiaryWriter.HasIdlePlaceholder(conn, start, end, tx)) return false;
+        if (!DiaryWriter.HasMarkedIdlePlaceholder(conn, start, end, tx)) return false;
+        Log.Info($"Idle answer for {start.ToIsoTimestamp()} skipped: its placeholder was already marked.");
+        return true;
     }
 
     // ── alert escalation (port of _check_alert) ──────────────────────────

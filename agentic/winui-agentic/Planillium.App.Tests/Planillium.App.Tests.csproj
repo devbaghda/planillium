@@ -88,6 +88,8 @@
     <Compile Include="..\Planillium.App\Services\DiaryWriter.cs" Link="App\DiaryWriter.cs" />
     <Compile Include="..\Planillium.App\Services\ConfigService.cs" Link="App\ConfigService.cs" />
     <Compile Include="..\Planillium.App\Services\Database.cs" Link="App\Database.cs" />
+    <!-- G3: the safe door for bulk diary writes (plain C#), so QA can test preview/apply/undo directly. -->
+    <Compile Include="..\Planillium.App\Services\DiaryChangeService.cs" Link="App\DiaryChangeService.cs" />
     <Compile Include="..\Planillium.App\Services\DateExtensions.cs" Link="App\DateExtensions.cs" />
     <!-- Needed by ScoreService.cs/ConfigService.cs since round-7's category-string
          centralization (audit finding #22). -->

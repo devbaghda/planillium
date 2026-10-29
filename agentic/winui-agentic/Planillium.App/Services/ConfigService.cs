@@ -281,4 +281,86 @@ public static class ConfigService
         });
         return true;
     }
+
+    private static readonly string[] RuleLists = { DiaryCategory.OnPlan, DiaryCategory.OffPlan, DiaryCategory.Neutral };
+
+    private static JsonArray RuleArray(JsonObject node, string cat)
+    {
+        if (node["activity_rules"] is not JsonObject rules)
+            node["activity_rules"] = rules = new JsonObject();
+        if (rules[cat] is JsonArray existing) return existing;
+        var fresh = new JsonArray();
+        rules[cat] = fresh;
+        return fresh;
+    }
+
+    private static bool RemoveKeyword(JsonArray arr, string keyword)
+    {
+        var removed = false;
+        for (var i = arr.Count - 1; i >= 0; i--)
+            if (arr[i] is JsonValue v && v.TryGetValue<string>(out var s) &&
+                string.Equals(s, keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                arr.RemoveAt(i);
+                removed = true;
+            }
+        return removed;
+    }
+
+    /// <summary>
+    /// G3 (2026-10-29): the bulk form of <see cref="LearnActivityRule"/> — same refusal rules
+    /// and the same move semantics (removed from the other two lists first), but ONE config
+    /// write for the whole set instead of one per keyword ("Mark all 8,921" used to mean
+    /// thousands of file rewrites). Returns false when nothing valid was given.
+    /// </summary>
+    public static bool LearnActivityRules(IEnumerable<string> keywords, string category)
+    {
+        if (category is not (DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)) return false;
+        var valid = keywords
+            .Where(k => !string.IsNullOrWhiteSpace(k) && !AppNames.Browsers.Contains(k.Trim()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (valid.Count == 0) return false;
+
+        Mutate(node =>
+        {
+            foreach (var keyword in valid)
+            {
+                foreach (var cat in RuleLists) RemoveKeyword(RuleArray(node, cat), keyword);
+                RuleArray(node, category).Add(keyword);
+            }
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// G3 (2026-10-29): reverses what one bulk mark taught, in ONE config write. For each
+    /// recorded keyword that is STILL in the list the mark taught it to: no prior list means
+    /// it was newly taught, so it is removed; a prior list means the mark moved it, so it goes
+    /// back there. A keyword the user has since moved or deleted is left alone, and keywords
+    /// that were already in the taught list before the mark were never recorded, so they are
+    /// never touched. Returns true when the file changed.
+    /// </summary>
+    public static bool UndoLearnedRules(IEnumerable<(string Keyword, string TaughtList, string? PriorList)> records)
+    {
+        var list = records.ToList();
+        if (list.Count == 0) return false;
+        var changed = false;
+        Mutate(node =>
+        {
+            foreach (var (keyword, taught, prior) in list)
+            {
+                if (!RuleLists.Contains(taught)) continue;
+                if (!RemoveKeyword(RuleArray(node, taught), keyword)) continue;
+                changed = true;
+                if (prior is not null && RuleLists.Contains(prior) && prior != taught)
+                {
+                    var target = RuleArray(node, prior);
+                    RemoveKeyword(target, keyword);
+                    target.Add(keyword);
+                }
+            }
+        });
+        return changed;
+    }
 }

@@ -117,6 +117,13 @@ public sealed partial class ReportsPage : Page
         _diarySearchDebounce?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
         _diaryLiveRefreshAction = null;
         _diarySearchDebounceAction = null;
+        // G3: the result bar's message ends when the page is left (Settings ▸ Change history is
+        // the lasting route to Undo) — unless a door action is still running, whose outcome
+        // must still be shown on return. The ticks (_diaryTicks) deliberately stay.
+        _diaryRenderResultsAction = null;
+        _diaryUpdateToolbarAction = null;
+        _diaryResultBar = null;
+        if (!_diaryDoorBusy) _diaryResult = null;
         Body.Children.Clear();
         DiaryBody.Children.Clear();
         _appDrillPieList = null;
