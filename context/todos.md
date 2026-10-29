@@ -14,6 +14,9 @@
 
 ## Done
 
+### 2026-10-29 -- G3 round 3: idle rows teach no keyword (regular side)
+`ReportsPage.BulkMark.cs` keyword-teach loop skips rows whose window is "idle" (case-insensitive); category mark still applies to them; nothing recorded for them in change_log_rules. Vanishing ticks closed (pre-G3 live exe). Strict build 0 warnings, 229 tests. QA deferred.
+
 ### 2026-10-29 -- G3 round 2: Undo forgets taught keywords, no-tick marks teach none (regular side)
 `DataChangeDoor.TeachKeywords` records newly taught keywords in new `change_log_rules`; `Undo` forgets them via `ConfigService.ForgetActivityRule` (only if still in the taught category; restores a moved keyword's old category); `DescribeUndo` reports forgotten/kept. Diary passes `teach = ticked rows > 0`. Settings Undo confirm mentions keywords; after Undo reloads keyword boxes (else Save on LostFocus would re-add them), summaries, tracker. Change-history text notes backups hold full window titles. Ticks: 1daa545 already keeps them across Mark/Undo (scratch repro, UIA + mouse, today/yesterday); the vanishing seen was the pre-G3 `selectedIds.Clear()`. Tag buttons on all matches, Settings Undo confirm, Show all past 300 were already in place. Strict build 0 warnings, 229 tests. QA deferred (group end).
 

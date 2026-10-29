@@ -160,6 +160,9 @@ public sealed partial class ReportsPage
                     var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var row in rows)
                     {
+                        // "idle" is a placeholder window, never an app: the category mark applies to
+                        // idle rows, but they teach no keyword (G3 round 3).
+                        if (string.Equals(row.Window, DiaryCategory.Idle, StringComparison.OrdinalIgnoreCase)) continue;
                         var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
                         if (keyword is { Length: > 0 } && keyword != "—") keywords.Add(keyword);
                     }

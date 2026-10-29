@@ -5,3 +5,5 @@
 5. Undo (message and Settings -> Change history) restores the exact old values; rows edited since are skipped and counted in the message.
 6. History keeps the last 20 changes for 30 days; older are dropped.
 7. Single-row marking, scores and income are unchanged. Strict build and existing suite green.
+8. Undo of a category mark removes the keywords that mark newly taught and leaves every pre-existing keyword rule; the message no longer says Undo leaves them.
+9. Tick 5 of 12 rows, Mark: afterwards the same 5 rows are still ticked (also after Undo); with a filter that makes a marked row stop matching, only that row loses its tick.
