@@ -43,6 +43,13 @@ the request fails, the manual copy-and-paste still works. While Claude is answer
 how long you have been waiting and how many new tasks have arrived so far; a long plan typically takes
 a minute or two, almost all of it Claude writing the reply.
 
+**AI cost cap.** Settings → AI shows a monthly cap in euro (default 5) and how much has been spent this
+month. The spend is an estimate: the AI service reports usage, not money, so the app multiplies the
+usage by a fixed price, slightly on the high side. When the month's spend reaches the cap, the AI
+buttons (Ask Claude, Test connection) stop with a message saying so; raise the cap there to continue.
+Nothing is lost, the copy-and-paste screens and the rest of the app keep working, and a new month
+starts at zero.
+
 Each plan can include:
 
 - a title,

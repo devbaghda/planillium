@@ -1010,6 +1010,9 @@ public sealed partial class SettingsPage : Page
         AiStatus.Text = has ? "A key is saved on this PC." : "No key saved — Ask Claude is off.";
         SumAi.Text = has ? "Key saved · " + AiSettings.Model : "No key — manual copy/paste";
         AiModelBox.Text = AiSettings.Model;
+        AiCapBox.Text = AiSpend.CapEur.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        AiSpendText.Text = $"Spent this month (an estimate): {AiSpend.Eur(AiSpend.SpentThisMonth)} of {AiSpend.Eur(AiSpend.CapEur)}. " +
+                           "When the cap is reached the AI switches off until next month; the rest of the app is unaffected.";
         AiRemoveBtn.IsEnabled = has;
         AiTestBtn.IsEnabled = has;
         AiKeyBox.PlaceholderText = has ? "Saved — type a new key to replace it" : "sk-ant-…";
@@ -1017,6 +1020,8 @@ public sealed partial class SettingsPage : Page
 
     private void AiSave_Click(object sender, RoutedEventArgs e)
     {
+        // G9a: a bad cap saves nothing at all; the typed text stays visible beside the message.
+        if (AiSpend.TrySaveCap(AiCapBox.Text) is { } capProblem) { AiResult.Text = capProblem; return; }
         try
         {
             AiSettings.SaveModel(AiModelBox.Text);

@@ -21,3 +21,4 @@
 - 2026-10-29 G3 round 3 regular (idle rows skipped when teaching keywords) | PM chose sonnet (small bounded change, explicit spec) | outcome: ok (precheck green 229/229; QA deferred)
 - 2026-10-29 G10 regular | PM chose sonnet (three bounded changes, explicit spec; guard modelled on G7) | outcome: ok (built, precheck green 229/229; QA deferred)
 - 2026-10-29 G6 regular | PM chose sonnet (small bounded change, explicit rule) | outcome: ok (built, precheck green 229/229; QA deferred)
+- 2026-10-29 G9a regular | PM chose sonnet (bounded settings + limit; money-limit logic watched in QA) | outcome: ok (built, precheck green 229/229; QA deferred)

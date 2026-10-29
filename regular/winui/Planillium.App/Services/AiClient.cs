@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace Planillium.App.Services;
 
-public enum AiFailure { NoKey, Auth, RateLimited, Server, Network, Timeout, BadResponse, Cancelled, ScratchBlocked }
+public enum AiFailure { NoKey, Auth, RateLimited, Server, Network, Timeout, BadResponse, Cancelled, ScratchBlocked, CapReached }
 
 /// <summary>An AI call that didn't produce a usable reply. <see cref="Exception.Message"/> is already
 /// plain language for the dialog; it never contains the API key.</summary>
@@ -82,6 +82,9 @@ public sealed class AiClient
             throw new AiException(AiFailure.ScratchBlocked,
                 "AI is off in this test copy (scratch data folder): set " + BaseUrlEnv +
                 " to a local stub server to use it. Nothing was sent.");
+        // G9a: the monthly cost cap. Every AI call in the app goes through this method (Ask Claude, Add plan,
+        // Replace remaining, Test connection), so this is the one place that refuses - before any request.
+        if (AiSpend.CapReachedMessage() is { } capMsg) throw new AiException(AiFailure.CapReached, capMsg);
         if (string.IsNullOrWhiteSpace(_apiKey)) throw new AiException(AiFailure.NoKey, "No API key is set.");
 
         var body = new JsonObject
@@ -94,6 +97,9 @@ public sealed class AiClient
 
         using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var clock = Stopwatch.StartNew();
+        int? inputTokens = null, outputTokens = null;
+        var text = new StringBuilder();
+        var answered = false;   // the server accepted the request: it is billed even if the reply is unusable
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages")
@@ -107,13 +113,12 @@ public sealed class AiClient
             using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, idle.Token).ConfigureAwait(false);
             var toHeaders = clock.Elapsed;
             TimeSpan? toFirstText = null;
-            int? inputTokens = null, outputTokens = null;
             if (!resp.IsSuccessStatusCode)
                 throw await FailureFor(resp, idle.Token).ConfigureAwait(false);
+            answered = true;
 
             await using var stream = await resp.Content.ReadAsStreamAsync(idle.Token).ConfigureAwait(false);
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            var text = new StringBuilder();
             string? stopReason = null;
             string? line;
             while ((line = await reader.ReadLineAsync(idle.Token).ConfigureAwait(false)) != null)
@@ -178,6 +183,12 @@ public sealed class AiClient
         {
             Log.Warn("AiClient", $"stream failure: {ex.GetType().Name}");
             throw new AiException(AiFailure.Network, "The connection to the AI service dropped. Nothing was changed.");
+        }
+        finally
+        {
+            // G9a: count the estimated cost. No token figures from the stream -> estimate from characters / 4.
+            if (answered)
+                AiSpend.Record(_model, inputTokens ?? body.Length / 4, outputTokens ?? text.Length / 4);
         }
     }
 

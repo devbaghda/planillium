@@ -181,6 +181,21 @@ public static class AppNames
 
     private static string[] SplitParts(string norm)
     {
+        // G9a: a stored messenger title is "<chat> – Telegram". A chat name that itself contains a dash
+        // ("Team - Sales", "Anna – work") used to be cut at its own dash, so the app came out as
+        // "Sales – Telegram" instead of "Telegram". When the title ends in " <dash> <messenger>", cut at THAT
+        // last separator only, so the whole chat name is kept as the first part.
+        foreach (var sep in Separators)
+        {
+            var idx = norm.LastIndexOf(sep, StringComparison.Ordinal);
+            if (idx <= 0) continue;
+            var tail = norm[(idx + sep.Length)..].Trim();
+            if (Messengers.Contains(tail))
+            {
+                var head = norm[..idx].Trim();
+                if (head.Length > 0) return new[] { head, tail };
+            }
+        }
         foreach (var sep in Separators)
             if (norm.Contains(sep))
                 return norm.Split(sep, StringSplitOptions.RemoveEmptyEntries |
