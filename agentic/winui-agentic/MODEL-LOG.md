@@ -78,3 +78,19 @@
 - coder outcome: ok (fixes 1-5; precheck green 0 warnings, 362/362; All time 128 -> 87 MB private WS, 16 switches 1428 -> 80 MB, hidden page 933 -> 101 MB)
 - round 2 coder (24 MB private-bytes creep): opus -- root-cause hunt, unknown cause, timing/lifetime class; planner skipped (bounded, same files/script); fix only if clear and low-risk.
 - round 2 coder outcome: ok (not a leak: GC sawtooth from All-time refresh + native rise from switching that levels off; 4 x 15-min scenario runs, qa/g5_creep.py; no code change; SPEC section 10)
+## G3 bulk marking + safe door 2026-10-29
+- designer: sonnet -- bounded UI additions (button count, confirm dialog, message with Undo, Settings list) reusing existing look; no timing/focus class.
+- planner: opus -- root-cause investigation (disappearing marks, vanishing ticks) + cross-cutting data-change service with backup/undo/edited-since skip; data-integrity, costly if wrong.
+- coder: opus -- writes to past data in bulk, backup/undo/keyword-forget logic and tick state across re-render; irreversible on real data if wrong.
+- designer outcome: ok (SPEC.md "Screen design"; 4 open questions, lead rulings passed to planner)
+- planner outcome: ok (SPEC.md Plan sections 1-8; causes: idle-placeholder cleanup deletes marked rows + 300-row reach; ticks cleared on Mark and kept in a rebuild-local set; 10 open questions, defaults ruled by lead)
+- coder outcome: ok (commit 9b8e864; precheck green 0 warnings, 362/362; no MANUAL.md on this side)
+- qa: opus -- new data-writing feature, scope/trial choice is judgement (2 400-row scratch seed, dialog counts, restart persistence, backups x5, undo skip, history 20/30 days, ticks). Not started: no QA budget in the brief; BUDGET-REQUEST sent to PM (proposed 45 min).
+## G3 round 2 (Addendum 2) 2026-10-29
+- designer/planner: not launched -- Addendum 2 is a bounded change list on an existing service and SPEC.
+- coder: sonnet -- explicit list of 5 answers on top of 9b8e864 (tag marks through the same door, Settings Undo confirm, Show all lifts the cap, no keyword teaching without ticks, Settings text); no focus/timing class; data door already built and specified.
+- qa: not started -- user deferred QA to the end of the group.
+- coder outcome: ok (commit 67fc0f8; precheck green 0 warnings, 362/362; answers 1-5 built, docs recorded; tag row put in a horizontal scroller, untested visually)
+- 2026-10-29 G3 round 3 agentic (idle rows skipped when teaching keywords) | PM chose sonnet (small bounded change, explicit spec) | outcome: ok (precheck green 0 warnings, 362/362)
+- coder: sonnet -- G3 round 3 (Addendum 3 item 1): skip idle rows when a category mark teaches keywords; one bounded service change, explicit spec.
+- coder outcome: ok (G3 round 3; precheck green 0 warnings, 362/362; one flaky AiClientTests log test on an earlier run, passed on rerun)

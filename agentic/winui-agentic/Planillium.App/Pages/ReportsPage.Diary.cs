@@ -1418,7 +1418,7 @@ public sealed partial class ReportsPage
         {
             Text = teachKeywords
                 ? "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history. " +
-                  "Marking also teaches Planillium the activity keywords of these rows; Undo forgets the ones this mark added."
+                  "Marking also teaches Planillium the activity keywords of these rows (idle rows are marked but teach none); Undo forgets the ones this mark added."
                 : "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history." +
                   (column == ChangeColumn.Category ? " Marking all matches does not teach activity keywords." : ""),
             FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap,

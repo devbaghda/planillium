@@ -193,7 +193,9 @@ public static class DiaryChangeService
 
             if (teach)
             {
-                keywords = CollectKeywords(toWrite.Select(r => r.Window), req.NewValue!);
+                // Addendum 3: idle rows still get the category but teach nothing, so "idle"
+                // is never learned (and never recorded for Undo to forget).
+                keywords = CollectKeywords(toWrite.Where(r => !IsIdleRow(r)).Select(r => r.Window), req.NewValue!);
                 using var kw = db.CreateCommand();
                 kw.CommandText =
                     "INSERT INTO change_history_keywords (change_id, keyword, taught_list, prior_list) " +
@@ -233,6 +235,12 @@ public static class DiaryChangeService
 
         return new ChangeResult(changeId, changed, dateList, keywordsChanged);
     }
+
+    /// <summary>An idle row: window 'idle' (the same window test DiaryWriter.ClearIdlePlaceholder
+    /// uses) or category still 'idle'. A row already marked keeps window 'idle'.</summary>
+    private static bool IsIdleRow(Row r) =>
+        string.Equals(r.Window, DiaryCategory.Idle, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(r.Category, DiaryCategory.Idle, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Keywords a category mark teaches, as the old per-row Mark did (sub-item, else
     /// app group; not "—", not empty, not a bare browser), deduplicated case-insensitively.
