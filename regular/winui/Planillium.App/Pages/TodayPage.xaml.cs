@@ -118,6 +118,7 @@ public sealed partial class TodayPage : Page
 
             if (plans.Count == 0)
             {
+                (App.MainWindow as MainWindow)?.SetTodayDot(false);
                 Sections.Children.Add(Views.EmptyPlansState.Build(this,
                     "Generate one with Claude, paste your own, or load a plan file.", Render));
                 return;
@@ -197,6 +198,8 @@ public sealed partial class TodayPage : Page
             {
                 OverdueBar.IsOpen = false;
             }
+            // Sidebar dot follows the banner decision above, nothing else (G6).
+            (App.MainWindow as MainWindow)?.SetTodayDot(totalOverdue > 0);
         }
         catch (Exception ex)
         {
@@ -207,6 +210,22 @@ public sealed partial class TodayPage : Page
             Log.Error("TodayPage.Render (if the app isn't next to the data folder, set MENTOR_ROOT)", ex);
             Sections.Children.Add(Muted(Log.Friendly("Couldn't load your plan data", ex)));
         }
+    }
+
+    /// <summary>Total overdue tasks across active plans, counted with the same BuildPlanView
+    /// call Render() uses for its banner, so the sidebar Today dot (G6) cannot disagree with
+    /// the banner. Used when the Today page is not the one rendering (other pages' actions,
+    /// startup).</summary>
+    internal static int CountOverdue(List<Plan> plans, Database db,
+        Dictionary<(string, int, string), bool> completions)
+    {
+        var total = 0;
+        foreach (var plan in plans)
+        {
+            var tasks = PlanStore.TasksFor(plan, db, completions);
+            total += BuildPlanView(plan, tasks, plan.PlanDay).Overdue.Count;
+        }
+        return total;
     }
 
     /// <summary>Everything Render()'s per-plan loop needs to know, decided once, up

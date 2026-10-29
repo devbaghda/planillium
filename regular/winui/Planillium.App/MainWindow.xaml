@@ -29,6 +29,9 @@
                         SelectionChanged="Nav_SelectionChanged">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="Today" Tag="today">
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="TodayDot" Visibility="Collapsed"/>
+                    </NavigationViewItem.InfoBadge>
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE823;"/></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="Schedule" Tag="schedule">

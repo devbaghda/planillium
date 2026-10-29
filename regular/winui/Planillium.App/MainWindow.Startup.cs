@@ -424,6 +424,27 @@ public sealed partial class MainWindow
             ScoreValue.Text = "—";
         }
         RefreshPlanDrift();
+        RefreshTodayDot();
+    }
+
+    /// <summary>Sidebar Today dot (G6): shown only while the Today page's overdue banner
+    /// would show. Recomputed on every RefreshScore (all plan-changing actions call it) and
+    /// set directly by TodayPage.Render.</summary>
+    public void SetTodayDot(bool on) =>
+        TodayDot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+
+    private void RefreshTodayDot()
+    {
+        try
+        {
+            var plans = PlanStore.LoadActivePlans();
+            using var db = new Database();
+            SetTodayDot(TodayPage.CountOverdue(plans, db, db.LoadCompletions()) > 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("RefreshTodayDot", ex);
+        }
     }
 
     /// <summary>Posted-days-only lifetime total — see IncomeChip's XAML comment for why
