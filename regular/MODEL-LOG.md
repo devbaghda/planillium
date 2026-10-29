@@ -18,4 +18,5 @@
 2026-10-28 G3 generalist model check: opus confirmed sufficient (new data-change service with backup/undo, unknown cause of vanishing marks); outcome: ok
 - 2026-10-29 G3 round 2 regular | PM chose opus (Undo-forgets-keywords, tick-survival cause unknown, touches safe-door data service) | outcome: ok (built, precheck green; QA deferred)
 2026-10-29 G3 round 2 generalist model check: opus confirmed sufficient (tick-loss cause unknown, keyword-undo inside safe-door data service); outcome: ok (precheck green first run; QA deferred)
-- 2026-10-29 G3 round 3 regular (idle rows skipped when teaching keywords) | PM chose sonnet (small bounded change, explicit spec) | outcome: pending
+- 2026-10-29 G3 round 3 regular (idle rows skipped when teaching keywords) | PM chose sonnet (small bounded change, explicit spec) | outcome: ok (precheck green 229/229; QA deferred)
+- 2026-10-29 G10 regular | PM chose sonnet (three bounded changes, explicit spec; guard modelled on G7) | outcome: ok (built, precheck green 229/229; QA deferred)

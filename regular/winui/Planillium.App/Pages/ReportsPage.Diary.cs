@@ -249,7 +249,7 @@ public sealed partial class ReportsPage
             bool MatchesApp(ReportData.DiaryEntry e)
             {
                 if (_diaryAppFilter.Count == 0) return true;
-                var g = AppNames.Group(e.Window);
+                var g = AppNames.FilterGroup(e.Window);
                 return g == "—" ? _diaryAppFilter.Contains(DiaryNoValue) : _diaryAppFilter.Contains(g);
             }
             bool MatchesPage(ReportData.DiaryEntry e)
@@ -277,10 +277,11 @@ public sealed partial class ReportsPage
 
             syncingFilters = true;
             var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e))
-                .Select(e => AppNames.Group(e.Window))
+                .Select(e => AppNames.FilterGroup(e.Window))
                 .Where(a => a != "—")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
+                .OrderBy(a => a == AppNames.OtherGroup ? 1 : 0)   // "Other" last
+                .ThenBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
             // drops filters whose app no longer appears in view ("-" always stays offered)
             _diaryAppFilter.RemoveWhere(x => x != DiaryNoValue && !appsInView.Contains(x, StringComparer.OrdinalIgnoreCase));
             appBox.SetOptions(appsInView.Select(x => (x, x)).Prepend((DiaryNoValue, "-")));

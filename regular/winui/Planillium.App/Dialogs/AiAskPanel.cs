@@ -181,13 +181,16 @@ public sealed class AiAskPanel : StackPanel
         try
         {
             var client = AiSettings.CreateClient();
-            var reply = await client.CompleteAsync(_prompt(), _cts.Token, progress.Feed);
+            // G10: the exchange is compact (less for Claude to write); the reply is expanded back to the
+            // full plan form below, so the host dialog sees exactly what it always did.
+            var reply = await client.CompleteAsync(_prompt() + CompactReply.Instruction, _cts.Token, progress.Feed);
             // Cancel pressed just as the reply landed: the user's Cancel wins, nothing is applied.
             if (_cts.IsCancellationRequested) return;
             StopClock("Waited {0} — Claude answered.");
             // Text typed into the reply box while Claude was answering must not be overwritten.
             if (_blocker?.Invoke() is { } why) Fail(why + " Claude's answer was discarded.");
-            else await _onReply(reply);
+            else if (CompactReply.Expand(reply, out var full) is { } notCompact) Fail(notCompact);
+            else await _onReply(full);
         }
         catch (AiException ex) when (ex.Kind == AiFailure.Cancelled) { /* the user asked for it — say nothing */ }
         catch (AiException ex) { StopClock("Waited {0} — no usable answer."); Fail(ex.Message); }

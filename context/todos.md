@@ -14,6 +14,9 @@
 
 ## Done
 
+### 2026-10-29 -- G10: App filter "Other", compact Ask, start-with-Windows guard (regular side)
+(1) `AppNames.FilterGroup` (new): a window title with no dash separator that is not a known program/browser/messenger/Telegram folds into "Other"; Diary App filter uses it for options (Other last) and matching; rows, search and Page filter unchanged. (2) `CompactReply` (new, Services): AiAskPanel appends a compact-format instruction and expands the one-line minified reply (short keys, per-task arrays) back to the full plan ```json block before the host dialog sees it; not-compact/old-form/malformed reply -> message via Fail, nothing applied; `ReplyProgress` also counts compact tasks. Manual copy/paste and .json file load keep the full form. Sample 14-task plan JSON: 7 753 -> 4 584 chars (-41%) before the dropped prose briefing. (3) `StartupService` guard on `AppPaths.IsScratch` (IsEnabled false, SetEnabled no-op). Sibling check: other out-of-folder effects = Credential Manager/AI/TickTick (G7), toasts (justified, not data), everything else writes under AppPaths.Root. Strict build 0 warnings, 229 tests. QA deferred.
+
 ### 2026-10-29 -- G3 round 3: idle rows teach no keyword (regular side)
 `ReportsPage.BulkMark.cs` keyword-teach loop skips rows whose window is "idle" (case-insensitive); category mark still applies to them; nothing recorded for them in change_log_rules. Vanishing ticks closed (pre-G3 live exe). Strict build 0 warnings, 229 tests. QA deferred.
 

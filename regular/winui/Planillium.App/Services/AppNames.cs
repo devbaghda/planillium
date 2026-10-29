@@ -100,6 +100,25 @@ public static class AppNames
         return Normalise.TryGetValue(raw, out var clean) ? clean : raw;
     }
 
+    /// <summary>The "Other" entry of the Diary's App filter (G10).</summary>
+    public const string OtherGroup = "Other";
+
+    /// <summary>
+    /// App-filter key (G10): like <see cref="Group"/>, but a window title with no dash separator
+    /// (so no program name could be read from it) and not a known program name is folded into
+    /// <see cref="OtherGroup"/>. Telegram rows and known programs/browsers/messengers keep their own entry.
+    /// "—" (no window text) is unchanged.
+    /// </summary>
+    public static string FilterGroup(string window)
+    {
+        var g = Group(window);
+        if (g == "—" || IsTelegramMarked(window)) return g;
+        if (SplitParts(NormaliseTitle(window)).Length > 1) return g;
+        if (Normalise.ContainsKey(g) || Normalise.ContainsValue(g) || Browsers.Contains(g) || Messengers.Contains(g))
+            return g;
+        return OtherGroup;
+    }
+
     /// <summary>Chat / site / project / filename sub-item, or null.</summary>
     public static string? Sub(string window)
     {

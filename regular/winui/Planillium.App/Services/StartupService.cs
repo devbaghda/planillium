@@ -20,6 +20,9 @@ public static class StartupService
     {
         get
         {
+            // G10: a scratch run (test copy on a MENTOR_ROOT data folder) never reads the real machine-wide
+            // start-with-Windows entry. A normal run is unchanged (IsScratch is always false there).
+            if (AppPaths.IsScratch) return false;
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RunKey);
@@ -35,6 +38,12 @@ public static class StartupService
 
     public static void SetEnabled(bool enabled)
     {
+        // G10: a scratch run never writes or deletes the real entry (or sweeps its legacy names).
+        if (AppPaths.IsScratch)
+        {
+            Log.Info("StartupService.SetEnabled: scratch data folder - the real start-with-Windows entry was not touched");
+            return;
+        }
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);

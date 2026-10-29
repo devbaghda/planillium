@@ -15,13 +15,24 @@ public sealed class ReplyProgress
     private int _chars, _tasks;
 
     public int Chars { get { lock (_gate) return _chars; } }
-    public int Tasks { get { lock (_gate) return _tasks; } }
+    public int Tasks { get { lock (_gate) return Math.Max(_tasks, _compactTasks); } }
+
+    // G10 compact reply: a task is a tuple starting "[<day>," (see CompactReply). Counted on a short tail
+    // of the stream so a tuple start split across two pieces is still counted exactly once.
+    private static readonly System.Text.RegularExpressions.Regex TupleStart = new(@"\[\s{0,3}\d{1,4}\s{0,3},");
+    private const int TailKeep = 16;
+    private string _tail = "";
+    private int _compactTasks;
 
     public void Feed(string piece)
     {
         lock (_gate)
         {
             _chars += piece.Length;
+            var both = _tail + piece;
+            foreach (System.Text.RegularExpressions.Match m in TupleStart.Matches(both))
+                if (m.Index + m.Length > _tail.Length) _compactTasks++;
+            _tail = both.Length > TailKeep ? both[^TailKeep..] : both;
             var s = _pending + piece;
             var i = 0;
             int keepFrom;

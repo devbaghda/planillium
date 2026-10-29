@@ -17,7 +17,8 @@
    are the diary tracking window too** — one pair of hours governing both, since 2026-08-04.
    They decide when the off-plan nag may fire *and* when activity is recorded at all
    (`ActivityTracker.InWorkingHours`, the single predicate both use). Outside them nothing is
-   tracked and no gap is counted against the user.
+   tracked and no gap is counted against the user. **Amended 2026-10-28 (rule 19d): work-classified
+   activity after hours will be recorded and counted -- takes effect when G3+G9 is built.**
 2. The diary window used to be a pair of hardcoded 06:00/20:00 statics in `ActivityTracker`,
    unrelated to working hours and unreachable from the UI — so moving the working day to 08:00
    left 06:00–08:00 still tracked and back-filled as "unaccounted time" every morning (the
@@ -239,6 +240,22 @@
     the old 300-row cap on search / All-time results was dropped because it contradicted Show all.
     What counts as an "app" (odd entries like "74% complete") is NOT decided: nothing is filtered
     out, no stored data changed -- see `context/todos.md` 2026-10-27 G2.
+19. **Bulk marking + learned rules (G3+G9, user decisions 2026-10-28, walkthrough approved as drawn).**
+    (a) Bulk Mark applies to ALL matches of the current filter, behind a confirm dialog showing
+    counts filled / overwritten / unchanged; overwriting existing values is allowed. (b) Every data
+    change goes through ONE door: preview -> automatic backup -> write (old values stored) -> Undo.
+    Undo covers the last 20 changes, kept 30 days. Backup is automatic before every bulk or learned
+    change, keep the last 5. (c) Learned rules are shown with a Wilson 95% range, never a bare
+    percentage; a rule acts alone only with >=10 examples AND range lower bound >=85%, otherwise it
+    asks. (d) **After-hours work counts**: where the learned rules say an activity is work, it is
+    recorded and counts for score and income even outside the working hours. This amends rule 1
+    ("outside them nothing is tracked") -- built under G3+G9; until then rule 1 stands in code.
+    (e) AI cost cap: default EUR 5/month, configurable in Settings. (f) Telegram identifies chats by
+    chat name only. (g) Self-changing code / push rule is NOT part of G3+G9 (own walkthrough later).
+    **Added 2026-10-29 (G3 answers):** (h) Undo of a category mark also forgets the activity keywords
+    that mark newly taught (only those; never rules that existed before). (i) A mark with nothing
+    ticked teaches no keywords. (j) Idle rows are skipped when teaching keywords ("idle" is never
+    learned). (k) Clear actions in Settings also delete all backups; backups hold full window titles.
 
 ---
 
@@ -317,7 +334,7 @@ compaction. General versions of several now also live in the global `windows-app
   MENTOR_ROOT as the data root; always false in Release) routes `CredentialStore` to an in-memory store, makes
   `AiClient` call only the `PLANILLIUM_AI_BASE_URL` stub (no stub = clear refusal, nothing sent) and refuses
   every TickTick connect, token and API call. Any new secret or external call must key on `IsScratch` too.
-  Not covered (not a secret or service): Windows toasts and the "start with Windows" registry entry.
+  G10 (2026-10-29, regular side): the "start with Windows" registry entry is covered too: under `IsScratch` `StartupService.IsEnabled` is false without reading the registry and `SetEnabled` returns without writing/deleting. Not covered (not a secret or service): Windows toasts. Every other write goes under `AppPaths.Root` (the scratch folder): database, log, exports, plan files, change backups.
 - **Copying a SQLite database is not copying one file.** `progress.db-wal` and `-shm` hold recent
   writes; copying only the `.db` into a root that already has an older instance's sidecars makes
   SQLite replay *those* over your copy, and the app opens what looks like an empty database with
