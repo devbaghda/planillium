@@ -246,7 +246,7 @@ public sealed partial class SettingsPage : Page
         };
         AutomationProperties.SetAutomationId(button, $"settings-change-undo-{id}");
         AutomationProperties.SetName(button, undone ? "Undone" : $"Undo: {title.Text}");
-        button.Click += async (_, _) => await UndoFromHistoryAsync(entry.Id, button, status, secondary, tertiary);
+        button.Click += async (_, _) => await UndoFromHistoryAsync(entry, title.Text, button, status, secondary, tertiary);
 
         var grid = new Grid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -266,10 +266,21 @@ public sealed partial class SettingsPage : Page
         return card;
     }
 
-    /// <summary>Undo one change from the list, through the same door as the Diary bar. No confirm
-    /// dialog (SPEC §4): rows edited or removed since are skipped, and the result is shown.</summary>
-    private async Task UndoFromHistoryAsync(long changeId, Button button, TextBlock status, Brush secondary, Brush tertiary)
+    /// <summary>Undo one change from the list, through the same door as the Diary bar. Asks first
+    /// (G3 round 2, user answer 2: a confirm dialog in the existing style, Cancel is the default);
+    /// rows edited or removed since are skipped, and the result is shown.</summary>
+    private async Task UndoFromHistoryAsync(ChangeEntry entry, string titleText, Button button, TextBlock status, Brush secondary, Brush tertiary)
     {
+        if (_changeUndoBusy) return;
+        var changeId = entry.Id;
+        var body = $"{titleText}. The rows go back to their old values; rows you edited or removed since are " +
+                   "left as they are. Your diary is backed up first.";
+        if (entry.Column == ChangeColumn.Category)
+            body += " Activity keywords that this mark taught (if any) are forgotten.";
+        var confirm = Dialogs.DialogControls.Build(XamlRoot, "Undo this change?", body,
+            primaryButtonText: "Undo", closeButtonText: "Cancel",
+            defaultButton: ContentDialogButton.Close);
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
         if (_changeUndoBusy) return;
         _changeUndoBusy = true;
         SetHistoryUndoButtonsEnabled(false);

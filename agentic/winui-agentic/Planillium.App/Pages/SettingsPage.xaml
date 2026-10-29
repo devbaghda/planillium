@@ -328,6 +328,10 @@
                     <TextBlock x:Name="ChangeHistoryIntro" TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Text="The last 20 bulk changes to your diary, kept for 30 days. Undo puts back the old values of one change; rows you edited since are left as they are."/>
+                    <TextBlock x:Name="ChangeHistoryBackupNote" TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               AutomationProperties.AutomationId="settings-change-backup-note"
+                               Text="Before each bulk change and each Undo, Planillium saves a backup copy of your diary database. The last 5 backups are kept (a new one replaces the oldest); they do not expire. Backups hold full window titles."/>
                     <TextBlock x:Name="ChangeHistoryLoading" Text="Loading..." Visibility="Collapsed"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                AutomationProperties.AutomationId="settings-change-loading"/>

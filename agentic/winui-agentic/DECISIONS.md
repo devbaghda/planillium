@@ -222,9 +222,19 @@
     row gone), counted as "edited or removed since"; (e) history keeps the newest 20 changes, none
     older than 30 days; keywords taught by a mark are recorded and Undo puts each back in the list it
     was in before (only if still where the mark put it). Mark reaches every filter match, not just the
-    300 shown; tag buttons act on ticked rows only. Clear activity history / Clear all my data also
-    delete the backups and the history. Lead rulings 1-10 of 2026-10-29; SPEC section 8 questions
-    still open with the user.
+    300 shown. Clear activity history / Clear all my data also delete the backups and the history.
+    Lead rulings 1-10 of 2026-10-29. **User answers, round 2 (2026-10-29):** (1) the tag buttons (each
+    tag, Clear tag) act on ALL filter matches when nothing is ticked, ticked rows otherwise, through the
+    same door and dialog, with the same count text as the category buttons; (2) Undo from Settings >
+    Change history asks "Undo this change?" first (Cancel is the default; the Diary result bar's Undo
+    stays one click); (3) "Show all" lifts the 300-row display cap and lists every match (the cap holds
+    until then; Select all ticks the rows the list can show, so after Show all it covers every match);
+    (4) a mark with nothing ticked does NOT teach activity keywords (`TeachKeywords` is set only for a
+    category mark of ticked rows; no keyword rows are logged, so Undo has nothing to forget; a ticked
+    category mark still teaches and Undo forgets only what it added); (5) backups never expire: each new
+    backup replaces the oldest, last 5 kept (unchanged), and Settings > Change history says backups hold
+    full window titles. The remaining defaults of SPEC section 8 (Q3, Q4, Q6, Q7, Q9, Q10) were accepted
+    by the user.
 
 ### Standing lessons
 _The durable ones. Every entry here cost a real bug to learn; none may be dropped in a

@@ -308,10 +308,36 @@ public sealed partial class ReportsPage
                 btn.IsEnabled = m > 0 && !_diaryDoorBusy;
                 ToolTipService.SetToolTip(btn, _diaryDoorBusy ? "Working..." : tip);
             }
-            foreach (var (_, btn) in tagMarkButtons)
+            // G3 round 2 (user answer 1): the tag buttons count and act exactly like the category
+            // buttons - ticked rows if any, else every match.
+            foreach (var (tagValue, btn) in tagMarkButtons)
             {
-                btn.IsEnabled = t > 0 && !_diaryDoorBusy;
-                ToolTipService.SetToolTip(btn, _diaryDoorBusy ? "Working..." : null);
+                var label = tagValue is null ? null : DiaryTag.LabelOf(tagValue) ?? tagValue;
+                string text, tip;
+                if (m == 0)
+                {
+                    text = label is null ? "Clear tag" : $"Mark {label}";
+                    tip = "No entries to mark.";
+                }
+                else if (t > 0)
+                {
+                    text = label is null ? $"Clear tag of {N0(t)} ticked" : $"Mark {N0(t)} ticked {label}";
+                    tip = label is null ? $"Clears the tag of only the {N0(t)} ticked rows." : $"Tags only the {N0(t)} ticked rows.";
+                }
+                else if (m == 1)
+                {
+                    text = label is null ? "Clear tag of 1" : $"Mark 1 {label}";
+                    tip = "Acts on the 1 entry matching the current view.";
+                }
+                else
+                {
+                    text = label is null ? $"Clear tag of all {N0(m)}" : $"Mark all {N0(m)} {label}";
+                    tip = $"Acts on all {N0(m)} entries matching the current filters and search, not only the rows shown.";
+                }
+                btn.Content = text;
+                AutomationProperties.SetName(btn, text);
+                btn.IsEnabled = m > 0 && !_diaryDoorBusy;
+                ToolTipService.SetToolTip(btn, _diaryDoorBusy ? "Working..." : tip);
             }
 
             syncingSelectAll = true;
@@ -632,18 +658,10 @@ public sealed partial class ReportsPage
             allFiltered = filteredList;
             var matchIds = filteredList.Select(e => e.Id).ToHashSet();
             selectedIds.RemoveWhere(id => !matchIds.Contains(id));
-            if (wideRange && filteredList.Count > maxSearchResults)
-            {
-                diaryResults.Children.Add(Dim(
-                    $"{filteredList.Count} matches — showing the {maxSearchResults} most recent " +
-                    "(subtotal above still covers all of them)."));
-                filteredList = filteredList.Take(maxSearchResults).ToList();
-            }
-            lastRows = filteredList;
-            UpdateMarkToolbar();
             // A genuine scope change (different day/search/filters/all-time) starts the reveal
             // count fresh; the periodic live-refresh timer re-running this same method with an
             // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
+            // (G3 round 2: this runs BEFORE the cap below, because the sticky Show all decides it.)
             var catStr = string.Join(",", _diaryCategoryFilter.OrderBy(x => x, StringComparer.Ordinal));
             var appStr = string.Join(",", _diaryAppFilter.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
             var pageStr = string.Join(",", _diaryPageFilter.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
@@ -655,6 +673,21 @@ public sealed partial class ReportsPage
                 _diaryShowAll = false;
                 _diaryRowsShownScopeKey = scopeKey;
             }
+            // G3 round 2 (user answer 3): the 300-row display cap holds until "Show all", which lifts
+            // it for every match. lastRows = the rows the list can show now, which is what Select
+            // all ticks; the full list goes to DiaryList, whose own paging row is virtualized
+            // (G5 ItemsRepeater), so 9,000 rows cost references only.
+            var capped = wideRange && !_diaryShowAll && filteredList.Count > maxSearchResults;
+            TextBlock? capNotice = null;
+            if (capped)
+            {
+                capNotice = Dim(
+                    $"{N0(filteredList.Count)} matches — showing the {maxSearchResults} most recent; " +
+                    "Show all lists every match (subtotal above covers all of them).");
+                diaryResults.Children.Add(capNotice);
+            }
+            lastRows = capped ? filteredList.Take(maxSearchResults).ToList() : filteredList;
+            UpdateMarkToolbar();
             // Card()'s Border has a non-zero CornerRadius (ReportsPage.Styling.cs), which makes
             // WinUI corner-clip its content to the Border's OWN arranged bounds — MinWidth on
             // diaryResults/the DiaryList StackPanel further down (see their own comments) only
@@ -665,7 +698,16 @@ public sealed partial class ReportsPage
             // MinWidth here has to cover the diary list's own MinWidth (DiaryListWidth) *plus*
             // this Border's horizontal Padding (18+18), or the clip region is still too narrow
             // for what's arranged inside it — that sum is DiaryCardWidth (ReportsPage.xaml.cs).
-            var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange));
+            var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange,
+                cap: wideRange ? maxSearchResults : int.MaxValue,
+                onShowAll: () =>
+                {
+                    // Show all was clicked: every match is listed now, so Select all covers them
+                    // all and the cap notice is stale.
+                    lastRows = allFiltered;
+                    if (capNotice is not null) capNotice.Visibility = Visibility.Collapsed;
+                    UpdateMarkToolbar();
+                }));
             diaryCard.MinWidth = DiaryCardWidth;
             diaryResults.Children.Add(diaryCard);
         }
@@ -734,10 +776,10 @@ public sealed partial class ReportsPage
         // G3: every Mark goes through the safe door (preview → confirm → backup → logged write →
         // Undo). Category: the ticks if any, else every match (M, uncapped). Tag: ticks only
         // (lead ruling 1).
-        void StartMark(Button btn, ChangeColumn column, string? value, bool ticksOnly)
+        // Round 2 (user answer 1): tag marks act like category marks - ticks if any, else all M.
+        void StartMark(Button btn, ChangeColumn column, string? value)
         {
             var t = selectedIds.Count;
-            if (ticksOnly && t == 0) return;
             var ticked = t > 0;
             var targets = ticked ? selectedIds.ToList() : allFiltered.Select(e => e.Id).ToList();
             if (targets.Count == 0) return;
@@ -748,15 +790,18 @@ public sealed partial class ReportsPage
             var scopeText = ticked
                 ? $"{N0(t)} ticked {(t == 1 ? "entry" : "entries")} - {scope}"
                 : scope;
-            _ = RunDiaryDoorAsync(btn, column, value, targets, scopeLine, scopeText);
+            // Round 2 (user answer 4): a mark with nothing ticked (all M matches) does NOT teach
+            // activity keywords; a category mark of ticked rows still does.
+            _ = RunDiaryDoorAsync(btn, column, value, targets, scopeLine, scopeText,
+                teachKeywords: column == ChangeColumn.Category && ticked);
         }
-        markOnBtn.Click += (_, _) => StartMark(markOnBtn, ChangeColumn.Category, DiaryCategory.OnPlan, ticksOnly: false);
-        markOffBtn.Click += (_, _) => StartMark(markOffBtn, ChangeColumn.Category, DiaryCategory.OffPlan, ticksOnly: false);
-        markNeutralBtn.Click += (_, _) => StartMark(markNeutralBtn, ChangeColumn.Category, DiaryCategory.Neutral, ticksOnly: false);
+        markOnBtn.Click += (_, _) => StartMark(markOnBtn, ChangeColumn.Category, DiaryCategory.OnPlan);
+        markOffBtn.Click += (_, _) => StartMark(markOffBtn, ChangeColumn.Category, DiaryCategory.OffPlan);
+        markNeutralBtn.Click += (_, _) => StartMark(markNeutralBtn, ChangeColumn.Category, DiaryCategory.Neutral);
         foreach (var (tagValue, btn) in tagMarkButtons)
         {
             var b = btn;
-            b.Click += (_, _) => StartMark(b, ChangeColumn.Tag, tagValue, ticksOnly: true);
+            b.Click += (_, _) => StartMark(b, ChangeColumn.Tag, tagValue);
         }
         _diaryRenderResultsAction = RenderDiaryResults;
         _diaryUpdateToolbarAction = UpdateMarkToolbar;
@@ -1027,7 +1072,16 @@ public sealed partial class ReportsPage
         var clearTagBtn = new Button { Content = "Clear tag", IsEnabled = false };
         tagToolbar.Children.Add(clearTagBtn);
         tagMarkButtons.Add((null, clearTagBtn));
-        DiaryBody.Children.Add(tagToolbar);
+        // Round 2: the tag buttons now carry count text ("Mark all 8,921 Procrastination"), which can
+        // outgrow the page width, so the row scrolls sideways instead of being clipped.
+        DiaryBody.Children.Add(new ScrollViewer
+        {
+            Content = tagToolbar,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Disabled,
+        });
 
         // G3: the result bar (running / success + Undo / undo result / errors), directly below
         // the tag row so the Mark buttons never move when it opens or closes. Its content is the
@@ -1190,12 +1244,11 @@ public sealed partial class ReportsPage
     /// after ~300 ms) → confirm dialog → backup + write (off the UI thread) → result bar.
     /// Cancel writes nothing. The ticks are never touched here (addendum 3).</summary>
     private async Task RunDiaryDoorAsync(Button clicked, ChangeColumn column, string? newValue,
-        IReadOnlyCollection<long> targets, string scopeLine, string scopeText)
+        IReadOnlyCollection<long> targets, string scopeLine, string scopeText, bool teachKeywords)
     {
         if (_diaryDoorBusy || targets.Count == 0) return;
         var word = DiaryChangeText.ValueWord(column, newValue);
-        var req = new ChangeRequest(column, newValue, targets, scopeText,
-            TeachKeywords: column == ChangeColumn.Category);
+        var req = new ChangeRequest(column, newValue, targets, scopeText, TeachKeywords: teachKeywords);
         var before = _diaryResult;
         SetDiaryDoorBusy(true);
         try
@@ -1218,7 +1271,7 @@ public sealed partial class ReportsPage
             }
             ShowDiaryResult(before);
 
-            var dialog = BuildDiaryDoorDialog(column, newValue, word, preview, scopeLine);
+            var dialog = BuildDiaryDoorDialog(column, newValue, word, preview, scopeLine, teachKeywords);
             var answer = await DialogGate.ShowAsync(dialog);
             if (answer != ContentDialogResult.Primary || preview.Total == 0) return;
 
@@ -1230,9 +1283,10 @@ public sealed partial class ReportsPage
                 var result = await Task.Run(() => { using var db = new Database(); return DiaryChangeService.Apply(db, req); });
                 ShowDiaryResult(new DiaryResultState(InfoBarSeverity.Success,
                     DiaryChangeText.DoneTitle(column, newValue, result.Changed),
-                    column == ChangeColumn.Category
-                        ? "A backup was made. Undo puts the old categories back and forgets the keywords this mark added."
-                        : "A backup was made. Undo puts the old tags back.",
+                    column == ChangeColumn.Tag ? "A backup was made. Undo puts the old tags back."
+                        : teachKeywords
+                            ? "A backup was made. Undo puts the old categories back and forgets the keywords this mark added."
+                            : "A backup was made. Undo puts the old categories back.",
                     Closable: true,
                     UndoChangeId: result.Changed > 0 ? result.ChangeId : null));
                 if (result.KeywordsChanged) (App.MainWindow as MainWindow)?.RestartTracker();
@@ -1296,7 +1350,7 @@ public sealed partial class ReportsPage
     /// always adds up (filled + overwritten = total; unchanged excluded), the safety note.
     /// Default button is Cancel, so Enter/Esc never writes.</summary>
     private ContentDialog BuildDiaryDoorDialog(ChangeColumn column, string? newValue, string word,
-        ChangePreview p, string scopeLine)
+        ChangePreview p, string scopeLine, bool teachKeywords)
     {
         var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
         var content = new StackPanel { Spacing = 10, MinWidth = 420 };
@@ -1362,10 +1416,11 @@ public sealed partial class ReportsPage
 
         var note = new TextBlock
         {
-            Text = column == ChangeColumn.Category
+            Text = teachKeywords
                 ? "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history. " +
                   "Marking also teaches Planillium the activity keywords of these rows; Undo forgets the ones this mark added."
-                : "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history.",
+                : "Your diary is backed up first. You can Undo this right after, or later in Settings > Change history." +
+                  (column == ChangeColumn.Category ? " Marking all matches does not teach activity keywords." : ""),
             FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap,
         };
         AutomationProperties.SetAutomationId(note, "g3-confirm-note");
@@ -1512,7 +1567,8 @@ public sealed partial class ReportsPage
 
     private StackPanel DiaryList(
         List<ReportData.DiaryEntry> diary,
-        HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
+        HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false,
+        int cap = int.MaxValue, Action? onShowAll = null)
     {
         // MinWidth must be repeated here, not just on diaryResults two levels up (2026-07-28
         // user report: "can't split the unaccounted time" — Edit/Split were being silently
@@ -1715,7 +1771,10 @@ public sealed partial class ReportsPage
         // silently collapsing back to the default every time it fires (see that field's own
         // comment). RenderDiaryResults already resets it to the default on an actual scope
         // change before this method is ever called.
-        var shown = _diaryShowAll ? diary.Count : Math.Min(_diaryRowsShown, diary.Count);
+        // G3 round 2: `reachable` is how far "Show N more" can go (the 300 cap of a wide search);
+        // only "Show all" (sticky) goes past it, to every match.
+        var reachable = _diaryShowAll ? diary.Count : Math.Min(diary.Count, cap);
+        var shown = _diaryShowAll ? diary.Count : Math.Min(_diaryRowsShown, reachable);
 
         // G5 (2026-10-28): the revealed rows go through an ItemsRepeater, which creates a row
         // only when it comes into the diary scroller's viewport (plus a small cache) and drops it
@@ -1746,7 +1805,7 @@ public sealed partial class ReportsPage
         void ShowNext(int count)
         {
             if (pagingRow != null) list.Children.Remove(pagingRow);
-            var next = Math.Min(shown + count, diary.Count);
+            var next = Math.Min(shown + count, reachable);
             for (var i = shown; i < next; i++)
                 revealed.Add(diary[i]);
             shown = next;
@@ -1766,7 +1825,7 @@ public sealed partial class ReportsPage
             status.VerticalAlignment = VerticalAlignment.Center;
             status.Margin = new Thickness(0, 0, 8, 0);
             pagingRow.Children.Add(status);
-            foreach (var k in DiaryFilter.IncrementsOffered(hidden))
+            foreach (var k in DiaryFilter.IncrementsOffered(reachable - shown))
             {
                 var inc = k;
                 var btn = new HyperlinkButton { Content = $"Show {inc} more" };
@@ -1774,7 +1833,13 @@ public sealed partial class ReportsPage
                 pagingRow.Children.Add(btn);
             }
             var allBtn = new HyperlinkButton { Content = $"Show all ({hidden})" };
-            allBtn.Click += (_, _) => { _diaryShowAll = true; ShowNext(hidden); };
+            allBtn.Click += (_, _) =>
+            {
+                _diaryShowAll = true;
+                reachable = diary.Count;
+                ShowNext(hidden);
+                onShowAll?.Invoke();
+            };
             pagingRow.Children.Add(allBtn);
             list.Children.Add(pagingRow);
         }
