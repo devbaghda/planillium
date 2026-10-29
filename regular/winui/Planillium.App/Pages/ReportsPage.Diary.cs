@@ -397,19 +397,20 @@ public sealed partial class ReportsPage
 
         // G3: every bulk mark goes through DataChangeDoor (confirm → backup → write with old
         // values → Undo). The row list is read at click time: ticked rows if any, else all matches.
+        // Only a mark of ticked rows teaches activity keywords (G3 round 2; tags never do).
         List<ReportData.DiaryEntry> MarkTargets() =>
             selectedIds.Count > 0 ? lastRows.Where(r => selectedIds.Contains(r.Id)).ToList() : lastRows.ToList();
         void Refresh() { RenderDiaryResults(); }
         HashSet<long> ShownIds() => lastRows.Select(r => r.Id).ToHashSet();
         markOnBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.OnPlan,
-            MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+            MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
         markOffBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.OffPlan,
-            MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+            MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
         markNeutralBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.Neutral,
-            MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+            MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
         foreach (var (tagValue, btn) in tagMarkButtons)
             btn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryTag, tagValue,
-                MarkTargets(), UpdateMarkToolbar, Refresh, ShownIds);
+                MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
         _diaryRerenderAction = RenderDiaryResults;
 
         selectAllBox.Checked += (_, _) =>

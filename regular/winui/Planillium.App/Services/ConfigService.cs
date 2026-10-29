@@ -252,4 +252,54 @@ public static class ConfigService
         });
         return true;
     }
+
+    /// <summary>Which activity_rules list holds this keyword right now (case-insensitive), or
+    /// null when none does. G3 round 2: the Diary's bulk Mark reads this before teaching, so the
+    /// change log can tell a keyword the mark newly taught (or moved from another category) from
+    /// one that was already there.</summary>
+    public static string? ActivityRuleCategoryOf(string keyword)
+    {
+        if (!Root.TryGetProperty("activity_rules", out var rules) || rules.ValueKind != JsonValueKind.Object)
+            return null;
+        foreach (var cat in new[] { DiaryCategory.OnPlan, DiaryCategory.OffPlan, DiaryCategory.Neutral })
+        {
+            if (!rules.TryGetProperty(cat, out var arr) || arr.ValueKind != JsonValueKind.Array) continue;
+            foreach (var v in arr.EnumerateArray())
+                if (v.ValueKind == JsonValueKind.String &&
+                    string.Equals(v.GetString(), keyword, StringComparison.OrdinalIgnoreCase))
+                    return cat;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The undo of one <see cref="LearnActivityRule"/> (G3 round 2): removes the keyword from
+    /// <paramref name="category"/> and, if it lived in another category before it was taught
+    /// (<paramref name="restoreTo"/>), puts it back there. Only when the keyword is still in
+    /// <paramref name="category"/> — if the user has moved or removed it since, that later
+    /// choice wins and nothing is touched (returns false), the same "never clobber a later
+    /// change" rule Undo applies to diary rows.
+    /// </summary>
+    public static bool ForgetActivityRule(string keyword, string category, string? restoreTo)
+    {
+        if (!string.Equals(ActivityRuleCategoryOf(keyword), category, StringComparison.Ordinal)) return false;
+        Mutate(node =>
+        {
+            if (node["activity_rules"] is not JsonObject rules) return;
+            if (rules[category] is JsonArray arr)
+                for (var i = arr.Count - 1; i >= 0; i--)
+                    if (arr[i] is JsonValue v && v.TryGetValue<string>(out var s) &&
+                        string.Equals(s, keyword, StringComparison.OrdinalIgnoreCase))
+                        arr.RemoveAt(i);
+            if (restoreTo is DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral &&
+                restoreTo != category)
+            {
+                if (rules[restoreTo] is not JsonArray back) rules[restoreTo] = back = new JsonArray();
+                if (!back.Any(n => n is JsonValue bv && bv.TryGetValue<string>(out var bs) &&
+                                   string.Equals(bs, keyword, StringComparison.OrdinalIgnoreCase)))
+                    back.Add(keyword);
+            }
+        });
+        return true;
+    }
 }

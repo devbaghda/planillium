@@ -14,6 +14,10 @@ namespace Planillium.App.Services;
 /// the snapshot taken right after the write). A row edited, split, re-marked or deleted since is
 /// skipped and counted, never overwritten — Undo must not clobber a later change.
 ///
+/// A category mark may also teach activity keywords (<see cref="TeachKeywords"/>); the door
+/// records each one it newly taught with the change, and Undo forgets exactly those (G3 round 2,
+/// 2026-10-29) — never a keyword that was already in that list before the mark.
+///
 /// Writes nothing on the UI thread by design: the callers run Apply/Undo via Task.Run (a backup
 /// of a large file takes a moment).
 /// </summary>
@@ -34,10 +38,14 @@ public static class DataChangeDoor
 
     public sealed record ApplyResult(long ChangeId, int Changed, string BackupFile, IReadOnlyCollection<DateOnly> Dates);
 
-    public sealed record UndoResult(int Restored, int Skipped, IReadOnlyCollection<DateOnly> Dates);
+    /// <summary><c>KeywordsForgotten</c>: keywords this change taught that Undo removed again.
+    /// <c>KeywordsKept</c>: ones left alone because the user moved or removed them since.
+    /// <c>KeywordsFailed</c>: ones that could not be removed (config.json not writable; logged).</summary>
+    public sealed record UndoResult(int Restored, int Skipped, IReadOnlyCollection<DateOnly> Dates,
+        IReadOnlyList<string> KeywordsForgotten, int KeywordsKept, int KeywordsFailed);
 
     public sealed record Change(long Id, DateTime At, string Label, Field Field, int RowCount,
-        DateTime? UndoneAt, int Restored, int Skipped);
+        DateTime? UndoneAt, int Restored, int Skipped, int KeywordsTaught);
 
     public static string BackupDir => Path.Combine(AppPaths.Root, "data", "backups");
 
@@ -154,12 +162,70 @@ public static class DataChangeDoor
         return new ApplyResult(changeId, changed, backup, dates);
     }
 
+    // ── keywords taught by a change ──────────────────────────────────────────
+
+    /// <summary>
+    /// Teaches each keyword to activity_rules under <paramref name="category"/> (as
+    /// <see cref="ConfigService.LearnActivityRule"/> does) on behalf of change
+    /// <paramref name="changeId"/>, and records the ones it newly taught — with the category each
+    /// one lived in before, if the mark moved it — so <see cref="Undo"/> can forget exactly those.
+    /// A keyword already in that category's list is neither re-taught nor recorded: it existed
+    /// before the mark, and Undo must leave it. Returns the newly taught keywords.
+    /// </summary>
+    public static List<string> TeachKeywords(long changeId, string category, IEnumerable<string> keywords)
+    {
+        var taught = new List<(string Keyword, string? Previous)>();
+        foreach (var keyword in keywords.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var previous = ConfigService.ActivityRuleCategoryOf(keyword);
+                if (previous == category) continue;
+                if (ConfigService.LearnActivityRule(keyword, category)) taught.Add((keyword, previous));
+            }
+            catch (Exception ex) { Log.Error("DataChangeDoor.TeachKeywords", ex); }
+        }
+        if (taught.Count == 0) return new List<string>();
+
+        try
+        {
+            using var db = new Database();
+            db.RunInTransaction(() =>
+            {
+                using var cmd = db.CreateCommand();
+                cmd.CommandText =
+                    "INSERT OR REPLACE INTO change_log_rules (change_id, keyword, category, previous_category) " +
+                    "VALUES ($c, $k, $cat, $prev)";
+                cmd.Parameters.AddWithValue("$c", changeId);
+                cmd.Parameters.AddWithValue("$cat", category);
+                var pk = cmd.Parameters.Add("$k", SqliteType.Text);
+                var pprev = cmd.Parameters.Add("$prev", SqliteType.Text);
+                foreach (var (keyword, previous) in taught)
+                {
+                    pk.Value = keyword;
+                    pprev.Value = (object?)previous ?? DBNull.Value;
+                    cmd.ExecuteNonQuery();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Taught, but Undo won't know about them — logged; the message still lists them and
+            // Settings ▸ Activity keywords can remove them by hand.
+            Log.Error("DataChangeDoor.TeachKeywords.Record", ex);
+        }
+        return taught.Select(t => t.Keyword).ToList();
+    }
+
     // ── undo ─────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Restores the old value of every row this change touched that is still exactly as the
     /// change left it; rows edited, split, re-marked or deleted since are skipped and counted.
     /// Backs up first (an Undo is itself a bulk change). A change can be undone once.
+    /// Also forgets the activity keywords this change taught (<see cref="TeachKeywords"/>): each
+    /// leaves the category it was taught to — and goes back to the one it had before, if the mark
+    /// moved it — unless the user has changed that keyword since.
     /// </summary>
     public static UndoResult Undo(long changeId)
     {
@@ -176,6 +242,7 @@ public static class DataChangeDoor
         var dates = new HashSet<DateOnly>();
         int restored = 0, skipped = 0;
         Field field = Field.DiaryCategory;
+        var rules = new List<(string Keyword, string Category, string? Previous)>();
         db.RunInTransaction(() =>
         {
             var change = LoadChange(db, changeId)
@@ -215,6 +282,16 @@ public static class DataChangeDoor
                 dates.Add(row.Date);
             }
 
+            using (var readRules = db.CreateCommand())
+            {
+                readRules.CommandText =
+                    "SELECT keyword, category, previous_category FROM change_log_rules WHERE change_id=$c";
+                readRules.Parameters.AddWithValue("$c", changeId);
+                using var rr = readRules.ExecuteReader();
+                while (rr.Read())
+                    rules.Add((rr.GetString(0), rr.GetString(1), rr.IsDBNull(2) ? null : rr.GetString(2)));
+            }
+
             using var mark = db.CreateCommand();
             mark.CommandText = "UPDATE change_log SET undone_at=$ts, restored=$r, skipped=$s WHERE id=$c";
             mark.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
@@ -226,7 +303,25 @@ public static class DataChangeDoor
 
         if (field == Field.DiaryCategory && dates.Count > 0)
             ScoreService.TryRecalculateDayScores(db, dates, "DataChangeDoor.Undo.RecalculateScore");
-        return new UndoResult(restored, skipped, dates);
+
+        // After the rows commit: config.json is a separate file, outside the transaction. The
+        // keywords belong to the change, so they go even if some rows were skipped.
+        var forgotten = new List<string>();
+        int kept = 0, failed = 0;
+        foreach (var (keyword, category, previous) in rules)
+        {
+            try
+            {
+                if (ConfigService.ForgetActivityRule(keyword, category, previous)) forgotten.Add(keyword);
+                else kept++;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("DataChangeDoor.Undo.ForgetKeyword", ex);
+                failed++;
+            }
+        }
+        return new UndoResult(restored, skipped, dates, forgotten, kept, failed);
     }
 
     /// <summary>The one wording for an Undo's outcome — the Diary message and the Settings
@@ -234,10 +329,20 @@ public static class DataChangeDoor
     public static string DescribeUndo(UndoResult r)
     {
         string Rows(int n) => $"{n.ToString("N0", CultureInfo.CurrentCulture)} {(n == 1 ? "row" : "rows")}";
-        return r.Skipped == 0
+        string Keywords(int n) => $"{n.ToString("N0", CultureInfo.CurrentCulture)} {(n == 1 ? "keyword" : "keywords")}";
+        var text = r.Skipped == 0
             ? $"Restored {Rows(r.Restored)} to their old values."
             : $"Restored {Rows(r.Restored)} to their old values. Skipped {Rows(r.Skipped)} changed since " +
               "(edited, split, re-marked or deleted) — they keep their newer values.";
+        if (r.KeywordsForgotten.Count > 0)
+            text += $" Forgot the {Keywords(r.KeywordsForgotten.Count)} this change taught: " +
+                    string.Join(", ", r.KeywordsForgotten.Take(8)) +
+                    (r.KeywordsForgotten.Count > 8 ? $" and {r.KeywordsForgotten.Count - 8} more" : "") + ".";
+        if (r.KeywordsKept > 0)
+            text += $" Kept {Keywords(r.KeywordsKept)} you changed since in Settings ▸ Activity keywords.";
+        if (r.KeywordsFailed > 0)
+            text += $" Couldn't remove {Keywords(r.KeywordsFailed)} — check Settings ▸ Activity keywords.";
+        return text;
     }
 
     // ── history ──────────────────────────────────────────────────────────────
@@ -252,7 +357,7 @@ public static class DataChangeDoor
         var result = new List<Change>();
         using var cmd = db.CreateCommand();
         cmd.CommandText =
-            "SELECT id, ts, label, field, row_count, undone_at, restored, skipped FROM change_log ORDER BY id DESC";
+            $"SELECT {ChangeColumns} FROM change_log ORDER BY id DESC";
         using var r = cmd.ExecuteReader();
         while (r.Read()) result.Add(ReadChange(r));
         return result;
@@ -262,29 +367,35 @@ public static class DataChangeDoor
     {
         using var cmd = db.CreateCommand();
         cmd.CommandText =
-            "SELECT id, ts, label, field, row_count, undone_at, restored, skipped FROM change_log WHERE id=$id";
+            $"SELECT {ChangeColumns} FROM change_log WHERE id=$id";
         cmd.Parameters.AddWithValue("$id", id);
         using var r = cmd.ExecuteReader();
         return r.Read() ? ReadChange(r) : null;
     }
 
+    private const string ChangeColumns =
+        "id, ts, label, field, row_count, undone_at, restored, skipped, " +
+        "(SELECT COUNT(*) FROM change_log_rules k WHERE k.change_id = change_log.id)";
+
     private static Change ReadChange(SqliteDataReader r) => new(
         r.GetInt64(0), ParseTs(r.GetString(1)), r.GetString(2), FieldOf(r.GetString(3)), r.GetInt32(4),
         r.IsDBNull(5) ? null : ParseTs(r.GetString(5)),
-        r.IsDBNull(6) ? 0 : r.GetInt32(6), r.IsDBNull(7) ? 0 : r.GetInt32(7));
+        r.IsDBNull(6) ? 0 : r.GetInt32(6), r.IsDBNull(7) ? 0 : r.GetInt32(7), r.GetInt32(8));
 
     private static DateTime ParseTs(string s) =>
         DateTime.TryParseExact(s, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
             ? d : DateTime.MinValue;
 
-    /// <summary>Keeps the newest 20 changes and drops any older than 30 days, with their rows.</summary>
+    /// <summary>Keeps the newest 20 changes and drops any older than 30 days, with their rows and
+    /// taught-keyword records (the keywords themselves stay taught — no longer undoable).</summary>
     private static void Prune(Database db)
     {
         using var cmd = db.CreateCommand();
         cmd.CommandText =
             "DELETE FROM change_log WHERE ts < $cutoff " +
             "  OR id NOT IN (SELECT id FROM change_log ORDER BY id DESC LIMIT $keep);" +
-            "DELETE FROM change_log_rows WHERE change_id NOT IN (SELECT id FROM change_log);";
+            "DELETE FROM change_log_rows WHERE change_id NOT IN (SELECT id FROM change_log);" +
+            "DELETE FROM change_log_rules WHERE change_id NOT IN (SELECT id FROM change_log);";
         cmd.Parameters.AddWithValue("$cutoff", DateTime.Now.AddDays(-ChangeDaysKept).ToIsoTimestamp());
         cmd.Parameters.AddWithValue("$keep", ChangesKept);
         cmd.ExecuteNonQuery();

@@ -296,7 +296,7 @@
                     <TextBlock Text="Change history" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="Bulk changes to past data, newest first — the last 20, each kept for 30 days. Undo puts back the old values of that one change. Rows changed since (edited, split, re-marked or deleted) are skipped and keep their newer values. A backup of your data is saved before every bulk change and every undo; the last 5 are kept in the data folder's backups subfolder."/>
+                               Text="Bulk changes to past data, newest first — the last 20, each kept for 30 days. Undo puts back the old values of that one change, and forgets the activity keywords it taught. Rows changed since (edited, split, re-marked or deleted) are skipped and keep their newer values. A backup of your data is saved before every bulk change and every undo; the last 5 are kept in the data folder's backups subfolder. Each backup is a full copy of your data, including the full window titles of your diary — keep that folder private."/>
                     <StackPanel x:Name="HistoryList" Spacing="8"/>
                 </StackPanel>
             </Grid>

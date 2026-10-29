@@ -27,6 +27,14 @@
 - Seed scratch data in two steps: first launch creates the schema, kill the app, seed `time_diary` with sqlite3, relaunch; a seeded diary gap triggers a "Welcome back" dialog to skip before driving the UI.
 - A QA worktree may start on another branch's commit: `git checkout --detach winui-rebuild` before building, or old code runs.
 - The shell wrapper refuses compound commands containing git inside a worktree; run git commands on their own.
+- The Diary list is virtualized: maximize, ScrollIntoView on "Select all", then mouse-wheel before counting row checkboxes (only on-screen rows exist in UIA).
+- A scratch driver script must kill the app it started in a `finally`; an exception otherwise leaves it running.
+- Before fixing a reported UI symptom, reproduce it on the current build in scratch; it may already be gone (G3 vanishing ticks were pre-G3 code).
+
+## Data changes (safe door)
+- Any side effect of a bulk change outside the database (e.g. learned keywords in config.json) is recorded with the change, so Undo can reverse exactly that and nothing older.
+- Settings boxes that save on LostFocus must be reloaded after an Undo rewrites the same config, or the next Save writes the undone values back.
+- Record only what a change newly did: check the prior state first; a helper that returns true when nothing changed over-reports.
 
 ## Memory (WinUI)
 - Measure memory with cached UIA element references (select/toggle/invoke); full tree walks create automation peers and inflate the figure.

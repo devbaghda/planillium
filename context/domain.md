@@ -135,6 +135,11 @@ time_diary       (id, date, start_time, end_time, duration_min, category, window
   -- category: on_plan | off_plan | neutral | idle | paid
 change_log       (id, ts, label, tbl, field, new_value, row_count, undone_at, restored, skipped)
 change_log_rows  (change_id, row_id, old_value, after_sig)  PK (change_id, row_id)
+change_log_rules (change_id, keyword, category, previous_category)  PK (change_id, keyword)
+  -- G3 round 2 (2026-10-29): activity keywords a category mark NEWLY taught (DataChangeDoor.
+  -- TeachKeywords; one already in that list is not recorded). Undo forgets each one still in
+  -- `category` and returns it to previous_category if the mark had moved it; one changed since is
+  -- kept. Pruned with its change; cleared by Clear activity history.
   -- G3 (2026-10-28) DataChangeDoor history: one row per bulk change / per changed row; old_value
   -- is what Undo restores, after_sig the row's full state after the write (Undo skips a row whose
   -- state differs = changed since). Last 20 changes within 30 days. Backups: data/backups/

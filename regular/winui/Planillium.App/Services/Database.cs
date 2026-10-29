@@ -253,6 +253,16 @@ public sealed class Database : IDisposable
             "  after_sig  TEXT    NOT NULL," +
             "  PRIMARY KEY (change_id, row_id)" +
             ");" +
+            // G3 round 2 (2026-10-29): the activity keywords a bulk category mark taught
+            // (config.json activity_rules), so its Undo can forget exactly those — and put a
+            // keyword it moved from another category back there (previous_category).
+            "CREATE TABLE IF NOT EXISTS change_log_rules (" +
+            "  change_id         INTEGER NOT NULL," +
+            "  keyword           TEXT    NOT NULL," +
+            "  category          TEXT    NOT NULL," +
+            "  previous_category TEXT," +
+            "  PRIMARY KEY (change_id, keyword)" +
+            ");" +
             // Read-only reporting views — nothing in either app queries
             // these, they exist purely so an external tool (Power Query,
             // Excel, a BI dashboard) can point straight at progress.db
@@ -464,7 +474,7 @@ public sealed class Database : IDisposable
             using var cmd = CreateCommand();
             // The change history (G3) holds old diary values too, so it goes with the diary.
             cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup; " +
-                              "DELETE FROM change_log_rows; DELETE FROM change_log;";
+                              "DELETE FROM change_log_rows; DELETE FROM change_log_rules; DELETE FROM change_log;";
             cmd.ExecuteNonQuery();
         });
         VacuumAndCheckpoint();
@@ -476,7 +486,7 @@ public sealed class Database : IDisposable
         "score_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
         // G3: the bulk-change history (old diary values) is user data like the rest — exported
         // with it, counted and wiped by "Clear all my data".
-        "change_log", "change_log_rows",
+        "change_log", "change_log_rows", "change_log_rules",
     };
 
     /// <summary>Total row count across every user-data table — for the "Clear all my

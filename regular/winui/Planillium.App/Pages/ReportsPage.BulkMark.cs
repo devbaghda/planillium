@@ -84,10 +84,12 @@ public sealed partial class ReportsPage
     /// One bulk mark: preview → confirm (filled / overwritten / unchanged, "Mark N rows" /
     /// Cancel) → DataChangeDoor.Apply (backup, write, old values kept) → message with Undo.
     /// Cancel writes nothing. <paramref name="rows"/> is every row the mark targets — the ticked
-    /// ones, or all matches of the filters when none are ticked.
+    /// ones, or all matches of the filters when none are ticked. <paramref name="teach"/>: whether
+    /// a category mark also teaches each row's app/page keyword — only when the user ticked the
+    /// rows; marking all matches of a filter teaches nothing (G3 round 2).
     /// </summary>
     private async Task BulkMarkDiaryAsync(DataChangeDoor.Field field, string? value,
-        List<ReportData.DiaryEntry> rows, Action updateToolbar, Action refresh, Func<HashSet<long>> shownIds)
+        List<ReportData.DiaryEntry> rows, bool teach, Action updateToolbar, Action refresh, Func<HashSet<long>> shownIds)
     {
         if (rows.Count == 0 || _diaryBulkBusy) return;
         var ids = rows.Select(r => r.Id).ToList();
@@ -146,23 +148,28 @@ public sealed partial class ReportsPage
                 return;
             }
 
-            // Unchanged from the old bulk Mark: a category mark also teaches the tracker each
-            // row's app/page keyword (Settings ▸ Activity keywords). Tags never did.
+            // A category mark of TICKED rows also teaches the tracker each row's app/page keyword
+            // (Settings ▸ Activity keywords), recorded with the change so Undo forgets exactly
+            // the ones it newly taught (G3 round 2). Marking all filter matches teaches nothing;
+            // tags never teach.
             var learned = new List<string>();
             if (isCategory)
             {
-                var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var row in rows)
+                if (teach)
                 {
-                    var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
-                    if (keyword is { Length: > 0 } && keyword != "—") keywords.Add(keyword);
-                }
-                foreach (var keyword in keywords)
-                {
-                    try { if (ConfigService.LearnActivityRule(keyword, value!)) learned.Add(keyword); }
+                    var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var row in rows)
+                    {
+                        var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
+                        if (keyword is { Length: > 0 } && keyword != "—") keywords.Add(keyword);
+                    }
+                    try
+                    {
+                        learned = await Task.Run(() => DataChangeDoor.TeachKeywords(result.ChangeId, value!, keywords));
+                    }
                     catch (Exception ex) { Log.Error("ReportsPage.BulkMark.Learn", ex); }
+                    if (learned.Count > 0) (App.MainWindow as MainWindow)?.RestartTracker();
                 }
-                if (keywords.Count > 0) (App.MainWindow as MainWindow)?.RestartTracker();
                 (App.MainWindow as MainWindow)?.RefreshScore();
             }
 
@@ -176,7 +183,7 @@ public sealed partial class ReportsPage
             if (learned.Count > 0)
                 parts.Add($"Keywords learned for {valueLabel}: {string.Join(", ", learned.Take(8))}" +
                           (learned.Count > 8 ? $" and {learned.Count - 8} more" : "") +
-                          " (Undo doesn't remove these; Settings ▸ Activity keywords does).");
+                          " (Undo forgets these too).");
             ShowDiaryNotice(new(InfoBarSeverity.Success,
                 clearing
                     ? $"Cleared the tag on {FormatCount(result.Changed)} {RowsWord(result.Changed)}"
@@ -258,6 +265,7 @@ public sealed partial class ReportsPage
         try
         {
             var result = await Task.Run(() => DataChangeDoor.Undo(changeId));
+            if (result.KeywordsForgotten.Count > 0) (App.MainWindow as MainWindow)?.RestartTracker();
             (App.MainWindow as MainWindow)?.RefreshScore();
             ShowDiaryNotice(new(result.Skipped > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success,
                 "Change undone", DataChangeDoor.DescribeUndo(result), null));

@@ -269,6 +269,41 @@ public sealed partial class SettingsPage : Page
 
     // ── rules & timing (writes the shared config.json) ───────────────────
 
+    /// <summary>The three Activity keywords boxes' text as config.json holds it now.</summary>
+    private static (string On, string Off, string Neutral) SavedActivityKeywords()
+    {
+        var cfg = ConfigService.Root;
+        string Words(string key)
+        {
+            if (!cfg.TryGetProperty("activity_rules", out var s) || s.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !s.TryGetProperty(key, out var arr) || arr.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return "";
+            return string.Join("\n", arr.EnumerateArray()
+                .Select(v => v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() ?? "" : "")
+                .Where(v => v.Length > 0));
+        }
+        return (Words(DiaryCategory.OnPlan), Words(DiaryCategory.OffPlan), Words(DiaryCategory.Neutral));
+    }
+
+    /// <summary>Fills the Activity keywords boxes from config.json — also after an Undo forgot
+    /// keywords (G3 round 2), so a later Save doesn't write the forgotten ones back.</summary>
+    private void LoadActivityKeywords()
+    {
+        var (on, off, neutral) = SavedActivityKeywords();
+        RulesOn.Text = on;
+        RulesOff.Text = off;
+        RulesNeutral.Text = neutral;
+    }
+
+    /// <summary>True when the Activity keywords boxes hold exactly what config.json holds
+    /// (line endings aside) — no unsaved edits there.</summary>
+    private bool ActivityKeywordsUnedited()
+    {
+        static string N(string s) => s.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+        var (on, off, neutral) = SavedActivityKeywords();
+        return N(RulesOn.Text) == N(on) && N(RulesOff.Text) == N(off) && N(RulesNeutral.Text) == N(neutral);
+    }
+
     private void LoadRules()
     {
         var cfg = ConfigService.Root;
@@ -299,9 +334,7 @@ public sealed partial class SettingsPage : Page
         // the same default the score formula would actually have used for it.
         foreach (var rule in ScoringRules.All)
             _scoringBoxes[rule.Key].Value = ConfigService.ScoringRate(rule.Key);
-        RulesOn.Text = Words(cfg, "activity_rules", DiaryCategory.OnPlan);
-        RulesOff.Text = Words(cfg, "activity_rules", DiaryCategory.OffPlan);
-        RulesNeutral.Text = Words(cfg, "activity_rules", DiaryCategory.Neutral);
+        LoadActivityKeywords();
         IdleOn.Text = Words(cfg, "idle_activity_rules", DiaryCategory.OnPlan);
         IdleOff.Text = Words(cfg, "idle_activity_rules", DiaryCategory.OffPlan);
         IdleNeutral.Text = Words(cfg, "idle_activity_rules", DiaryCategory.Neutral);

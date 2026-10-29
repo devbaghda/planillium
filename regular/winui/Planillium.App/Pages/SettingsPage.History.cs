@@ -105,10 +105,14 @@ public sealed partial class SettingsPage
     {
         if (_historyBusy) return;
         var rows = $"{c.RowCount.ToString("N0", CultureInfo.CurrentCulture)} {(c.RowCount == 1 ? "row" : "rows")}";
+        var keywords = c.KeywordsTaught == 0 ? "" :
+            $" The {c.KeywordsTaught.ToString("N0", CultureInfo.CurrentCulture)} " +
+            $"{(c.KeywordsTaught == 1 ? "activity keyword" : "activity keywords")} it taught " +
+            "are forgotten too, unless you changed them since.";
         var confirm = Dialogs.DialogControls.Build(XamlRoot, "Undo this change?",
             $"\"{c.Label}\" ({rows}, {c.At.ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture)}) — " +
             "each row goes back to the value it had before. Rows changed since are skipped and keep " +
-            "their newer values. A backup is saved first.",
+            "their newer values." + keywords + " A backup is saved first.",
             primaryButtonText: "Undo", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
 
@@ -117,9 +121,22 @@ public sealed partial class SettingsPage
         SaveStatus.Text = "Undoing…";
         try
         {
+            // Read before the Undo rewrites config.json: were the keyword boxes edited but not saved?
+            var boxesUnedited = ActivityKeywordsUnedited();
             var result = await Task.Run(() => DataChangeDoor.Undo(c.Id));
+            var status = DataChangeDoor.DescribeUndo(result);
+            if (result.KeywordsForgotten.Count > 0)
+            {
+                // Keep the boxes in step with config.json, or the next Save would write the
+                // forgotten keywords straight back. Unsaved edits there are left alone, with a note.
+                if (boxesUnedited) LoadActivityKeywords();
+                else status += " Your unsaved edits in Activity keywords were kept — saving them " +
+                               "would bring the forgotten keywords back; remove those lines first.";
+                RefreshSummaries();
+                (App.MainWindow as MainWindow)?.RestartTracker();
+            }
             (App.MainWindow as MainWindow)?.RefreshScore();
-            SaveStatus.Text = DataChangeDoor.DescribeUndo(result);
+            SaveStatus.Text = status;
         }
         catch (InvalidOperationException ex)
         {
