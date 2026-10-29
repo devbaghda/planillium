@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Change: the Reports Diary no longer stops at 300 rows. "Show N more" keeps growing the list up to "Show all", and "Select all" ticks every matching entry (the count shown equals the number of matches). Filters, search and marks work as before.
+
 - Change: Reports, Time diary, App filter: entries that are a window title without a dash (for example "74% complete" or "Add a device") are gathered under one entry, "Other", listed last; choosing it shows exactly those rows. Real program names (and known ones such as Chrome, Excel, Telegram) stay individual. The App column of each row is unchanged. Counts, other filters, search, Show all and Clear work as before.
 - Change: Ask Claude (Add plan and Replace remaining tasks) now asks Claude for a compact reply: one minified JSON block, the briefing only inside it (not also written out as text), short fields. The prompts are 10-38% shorter and a sample 14-task plan reply is about 43% smaller, so Claude answers faster. The plan, tasks, preview and Apply look exactly the same; the wait limit and Cancel are unchanged. A full-form plan (pasted, loaded from a .json file, or from an older prompt) still imports as before; a compact reply that is malformed is refused with a message and nothing is added.
 - Fix: a test copy of the app (started with MENTOR_ROOT set) no longer reads, switches or deletes the real "Start with Windows" setting; the toggle then shows off and does nothing. Normal runs are unchanged.

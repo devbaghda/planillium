@@ -194,7 +194,7 @@ public sealed partial class ReportsPage
         // its buttons don't get re-wired constantly; UpdateMarkToolbar()
         // just flips enabled/label state as the selection changes.
         // G3: the ticks are the page field (survive Render/Mark/Undo). lastRows = the rows
-        // listed (capped at 300 in a wide search); allFiltered = every match (M), uncapped —
+        // listed (G10b: no cap, = every match); allFiltered = every match (M), uncapped —
         // what Mark without ticks acts on and what the ticks are pruned against.
         var selectedIds = _diaryTicks;
         var lastRows = new List<ReportData.DiaryEntry>();
@@ -206,8 +206,6 @@ public sealed partial class ReportsPage
         };
 
         var diaryResults = BuildDiaryResultsArea();
-
-        const int maxSearchResults = 300;
 
         // Guards SelectionChanged from firing when RenderDiaryResults below re-syncs these boxes'
         // SelectedItem to the persisted filter state (e.g. after the app/page lists are
@@ -655,8 +653,8 @@ public sealed partial class ReportsPage
                 UpdateMarkToolbar();
                 return;
             }
-            // G3: prune ticks against EVERY match, before the 300 cap below — the old prune ran
-            // against the capped list, so a tick on a row past the cap silently vanished.
+            // G3: prune ticks against EVERY match, (G10b: there is no display cap any more; the old
+            // prune ran against a capped list, so a tick past the cap silently vanished).
             allFiltered = filteredList;
             var matchIds = filteredList.Select(e => e.Id).ToHashSet();
             selectedIds.RemoveWhere(id => !matchIds.Contains(id));
@@ -675,20 +673,11 @@ public sealed partial class ReportsPage
                 _diaryShowAll = false;
                 _diaryRowsShownScopeKey = scopeKey;
             }
-            // G3 round 2 (user answer 3): the 300-row display cap holds until "Show all", which lifts
-            // it for every match. lastRows = the rows the list can show now, which is what Select
-            // all ticks; the full list goes to DiaryList, whose own paging row is virtualized
-            // (G5 ItemsRepeater), so 9,000 rows cost references only.
-            var capped = wideRange && !_diaryShowAll && filteredList.Count > maxSearchResults;
-            TextBlock? capNotice = null;
-            if (capped)
-            {
-                capNotice = Dim(
-                    $"{N0(filteredList.Count)} matches — showing the {maxSearchResults} most recent; " +
-                    "Show all lists every match (subtotal above covers all of them).");
-                diaryResults.Children.Add(capNotice);
-            }
-            lastRows = capped ? filteredList.Take(maxSearchResults).ToList() : filteredList;
+            // G10b: no display cap. Paging ("Show N more" up to "Show all") reaches every match,
+            // and Select all ticks every match (lastRows = the full list). The full list goes to
+            // DiaryList, whose revealed rows are virtualized (G5 ItemsRepeater), so 9,000 rows
+            // cost references only.
+            lastRows = filteredList;
             UpdateMarkToolbar();
             // Card()'s Border has a non-zero CornerRadius (ReportsPage.Styling.cs), which makes
             // WinUI corner-clip its content to the Border's OWN arranged bounds — MinWidth on
@@ -700,16 +689,7 @@ public sealed partial class ReportsPage
             // MinWidth here has to cover the diary list's own MinWidth (DiaryListWidth) *plus*
             // this Border's horizontal Padding (18+18), or the clip region is still too narrow
             // for what's arranged inside it — that sum is DiaryCardWidth (ReportsPage.xaml.cs).
-            var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange,
-                cap: wideRange ? maxSearchResults : int.MaxValue,
-                onShowAll: () =>
-                {
-                    // Show all was clicked: every match is listed now, so Select all covers them
-                    // all and the cap notice is stale.
-                    lastRows = allFiltered;
-                    if (capNotice is not null) capNotice.Visibility = Visibility.Collapsed;
-                    UpdateMarkToolbar();
-                }));
+            var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange));
             diaryCard.MinWidth = DiaryCardWidth;
             diaryResults.Children.Add(diaryCard);
         }
@@ -1569,8 +1549,7 @@ public sealed partial class ReportsPage
 
     private StackPanel DiaryList(
         List<ReportData.DiaryEntry> diary,
-        HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false,
-        int cap = int.MaxValue, Action? onShowAll = null)
+        HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
     {
         // MinWidth must be repeated here, not just on diaryResults two levels up (2026-07-28
         // user report: "can't split the unaccounted time" — Edit/Split were being silently
@@ -1773,9 +1752,8 @@ public sealed partial class ReportsPage
         // silently collapsing back to the default every time it fires (see that field's own
         // comment). RenderDiaryResults already resets it to the default on an actual scope
         // change before this method is ever called.
-        // G3 round 2: `reachable` is how far "Show N more" can go (the 300 cap of a wide search);
-        // only "Show all" (sticky) goes past it, to every match.
-        var reachable = _diaryShowAll ? diary.Count : Math.Min(diary.Count, cap);
+        // G10b: no cap - "Show N more" can reach every match; "Show all" (sticky) shows them at once.
+        var reachable = diary.Count;
         var shown = _diaryShowAll ? diary.Count : Math.Min(_diaryRowsShown, reachable);
 
         // G5 (2026-10-28): the revealed rows go through an ItemsRepeater, which creates a row
@@ -1838,9 +1816,7 @@ public sealed partial class ReportsPage
             allBtn.Click += (_, _) =>
             {
                 _diaryShowAll = true;
-                reachable = diary.Count;
                 ShowNext(hidden);
-                onShowAll?.Invoke();
             };
             pagingRow.Children.Add(allBtn);
             list.Children.Add(pagingRow);
