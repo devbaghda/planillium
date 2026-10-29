@@ -208,6 +208,24 @@ public static class ConfigService
         });
     }
 
+    /// <summary>G9a: the monthly AI cost cap in EUR (ai.monthly_cap_eur), default 5. A missing,
+    /// non-numeric or non-positive stored value reads as the default.</summary>
+    public static double AiMonthlyCapEur =>
+        Root.TryGetProperty("ai", out var ai) && ai.TryGetProperty("monthly_cap_eur", out var v) &&
+        v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetDouble(out var d) &&
+        d > 0 && double.IsFinite(d)
+            ? d : AiSpendCap.DefaultCapEur;
+
+    public static void SetAiMonthlyCapEur(double eur)
+    {
+        Mutate(node =>
+        {
+            if (node["ai"] is not JsonObject ai)
+                node["ai"] = ai = new JsonObject();
+            ai["monthly_cap_eur"] = eur;
+        });
+    }
+
     /// <summary>Configured potential net monthly income in EUR (for the lost-earnings counter),
     /// default 2925.0 (2700 x 13 months / 12).</summary>
     public static double PotentialMonthlyIncomeEur()

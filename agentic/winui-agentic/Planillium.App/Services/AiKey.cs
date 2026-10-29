@@ -28,5 +28,6 @@ public static class AiKey
 
     /// <summary>A client wired to the saved key, the chosen model and the active base URL.</summary>
     public static AiClient CreateClient(string model) =>
-        new(Http, AiSettings.BaseUrl(), model, Read, AiClient.DefaultTimeout);
+        new(Http, AiSettings.BaseUrl(), model, Read, AiClient.DefaultTimeout,
+            capCheck: AiSpend.RefusalOrNull, recordSpend: AiSpend.Record);   // G9a: every real AI call is capped
 }

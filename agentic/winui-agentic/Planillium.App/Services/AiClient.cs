@@ -14,18 +14,23 @@ public enum AiFailure
 {
     NoKey, Rejected401, ModelNotFound404, RateLimited429, ServerError5xx, BadRequest400,
     Timeout, Network, Cancelled, Truncated, EmptyReply, Unreadable,
+    /// <summary>G9a: the monthly cost cap was reached; refused before any request.</summary>
+    CapReached,
 }
 
 /// <summary>Success text, or a failure category. Exactly one of the two is set.</summary>
-public sealed record AiResult(string? Text, AiFailure? Failure)
+public sealed record AiResult(string? Text, AiFailure? Failure, string? Detail = null)
 {
     public bool Succeeded => Failure is null;
 
-    public string Message => Failure is { } f ? AiMessages.For(f) : string.Empty;
+    public string Message => Detail ?? (Failure is { } f ? AiMessages.For(f) : string.Empty);
 
     public static AiResult Success(string text) => new(text, null);
 
     public static AiResult Fail(AiFailure failure) => new(null, failure);
+
+    /// <summary>A refusal with its own message (the cap message carries the amounts).</summary>
+    public static AiResult Fail(AiFailure failure, string detail) => new(null, failure, detail);
 }
 
 /// <summary>The exact user-facing copy for each failure category (ai-layer spec, D4).</summary>
@@ -45,6 +50,7 @@ public static class AiMessages
         AiFailure.Truncated => "Claude's reply was cut off before it finished, so it was not used.",
         AiFailure.EmptyReply => "Claude sent back an empty reply.",
         AiFailure.Unreadable => "Anthropic's answer was not in a form this app understands.",
+        AiFailure.CapReached => "The monthly AI limit was reached. Raise it in Settings -> AI.",
         _ => "Something went wrong.",
     };
 }
@@ -125,9 +131,16 @@ public sealed class AiClient
     private readonly string _model;
     private readonly Func<string?> _keyProvider;
     private readonly TimeSpan _timeout;
+    private readonly Func<string?>? _capCheck;
+    private readonly Action<double>? _recordSpend;
 
-    public AiClient(HttpClient http, string baseUrl, string model, Func<string?> keyProvider, TimeSpan timeout)
+    /// <param name="capCheck">G9a: returns null when a call may go ahead, else the refusal message; run before any request.</param>
+    /// <param name="recordSpend">G9a: told the estimated EUR cost of every call that got an HTTP success reply.</param>
+    public AiClient(HttpClient http, string baseUrl, string model, Func<string?> keyProvider, TimeSpan timeout,
+        Func<string?>? capCheck = null, Action<double>? recordSpend = null)
     {
+        _capCheck = capCheck;
+        _recordSpend = recordSpend;
         _http = http;
         _baseUrl = baseUrl;
         _model = model;
@@ -144,6 +157,9 @@ public sealed class AiClient
     {
         var key = _keyProvider()?.Trim();
         if (string.IsNullOrEmpty(key)) return AiResult.Fail(AiFailure.NoKey);
+
+        // G9a: the monthly cap is checked before the request is even built.
+        if (_capCheck?.Invoke() is { } refusal) return AiResult.Fail(AiFailure.CapReached, refusal);
 
         using var timeoutCts = new CancellationTokenSource(_timeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
@@ -171,6 +187,8 @@ public sealed class AiClient
                 Log.Warn("AiClient", $"{status} ({failure})");
                 return AiResult.Fail(failure);
             }
+            // The call was answered and billed: count its estimated cost, whatever the reply turns out to be.
+            _recordSpend?.Invoke(AiCostEstimate.EurFromReply(_model, raw, prompt));
             // Stop was pressed at the same moment the reply arrived: one outcome, and it is Cancelled.
             if (ct.IsCancellationRequested) return AiResult.Fail(AiFailure.Cancelled);
             return ParseReply(raw);

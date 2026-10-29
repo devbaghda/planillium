@@ -93,6 +93,7 @@ public static class AppNames
     {
         if (string.IsNullOrEmpty(window)) return "—";
         if (IsTelegramMarked(window)) return "Telegram";
+        if (TryTelegramSuffix(window, out _)) return "Telegram";
         var norm = NormaliseTitle(window);
         if (norm.Length == 0) return "—";
         var parts = SplitParts(norm);
@@ -114,7 +115,7 @@ public static class AppNames
     public static string FilterGroup(string window)
     {
         var g = Group(window);
-        if (g == "—" || IsTelegramMarked(window)) return g;
+        if (g == "—" || IsTelegramMarked(window) || TryTelegramSuffix(window, out _)) return g;
         if (SplitParts(NormaliseTitle(window)).Length > 1) return g; // has a dash: last part is the program
         return IsKnownProgram(g) ? g : OtherGroup;
     }
@@ -134,6 +135,9 @@ public static class AppNames
             var chat = StripTelegramTitle(window);
             return chat.Length > 0 ? chat : null;
         }
+        // G9a: the chat name is everything before the trailing "– Telegram", even when the chat
+        // name itself contains a dash ("Team - Alpha – Telegram"); no chat name = no sub-item.
+        if (TryTelegramSuffix(window, out var tgChat)) return tgChat.Length > 0 ? tgChat : null;
         var norm = NormaliseTitle(window);
         if (norm.Length == 0) return null;
         var parts = SplitParts(norm);
@@ -192,6 +196,29 @@ public static class AppNames
                 return norm.Split(sep, StringSplitOptions.RemoveEmptyEntries |
                                        StringSplitOptions.TrimEntries);
         return new[] { norm };
+    }
+
+    /// <summary>
+    /// G9a (rule 19 f): true for a stored Telegram row without the LTR mark: "Chat – Telegram" (the form
+    /// WindowTitleResolver writes), "(3) Chat – Telegram" or a bare "Telegram". <paramref name="chat"/> is
+    /// the chat name (everything before the LAST " – Telegram"; "" when none), so a chat name that itself
+    /// contains " - " is kept whole instead of being split at its own dash.
+    /// </summary>
+    internal static bool TryTelegramSuffix(string window, out string chat)
+    {
+        chat = "";
+        if (string.IsNullOrWhiteSpace(window)) return false;
+        var n = ActivityTracker.StripUnreadBadge(NormaliseTitle(window));
+        if (n.Equals("Telegram", StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var c in DashChars)
+        {
+            var suffix = $" {c} Telegram";
+            if (!n.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
+            var name = ActivityTracker.StripUnreadBadge(n[..^suffix.Length]).Trim();
+            chat = name.Equals("Telegram", StringComparison.OrdinalIgnoreCase) ? "" : name;
+            return true;
+        }
+        return false;
     }
 
     private static bool IsTelegramMarked(string title) =>

@@ -17,6 +17,10 @@ public class AppState
     [JsonPropertyName("name_asked")] public bool NameAsked { get; set; } = false;
     // Set once the user accepts the one-time "what is sent to Anthropic" notice (ai-layer spec).
     [JsonPropertyName("ai_notice_accepted")] public bool AiNoticeAccepted { get; set; } = false;
+    // G9a: estimated AI spend of one calendar month ("yyyy-MM") in EUR; see AiSpendCap. A stored
+    // month other than the current one counts as zero.
+    [JsonPropertyName("ai_spend_month")] public string AiSpendMonth { get; set; } = "";
+    [JsonPropertyName("ai_spend_eur")] public double AiSpendEur { get; set; } = 0.0;
     [JsonPropertyName("window_width")] public int WindowWidth { get; set; } = 1180;
     [JsonPropertyName("window_height")] public int WindowHeight { get; set; } = 780;
     // How many toast notifications have fired since the window was last brought to the

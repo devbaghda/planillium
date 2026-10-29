@@ -94,6 +94,7 @@ public sealed partial class SettingsPage : Page
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
             AiModelBox.Text = ConfigService.AiModelStored;
+            AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
             RefreshAiPanel();
             LoadIncome();
             LoadRules();
@@ -138,6 +139,7 @@ public sealed partial class SettingsPage : Page
         _lastSection = SectionList.SelectedIndex;
         for (var i = 0; i < _panels.Length; i++)
             _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
+        if (_panels[_lastSection] == AIPanel) RefreshAiSpend();   // G9a: fresh on every visit
         if (_panels[_lastSection] == AIPanel && AIStatus.Text.Length == 0 && AiKey.Has())
             SetAiStatus("A key is saved on this computer.", failure: false);
         // G3: read fresh on every visit — a Mark made on the Diary since must show here.
@@ -1372,7 +1374,12 @@ public sealed partial class SettingsPage : Page
         AiTestBtn.IsEnabled = hasKey;
         AiRemoveBtn.IsEnabled = hasKey;
         SumAI.Text = hasKey ? $"Key saved · {ConfigService.AiModel}" : "No key — copy and paste";
+        RefreshAiSpend();
     }
+
+    /// <summary>G9a: this month's estimated spend against the saved limit (read fresh each time).</summary>
+    private void RefreshAiSpend() =>
+        AiSpendLine.Text = AiSpendCap.StatusLine(AiSpend.SpentThisMonth(), ConfigService.AiMonthlyCapEur);
 
     private void SetAiStatus(string text, bool failure)
     {
@@ -1388,6 +1395,7 @@ public sealed partial class SettingsPage : Page
         AiSaveBtn.IsEnabled = !busy;
         AiKeyBox.IsEnabled = !busy;
         AiModelBox.IsEnabled = !busy;
+        AiCapBox.IsEnabled = !busy;
         AiTestBtn.IsEnabled = hasKey;
         AiRemoveBtn.IsEnabled = hasKey;
         AiProgressRow.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -1410,15 +1418,29 @@ public sealed partial class SettingsPage : Page
         var model = AiModelBox.Text.Trim();
         var modelChanged = model != ConfigService.AiModelStored;
 
+        // G9a: the monthly limit is checked first; a refused value saves nothing and the text stays.
+        var capProblem = AiSpendCap.ValidateCap(AiCapBox.Text, out var capValue);
+        if (capProblem is not null)
+        {
+            SetAiStatus(capProblem, failure: true);
+            return;
+        }
+        var capChanged = capValue != ConfigService.AiMonthlyCapEur;
+
         if (key.Length == 0)
         {
-            if (!AiKey.Has())
+            if (!AiKey.Has() && !capChanged)
             {
                 SetAiStatus("Not saved: paste your API key first.", failure: true);
                 return;
             }
-            if (modelChanged) ConfigService.SetAiModel(model);
-            SetAiStatus(modelChanged ? "Model saved." : "Nothing to save.", failure: false);
+            if (modelChanged && AiKey.Has()) ConfigService.SetAiModel(model);
+            if (capChanged) ConfigService.SetAiMonthlyCapEur(capValue);
+            AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
+            var savedModel = modelChanged && AiKey.Has();
+            SetAiStatus(savedModel && capChanged ? "Model and monthly limit saved."
+                : capChanged ? "Monthly limit saved."
+                : savedModel ? "Model saved." : "Nothing to save.", failure: false);
             RefreshAiPanel();
             return;
         }
@@ -1434,8 +1456,11 @@ public sealed partial class SettingsPage : Page
             return;
         }
         ConfigService.SetAiModel(model);
+        if (capChanged) ConfigService.SetAiMonthlyCapEur(capValue);
+        AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
         AiKeyBox.Password = "";
-        SetAiStatus("✓ Key saved. It is stored in Windows Credential Manager and is not shown again.", failure: false);
+        SetAiStatus("✓ Key saved. It is stored in Windows Credential Manager and is not shown again." +
+            (capChanged ? " Monthly limit saved." : ""), failure: false);
         RefreshAiPanel();
     }
 
@@ -1443,7 +1468,8 @@ public sealed partial class SettingsPage : Page
     {
         // Test uses what is saved, never what is typed: unsaved edits would test something the
         // user has not committed to, so no request is made.
-        if (AiKeyBox.Password.Trim().Length > 0 || AiModelBox.Text.Trim() != ConfigService.AiModelStored)
+        if (AiKeyBox.Password.Trim().Length > 0 || AiModelBox.Text.Trim() != ConfigService.AiModelStored ||
+            AiCapBox.Text.Trim() != AiSpendCap.CapText(ConfigService.AiMonthlyCapEur))
         {
             SetAiStatus("Press Save first — Test connection uses the saved key and model.", failure: false);
             return;
@@ -1465,9 +1491,11 @@ public sealed partial class SettingsPage : Page
         _aiTestCts = null;
         cts.Dispose();
         SetAiBusy(false);
+        RefreshAiSpend();
 
         if (result.Succeeded) SetAiStatus($"✓ Connected. Claude answered using {model}.", failure: false);
         else if (result.Failure == AiFailure.Cancelled) SetAiStatus("Stopped. Nothing was changed.", failure: false);
+        else if (result.Failure == AiFailure.CapReached) SetAiStatus(result.Message, failure: true);
         else SetAiStatus("Not connected: " + result.Message, failure: true);
     }
 

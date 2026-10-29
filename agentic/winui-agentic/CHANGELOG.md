@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New: monthly AI cost limit. Settings -> AI shows "Monthly AI limit (EUR)" (default 5) and "This month: EUR x of EUR y used (estimated)". When the month's estimated cost reaches the limit, Ask Claude and Test connection are refused before anything is sent, with a message saying the limit was reached, how much was spent and where to raise it; plans, prompts and non-AI features are unaffected, and the copy-the-prompt route still works. The spend restarts at zero each calendar month. An empty, negative, zero or text limit is refused with a message and not saved. The cost is an estimate (reply size at Anthropic's list prices), not an invoice.
+- Fix: Time diary: a Telegram chat whose name contains " - " (for example "Team - Alpha") is now told apart by its whole chat name in the App/Page columns, the filters and search, instead of being split at its own dash and landing under a wrong app. Telegram windows without a chat name still show as plain "Telegram"; other apps are unchanged.
+
 - Change: the "Today" item in the left sidebar shows a dot only while the overdue banner shows on the Today page, and on every page. It goes away as soon as the last overdue task is rescheduled, completed or covered by a day off, and appears when a task becomes overdue (midnight rollover, plan change); no restart needed. What counts as overdue, the banner and scoring are unchanged.
 
 - Fix: clicking empty space no longer pushes the cursor into a text box anywhere in the app, and it takes the cursor out of the box it was in — the same protection Settings -> Income already had, now also on the other Settings sections (General, Hours, Scoring, Keywords, Idle, AI), Today and Schedule (task notes), Reports (Diary search) and every dialog with a text box (Add plan, Add task, Edit/Split diary entry, Welcome back, Name setup, Replace remaining tasks, Evening review, Spend, TickTick connect). Tab, clicking into a box and Settings -> Income work as before.

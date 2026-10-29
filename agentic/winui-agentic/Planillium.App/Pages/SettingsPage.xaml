@@ -261,6 +261,15 @@
                     <TextBlock TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Text="Leave empty to use the default (claude-sonnet-5-5). Change it here if Anthropic retires this model — no app update needed."/>
+                    <TextBox x:Name="AiCapBox" Header="Monthly AI limit (EUR)" Width="260"
+                             HorizontalAlignment="Left" PlaceholderText="5"
+                             AutomationProperties.Name="Monthly AI limit" KeyDown="AiBox_KeyDown"/>
+                    <TextBlock x:Name="AiSpendLine" TextWrapping="Wrap" FontSize="13"
+                               AutomationProperties.Name="AI spend this month"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the next month starts (the spend then restarts at zero). The cost is an estimate from the size of each exchange at Anthropic's list prices, not an invoice. Default 5 euros."/>
                     <!-- Star columns, not a horizontal StackPanel: same reason as the Data panel. -->
                     <Grid ColumnSpacing="10" HorizontalAlignment="Stretch">
                         <Grid.ColumnDefinitions>
