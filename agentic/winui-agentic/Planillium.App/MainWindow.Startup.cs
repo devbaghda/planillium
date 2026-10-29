@@ -421,7 +421,32 @@ public sealed partial class MainWindow
         }
         RefreshIncome();
         RefreshPlanDrift();
+        RefreshTodayDot();
     }
+
+    /// <summary>G6: sidebar "Today" dot visible only while the Today page's overdue banner
+    /// would show (same per-plan overdue total, TodayPage.CountBannerOverdue). Runs from
+    /// RefreshScore, which every reschedule/complete/day-off/replan/plan change and the
+    /// midnight rollover already call, so it works from every page without a restart.</summary>
+    private void RefreshTodayDot()
+    {
+        try
+        {
+            var plans = PlanStore.LoadActivePlans();
+            using var db = new Database();
+            var completions = db.LoadCompletions();
+            var tasks = plans.Select(p => PlanStore.TasksFor(p, db, completions)).ToArray();
+            SetTodayDot(TodayPage.CountBannerOverdue(plans, tasks) > 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("RefreshTodayDot", ex);
+            SetTodayDot(false);
+        }
+    }
+
+    internal void SetTodayDot(bool show) =>
+        TodayDot.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
 
     private void RefreshIncome()
     {

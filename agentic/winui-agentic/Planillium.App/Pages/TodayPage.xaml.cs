@@ -202,6 +202,8 @@ public sealed partial class TodayPage : Page
             {
                 OverdueBar.IsOpen = false;
             }
+            // G6: the sidebar Today dot follows the banner exactly (same total, same moment).
+            (App.MainWindow as MainWindow)?.SetTodayDot(totalOverdue > 0);
         }
         catch (Exception ex)
         {
@@ -220,6 +222,23 @@ public sealed partial class TodayPage : Page
         string Header, string? NotStartedMessage, bool DayOff,
         List<AssignedTask> Overdue, List<AssignedTask> Today, string? NoTasksMessage,
         (List<AssignedTask> TomorrowTasks, bool TodayClear)? Eligible);
+
+    /// <summary>The overdue total the banner uses (G6): per plan, BuildPlanView's Overdue list,
+    /// skipping plans that have not started — identical to Render()'s totalOverdue. Lets the
+    /// sidebar dot be computed from any page. Throws like Render's loading would; caller handles.</summary>
+    internal static int CountBannerOverdue(
+        List<Plan> plans, List<AssignedTask>[] tasksPerPlan)
+    {
+        var total = 0;
+        for (var i = 0; i < plans.Count; i++)
+        {
+            var plan = plans[i];
+            var view = BuildPlanView(plan, tasksPerPlan[i], plan.PlanDay);
+            if (view.NotStartedMessage is not null) continue;
+            total += view.Overdue.Count;
+        }
+        return total;
+    }
 
     private static PlanTodayView BuildPlanView(Plan plan, List<AssignedTask> tasks, int planDay)
     {

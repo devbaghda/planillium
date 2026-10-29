@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Change: the "Today" item in the left sidebar shows a dot only while the overdue banner shows on the Today page, and on every page. It goes away as soon as the last overdue task is rescheduled, completed or covered by a day off, and appears when a task becomes overdue (midnight rollover, plan change); no restart needed. What counts as overdue, the banner and scoring are unchanged.
+
 - Fix: clicking empty space no longer pushes the cursor into a text box anywhere in the app, and it takes the cursor out of the box it was in — the same protection Settings -> Income already had, now also on the other Settings sections (General, Hours, Scoring, Keywords, Idle, AI), Today and Schedule (task notes), Reports (Diary search) and every dialog with a text box (Add plan, Add task, Edit/Split diary entry, Welcome back, Name setup, Replace remaining tasks, Evening review, Spend, TickTick connect). Tab, clicking into a box and Settings -> Income work as before.
 
 - Change: the Reports Diary no longer stops at 300 rows. "Show N more" keeps growing the list up to "Show all", and "Select all" ticks every matching entry (the count shown equals the number of matches). Filters, search and marks work as before.
