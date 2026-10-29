@@ -26,6 +26,25 @@ internal static class DialogControls
         bool isPrimaryButtonEnabled = true,
         Style? secondaryButtonStyle = null)
     {
+        // G8: a dialog whose content holds a text box gets the blank-click focus protection (Controls/FocusShield.cs):
+        // releases claimed on its own scrollers and the template's ContentScrollViewer, and a blank press parks the cursor
+        // on an invisible park. No focus guard: the dialog's opening focus is unchanged. String content and box-less
+        // dialogs are left exactly as before.
+        Grid? shield = null;
+        Button? park = null;
+        if (content is UIElement element)
+        {
+            var scrollers = new List<ScrollViewer>();
+            if (Controls.FocusShield.HasTextEntry(element, scrollers))
+            {
+                park = Controls.FocusShield.CreatePark();
+                shield = new Grid();
+                shield.Children.Add(park);
+                shield.Children.Add(element);
+                foreach (var sv in scrollers) Controls.FocusShield.ClaimReleases(sv);
+                content = shield;
+            }
+        }
         var dialog = new ContentDialog
         {
             Title = title,
@@ -38,6 +57,16 @@ internal static class DialogControls
         if (secondaryButtonText is not null) dialog.SecondaryButtonText = secondaryButtonText;
         if (closeButtonText is not null) dialog.CloseButtonText = closeButtonText;
         if (secondaryButtonStyle is not null) dialog.SecondaryButtonStyle = secondaryButtonStyle;
+        if (shield is not null && park is not null)
+        {
+            var host = shield;
+            dialog.Loaded += (_, _) =>
+            {
+                if (Controls.FocusShield.NearestScroller(host) is { } templateScroller)
+                    Controls.FocusShield.ClaimReleases(templateScroller);
+            };
+            Controls.FocusShield.Attach(dialog, park, new Controls.FocusShield.AttachOptions { Guard = false });
+        }
         return dialog;
     }
 

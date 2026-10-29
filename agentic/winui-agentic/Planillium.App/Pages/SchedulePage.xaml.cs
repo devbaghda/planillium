@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Planillium.App.Controls;
 using Planillium.App.Models;
 using Planillium.App.Services;
 using Planillium.App.Views;
@@ -28,6 +29,10 @@ public sealed partial class SchedulePage : Page
     public SchedulePage()
     {
         InitializeComponent();
+        // G8: a blank click never pulls the cursor into a note box, and leaves the box it was in (Controls/FocusShield.cs).
+        FocusShield.PreparePark(FocusPark);
+        FocusShield.ClaimReleases(Scroller);
+        FocusShield.Attach(this, FocusPark, new FocusShield.AttachOptions { Guard = true });
     }
 
     // See PageLayout's own doc comment.
@@ -215,6 +220,7 @@ public sealed partial class SchedulePage : Page
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        FocusShield.ClaimReleases(scroller); // G8: no focus jump from a blank click inside the day-card list
         var card = new Border
         {
             BorderBrush = Res("CardStrokeColorDefaultBrush"),

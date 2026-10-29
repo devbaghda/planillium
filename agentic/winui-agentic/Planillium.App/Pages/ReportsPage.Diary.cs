@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Planillium.App.Controls;
 using Planillium.App.Dialogs;
 using Planillium.App.Services;
 
@@ -973,13 +974,15 @@ public sealed partial class ReportsPage
         // and the "All time" checkbox can be clipped off-screen with no way to reach them
         // (2026-07-24 audit finding #1, a regression from the App/Page column split). Same
         // HorizontalScrollBarVisibility="Auto" treatment as diaryScroller below, just for one row.
-        DiaryBody.Children.Add(new ScrollViewer
+        var filterScroller = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Margin = new Thickness(0, 0, 0, 8),
             Content = filterRow,
-        });
+        };
+        FocusShield.ClaimReleases(filterScroller); // G8: a blank click here must not focus the first filter button
+        DiaryBody.Children.Add(filterScroller);
 
         return (categoryBtn, appBtn, pageBtn, tagBtn, allTimeBox, clearFiltersBtn, categoryStack, tagStack, appStack, pageStack);
     }
@@ -1056,14 +1059,16 @@ public sealed partial class ReportsPage
         tagMarkButtons.Add((null, clearTagBtn));
         // Round 2: the tag buttons now carry count text ("Mark all 8,921 Procrastination"), which can
         // outgrow the page width, so the row scrolls sideways instead of being clipped.
-        DiaryBody.Children.Add(new ScrollViewer
+        var tagScroller = new ScrollViewer
         {
             Content = tagToolbar,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollMode = ScrollMode.Enabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollMode = ScrollMode.Disabled,
-        });
+        };
+        FocusShield.ClaimReleases(tagScroller); // G8: a blank click here must not focus the first tag button
+        DiaryBody.Children.Add(tagScroller);
 
         // G3: the result bar (running / success + Undo / undo result / errors), directly below
         // the tag row so the Mark buttons never move when it opens or closes. Its content is the
@@ -1116,6 +1121,7 @@ public sealed partial class ReportsPage
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = diaryResults,
         };
+        FocusShield.ClaimReleases(diaryScroller); // G8: a blank click in the results must not focus the first row's check box
         DiaryBody.Children.Add(diaryScroller);
         return diaryResults;
     }

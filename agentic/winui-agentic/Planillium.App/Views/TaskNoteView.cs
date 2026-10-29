@@ -170,7 +170,8 @@ public static class TaskNoteView
             display.Visibility = Visibility.Collapsed;
             editBox.Visibility = Visibility.Visible;
             editRow.Visibility = Visibility.Visible;
-            editBox.Focus(FocusState.Programmatic);
+            // G8: the page focus guard only lets a box take focus programmatically when asked through FocusShield.
+            Controls.FocusShield.RequestFocus(editBox);
             if (!editActive) { editActive = true; _activeEditCount++; }
             if (draftKey is { } dk) _openDrafts[dk] = editBox.Text;
         }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: clicking empty space no longer pushes the cursor into a text box anywhere in the app, and it takes the cursor out of the box it was in — the same protection Settings -> Income already had, now also on the other Settings sections (General, Hours, Scoring, Keywords, Idle, AI), Today and Schedule (task notes), Reports (Diary search) and every dialog with a text box (Add plan, Add task, Edit/Split diary entry, Welcome back, Name setup, Replace remaining tasks, Evening review, Spend, TickTick connect). Tab, clicking into a box and Settings -> Income work as before.
+
 - Change: the Reports Diary no longer stops at 300 rows. "Show N more" keeps growing the list up to "Show all", and "Select all" ticks every matching entry (the count shown equals the number of matches). Filters, search and marks work as before.
 
 - Change: Reports, Time diary, App filter: entries that are a window title without a dash (for example "74% complete" or "Add a device") are gathered under one entry, "Other", listed last; choosing it shows exactly those rows. Real program names (and known ones such as Chrome, Excel, Telegram) stay individual. The App column of each row is unchanged. Counts, other filters, search, Show all and Clear work as before.

@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Planillium.App.Controls;
 using Planillium.App.Models;
 using Planillium.App.Services;
 
@@ -41,6 +42,11 @@ public sealed partial class ReportsPage : Page
     {
         InitializeComponent();
         BuildPeriodBar();
+        // G8: a blank click never pulls the cursor into the diary search box, and leaves it (Controls/FocusShield.cs).
+        // Inner scrollers are claimed where they are built (ReportsPage.Diary.cs, ReportsPage.Styling.cs).
+        FocusShield.PreparePark(FocusPark);
+        FocusShield.ClaimReleases(RootScroller);
+        FocusShield.Attach(this, FocusPark, new FocusShield.AttachOptions { Guard = true });
     }
 
     // The Diary section's own list/card widths (ReportsPage.Diary.cs) — declared once here so

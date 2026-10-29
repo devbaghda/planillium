@@ -69,6 +69,9 @@ public sealed partial class SettingsPage : Page
         // Click-outside for the "New payable tag" line. handledEventsToo so it still sees presses a child
         // control has already handled (buttons, text boxes).
         AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Page_PointerPressed), handledEventsToo: true);
+        // G8: the same protection for the boxes of every other section (General, Hours, Scoring, Keywords, Idle, AI).
+        // SectionContent already claims releases (B1f); Income keeps its own handlers above and is skipped here.
+        FocusShield.Attach(SectionContent, FocusPark, new FocusShield.AttachOptions { Skip = { IncomePanel }, Fallback = SectionList, Guard = true });
         BuildScoringSection();
         SectionList.SelectedIndex = _lastSection;
         // The strip is fixed at two lines so it can't resize the page (see XAML), which means a

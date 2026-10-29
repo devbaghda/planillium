@@ -8,20 +8,27 @@
          code, not Center+MaxWidth, which doesn't hold this column at one stable width as each
          plan's day-card list changes (2026-08-05 request: "fix width on all of the pages —
          Schedule for example is not fixed for now"). -->
-    <ScrollViewer x:Name="Scroller" Padding="32,24,32,24" SizeChanged="Scroller_SizeChanged">
-        <StackPanel x:Name="ContentColumn" HorizontalAlignment="Left" Spacing="8">
-            <TextBlock Text="Schedule" Style="{StaticResource TitleTextBlockStyle}"/>
-            <TextBlock x:Name="Subtitle"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Margin="0,0,0,12"/>
-            <InfoBar x:Name="SaveErrorBar"
-                     Severity="Error"
-                     IsOpen="False"
-                     IsClosable="True"
-                     Title="Couldn't save that change"
-                     Message="The database was briefly busy — try again in a moment."
-                     Margin="0,0,0,8"/>
-            <StackPanel x:Name="Sections" Spacing="12"/>
-        </StackPanel>
-    </ScrollViewer>
+    <!-- G8: blank-click focus protection (Controls/FocusShield.cs). FocusPark is first so it sits under the scroller
+         and Tab from the parked state enters the page content; Transparent makes blank space hit-testable. -->
+    <Grid Background="Transparent">
+        <Button x:Name="FocusPark" Width="1" Height="1" Opacity="0" MinWidth="0" MinHeight="0" Padding="0"
+                BorderThickness="0" IsTabStop="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+                AutomationProperties.AccessibilityView="Raw"/>
+        <ScrollViewer x:Name="Scroller" Padding="32,24,32,24" SizeChanged="Scroller_SizeChanged">
+            <StackPanel x:Name="ContentColumn" HorizontalAlignment="Left" Spacing="8">
+                <TextBlock Text="Schedule" Style="{StaticResource TitleTextBlockStyle}"/>
+                <TextBlock x:Name="Subtitle"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,0,12"/>
+                <InfoBar x:Name="SaveErrorBar"
+                         Severity="Error"
+                         IsOpen="False"
+                         IsClosable="True"
+                         Title="Couldn't save that change"
+                         Message="The database was briefly busy — try again in a moment."
+                         Margin="0,0,0,8"/>
+                <StackPanel x:Name="Sections" Spacing="12"/>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Page>

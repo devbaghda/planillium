@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Planillium.App.Controls;
 using Planillium.App.Dialogs;
 using Planillium.App.Models;
 using Planillium.App.Services;
@@ -17,6 +18,10 @@ public sealed partial class TodayPage : Page
     public TodayPage()
     {
         InitializeComponent();
+        // G8: a blank click never pulls the cursor into a note box, and leaves the box it was in (Controls/FocusShield.cs).
+        FocusShield.PreparePark(FocusPark);
+        FocusShield.ClaimReleases(RootScroller);
+        FocusShield.Attach(this, FocusPark, new FocusShield.AttachOptions { Guard = true });
     }
 
     // See PageLayout's own doc comment — every page but Settings (which uses a different,

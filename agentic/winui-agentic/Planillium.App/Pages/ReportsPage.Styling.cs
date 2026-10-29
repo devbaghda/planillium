@@ -113,16 +113,21 @@ public sealed partial class ReportsPage
     /// this away against the page-wide alignment grid the previous round established. Scrolling
     /// keeps both. The diary list below already solves the same problem the same way.
     /// </summary>
-    private static ScrollViewer Scrollable(UIElement child) => new()
+    private static ScrollViewer Scrollable(UIElement child)
     {
-        Content = child,
-        HorizontalScrollMode = ScrollMode.Enabled,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-        // Vertical stays off: the page itself scrolls, and a nested vertical scroller would
-        // swallow wheel events over the table.
-        VerticalScrollMode = ScrollMode.Disabled,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-    };
+        var sv = new ScrollViewer
+        {
+            Content = child,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            // Vertical stays off: the page itself scrolls, and a nested vertical scroller would
+            // swallow wheel events over the table.
+            VerticalScrollMode = ScrollMode.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+        Controls.FocusShield.ClaimReleases(sv); // G8: a blank click on a table must not move focus
+        return sv;
+    }
 
     private static Border Card(UIElement child) => new()
     {
