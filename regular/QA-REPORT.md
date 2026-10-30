@@ -1,68 +1,61 @@
-VERDICT: FAIL - workflow=regular feature=G12 round 2 (build 9d1a621) defectsQa=1
-All 12 acceptance lines pass. The one defect breaks the 2026-10-30 user ruling ("Shift+Tab after leaving a box moves to the control before it"), outside the checklist: after a park by blank click, Tab and Shift+Tab do not continue from the box that was left.
+VERDICT: PASS WITH CAVEATS - workflow=regular feature=G13 key-only-on-save defectsQa=0
 
-Run: 12:01-12:10 (about 10 of 20 min). Isolated worktree, detached at 9d1a621, Debug. Scratch MENTOR_ROOT = new empty folder `scratchpad\mroot-g12r2-empty` with nothing copied in. Fake key via PLANILLIUM_SCRATCH_AI_KEY, AI URL pointed at 127.0.0.1:8765 (no AI call made). cmdkey /list before = after. Only my own PID 11028 was launched and killed. Before every click and keystroke, a check confirmed my window was in the foreground (h.py guard()).
-Deviation: MENTOR_INSTANCE_SUFFIX=`verifyg12r2`, not `verify`. A leftover Debug instance from another worktree (PID 7256, `agent-a3af907c775522590`) holds the `verify` mutex. With that suffix my app exited at once. I did not touch that process because it is not mine.
+Build under test: b669eb8 + the uncommitted `regular/winui/Planillium.App/Pages/SettingsPage.xaml.cs` (G13 line in Page_PointerPressed), copied into isolated worktree `D:/CLAUDE/Planillium/.claude/worktrees/qa-g13-reg`, Debug. Scratch: new empty MENTOR_ROOT `scratchpad/mroot-g13`, MENTOR_INSTANCE_SUFFIX=verify-g13, no scratch key (in-memory store active: summary started "No key" although the real Credential Manager holds a key). Run 12:59-13:06 (about 7 of 25 min). One trial per action (nothing timing-dependent).
 
-## Acceptance lines
+Caveat (needs a PM ruling, not a defect): ACCEPTANCE line 3's first variant ("click blank space, then click Save: the key IS stored") contradicts REQUEST rule 2 ("a blank click ... discards the unsaved key"). Regular follows rule 2: after a blank click, Save stores nothing. The deliberate path (type key, click Save) stores the key.
+
+## Per-line results
+
 | Line | Result | Evidence |
 |---|---|---|
-| 1 cap Esc | PASS | Saved 8; typed 12 + Esc -> box 8, no message, focus to IncomeFocusPark; typed 9 -> no box changed |
-| 2 Model + key Esc | PASS | Model: saved qa-model-final; typed xyz-typed + Esc -> qa-model-final, config unchanged, parked, 9 changes nothing. Key: typed sk-ant-TYPED-qa-0001 + Esc -> parked, box empty, "A key is saved on this PC." unchanged, cmdkey unchanged, 9 changes nothing |
-| 3 -5 Enter Esc | PASS | After Enter the box shows -5 and "The cap must be more th..."; after Esc it shows 8, the message is gone, config cap 8 (`qa/l3.png`) |
-| 4 cap blank click | PASS | Typed 6, clicked SectionScroll blank -> config cap_eur 6, focus parked |
-| 5 Income Esc | PASS | Salary 2 925: typed 4000 + Esc -> 2 925, config unchanged, parked, 9 changes nothing. Tag 1 600: typed 1234 + Esc -> 1 600 |
-| 6 | PASS (round 1, code unchanged) | QA-REPORT-G12-round1.md |
-| 7 | PASS (round 1, code unchanged) | QA-REPORT-G12-round1.md |
-| 8 | PASS (round 1, code unchanged) | QA-REPORT-G12-round1.md |
-| 9 strict build + tests | PASS | `-warnaserror --no-incremental`: 0 warnings, 0 errors; dotnet test 229/229 |
-| 10 Model blank click | PASS | Typed qa-model-blank + blank click -> config model qa-model-blank, parked, 9 changes nothing (`qa/l10.png`). Enter saves (qa-model-enter, parked). Empty + blank click -> box and config show the default claude-sonnet-5-5. After switching to Today and back to Settings > AI the box shows the saved qa-model-final |
-| 11 cap 6 + blank + 9 | PASS | Focus moved to IncomeFocusPark; typed 9 -> no Edit changed, the API key box included (`qa/l11.png`) |
-| 12 salary Esc Shift+Tab | PASS | Reference: Shift+Tab straight from the salary box -> nav "Settings" item. Click, Esc, Shift+Tab -> nav "Settings" item (same) |
+| 1 Key, blank, Model + Enter | PASS | Summary "No key - manual copy/paste" before and after; config `model` = claude-g13-model; screenshot shows key box empty (placeholder); Save probe afterwards kept "No key" (Save stores any typed key, see line 3), so the box was truly empty. |
+| 2 Key, blank, cap + Enter | PASS | Summary stays "No key"; config `cap_eur` 5 -> 7; Save probe kept "No key". |
+| 3 Deliberate save works | PASS (caveat above) | Type key + Save -> "A key is saved on this PC." / "Key saved · claude-g13-m2". Key + blank + Save -> "No key" (blank click emptied the box, per REQUEST rule 2). Enter in the key box: regular has no Enter-to-save (see siblings). |
+| 4 Key, Esc | PASS | Summary "No key"; focus parked (IncomeFocusPark); typing 9 afterwards went nowhere; Save probe kept "No key". |
+| 5 Leave key box by Tab / click other box | PASS | Regular behaviour: the typed key STAYS in the box unsaved (dots visible in screenshot), summary stays "No key"; it is stored only by Save. Tab -> Model, Model Enter -> model saved, still "No key". Click cap, cap Enter -> cap 8 saved, still "No key". A following blank click emptied the box (Save probe: "No key"). Never stored silently. |
+| 6 Credential Manager count | PASS | `cmdkey /list` 57 Target lines before and after; sorted target names identical. |
+| 7 Strict build, suite | PASS | `-warnaserror --no-incremental` Debug: 0 warnings, 0 errors (38 s); suite 229/229. |
 
-## Regression (one trial each: Esc, blank click, then 9)
-| Box | Result | Evidence |
+## Sibling Enter paths (one trial each)
+| Path | Observed |
+|---|---|
+| Enter in Model | Saves only the model ("Saved."), focus parks, key untouched (line 1, 5). |
+| Enter in cap | Saves only the cap, focus parks, key untouched (line 2, 5). |
+| Enter in key box | Nothing happens: focus stays in the key box, summary "No key", nothing stored. A blank click then empties it (Save probe "No key"). |
+
+## qa-extra (Settings AI boxes)
+| Case | Result | Evidence |
 |---|---|---|
-| AI cap / Model / key | PASS | Above. Shift+Tab after an Esc park on cap -> Model box (correct) |
-| Work start | PASS | Esc reverts 08:00. 07:30 + blank click -> saved to config, parked, 9 changes nothing |
-| Grace NumberBox | PASS | 17 + Esc -> 18, parked. 18 + blank click -> saved, parked. A click on the compact spin-up -> 18 to 19, focus stays in the box; a blank click then saves 19 and parks |
-| Keyword (On-plan) | PASS | Esc reverts (empty). qakw + blank click -> activity_rules.on_plan ["qakw"], parked |
-| Your name | PASS | Esc reverts QA. Blank click saves QAZed, parked |
-| Income salary | PASS | 3000 + blank click -> config 3000, parked. Tab after an Esc park -> EmployedToggle (correct) |
-| Income tag | PASS (Esc/blank) / FAIL (Tab after blank park) | Esc reverts 1 600. 1700 + blank click -> config 1700, parked. Tab after the blank park: see D1 |
-| New payable tag name/rate | PASS with note | Esc clears the text. Focus goes to the "Income" item of the section list, not the park button (see observations) |
+| 2026-10-29 cap -5 Save, message matches text after leaving | PASS | "The cap must be more than 0 ...", config unchanged (8); then 6 + Tab -> message gone, cap 6 saved. |
+| 2026-10-30 Esc / blank click release cap, Model, key | PASS | Cap Esc: reverts to 6, parks, typed 1 goes nowhere. Cap blank: saves 4, parks. Model Esc: reverts, parks. Model blank: saves, parks. Key blank: parks. |
+| 2026-10-30 r2 cap 6, blank, Shift+Tab -> Model | PASS | Focus -> AiModelBox. |
+| 2026-10-27 B1h scratch must not show real "Key saved" | PASS (observed) | Scratch instance started "No key saved - Ask Claude is off." while the real store holds `anthropic_api_key@Planillium`. |
 
 ## Defects
-**D1 (medium): after a park by blank click, Tab and Shift+Tab start from the park button, not from the box that was left.** After an Esc park they work.
-- Repro 1: Settings > AI, click the cap box, type 6, click blank page space, press Shift+Tab -> focus goes to the nav "Settings" item. Expected: the Model box, which is what you get after an Esc park. Seen 2 out of 2.
-- Repro 2: Settings > Income, click the Studioshoo tag box, click blank space, press Shift+Tab -> nav "Settings" item. Expected: EmployedToggle, which is what you get after an Esc park. Tag box, type 1700, blank click, Tab -> EmployedToggle. Expected: the "Remove" button, which is what you get after an Esc park.
-- Why it matters: after clicking away, a keyboard user jumps out of the page, or to the top of it, instead of continuing next to the box they were in. The 2026-10-30 ruling says Shift+Tab after leaving a box goes to the control before it.
-- Fix in plain terms: when a blank click parks the cursor, remember the box that was left, the same way the Esc path already does. The park button's Tab and Shift+Tab then hand off from that box.
-- Why that fixes it: Esc already records the box that was left, and that is why Tab and Shift+Tab work correctly after Esc. The blank-click path does not record it, so the default tab order from the page-level park button takes over.
-- Line 12 passes only because the control before the salary box happens to be the same nav item the park button falls back to.
-
-## Security
-- No real key was used, and cmdkey was the same before and after.
-- The key typed and then cancelled with Esc was not stored.
-- Real data was never touched: no data/, config.json or plans/, and the live Release exe was left alone.
-
-## UNTESTABLE
 None.
 
-## NOT RUN
-Round-1 New cases 1-3 were run: they are lines 11, 10 and 12 above, all PASS.
+## Security
+- Key never written to config.json (config `ai` held only model and cap_eur throughout).
+- Real Credential Manager untouched: 57 = 57 entries, same target names; scratch store in memory only; fake keys only (`sk-ant-FAKE-g13-*`).
+- mentor-winui.log has 0 ERROR lines; none of the typed fake keys (`sk-ant`) appears in the log or config.json.
+- Abandon paths (blank click, Esc) discard the typed key; Tab / click-other-box keep it in the box but unsaved (visible as dots, summary says "No key").
+
+## Untestable lines
+None.
 
 ## Extra observations
-- In the New payable tag name and rate boxes, Esc moves focus to the "Income" item of the section list, not to the park button. One trial: typing "d" afterwards did nothing (the section stayed Income, no box changed), so nothing harmful happens. It is still inconsistent with every other box.
-- A stale Debug instance from worktree agent-a3af907c775522590 (PID 7256) is still running and holds the `verify` mutex. Any future QA run using suffix `verify` will exit at once.
+- After Save with an empty key box the result line says "Saved." (it saved model/cap); fine, but it reads the same whether or not a key was stored. The summary line is the reliable signal.
+- Tab / click-other-box leaves a typed key sitting in the box (regular's behaviour for line 5). Only a later blank click, Esc or Save resolves it; navigating away was not tested.
+- The Good morning dialog arrived a few seconds after first launch, after the first dismissal pass; the script's focus assert caught it before any typing.
 
 ## New cases
-- Settings > AI: click the cap box, type 6, click blank space, press Shift+Tab -> focus goes to the Model box.
-- Settings > Income: click the tag box, click blank space, press Tab -> the tag's Remove button. Shift+Tab -> EmployedToggle.
-- Settings > Income: click the New payable tag name box, type text, press Esc -> the text is cleared and focus is parked (not on the section list).
+- Settings > AI: type a key, Tab to Model, type a model, Enter -> summary stays "No key"; then a blank click -> key box empty (Save afterwards stores nothing).
+- Settings > AI: type a key, press Enter in the key box -> nothing stored (regular: focus stays; state the side's behaviour).
+- PM ruling needed: ACCEPTANCE G13 line 3 "blank click, then Save stores the key" vs REQUEST rule 2 "blank click discards the key" - pick one wording for both sides.
 
 ## Lessons
-- A Shift+Tab test can leave focus in the nav list. Typed letters then navigate by type-ahead ("t" opened Today), and every later step in the script is invalid. After any Tab or Shift+Tab test, put focus back in the page before the next step. I had to discard and re-run the first Model pass because of this.
-- Choose "blank" points by ElementFromPoint, not by an offset from a box. My first Hours point (Work start + 300, +100) landed on the Repeat NumberBox and typed 9 into it.
-- Check the result of a park against the Esc path. A matching reference (line 12) can hide a fallback bug.
-- WinUI compact NumberBox spin buttons sit in an unnamed PopupHost. Click by coordinate: top half of the popup = up.
+- In Git Bash, `cmdkey /list` is mangled into a bad switch; use `cmdkey //list`.
+- cmdkey output order (and a "Local machine persistence" line) changes between calls: compare the sorted Target names, not a file hash.
+- The Good morning dialog can appear seconds after the first dismissal pass: re-run the dialog sweep right before the first real click, and assert focus landed in the box before typing.
+- A password box cannot be read through UIA; prove it is empty behaviourally (click Save: if the summary stays "No key", the box was empty), after first proving Save does store a typed key.
+- A blank-click point taken as an offset from a box is fine when checked with ElementFromPoint first (here: SectionScroll pane).

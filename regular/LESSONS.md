@@ -69,3 +69,9 @@
 - Compact NumberBox spin buttons sit in an unnamed popup; click them by position (top half = up).
 - A stale scratch instance holds its MENTOR_INSTANCE_SUFFIX lock and makes a new instance with the same suffix exit at once; use a unique suffix per run.
 - Every Settings text/number box needs Esc and blank-area-click exits that release focus (AI cap/Model/Key boxes still failed after G11); cap salary amounts with a visible "too large" message.
+
+## QA technique (G13 2026-10-30)
+- A key is stored only by Save; blank click or Esc empties an unsaved key box; Model/cap Enter save only their own box.
+- Git Bash: use `cmdkey //list`; compare sorted names, not a hash (order changes per call).
+- Dismiss startup dialogs again right before the first real click; confirm the cursor is in the box before typing.
+- A PasswordBox cannot be read through UIA: prove it empty by behaviour (Save stores a typed key; a Save leaving "No key" means empty).

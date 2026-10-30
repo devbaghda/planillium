@@ -607,6 +607,8 @@ public sealed partial class SettingsPage : Page
         // take focus as usual. G12: the same for every text, number and password box on the page;
         // leaving the box saves it as before.
         if ((focused is TextBox or PasswordBox || inLine) && blank) Park(_pressLeftFrom ?? focused as UIElement);
+        // G13: a key is stored only by Save. A blank click abandons a typed key, like Esc: the box empties.
+        if (blank && AiKeyBox.Password.Length > 0) AiKeyBox.Password = "";
         // B1d: whatever the click did, the cursor must not end up in an Income box the click was not
         // on (WinUI may hand focus to the first focusable box when a container takes a click —
         // the salary box is that first box). Checked once the press, and again once the release,
