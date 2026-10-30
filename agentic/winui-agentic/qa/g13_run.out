@@ -1,0 +1,51 @@
+== open AI
+AI section True
+edits [('AiKeyBox', 'Anthropic API key'), ('AiModelBox', 'Model'), ('AiCapBox', 'Monthly AI limit')]
+  focus |AI|list item | keybox diff-px vs empty: 0 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L4 key typed, Esc
+  typed diff-px 516
+  focus Nav||custom | keybox diff-px vs empty: 0 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L1 key, blank, Model Enter
+  after blank diff-px 0 focus Nav||custom
+  focus AiModelBox|Model|edit | keybox diff-px vs empty: 0 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l1'}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Model saved.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L2 key, blank, cap Enter
+  after blank diff-px 0
+  focus AiCapBox|Monthly AI limit|edit | keybox diff-px vs empty: 0 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l1', 'monthly_cap_eur': 7}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Monthly limit saved.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L3b key, blank, Save
+  focus AiSaveBtn|Save|button | keybox diff-px vs empty: 0 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l1', 'monthly_cap_eur': 7}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Not saved: paste your API key first.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L5 key, Tab, model, Enter
+  after Tab focus AiModelBox|Model|edit diff-px 470
+  focus AiModelBox|Model|edit | keybox diff-px vs empty: 470 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l5', 'monthly_cap_eur': 7}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Model saved.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L5b then click cap box, 9, Enter
+  focus AiCapBox|Monthly AI limit|edit | keybox diff-px vs empty: 470 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l5', 'monthly_cap_eur': 9}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Monthly limit saved.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L5c then blank click (key left long ago)
+  focus Nav||custom | keybox diff-px vs empty: 470 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l5', 'monthly_cap_eur': 9}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Monthly limit saved.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== SIB key box: Ctrl+A, new key, click Model box (other box), blank
+  focus AiModelBox|Model|edit
+  focus Nav||custom | keybox diff-px vs empty: 366 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {'ai': {'model': 'qa-model-l5', 'monthly_cap_eur': 9}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", 'Monthly limit saved.', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L3c Enter in key box stores
+  focus AiKeyBox|Anthropic API key|edit | keybox diff-px vs empty: 856 | buttons {'AiSaveBtn': True, 'AiTestBtn': True, 'AiRemoveBtn': True}
+  cfg {'ai': {'model': 'qa-model-l5', 'monthly_cap_eur': 9}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", '✓ Key saved for this test run only (kept in memory, not in Windows Credential Manager).', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'Key saved · qa-model-l5']
+== Remove key via cfg? no - L3a key + Save stores
+  focus AiSaveBtn|Save|button | keybox diff-px vs empty: 943 | buttons {'AiSaveBtn': True, 'AiTestBtn': True, 'AiRemoveBtn': True}
+  cfg {'ai': {'model': 'qa-model-l5', 'monthly_cap_eur': 9}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", '✓ Key saved for this test run only (kept in memory, not in Windows Credential Manager).', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'Key saved · qa-model-l5']

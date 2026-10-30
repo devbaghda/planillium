@@ -1,0 +1,2 @@
+# G13 brief
+Small fix, scope = REQUEST.md only. Reuse the side's existing save/park mechanisms; no refactor. Strict build + suite green before hand-off (precheck). Batch: one QA only after the fix, 25-minute cap, ACCEPTANCE lines 1-7 plus a one-trial sibling check on the other AI-section Enter paths. QA: foreground check before every input, new empty scratch root, G7 in-memory store, cmdkey /list before and after. Write reports to files first. Do not touch DECISIONS.md rules except to add the key rule if it is confirmed as a defect.

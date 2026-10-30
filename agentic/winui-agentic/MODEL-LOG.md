@@ -94,3 +94,4 @@
 - 2026-10-29 G3 round 3 agentic (idle rows skipped when teaching keywords) | PM chose sonnet (small bounded change, explicit spec) | outcome: ok (precheck green 0 warnings, 362/362)
 - coder: sonnet -- G3 round 3 (Addendum 3 item 1): skip idle rows when a category mark teaches keywords; one bounded service change, explicit spec.
 - coder outcome: ok (G3 round 3; precheck green 0 warnings, 362/362; one flaky AiClientTests log test on an earlier run, passed on rerun)
+- 2026-10-30 G13 QA | ACCEPTANCE 1-7 + one-trial sibling check on other AI Enter paths, 25 min cap | opus | focus/key-event + secret store judgement; PM brief | outcome: ok (PASS, 0 defects, ~16 of 25 min)

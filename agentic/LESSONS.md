@@ -82,3 +82,74 @@
 - Edit CRLF files with the Edit tool or byte-level replace; Python text mode or sed -i turns CRLF into LF.
 - A leak is a bottom level that keeps climbing: run one scenario per launch for 15 min, sample every 30 s, split .NET-managed vs native (largest private reserved block via VirtualQueryEx); a sawtooth or plateau is not a leak.
 - A "low-risk" fix that changes when the screen refreshes is a visible change: report it as an option, do not apply it.
+
+## Bulk marks / caps (G3)
+- Lifting a display cap touches four places: the truncation, the paging row's reachable count, Select all's row set, and the order of state resets.
+- Count text on a button can outgrow its row: check the width of every sibling row it applies to.
+- An option that varies per click (teach keywords) is threaded into every text it affects (dialog note, success bar, Settings confirm); grep the old fixed sentence.
+- C# has no `action?.()`: write `action?.Invoke()`; build, do not eyeball.
+- Check `git ls-files` before assuming a spec doc is tracked.
+
+## Machine-wide guards / filters / prompts (G10)
+- A guard on machine-wide side effects needs a sweep of every sibling (Registry, SpecialFolder/AppData, env vars, Process.Start, credential store); list each as covered or justified (G7 missed the Run key).
+- A "no dash" filter rule must exempt known bare program names first, or real apps land in "Other"; ask whether unlisted bare names go to "Other".
+- Before rewriting a prompt template grep the tests for its schema phrases; keep them or update assertions in the same pass.
+- Compact formats: explicit marker field (cf); only marked replies are expanded/rejected, unmarked input keeps the old path.
+- Rewriting a CRLF template file: normalise to LF, replace blocks, write CRLF back, check git diff --stat.
+- Spec lines in conflict (reject old form vs keep tests/file load): keep the safe behaviour, report the conflict.
+
+## Focus protection across pages / dialogs (G8)
+- Every ContentDialog has a scrolling body (its template wraps title, padding and content in a ScrollViewer): treat dialogs as scrollers.
+- Route a whole UI kind through its single factory (DialogControls.Build) so one change covers every sibling and future ones.
+- Claim PointerReleased at a scroller's template root to cover padding, scrollbar strip and area below content without layout changes (untested until G8 QA).
+- A press-time park must skip presses inside popups and inside the focused box's owner control (NumberBox, AutoSuggestBox), or suggestion picking breaks.
+- A "did the user click a control" test walks up to the nearest Control, skipping ScrollViewer/ScrollBar chrome; the pressed element is usually inner layout.
+- A park inside a scroller handles BringIntoViewRequested (no scroll) and resets its tab stop on LostFocus; give the helper a prepare method for XAML-declared parks.
+- A guard remembering the last focused box per area must forget it when an outside park takes focus.
+- WinUI: AccessibilityView is in Microsoft.UI.Xaml.Automation.Peers; fix the CS error first, the WMC9999/WMC1509 XAML errors follow from it.
+- Glob may report "No files found" for an existing folder: confirm with ls.
+
+## Indicators / badges (G6)
+- Before "fixing" an indicator, grep XAML and code to confirm it exists; if not, build it and report the false premise.
+- Derive a new indicator from the existing widget's own condition via one shared function, never a second definition (e.g. overdue).
+- Hook refresh to the call every mutating action already makes (RefreshScore) plus the widget's Render: covers all pages and midnight rollover.
+
+## AI cost cap / estimates (G9a)
+- Wire a cross-cutting guard in the single factory (AiKey.CreateClient) with optional ctor params so existing tests stay unchanged; any new AI call must be built through it.
+- A spend estimate needs one named price table, a dearest-row fallback for unknown models, a chars/3 fallback when usage is missing, and the UI/report must say "estimate".
+- "Available wherever X is used": grep who parses X first; the real defect (dash inside Telegram chat name) was in the shared parser, not a missing field.
+- sed -i flips CRLF on csproj files too: use Edit or a byte-level replace, git checkout to undo.
+
+## Group QA technique (2026-10-29)
+- b1f_lib launch() ends on MENTOR_PAGE=settings and hard-codes stub URL port 9: override per step, run the stub on that port.
+- PrintWindow can return black: use pywinauto capture_as_image() with the app in front.
+- The Today dot (InfoBadge) is not in the UIA tree: count accent-colour pixels at the nav item before/after.
+- Diary "Showing N of M" is not UIA-readable; the "Mark all N ..." button names carry the filtered count.
+- Write QA-PROGRESS.md by absolute main path (a relative path from a worktree lands in the worktree copy).
+- Python files with NBSP or the euro sign written via sed break UTF-8: write with the file tool using \u escapes.
+- AI-dependent lines need a decision up front: scratch runs allow only credential anthropic_api_key_test, stored in the real Credential Manager; ask the PM at plan time.
+- Diary: "– Telegram" rows (no chat name) must count under Telegram, not Other; a paid tag equal to a built-in tag must be listed once; check Reports header width at 1180x780; a refusal message must clear when the box text changes.
+
+## G11 group-QA fixes (2026-10-30)
+- Before calling a .NET runtime crash fixed, check the triggering switch exists in this build, then prove the fix by forcing the switch in a scratch program; every JsonSerializerOptions carries an explicit resolver (JsonFileIO.Plain/Indented), no Serialize without options.
+- A scratch-safety guard at the single store allows no name exceptions; test secrets live in memory (env PLANILLIUM_SCRATCH_AI_KEY, scratch Debug only).
+- Compare user-editable keys (tag values) ignoring case where matched or de-duplicated; check money paths separately (open question: paid-tag income is still case-exact).
+- A title parser must handle the separator with nothing on one side ("- Telegram").
+- "Header cut off" on a sideways-scrolling table is often a hidden scrollbar: wrap the header, do not change the shared column grid.
+- Tie a refusal message to the box it refuses and clear it when that box changes; refresh a status line from an event raised by the one writer, not only on page load.
+- Model log is agentic/MODEL-LOG.md (winui-agentic/MODEL-LOG.md is an old B1d file).
+
+## G12 Settings Esc / ceiling (2026-10-30)
+- Esc leaves every Settings text/number box and restores the saved value; test Esc and blank click on each box (siblings), reading which element got focus ("Nav" = parked).
+- Enter in an AI box saves only that box; a key is stored only by Save or Enter in the key box; blank click or Esc empties an unsaved key (G13, QA PASS). A forgotten key left after Tab/click-away is stored by a later Save (rule allows; PM may rule).
+- Read summary/status texts outside the tested box after every step, not only focus and value.
+- Money ceiling EUR 100 000,00/month applies to salary, tag amounts and new tag; test the boundary (100000 ok, 100000,01 refused).
+- A Compact NumberBox's spin buttons are not in the UIA tree: ElementFromPoint at its right edge gives "UpDownPopup"; a real click on the upper/lower half steps it.
+- Check the test DLL date before dotnet test --no-build; insert edits above a method's doc comment and read back; keep CRLF when scripting edits.
+
+## G13 key-only-on-save (2026-10-30)
+- The password box text is unreadable by UIA: judge "empty" by screenshot vs an empty box.
+- Run the "stores the key" line on a fresh launch (a saved key already shows "Key saved", repeat proves nothing); put "No key" cases first, storing cases last (one launch, ~3 min).
+- Kill only the PID you started, never by program name (the user's own Planillium may run).
+- A shared Enter handler saves per box by branching on the sender; use ReferenceEquals(sender, box) (== on object vs control fails -warnaserror CS0252).
+- "Click blank discards" belongs at the single place the park receives the cursor (FocusPark_GettingFocus, OldFocusedElement).

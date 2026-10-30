@@ -1,0 +1,10 @@
+== open AI
+AI section True
+edits [('AiKeyBox', 'Anthropic API key'), ('AiModelBox', 'Model'), ('AiCapBox', 'Monthly AI limit')]
+  focus |AI|list item | keybox diff-px vs empty: 0 | buttons {'AiSaveBtn': True, 'AiTestBtn': False, 'AiRemoveBtn': False}
+  cfg {}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'No key — copy and paste']
+== L3a fresh: key + Save (no blank click)
+  focus AiSaveBtn|Save|button | keybox diff-px vs empty: 943 | buttons {'AiSaveBtn': True, 'AiTestBtn': True, 'AiRemoveBtn': True}
+  cfg {'ai': {'model': ''}}
+  texts ['Optional. With your own Anthropic API key, "Ask Claude" in Replace remaining tasks and Add plan sends the prompt shown t', 'Anthropic API key', 'Monthly AI limit (EUR)', "When the month's estimated cost reaches the limit, Ask Claude and Test connection stop until you raise it here or the ne", '✓ Key saved for this test run only (kept in memory, not in Windows Credential Manager).', '2925,00€ monthly · Not employed (losing)', 'Activity keywords', 'Not connected', 'Key saved · claude-sonnet-5-5']
