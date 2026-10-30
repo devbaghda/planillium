@@ -26,3 +26,6 @@
 - 2026-10-29 group QA launch opus (g1-g10, UIA, 35 min cap) | outcome: ok (report written; verdict FAIL, D1 high)
 - 2026-10-30 G11 regular (group-QA fixes) | PM chose opus (serializer failure only visible in-app; secret-store change; earlier sonnet build of this class failed) | outcome: ok (built, precheck green 229/229 first run; QA deferred)
 2026-10-30 G11 generalist model check: opus confirmed sufficient (in-app-only serializer failure, secret-store change, rounding rule); outcome: ok
+- 2026-10-30 re-QA regular | PM chose sonnet for generalist (precheck, start QA, pass up; no build); QA opus per user ruling | outcome: ok (QA opus FAIL, 2 medium defects D1 AI-box Esc/blank click, D2 salary no max; ~20 of 35 min)
+- 2026-10-30 G12 regular (Esc rule, salary ceiling, cent match) | PM chose opus (focus/key-event behaviour, LESSONS class; rounding across three views) | outcome: pending
+2026-10-30 G12 generalist model check: opus confirmed sufficient (focus/key-event across all Settings boxes, money ceiling, cent rounding across views)

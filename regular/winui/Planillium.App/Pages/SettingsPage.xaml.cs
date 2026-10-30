@@ -44,8 +44,10 @@ public sealed partial class SettingsPage : Page
         MonthlyIncomeBox.Committed += (_, _) => { if (!_initialising) SaveIncome(); };
         MonthlyIncomeBox.Submitted += (_, _) => Park(MonthlyIncomeBox);
         MonthlyIncomeBox.Cancelled += (_, _) => Park(MonthlyIncomeBox);   // B1h: Esc leaves the box
+        MonthlyIncomeBox.Maximum = IncomeService.MaxMonthlyEur;   // G12
         WatchMoneyBox(MonthlyIncomeBox, () => "Previous salary needs a number");
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
+        PreviewKeyDown += Page_PreviewKeyDown;   // G12: Esc on every other Settings box
         NewPaidTagRate.Value = double.NaN;
         WatchMoneyBox(NewPaidTagRate, null);
         var (lineHint, showLineHint) = ErrorHint();
@@ -360,7 +362,7 @@ public sealed partial class SettingsPage : Page
         {
             var t = tag;
             // B1d: a payable tag never holds 0 or nothing — leaving the box that way puts the stored amount back.
-            var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", Width = 240, KeepsStoredValue = true, Accepts = v => v > 0 };
+            var rate = new MoneyBox { Header = $"{t.Label} — monthly net (€)", Width = 240, KeepsStoredValue = true, Accepts = v => v > 0, Maximum = IncomeService.MaxMonthlyEur };
             rate.Value = t.MonthlyEur;
             WatchMoneyBox(rate, () => $"\"{t.Label}\" needs an amount above 0");
             rate.Committed += (_, _) =>
@@ -434,7 +436,13 @@ public sealed partial class SettingsPage : Page
         box.NegativeChanged += (_, on) => { if (on) SaveStatus.Text = ""; };
         if (revertReason is not null)
             box.Reverted += (_, _) => SaveStatus.Text = revertReason() + " — the saved amount was kept.";
+        // G12: an absurd amount (e.g. 999 999 999 999) is never saved; the box already shows the stored amount.
+        box.TooLarge += (_, _) => SaveStatus.Text = TooLargeText + " The saved amount was kept.";
     }
+
+    /// <summary>G12: the refusal for an amount above <see cref="IncomeService.MaxMonthlyEur"/>.</summary>
+    private static string TooLargeText =>
+        $"Amount is too large — at most {MainWindow.FormatEur(IncomeService.MaxMonthlyEur)} a month.";
 
     // ── the new-tag line's message (B1c minus, B1d refusals) ─────────────
 
@@ -520,9 +528,10 @@ public sealed partial class SettingsPage : Page
 
     // ── "the cursor is nowhere" (B1b park, B1c Enter/blank-click/Tab rules) ──
     // WinUI has no "no focus" state inside a window, so "nowhere" is the 1 px see-through
-    // IncomeFocusPark button: it has no caret, so typing reaches no box. It sits just before the
-    // salary box in the tab order, so a plain Tab from it would put the cursor in the salary box
-    // whatever box was left — the very jump the user reported. Tab/Shift+Tab on the park therefore
+    // IncomeFocusPark button: it has no caret, so typing reaches no box. It sits before the content
+    // pane in the tab order (page level since G12, so every section can park), so a plain Tab from it
+    // would put the cursor in the section's first box whatever box was left — the very jump the user
+    // reported (B1c, salary box). Tab/Shift+Tab on the park therefore
     // continue from the element that was parked from, as if the park had never happened.
 
     /// <summary>The element focus was parked from (null when it no longer exists, e.g. after Remove).</summary>
@@ -539,7 +548,8 @@ public sealed partial class SettingsPage : Page
     {
         if (e.Key != Windows.System.VirtualKey.Tab) return;
         var from = _parkedFrom;
-        if (from is null || !IsInIncomePanel(from) || from.Visibility != Visibility.Visible) return;
+        // G12: any box on the page can be parked from now, not only the Income ones.
+        if (from is null || !IsWithin(from, this) || from.Visibility != Visibility.Visible) return;
         e.Handled = true;
         var shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
@@ -578,6 +588,7 @@ public sealed partial class SettingsPage : Page
     {
         _tabPending = false;   // a click is never "the Tab that left the line"
         _focusIntent = null;
+        _skipSaveFor = null;
         var src = e.OriginalSource as DependencyObject;
         _pressSource = src;
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
@@ -585,8 +596,9 @@ public sealed partial class SettingsPage : Page
         var blank = IsNonInteractive(src);
         // B1b/B1c: a click on a heading, caption or blank space takes the cursor out of a money box
         // (or the new-tag line) and leaves it nowhere. A click on another control lets that control
-        // take focus as usual.
-        if ((focused is MoneyBox || inLine) && blank) Park(focused as UIElement);
+        // take focus as usual. G12: the same for every text, number and password box on the page;
+        // leaving the box saves it as before.
+        if ((focused is TextBox or PasswordBox || inLine) && blank) Park(focused as UIElement);
         // B1d: whatever the click did, the cursor must not end up in an Income box the click was not
         // on (WinUI may hand focus to the first focusable box when a container takes a click —
         // the salary box is that first box). Checked once the press, and again once the release,
@@ -699,6 +711,7 @@ public sealed partial class SettingsPage : Page
             RefuseNewTag("Monthly net needs an amount above 0.");
             return false;
         }
+        if (NewPaidTagRate.Value > IncomeService.MaxMonthlyEur) { fix = NewPaidTagRate; RefuseNewTag(TooLargeText); return false; }   // G12
         var all = PaidTags.All().ToList();
         if (all.Any(p => DiaryTag.Same(p.Value, slug))) { fix = NewPaidTagName; RefuseNewTag($"\"{label}\" is already a payable tag."); return false; }
         // A name matching a built-in tag (e.g. Selfdev) simply makes that tag payable.
@@ -724,7 +737,9 @@ public sealed partial class SettingsPage : Page
         }
         // B1c: a negative amount is never saved; a toggle flip while the box shows one keeps the
         // amount that is already stored.
-        var amount = MonthlyIncomeBox.IsNegative ? ConfigService.PotentialMonthlyIncomeEur() : MonthlyIncomeBox.Value;
+        // G12: nor is an amount above the ceiling (the box refuses it on leave; this covers a toggle flip mid-typing).
+        var amount = MonthlyIncomeBox.IsNegative || MonthlyIncomeBox.Value > IncomeService.MaxMonthlyEur
+            ? ConfigService.PotentialMonthlyIncomeEur() : MonthlyIncomeBox.Value;
         try
         {
             ConfigService.Mutate(cfg =>
@@ -765,7 +780,7 @@ public sealed partial class SettingsPage : Page
     /// in one Mutate call — this just removes the extra click.</summary>
     private void Rules_Changed(object sender, RoutedEventArgs e)
     {
-        if (_initialising) return;
+        if (_initialising || SkipSave(sender)) return;
         SaveRules();
     }
 
@@ -792,10 +807,12 @@ public sealed partial class SettingsPage : Page
         if (!SaveHoursAndEod(out var hoursError))
         {
             SaveStatus.Text = hoursError;
+            _rulesError = true;
             return;
         }
 
         var rulesOk = SaveRemainingRules(out var rulesError);
+        _rulesError = !rulesOk;
         // The tracker reads config once at construction — restart it so hours/keyword/
         // threshold changes apply now, not at the next app start. Unconditional: hours/EOD
         // above already succeeded even if the rest of the page didn't.
@@ -976,7 +993,7 @@ public sealed partial class SettingsPage : Page
     /// neutral greeting) — nothing here forces a value.</summary>
     private void YourName_Changed(object sender, RoutedEventArgs e)
     {
-        if (_initialising) return;
+        if (_initialising || SkipSave(sender)) return;
         try
         {
             ConfigService.Mutate(cfg => cfg["user_name"] = YourName.Text.Trim());
@@ -1036,6 +1053,163 @@ public sealed partial class SettingsPage : Page
         if (_refusedCapText is null || AiCapBox.Text == _refusedCapText) return;
         _refusedCapText = null;
         AiResult.Text = "";
+    }
+
+    // ── G12 (2026-10-30): Esc, Enter and leaving on the other Settings boxes ──
+    // Esc in any text, number or password box puts back the last SAVED value, drops the validation
+    // message that belonged to the discarded text, and leaves the box (to the park). The money boxes
+    // keep their own Esc (B1h) and the new-tag line keeps its own (B1). The AI cap saves when it is
+    // left or Enter is pressed, like the other autosaving boxes; Model and key still save with Save.
+
+    /// <summary>A box whose next LostFocus must not save: Esc just put its saved value back.</summary>
+    private object? _skipSaveFor;
+
+    /// <summary>True while the status line shows a rules validation message (set by SaveRules).</summary>
+    private bool _rulesError;
+
+    private bool SkipSave(object sender)
+    {
+        if (!ReferenceEquals(sender, _skipSaveFor)) return false;
+        _skipSaveFor = null;
+        return true;
+    }
+
+    private void Page_PreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        _skipSaveFor = null;
+        if (e.Key is not (Windows.System.VirtualKey.Escape or Windows.System.VirtualKey.Enter)) return;
+        if (XamlRoot is null) return;
+        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        if (focused is null || focused is MoneyBox || InNewPaidTagLine(focused) || !IsWithin(focused, this)) return;
+
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            if (!ReferenceEquals(focused, AiCapBox)) return;
+            e.Handled = true;
+            if (SaveCapFromBox()) Park(AiCapBox);
+            return;
+        }
+
+        if (OwningNumberBox(focused) is { } number)
+        {
+            if (SavedNumber(number) is not { } saved) return;
+            e.Handled = true;
+            // Value only re-draws the text when it changes, so it goes through NaN first; neither
+            // assignment saves (the guard), and the box's own LostFocus then finds nothing new to commit.
+            _initialising = true;
+            try { number.Value = double.NaN; number.Value = saved; }
+            finally { _initialising = false; }
+            Park(number);
+            if (_rulesError) SaveRules();   // the message was about discarded text: re-check what is left
+            return;
+        }
+
+        if (focused is PasswordBox pw && ReferenceEquals(pw, AiKeyBox))
+        {
+            e.Handled = true;
+            AiKeyBox.Password = "";   // the typed key is discarded; nothing is saved
+            Park(AiKeyBox);
+            return;
+        }
+
+        if (focused is not TextBox box || SavedText(box) is not { } text) return;
+        e.Handled = true;
+        box.Text = text;
+        if (ReferenceEquals(box, AiCapBox))
+        {
+            if (_refusedCapText is not null) AiResult.Text = "";
+            _refusedCapText = null;
+        }
+        _skipSaveFor = box;
+        Park(box);
+        if (_rulesError && IsRulesBox(box)) SaveRules();
+    }
+
+    private static NumberBox? OwningNumberBox(DependencyObject? d)
+    {
+        for (; d is not null; d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d))
+        {
+            if (d is NumberBox n) return n;
+            if (d is Page) return null;
+        }
+        return null;
+    }
+
+    /// <summary>What config.json holds for a number box (the same readers LoadRules uses).</summary>
+    private double? SavedNumber(NumberBox box)
+    {
+        if (ReferenceEquals(box, GraceMin)) return ConfigService.ReminderGraceMinutes();
+        if (ReferenceEquals(box, RepeatMin)) return ConfigService.ReminderIntervalMinutes();
+        if (ReferenceEquals(box, IdleMin)) return ConfigService.IdleThresholdMinutes();
+        if (ReferenceEquals(box, RetentionDays)) return ConfigService.DiaryRetentionDays();
+        if (ReferenceEquals(box, LateDayReminderHours))
+            return ConfigService.Root.TryGetProperty("late_day_task_reminder_hours", out var v) && v.TryGetDouble(out var n) ? n : 2.0;
+        foreach (var (key, b) in _scoringBoxes)
+            if (ReferenceEquals(b, box)) return ConfigService.ScoringRate(key);
+        return null;
+    }
+
+    /// <summary>What config.json (or the AI settings) holds for a text box; null for a box this page does not know.</summary>
+    private string? SavedText(TextBox box)
+    {
+        if (ReferenceEquals(box, YourName)) return ConfigService.UserName;
+        if (ReferenceEquals(box, WorkStart)) return ConfigService.WorkStartTime().ToIsoTimeOfDay();
+        if (ReferenceEquals(box, WorkEnd)) return ConfigService.WorkEndTime().ToIsoTimeOfDay();
+        if (ReferenceEquals(box, EodTimeBox)) return EodTime();
+        if (ReferenceEquals(box, RulesOn) || ReferenceEquals(box, RulesOff) || ReferenceEquals(box, RulesNeutral))
+        {
+            var (on, off, neutral) = SavedActivityKeywords();
+            return ReferenceEquals(box, RulesOn) ? on : ReferenceEquals(box, RulesOff) ? off : neutral;
+        }
+        if (ReferenceEquals(box, IdleOn)) return SavedWords("idle_activity_rules", DiaryCategory.OnPlan);
+        if (ReferenceEquals(box, IdleOff)) return SavedWords("idle_activity_rules", DiaryCategory.OffPlan);
+        if (ReferenceEquals(box, IdleNeutral)) return SavedWords("idle_activity_rules", DiaryCategory.Neutral);
+        if (ReferenceEquals(box, AiModelBox)) return AiSettings.Model;
+        if (ReferenceEquals(box, AiCapBox)) return SavedCapText();
+        return null;
+    }
+
+    private bool IsRulesBox(TextBox box) =>
+        box == WorkStart || box == WorkEnd || box == EodTimeBox || box == RulesOn || box == RulesOff ||
+        box == RulesNeutral || box == IdleOn || box == IdleOff || box == IdleNeutral;
+
+    private static string SavedWords(string section, string key)
+    {
+        var cfg = ConfigService.Root;
+        if (!cfg.TryGetProperty(section, out var s) || s.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !s.TryGetProperty(key, out var arr) || arr.ValueKind != System.Text.Json.JsonValueKind.Array)
+            return "";
+        return string.Join("\n", arr.EnumerateArray()
+            .Select(v => v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() ?? "" : "")
+            .Where(v => v.Length > 0));
+    }
+
+    private static string SavedCapText() =>
+        AiSpend.CapEur.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void AiCapBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_initialising || SkipSave(sender)) return;
+        SaveCapFromBox();
+    }
+
+    /// <summary>G12: saves the AI cap from its box when the text differs from the saved cap. A refused
+    /// cap saves nothing, keeps the typed text and shows why (same message as Save). True when the box
+    /// now matches what is saved.</summary>
+    private bool SaveCapFromBox()
+    {
+        if (AiCapBox.Text.Trim() == SavedCapText()) return true;
+        if (AiSpend.TrySaveCap(AiCapBox.Text) is { } capProblem)
+        {
+            AiResult.Text = capProblem;
+            _refusedCapText = AiCapBox.Text;
+            return false;
+        }
+        _refusedCapText = null;
+        AiCapBox.Text = SavedCapText();
+        AiResult.Text = "Saved.";
+        RefreshSpendLine();
+        return true;
     }
 
     private void AiSave_Click(object sender, RoutedEventArgs e)

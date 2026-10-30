@@ -154,6 +154,10 @@ public static class ReportData
             keepEmpty: true, daily);
     }
 
+    /// <summary>A EUR figure as Reports shows it: rounded to the cent (G11/G12 rule: every money cell and
+    /// every sum across days is built from these rounded day figures).</summary>
+    public static double Cents(double v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+
     /// <summary>Folds <see cref="DailyRows"/> into labelled buckets — the one implementation
     /// behind both bucket tables, which were near-identical apart from how a date maps to a
     /// bucket and how that bucket is labelled.</summary>
@@ -174,8 +178,10 @@ public static class ReportData
                 Score = b.Score + r.Score,
                 Done = b.Done + r.Done,
                 Total = b.Total + r.Total,
-                Income = b.Income + inc.Income,
-                Paid = b.Paid + inc.Paid,
+                // G12: a bucket folds each day's figure as shown (rounded to the cent), so a week's
+                // Month/Year row equals the same week's Total in the Week view to the cent.
+                Income = (double)((decimal)b.Income + (decimal)Cents(inc.Income)),
+                Paid = (double)((decimal)b.Paid + (decimal)Cents(inc.Paid)),
             };
         }
         // The Year view drops months with nothing in them at all: a fresh install would

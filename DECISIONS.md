@@ -191,7 +191,16 @@
       recommendations").** Every cell of the two EUR columns (Income lost/gained, Of which paid work) is rounded to
       the cent, and the Total row adds up exactly those cents, so the rows always sum to the Total. It is no longer
       the separately computed period figure (`SumForPeriod`), which drifted a cent from the rows (4 x -€81,66 showed
-      a Total of -€326,63).
+      a Total of -€326,63). G12 (2026-10-30): the Month and Year rows are built from the same per-day cents
+      (`ReportData.Bucket` adds each day's rounded figure), so one week's paid work reads the same to the cent in the
+      Week Total, its Month row and its Year row (it read 99,20 vs 99,21 before).
+    - **Money ceiling: €100 000 a month (G12, 2026-10-30, user asked for "a sensible ceiling").** The previous
+      salary and every payable-tag amount above `IncomeService.MaxMonthlyEur` (100 000) are refused with "Amount is
+      too large", nothing is saved and the box shows the saved amount again (it silently saved 999 999 999 before).
+    - **Esc in any Settings box reverts to the saved value (G12, user ruling 2026-10-30).** Every text, number and
+      password box on Settings: Esc puts back what is saved, drops the validation message about the discarded text
+      and leaves the box; a click on blank space leaves the box too and saves as before. The AI cap now also saves
+      on leaving the box or Enter; Model and API key still save only with Save (Esc discards a typed key).
     - **A tag's identity ignores letter case (G11).** "Studioshoo" and "studioshoo" are one tag: listed once in
       every tag list and the Diary tag filter, one Mark button, one payable entry, and payable minutes are matched
       case-insensitively (never counted twice).

@@ -62,6 +62,12 @@
             <TextBlock x:Name="TrackerInfo" TextWrapping="Wrap"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
         </StackPanel>
+        <!-- Focus park (B1b; page level since G12 so every section can use it): a 1 px, see-through button (a tab
+             stop only while parked), laid over the title row so it takes no space. Esc, Enter or a click on a heading
+             or blank space moves focus here, so stray typing reaches no box. The name is kept for the QA harnesses. -->
+        <Button x:Name="IncomeFocusPark" Grid.Row="0" Grid.Column="0" Width="1" Height="1" MinWidth="0" MinHeight="0"
+                Padding="0" Opacity="0.01" IsTabStop="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+                PreviewKeyDown="IncomeFocusPark_PreviewKeyDown"/>
 
         <!-- ══ content pane ══════════════════════════════════════════════════════════════ -->
         <ScrollViewer x:Name="SectionScroll" Grid.Row="1" Grid.Column="0"
@@ -151,11 +157,6 @@
 
                 <StackPanel x:Name="IncomePanel" Spacing="16" VerticalAlignment="Top" Visibility="Collapsed">
                     <TextBlock Text="Income" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <!-- Focus park (B1b): a 1 px, see-through, button (a tab stop only while parked). Clicking a heading moves focus
-                         here so stray typing cannot reach a money box. -->
-                    <Button x:Name="IncomeFocusPark" Width="1" Height="1" MinWidth="0" MinHeight="0" Padding="0"
-                            Opacity="0.01" IsTabStop="False" Margin="0,-16,0,-16"
-                            PreviewKeyDown="IncomeFocusPark_PreviewKeyDown"/>
                     <!-- Built in code (SettingsPage constructor) by the same row builder the payable tags use. -->
                     <StackPanel x:Name="SalaryHost"/>
                     <ToggleSwitch x:Name="EmployedToggle" Header="Employment status"
@@ -249,7 +250,7 @@
                     <PasswordBox x:Name="AiKeyBox" Header="API key" PlaceholderText="sk-ant-…" MaxWidth="460" HorizontalAlignment="Left"/>
                     <TextBox x:Name="AiModelBox" Header="Model" MaxWidth="460" HorizontalAlignment="Left"/>
                     <TextBox x:Name="AiCapBox" Header="Monthly AI cap (€)" PlaceholderText="5" MaxWidth="460" HorizontalAlignment="Left"
-                             AutomationProperties.Name="Monthly AI cap in euro" TextChanged="AiCapBox_TextChanged"/>
+                             AutomationProperties.Name="Monthly AI cap in euro" TextChanged="AiCapBox_TextChanged" LostFocus="AiCapBox_LostFocus"/>
                     <TextBlock x:Name="AiSpendText" TextWrapping="Wrap" FontSize="12"
                                AutomationProperties.AutomationId="AiSpendText"/>
                     <StackPanel Orientation="Horizontal" Spacing="8">

@@ -106,7 +106,7 @@ public sealed partial class ReportsPage
     /// <summary>G11 (2026-10-30) rule: every EUR cell in these tables shows the figure rounded to the cent, and the
     /// Total row is the sum of those shown cents, so the rows add up to the Total exactly. (The Total used to be the
     /// unrounded period figure, which drifted a cent from the rows once several rows carried fractions of a cent.)</summary>
-    private static double Cents(double v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+    private static double Cents(double v) => ReportData.Cents(v);
 
     private static (double Income, double Paid) SumOfShown(IEnumerable<(double Income, double Paid)> rows)
     {

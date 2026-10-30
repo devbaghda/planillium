@@ -40,6 +40,11 @@ public sealed class IncomeService : IDisposable
     /// against the few off-plan hours and inflated the rate several-fold.</summary>
     public const double WorkingHoursPerMonth = 168;
 
+    /// <summary>G12 (2026-10-30): the most a monthly amount in Settings → Income (previous salary, a payable
+    /// tag) may be. Above it the box says "Amount is too large" and nothing is saved — a slipped key
+    /// (999999999999) used to save €999 999 999 a month silently and turn every income figure into nonsense.</summary>
+    public const double MaxMonthlyEur = 100_000;
+
     /// <summary>What one hour of work is worth: configured monthly net ÷ 168 h.</summary>
     public static double HourValueEur() =>
         ConfigService.PotentialMonthlyIncomeEur() / WorkingHoursPerMonth;

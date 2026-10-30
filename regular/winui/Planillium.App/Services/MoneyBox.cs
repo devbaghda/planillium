@@ -149,6 +149,14 @@ public sealed class MoneyBox : TextBox
             finally { _internal = false; }
         }
         if (IsNegative) return;
+        // G12: an amount above Maximum is never committed. A box holding a stored amount shows that
+        // amount again; TooLarge lets the page say why.
+        if (!double.IsNaN(_value) && _value > Maximum)
+        {
+            if (KeepsStoredValue && !double.IsNaN(_committed)) Value = _committed;
+            TooLarge?.Invoke(this, EventArgs.Empty);
+            return;
+        }
         // B1d: a box holding a stored amount never leaves an empty (or unaccepted) text behind it —
         // the box would say one thing and config.json another. It goes back to the stored amount and
         // says so through Reverted; nothing is saved.
@@ -170,6 +178,14 @@ public sealed class MoneyBox : TextBox
 
     /// <summary>B1d: optional extra rule for a non-negative value (e.g. "above 0" for payable tags).</summary>
     public Func<double, bool>? Accepts { get; set; }
+
+    /// <summary>G12: the largest amount the box commits (no limit unless set).</summary>
+    public double Maximum { get; set; } = double.PositiveInfinity;
+
+    /// <summary>G12: raised when the box was left (or Enter pressed) holding an amount above
+    /// <see cref="Maximum"/>; nothing was committed, and a <see cref="KeepsStoredValue"/> box already
+    /// shows its stored amount again.</summary>
+    public event EventHandler? TooLarge;
 
     /// <summary>B1d: raised after an empty or refused value was replaced by the stored amount.</summary>
     public event EventHandler? Reverted;
