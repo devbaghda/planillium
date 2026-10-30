@@ -12,6 +12,17 @@ public static class AiSettings
 {
     private const string KeyName = "anthropic_api_key";
 
+    /// <summary>G11: the fake AI key for a scratch (QA) run. Read only in Debug / test builds and only kept in the
+    /// in-memory scratch store (<see cref="CredentialStore.SeedScratch"/>); a normal or Release run ignores it.</summary>
+    public const string ScratchKeyEnv = "PLANILLIUM_SCRATCH_AI_KEY";
+
+    static AiSettings()
+    {
+#if DEBUG || PLANILLIUM_TESTS
+        if (Environment.GetEnvironmentVariable(ScratchKeyEnv) is { Length: > 0 } k) CredentialStore.SeedScratch(KeyName, k.Trim());
+#endif
+    }
+
     public static bool HasKey => !string.IsNullOrEmpty(CredentialStore.Read(KeyName));
 
     /// <returns>false when Windows refused to store the key (it didn't round-trip).</returns>

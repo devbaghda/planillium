@@ -39,11 +39,22 @@ public static class CredentialStore
     // can't read the user's real AI key / TickTick secret and tokens, can't overwrite them, and can't
     // delete them ("Remove key", "Disconnect", "Clear all my data"). Whatever a scratch run saves lives
     // only until it exits (G7, 2026-10-27).
+    // G11: keyed on AppPaths.ScratchRequested (MENTOR_ROOT set at all), not IsScratch, so a mistyped scratch path
+    // still never reaches the real store.
     private static readonly Dictionary<string, string> ScratchSecrets = new();
+
+    /// <summary>G11: puts a test secret into the in-memory scratch store (e.g. the fake AI key a QA run passes in an
+    /// environment variable), so QA needs no typing and nothing is written anywhere. Does nothing outside a scratch
+    /// run, and never replaces a value already saved in this run.</summary>
+    public static void SeedScratch(string key, string value)
+    {
+        if (!AppPaths.ScratchRequested || string.IsNullOrEmpty(value)) return;
+        lock (ScratchSecrets) ScratchSecrets.TryAdd(key, value);
+    }
 
     public static string? Read(string key)
     {
-        if (AppPaths.IsScratch)
+        if (AppPaths.ScratchRequested)
             lock (ScratchSecrets) return ScratchSecrets.TryGetValue(key, out var v) ? v : null;
 
         // Only the two forms actually documented above: current name, and the
@@ -78,7 +89,7 @@ public static class CredentialStore
     public static bool Write(string key, string value)
     {
         if (string.IsNullOrEmpty(value)) return false;
-        if (AppPaths.IsScratch)
+        if (AppPaths.ScratchRequested)
         {
             lock (ScratchSecrets) ScratchSecrets[key] = value;
             return true;
@@ -138,7 +149,7 @@ public static class CredentialStore
     /// finding R11-13) — logged now, matching the pattern Write already uses on failure.</summary>
     public static void Delete(string key)
     {
-        if (AppPaths.IsScratch)
+        if (AppPaths.ScratchRequested)
         {
             lock (ScratchSecrets) ScratchSecrets.Remove(key);
             return;

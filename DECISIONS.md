@@ -187,6 +187,14 @@
       credit; employed days get none (they already add the full rate); today counts live in the
       Reports figure but not in the sidebar chip (posted days only, as before). Tasks count on the
       day they were assigned, so a late completion credits its assigned day.
+    - **Reports table: the Total row is the sum of the rows as shown (G11, 2026-10-30, user: "go with your
+      recommendations").** Every cell of the two EUR columns (Income lost/gained, Of which paid work) is rounded to
+      the cent, and the Total row adds up exactly those cents, so the rows always sum to the Total. It is no longer
+      the separately computed period figure (`SumForPeriod`), which drifted a cent from the rows (4 x -€81,66 showed
+      a Total of -€326,63).
+    - **A tag's identity ignores letter case (G11).** "Studioshoo" and "studioshoo" are one tag: listed once in
+      every tag list and the Diary tag filter, one Mark button, one payable entry, and payable minutes are matched
+      case-insensitively (never counted twice).
 
 
 15. **Replace remaining tasks: new tasks start right after the last done task** (user decision

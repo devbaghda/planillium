@@ -197,13 +197,11 @@ public sealed partial class ReportsPage : Page
             // this week regardless of what the selector said.
             var totals = ReportData.PeriodStats(_period, db.Conn, score);
             using var income = new IncomeService(db);
-            var incomeSum = income.SumForPeriod(_period, score);
-            var earned = income.PaidEarningsForPeriod(_period).Sum(e => e.Eur);
             // B1i (2026-10-27): the Score card and the income card row are gone; the two EUR figures
             // are columns of the table below, one value per row, folded from the same per-day figures.
-            // The Total row shows the period figures themselves (what the cards used to show).
+            // G11 (2026-10-30): the Total row is the sum of the rows as shown (to the cent), not the
+            // separately computed period figure, which could differ from the rows by a cent.
             var daily = income.DailyFigures(score, ReportData.PeriodStart(_period, today));
-            var incomeTotals = (Income: incomeSum, Paid: earned);
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -211,7 +209,7 @@ public sealed partial class ReportsPage : Page
             // 2026-08-05) and the card would otherwise clip the last of them off in silence on a
             // narrow window — see Scrollable's own comment for the measurement.
             if (_period is ReportPeriod.Day or ReportPeriod.Week)
-                Body.Children.Add(Card(Scrollable(DayTable(weekStats, daily, incomeTotals))));
+                Body.Children.Add(Card(Scrollable(DayTable(weekStats, daily))));
             else
             {
                 var buckets = _period == ReportPeriod.Month
@@ -223,7 +221,7 @@ public sealed partial class ReportsPage : Page
                 // which reads as broken rather than simply empty.
                 Body.Children.Add(buckets.Count == 0
                     ? Dim("No activity logged yet.")
-                    : Card(Scrollable(BucketTable(buckets, incomeTotals))));
+                    : Card(Scrollable(BucketTable(buckets))));
             }
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────

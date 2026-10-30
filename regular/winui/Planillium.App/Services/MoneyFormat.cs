@@ -11,6 +11,11 @@ namespace Planillium.App.Services;
 /// digits is a decimal ("14.5").</summary>
 public static class MoneyFormat
 {
+    /// <summary>The app's one euro display format ("€1 234,50", "-€0,40"; separators from the user's culture).
+    /// MainWindow.FormatEur forwards here; moved to plain C# (G11) so AiSpend's spend line uses the same format.</summary>
+    public static string Eur(double v) =>
+        (v < 0 ? "-€" : "€") + Math.Abs(v).ToString("N2", CultureInfo.CurrentCulture);
+
     public const char Thin = ' ';
     private const int MaxInt = 9, MaxDec = 2;
 

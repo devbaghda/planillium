@@ -163,7 +163,7 @@ public static class SplitDiaryEntryDialog
             foreach (var (label, value) in DiaryTag.Options)
                 tagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
             tagBox.SelectedIndex = prefillTag is null ? 0
-                : Array.FindIndex(DiaryTag.Options, t => t.Value == prefillTag) is >= 0 and var ti ? ti + 1 : 0;
+                : Array.FindIndex(DiaryTag.Options, t => DiaryTag.Same(t.Value, prefillTag)) is >= 0 and var ti ? ti + 1 : 0;
             AutomationProperties.SetName(tagBox, "Tag (optional)");
             // Fixed width, not Star (2026-08-06 follow-up) — inside rowsScroller's horizontal
             // ScrollViewer this Grid is offered effectively unconstrained width, and a Star

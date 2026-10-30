@@ -221,7 +221,7 @@ public sealed class IncomeService : IDisposable
         {
             using var cmd = _db.CreateCommand();
             cmd.CommandText = "SELECT date, COALESCE(SUM(duration_min), 0) FROM time_diary " +
-                              "WHERE tag=$t AND date >= $from AND date <= $to GROUP BY date";
+                              "WHERE tag=$t COLLATE NOCASE AND date >= $from AND date <= $to GROUP BY date";
             cmd.Parameters.AddWithValue("$t", tag.Value);
             cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
             cmd.Parameters.AddWithValue("$to", today.ToIsoDate());
@@ -254,7 +254,7 @@ public sealed class IncomeService : IDisposable
         {
             using var cmd = _db.CreateCommand();
             cmd.CommandText = "SELECT COALESCE(SUM(duration_min), 0) FROM time_diary " +
-                              "WHERE tag=$t AND date >= $from AND date <= $to";
+                              "WHERE tag=$t COLLATE NOCASE AND date >= $from AND date <= $to";
             cmd.Parameters.AddWithValue("$t", tag.Value);
             cmd.Parameters.AddWithValue("$from", from.ToIsoDate());
             cmd.Parameters.AddWithValue("$to", to.ToIsoDate());

@@ -226,6 +226,11 @@ public static class AppNames
     {
         if (IsTelegramMarked(title)) return StripTelegramTitle(title);
         var t = title.Trim();
+        // G11: "- Telegram" / "– Telegram" is a messenger title with no chat name (the empty head was trimmed off),
+        // so it is that messenger, not an unknown program called "- Telegram" (it landed under "Other").
+        if (t.Length > 2 && Array.IndexOf(DashChars, t[0]) >= 0 && char.IsWhiteSpace(t[1])
+            && t[1..].Trim() is var rest && Messengers.Contains(rest))
+            return rest;
         if (t.StartsWith('(') && t.Contains(')'))
         {
             var inner = t[1..t.IndexOf(')')];

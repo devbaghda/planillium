@@ -29,7 +29,9 @@ public static class CompactReply
         For a request that replaces the remaining tasks of an existing plan, send only {"p":[...]} (leave out i, n, d and b).
         """;
 
-    private static readonly JsonSerializerOptions Pretty = new()
+    // Built from .Default (G11): a from-scratch options object has no TypeInfoResolver, so
+    // ToJsonString threw for every reply holding a generically-added node (the tools array).
+    private static readonly JsonSerializerOptions Pretty = new(JsonSerializerOptions.Default)
     {
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,

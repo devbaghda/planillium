@@ -249,7 +249,7 @@
                     <PasswordBox x:Name="AiKeyBox" Header="API key" PlaceholderText="sk-ant-…" MaxWidth="460" HorizontalAlignment="Left"/>
                     <TextBox x:Name="AiModelBox" Header="Model" MaxWidth="460" HorizontalAlignment="Left"/>
                     <TextBox x:Name="AiCapBox" Header="Monthly AI cap (€)" PlaceholderText="5" MaxWidth="460" HorizontalAlignment="Left"
-                             AutomationProperties.Name="Monthly AI cap in euro"/>
+                             AutomationProperties.Name="Monthly AI cap in euro" TextChanged="AiCapBox_TextChanged"/>
                     <TextBlock x:Name="AiSpendText" TextWrapping="Wrap" FontSize="12"
                                AutomationProperties.AutomationId="AiSpendText"/>
                     <StackPanel Orientation="Horizontal" Spacing="8">

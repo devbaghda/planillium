@@ -11,7 +11,7 @@ namespace Planillium.App.Pages;
 public sealed partial class ReportsPage
 {
     private static Grid DayTable(List<ReportData.DayStat> weekStats,
-        IReadOnlyDictionary<DateOnly, (double Income, double Paid)> daily, (double Income, double Paid) periodTotals)
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid)> daily)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var rows = _period == ReportPeriod.Day
@@ -38,7 +38,8 @@ public sealed partial class ReportsPage
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition());
             var isToday = s.Date == today;
-            daily.TryGetValue(s.Date, out var money);
+            daily.TryGetValue(s.Date, out var raw);
+            var money = (Income: Cents(raw.Income), Paid: Cents(raw.Paid));
             // A day off correctly zeroes on/off-plan minutes here (same rule the score
             // uses), but showing that as a bare "0m/0m" reads identically to a tracking
             // failure or a genuinely idle day everywhere else in the app labels a day off
@@ -88,6 +89,8 @@ public sealed partial class ReportsPage
         // score total is the more useful figure — it's the same number the card above shows,
         // which is now guaranteed rather than hoped for: both fold ReportData.DailyRows.
         if (rows.Count > 1)
+        {
+            var periodTotals = SumOfShown(rows.Select(s => daily.GetValueOrDefault(s.Date)));
             AddTotalsRow(grid, columns,
                 [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1, null),
                  .. CategoryColumns.Select((c, i) =>
@@ -96,7 +99,20 @@ public sealed partial class ReportsPage
                  (rows.Sum(s => s.Score).ToString(), columns - 3, null),
                  (MainWindow.FormatEur(periodTotals.Income), columns - 2, IncomeBrush(periodTotals.Income)),
                  (MainWindow.FormatEur(periodTotals.Paid), columns - 1, PaidBrush())]);
+        }
         return grid;
+    }
+
+    /// <summary>G11 (2026-10-30) rule: every EUR cell in these tables shows the figure rounded to the cent, and the
+    /// Total row is the sum of those shown cents, so the rows add up to the Total exactly. (The Total used to be the
+    /// unrounded period figure, which drifted a cent from the rows once several rows carried fractions of a cent.)</summary>
+    private static double Cents(double v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+
+    private static (double Income, double Paid) SumOfShown(IEnumerable<(double Income, double Paid)> rows)
+    {
+        decimal income = 0, paid = 0;
+        foreach (var (i, p) in rows) { income += (decimal)Cents(i); paid += (decimal)Cents(p); }
+        return ((double)income, (double)paid);
     }
 
     /// <summary>The category columns both summary tables carry — the shared
@@ -143,7 +159,7 @@ public sealed partial class ReportsPage
         foreach (var (text, column, fore) in cells) Cell(text, column, fore);
     }
 
-    private static Grid BucketTable(List<ReportData.BucketStat> buckets, (double Income, double Paid) periodTotals)
+    private static Grid BucketTable(List<ReportData.BucketStat> buckets)
     {
         // Same shared alignment grid as DayTable above — which also means switching Week↔Month
         // no longer shifts the figures sideways, since the two tables' first columns were 110
@@ -170,8 +186,8 @@ public sealed partial class ReportsPage
                 .. CategoryColumns.Select(c => ReportData.FmtHours(b.Minutes.Of(c.Category))),
                 ReportData.FmtHours(b.Minutes.TotalMin),
                 b.Score.ToString(),
-                MainWindow.FormatEur(b.Income),
-                MainWindow.FormatEur(b.Paid),
+                MainWindow.FormatEur(Cents(b.Income)),
+                MainWindow.FormatEur(Cents(b.Paid)),
             ];
             for (var c = 0; c < cells.Length; c++)
             {
@@ -181,7 +197,7 @@ public sealed partial class ReportsPage
                     // Score keeps the same green/amber/red reading it has in the Day/Week table,
                     // so the one figure people actually look for is found the same way in both.
                     Foreground = c == columns - 3 ? ScoreBrush(b.Score)
-                        : c == columns - 2 ? IncomeBrush(b.Income)
+                        : c == columns - 2 ? IncomeBrush(Cents(b.Income))
                         : c == columns - 1 ? PaidBrush()
                         : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 };
@@ -195,6 +211,8 @@ public sealed partial class ReportsPage
         // several buckets, and a zero-bucket table never reaches this method at all (Render
         // substitutes a "No activity logged yet" message instead).
         if (buckets.Count > 0)
+        {
+            var periodTotals = SumOfShown(buckets.Select(b => (b.Income, b.Paid)));
             AddTotalsRow(grid, columns,
                 [($"{buckets.Sum(b => b.Done)}/{buckets.Sum(b => b.Total)}", 1, null),
                  .. CategoryColumns.Select((c, i) =>
@@ -203,6 +221,7 @@ public sealed partial class ReportsPage
                  (buckets.Sum(b => b.Score).ToString(), columns - 3, null),
                  (MainWindow.FormatEur(periodTotals.Income), columns - 2, IncomeBrush(periodTotals.Income)),
                  (MainWindow.FormatEur(periodTotals.Paid), columns - 1, PaidBrush())]);
+        }
         return grid;
     }
 

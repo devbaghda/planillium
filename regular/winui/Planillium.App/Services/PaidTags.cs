@@ -32,6 +32,9 @@ public static class PaidTags
             var label = e.TryGetProperty("label", out var l) ? l.GetString() : null;
             if (string.IsNullOrWhiteSpace(value)) continue;
             var eur = e.TryGetProperty("monthly_net_eur", out var m) && m.TryGetDouble(out var d) && d >= 0 ? d : 0;
+            // G11: one entry per tag, letter case ignored (a hand-edited config may list "Studioshoo" and
+            // "studioshoo"); counting both would pay the same diary minutes twice.
+            if (list.Exists(p => DiaryTag.Same(p.Value, value))) continue;
             list.Add(new PaidTag(value, string.IsNullOrWhiteSpace(label) ? value : label, eur));
         }
         return list;

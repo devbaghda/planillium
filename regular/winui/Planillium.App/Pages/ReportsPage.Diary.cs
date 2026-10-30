@@ -55,7 +55,7 @@ public sealed partial class ReportsPage
     private static readonly HashSet<string> _diaryPageFilter = new(StringComparer.OrdinalIgnoreCase);
     // The DiaryTag axis (2026-08-06) — same null-means-no-filter, survives-navigation
     // treatment as the three filters above.
-    private static readonly HashSet<string> _diaryTagFilter = new();
+    private static readonly HashSet<string> _diaryTagFilter = new(StringComparer.OrdinalIgnoreCase); // G11: tag case ignored
 
     // 2026-07-23 request: filters/search normally scope to whichever single day the date
     // nav/picker is showing; this widens that scope to the full retention window (same range

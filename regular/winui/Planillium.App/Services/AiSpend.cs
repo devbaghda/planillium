@@ -53,7 +53,9 @@ public static class AiSpend
         if (t.Length == 0) return "Enter a monthly cap in euro, for example 5.";
         // One decimal separator, comma or dot; nothing else.
         t = t.Replace(',', '.');
-        if (!double.TryParse(t, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var cap) || !double.IsFinite(cap))
+        // G11: a leading minus is read too, so "-5" gets the real reason ("more than 0"), not "must be a number".
+        if (!double.TryParse(t, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture,
+                out var cap) || !double.IsFinite(cap))
             return "The cap must be a number, for example 5 or 7.50.";
         if (cap <= 0) return "The cap must be more than 0 (it is the most the AI may cost in a month).";
         if (cap > 10000) return "That cap is unreasonably high. Enter at most 10000.";
@@ -79,7 +81,12 @@ public static class AiSpend
                "Nothing was lost and everything else in the app works as before.";
     }
 
-    public static string Eur(double v) => "€" + v.ToString("0.00", CultureInfo.InvariantCulture);
+    /// <summary>Same euro format as the rest of the app (G11: was "€0.00" with a fixed dot).</summary>
+    public static string Eur(double v) => MoneyFormat.Eur(v);
+
+    /// <summary>Raised (on the calling thread) after an answered call was added to this month's spend, so an open
+    /// Settings page can refresh its spend line without a restart (G11).</summary>
+    public static event Action? Changed;
 
     /// <summary>Estimated cost in EUR of one call; see the class comment for how it is estimated.</summary>
     public static double EstimateEur(string model, long inputTokens, long outputTokens)
@@ -109,7 +116,9 @@ public static class AiSpend
                 });
             }
         }
-        catch (Exception ex) { Log.Error("AiSpend.Record", ex); }
+        catch (Exception ex) { Log.Error("AiSpend.Record", ex); return; }
+        try { Changed?.Invoke(); }
+        catch (Exception ex) { Log.Error("AiSpend.Changed", ex); }
     }
 
     private static bool Ai(out JsonElement ai)

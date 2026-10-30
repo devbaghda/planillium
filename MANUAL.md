@@ -47,6 +47,7 @@ a minute or two, almost all of it Claude writing the reply.
 month. The spend is an estimate: the AI service reports usage, not money, so the app multiplies the
 usage by a fixed price, slightly on the high side. When the month's spend reaches the cap, the AI
 buttons (Ask Claude, Test connection) stop with a message saying so; raise the cap there to continue.
+The spent figure updates as soon as an AI call is answered. The cap must be more than 0.
 Nothing is lost, the copy-and-paste screens and the rest of the app keep working, and a new month
 starts at zero.
 
@@ -150,7 +151,7 @@ The Day/Week/Month/Year selector governs everything above the diary: the summary
 table, top distractions, time by app, and the insights. The table's Score column shows the points that period's activity
 added up to — which is not the same as the BALANCE in the sidebar, since that is a running total
 across all time and also subtracts anything you've spent on entertainment time. The table's last two columns, INCOME LOST/GAINED and OF WHICH PAID WORK, show the money side: income lost or gained is based on the potential monthly
-income you set in Settings, and the paid-work column is the part of it that came from paid work (already inside the first figure, not added to it). Each row shows its own day, week or month; the Total row shows the figure for the whole period. Finishing plan tasks earns money back: on a day you're counted as losing
+income you set in Settings, and the paid-work column is the part of it that came from paid work (already inside the first figure, not added to it). Each row shows its own day, week or month, to the cent; the Total row adds up exactly the rows shown. Finishing plan tasks earns money back: on a day you're counted as losing
 income, the share of that day's planned tasks you completed (3 of 4 = 75%) is credited against it.
 Top Distractions shows the same per-hour value on each row: that app or
 site's hours and its EUR cost, in two aligned columns. The diary section at the

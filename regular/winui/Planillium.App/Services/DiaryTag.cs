@@ -44,15 +44,19 @@ public static class DiaryTag
     /// <summary>The built-in tags plus any payable tag the user added in Settings
     /// (<see cref="PaidTags"/>), re-read on every access so a new tag shows up in the next dropdown
     /// opened without a restart. Callers must not cache the array across user actions.</summary>
+    /// G11 (2026-10-30): a tag's identity ignores letter case, so a payable tag that is also a built-in tag (or that
+    /// is listed twice) appears once — "Studioshoo" and "studioshoo" are one tag, shown with the built-in's value.
     public static (string Label, string Value)[] Options =>
-        BuiltIn.Concat(PaidTags.All()
-                .Where(p => Array.FindIndex(BuiltIn, b => b.Value == p.Value) < 0)
-                .Select(p => (p.Label, p.Value)))
+        BuiltIn.Concat(PaidTags.All().Select(p => (p.Label, p.Value)))
+            .DistinctBy(o => o.Value, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+    /// <summary>True when two stored tag values are the same tag (G11: letter case ignored).</summary>
+    public static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Value → label, or null for an unrecognised/legacy value — used wherever a raw
     /// column value needs to become display text (the diary row's details column, search
     /// matching) without every call site re-walking <see cref="Options"/> by hand.</summary>
     public static string? LabelOf(string? value) =>
-        value is null ? null : Array.Find(Options, o => o.Value == value).Label is { Length: > 0 } l ? l : null;
+        value is null ? null : Array.Find(Options, o => Same(o.Value, value)).Label is { Length: > 0 } l ? l : null;
 }

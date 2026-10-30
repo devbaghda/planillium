@@ -22,3 +22,7 @@
 - 2026-10-29 G10 regular | PM chose sonnet (three bounded changes, explicit spec; guard modelled on G7) | outcome: ok (built, precheck green 229/229; QA deferred)
 - 2026-10-29 G6 regular | PM chose sonnet (small bounded change, explicit rule) | outcome: ok (built, precheck green 229/229; QA deferred)
 - 2026-10-29 G9a regular | PM chose sonnet (bounded settings + limit; money-limit logic watched in QA) | outcome: ok (built, precheck green 229/229; QA deferred)
+- 2026-10-29 group QA regular | PM chose sonnet for generalist (run precheck, start QA, pass report up; no build); QA opus per user ruling | outcome: ok (precheck green after 1 flaky rerun; QA opus FAIL, 3 defects, ~23 of 35 min; g5 NOT RUN)
+- 2026-10-29 group QA launch opus (g1-g10, UIA, 35 min cap) | outcome: ok (report written; verdict FAIL, D1 high)
+- 2026-10-30 G11 regular (group-QA fixes) | PM chose opus (serializer failure only visible in-app; secret-store change; earlier sonnet build of this class failed) | outcome: ok (built, precheck green 229/229 first run; QA deferred)
+2026-10-30 G11 generalist model check: opus confirmed sufficient (in-app-only serializer failure, secret-store change, rounding rule); outcome: ok

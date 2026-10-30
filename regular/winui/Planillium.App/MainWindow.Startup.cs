@@ -477,8 +477,7 @@ public sealed partial class MainWindow
     /// this small. Decimal separator is CurrentCulture, same reasoning as
     /// ReportData.FmtHours; the € symbol itself is hardcoded, same as ConfigService.
     /// SpendRates' own default — this figure is EUR regardless of system locale.</summary>
-    internal static string FormatEur(double v) =>
-        (v < 0 ? "-€" : "€") + Math.Abs(v).ToString("N2", CultureInfo.CurrentCulture);
+    internal static string FormatEur(double v) => MoneyFormat.Eur(v);
 
     /// <summary>
     /// Short sidebar status block per active plan, mirroring the Plans page's

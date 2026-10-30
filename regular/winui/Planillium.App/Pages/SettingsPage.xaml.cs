@@ -81,6 +81,7 @@ public sealed partial class SettingsPage : Page
             YourName.Text = ConfigService.UserName;
             RefreshTickTickStatus();
             RefreshAiStatus();
+            AiSpend.Changed += OnAiSpendChanged;
             LoadRules();
             LoadIncome();
             // After LoadRules, not before: the keyword counts are read off the boxes it fills.
@@ -98,6 +99,7 @@ public sealed partial class SettingsPage : Page
         Unloaded += (_, _) =>
         {
             if (App.MainWindow is MainWindow win) win.TrackingStateChanged -= RefreshTrackerInfo;
+            AiSpend.Changed -= OnAiSpendChanged;
         };
     }
 
@@ -698,9 +700,9 @@ public sealed partial class SettingsPage : Page
             return false;
         }
         var all = PaidTags.All().ToList();
-        if (all.Any(p => p.Value == slug)) { fix = NewPaidTagName; RefuseNewTag($"\"{label}\" is already a payable tag."); return false; }
+        if (all.Any(p => DiaryTag.Same(p.Value, slug))) { fix = NewPaidTagName; RefuseNewTag($"\"{label}\" is already a payable tag."); return false; }
         // A name matching a built-in tag (e.g. Selfdev) simply makes that tag payable.
-        var builtIn = Array.Find(DiaryTag.Options, o => o.Value == slug);
+        var builtIn = Array.Find(DiaryTag.Options, o => DiaryTag.Same(o.Value, slug));
         all.Add(new PaidTag(slug, builtIn.Label ?? label, NewPaidTagRate.Value));
         SavePaidTags(all, rerender: true);
         ClearNewPaidTagLine();
@@ -1011,17 +1013,41 @@ public sealed partial class SettingsPage : Page
         SumAi.Text = has ? "Key saved · " + AiSettings.Model : "No key — manual copy/paste";
         AiModelBox.Text = AiSettings.Model;
         AiCapBox.Text = AiSpend.CapEur.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-        AiSpendText.Text = $"Spent this month (an estimate): {AiSpend.Eur(AiSpend.SpentThisMonth)} of {AiSpend.Eur(AiSpend.CapEur)}. " +
-                           "When the cap is reached the AI switches off until next month; the rest of the app is unaffected.";
+        RefreshSpendLine();
         AiRemoveBtn.IsEnabled = has;
         AiTestBtn.IsEnabled = has;
         AiKeyBox.PlaceholderText = has ? "Saved — type a new key to replace it" : "sk-ant-…";
     }
 
+    private void RefreshSpendLine() =>
+        AiSpendText.Text = $"Spent this month (an estimate): {AiSpend.Eur(AiSpend.SpentThisMonth)} of {AiSpend.Eur(AiSpend.CapEur)}. " +
+                           "When the cap is reached the AI switches off until next month; the rest of the app is unaffected.";
+
+    /// <summary>G11: an AI call answered anywhere in the app (Ask Claude, Test connection) refreshes the spend line
+    /// at once. Record runs on a background thread, so the update is queued onto this page's UI thread.</summary>
+    private void OnAiSpendChanged() => DispatcherQueue.TryEnqueue(RefreshSpendLine);
+
+    /// <summary>G11: the cap text a refused Save complained about. Once the box holds different text the message no
+    /// longer describes it, so it is cleared (by value, not on any TextChanged); every other result clears this.</summary>
+    private string? _refusedCapText;
+
+    private void AiCapBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_refusedCapText is null || AiCapBox.Text == _refusedCapText) return;
+        _refusedCapText = null;
+        AiResult.Text = "";
+    }
+
     private void AiSave_Click(object sender, RoutedEventArgs e)
     {
+        _refusedCapText = null;
         // G9a: a bad cap saves nothing at all; the typed text stays visible beside the message.
-        if (AiSpend.TrySaveCap(AiCapBox.Text) is { } capProblem) { AiResult.Text = capProblem; return; }
+        if (AiSpend.TrySaveCap(AiCapBox.Text) is { } capProblem)
+        {
+            AiResult.Text = capProblem;
+            _refusedCapText = AiCapBox.Text;
+            return;
+        }
         try
         {
             AiSettings.SaveModel(AiModelBox.Text);
@@ -1045,6 +1071,7 @@ public sealed partial class SettingsPage : Page
 
     private async void AiTest_Click(object sender, RoutedEventArgs e)
     {
+        _refusedCapText = null;
         AiTestBtn.IsEnabled = false;
         AiStopBtn.Visibility = Visibility.Visible;
         AiResult.Text = "Testing… (gives up after 30 seconds)";
@@ -1079,6 +1106,7 @@ public sealed partial class SettingsPage : Page
             "the manual copy/paste screens keep working.",
             primaryButtonText: "Remove", closeButtonText: "Cancel");
         if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+        _refusedCapText = null;
         try { AiSettings.RemoveKey(); AiResult.Text = "Key removed."; }
         catch (Exception ex) { Log.Error("SettingsPage (AI remove)", ex); AiResult.Text = "Couldn't remove the key."; }
         RefreshAiStatus();

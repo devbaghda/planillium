@@ -75,6 +75,21 @@ public static class AppPaths
     /// </summary>
     public static bool IsScratch => ScratchRoot() != null;
 
+    /// <summary>G11: true whenever a Debug / test build was started with MENTOR_ROOT set at all, even to a folder that
+    /// does not exist (where <see cref="IsScratch"/> is false). The secret store keys on this, so a test run never
+    /// reaches the real Windows Credential Manager because of a mistyped scratch path. Always false in Release.</summary>
+    public static bool ScratchRequested
+    {
+        get
+        {
+#if DEBUG || PLANILLIUM_TESTS
+            return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MENTOR_ROOT"));
+#else
+            return false;
+#endif
+        }
+    }
+
     /// <summary>The MENTOR_ROOT folder when it is honoured (Debug / test builds, folder exists), else null.
     /// The one place that condition lives, shared by <see cref="Root"/> and <see cref="IsScratch"/>.</summary>
     private static string? ScratchRoot()

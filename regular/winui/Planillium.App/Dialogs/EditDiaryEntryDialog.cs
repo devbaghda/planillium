@@ -51,7 +51,7 @@ public static class EditDiaryEntryDialog
         foreach (var (label, value) in DiaryTag.Options)
             tagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
         tagBox.SelectedIndex = tag is null ? 0
-            : Array.FindIndex(DiaryTag.Options, t => t.Value == tag) is >= 0 and var ti ? ti + 1 : 0;
+            : Array.FindIndex(DiaryTag.Options, t => DiaryTag.Same(t.Value, tag)) is >= 0 and var ti ? ti + 1 : 0;
         panel.Children.Add(tagBox);
 
         // AutoSuggestBox, not a plain TextBox — surfaces your own most commonly-used
