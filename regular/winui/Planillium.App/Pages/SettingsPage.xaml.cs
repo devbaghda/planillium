@@ -555,6 +555,9 @@ public sealed partial class SettingsPage : Page
                      & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
         // A Tab out of the new-tag line must not clear it (same flag the line's own Tab sets).
         if (InNewPaidTagLine(from)) _tabPending = true;
+        // G12 (QA observation): the park stops being a tab stop first, or Shift+Tab finds the park
+        // itself as the element before the box and the cursor goes nowhere.
+        IncomeFocusPark.IsTabStop = false;
         from.Focus(FocusState.Keyboard);
         Microsoft.UI.Xaml.Input.FocusManager.TryMoveFocus(
             shift ? Microsoft.UI.Xaml.Input.FocusNavigationDirection.Previous : Microsoft.UI.Xaml.Input.FocusNavigationDirection.Next,
@@ -625,11 +628,16 @@ public sealed partial class SettingsPage : Page
     /// <summary>B1d: if, after a click, a text box in the Income section holds the cursor although
     /// the click did not land in that box, the cursor is moved to "nowhere" (the park). A click into
     /// a box, or on a control that takes focus itself (toggle, button), is left alone.</summary>
+    /// G12 (QA D1): the same for every section — a blank click in Settings → AI handed the cursor to the
+    /// API key box (the AI section's first box), so stray typing went into the key. Password boxes count
+    /// too; a number box counts as one control (a click on its spin buttons is a click on it).
     private void GuardStrayFocus(DependencyObject? src)
     {
-        if (XamlRoot is null || IncomePanel.Visibility != Visibility.Visible) return;
-        if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is not TextBox box) return;
-        if (!IsInIncomePanel(box) || IsWithin(src, box) || ReferenceEquals(box, _focusIntent)) return;
+        if (XamlRoot is null) return;
+        if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is not (TextBox or PasswordBox)) return;
+        var box = (Control)Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
+        DependencyObject owner = OwningNumberBox(box) ?? (DependencyObject)box;
+        if (!IsWithin(box, this) || IsWithin(src, owner) || ReferenceEquals(box, _focusIntent)) return;
         Park(box);
     }
 
