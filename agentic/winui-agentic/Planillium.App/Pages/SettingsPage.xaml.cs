@@ -71,7 +71,11 @@ public sealed partial class SettingsPage : Page
         AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Page_PointerPressed), handledEventsToo: true);
         // G8: the same protection for the boxes of every other section (General, Hours, Scoring, Keywords, Idle, AI).
         // SectionContent already claims releases (B1f); Income keeps its own handlers above and is skipped here.
-        FocusShield.Attach(SectionContent, FocusPark, new FocusShield.AttachOptions { Skip = { IncomePanel }, Fallback = SectionList, Guard = true });
+        // G12: attached to the whole page (not only SectionContent), so a press on the page header, the padding or the
+        // status strip parks the cursor too (the root Grid has a Transparent background for this).
+        FocusShield.Attach(this, FocusPark, new FocusShield.AttachOptions { Skip = { IncomePanel }, Fallback = SectionList, Guard = true });
+        // G12: which box focus was parked away from, so Tab / Shift+Tab continue from there (Page_PreviewKeyDown).
+        FocusPark.GettingFocus += FocusPark_GettingFocus;
         BuildScoringSection();
         SectionList.SelectedIndex = _lastSection;
         // The strip is fixed at two lines so it can't resize the page (see XAML), which means a
@@ -565,6 +569,8 @@ public sealed partial class SettingsPage : Page
         /// <summary>Nothing has focus, or the focused element is in Settings -> Income (a box or a button there).
         /// Focus the user moved elsewhere (section list, another control outside Income) is left alone.</summary>
         InIncome,
+        /// <summary>Nothing has focus, or the focused element is in the section pane (G12 Esc in any box there).</summary>
+        InSection,
     }
 
     /// <summary>Moves keyboard focus onto a harmless non-text element (the 1x1 <c>FocusPark</c> button), so stray
@@ -581,6 +587,7 @@ public sealed partial class SettingsPage : Page
             var ok = when switch
             {
                 ParkIf.InAddLine => IsFocusInsideNewPaidTagLine(),
+                ParkIf.InSection => focused == null || IsWithin(focused, SectionContent),
                 _ => focused == null || IsWithin(focused, IncomePanel),
             };
             if (!ok) return;
@@ -668,9 +675,13 @@ public sealed partial class SettingsPage : Page
             // too large) and would put back a message for text that is no longer in the box.
             if (box.CurrentProblem is { } p) SaveStatus.Text = $"Not saved: {p}";
         };
-        box.Reverted += (_, reason) => SaveStatus.Text = reason is null
-            ? "Empty amount not saved; the saved amount is back in the box."
-            : $"Not saved: {reason} The saved amount is back in the box.";
+        // G12: the too-large message already says the saved amount was kept, so it is shown exactly as it is.
+        box.Reverted += (_, reason) => SaveStatus.Text = reason switch
+        {
+            null => "Empty amount not saved; the saved amount is back in the box.",
+            MoneyBox.TooLargeText => MoneyBox.TooLargeText,
+            _ => $"Not saved: {reason} The saved amount is back in the box.",
+        };
         box.EscapePressed += (_, discarded) =>
         {
             if (discarded) SaveStatus.Text = "Change discarded; the saved amount is back in the box.";
@@ -782,6 +793,16 @@ public sealed partial class SettingsPage : Page
     private void Page_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.Tab) _lastTabAt = Environment.TickCount64;
+        // G12: Tab / Shift+Tab with the cursor parked continues from the box that was left (Esc, a blank click, Enter),
+        // never from the hidden park (whose place in the tab order is next to the section list).
+        if (e.Key == VirtualKey.Tab && XamlRoot != null && ReferenceEquals(FocusManager.GetFocusedElement(XamlRoot), FocusPark)
+            && _parkedFrom != null && _parkedFrom.TryGetTarget(out var from) && IsWithin(from, SectionContent))
+        {
+            var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            if (FocusShield.ContinueTab(from, shift, FocusPark)) e.Handled = true;
+            return;
+        }
         // Esc after a refused mouse Add (focus parked, typed text and message kept): clears the line like Esc inside
         // it (B1d fix). Esc with the cursor in the line is left to NewPaidTag_KeyDown. With the cursor in a saved money
         // box (reached by Tab from the park) the key is not swallowed: the box still reverts and the cursor leaves (B1g).
@@ -791,7 +812,135 @@ public sealed partial class SettingsPage : Page
             if (!inSavedBox) e.Handled = true;
             LeavePaidTagLine();
         }
+        // G12: Esc in any text or number box outside Income (Income's boxes have their own Esc: MoneyBox, add line).
+        if (e.Key == VirtualKey.Escape && XamlRoot != null && EscapableBox(FocusManager.GetFocusedElement(XamlRoot) as DependencyObject) is { } box)
+        {
+            e.Handled = true;
+            DiscardAndPark(box);
+        }
     }
+
+    // ══ G12: Esc in every box, Tab after a park (2026-10-30) ════════════════════════════════════
+    //
+    // Exit paths x box kinds (written before coding, LESSONS "every exit path times every input kind"):
+    //   box kinds: single-line text (name, work start/end, review time, AI model, AI limit), multi-line keyword boxes,
+    //              password (API key), number boxes (Hours, Scoring), money boxes (Income: own B1g rules, skipped here).
+    //   Esc        -> saved value back, message about the discarded text cleared, cursor parked (DiscardAndPark).
+    //   Enter      -> AI boxes save (SaveAi); other boxes unchanged (number boxes commit their value, which saves).
+    //   Tab / click on another control / section switch / blank click -> leave-save (LostFocus / ValueChanged; AI
+    //              model and limit since G12); a leave with nothing changed saves nothing and says nothing.
+    //   Tab or Shift+Tab after a park -> continues from the box that was left (ContinueTab).
+
+    /// <summary>The control focus was last parked away from (weak: a rebuilt row must not be kept alive).</summary>
+    private WeakReference<Control>? _parkedFrom;
+
+    private void FocusPark_GettingFocus(UIElement sender, GettingFocusEventArgs args)
+    {
+        // No old element (focus restored to the park after a window switch): keep what was recorded.
+        if (args.OldFocusedElement is not DependencyObject old || ReferenceEquals(old, FocusPark)) return;
+        _parkedFrom = old is Control c && IsWithin(c, SectionContent) ? new WeakReference<Control>(c) : null;
+    }
+
+    /// <summary>The box Esc applies to: a text box, password box or number box (the focused element is its inner text
+    /// box) in the section pane, outside Income. Null for anything else.</summary>
+    private Control? EscapableBox(DependencyObject? focused)
+    {
+        if (focused is not (TextBox or PasswordBox) || !IsWithin(focused, SectionContent) || IsWithin(focused, IncomePanel))
+            return null;
+        for (var d = VisualTreeHelper.GetParent(focused); d != null && !ReferenceEquals(d, SectionContent); d = VisualTreeHelper.GetParent(d))
+            if (d is NumberBox nb) return nb;
+        return (Control)focused;
+    }
+
+    /// <summary>Esc: the box shows its saved value again (nothing is saved), any message about what was typed in it
+    /// goes, and the cursor leaves the box.</summary>
+    private void DiscardAndPark(Control box)
+    {
+        PutSavedBack(box);
+        if (box == AiKeyBox || box == AiModelBox || box == AiCapBox) ClearRefusalFor(box);
+        if (_rulesRefusal != null && SaveStatus.Text == _rulesRefusal && _rulesRefusedBoxes.Contains(box))
+            SaveStatus.Text = "";
+        ParkFocus("SettingsPage.Esc", ParkIf.InSection);
+    }
+
+    /// <summary>Puts the stored value back in <paramref name="box"/> without saving anything (the change handlers are
+    /// held off by <see cref="_initialising"/>).</summary>
+    private void PutSavedBack(Control box)
+    {
+        var was = _initialising;
+        _initialising = true;
+        try
+        {
+            switch (box)
+            {
+                case NumberBox nb when SavedNumber(nb) is { } v:
+                    // Through NaN: with the typed text not yet committed, Value still equals the saved number, and
+                    // setting an equal Value would not refresh the text.
+                    nb.Value = double.NaN;
+                    nb.Value = v;
+                    break;
+                case PasswordBox pb:
+                    pb.Password = "";   // the key is never shown back; a typed key is discarded
+                    break;
+                case TextBox tb when SavedText(tb) is { } t:
+                    tb.Text = t;
+                    break;
+            }
+        }
+        finally { _initialising = was; }
+    }
+
+    /// <summary>The stored value a number box shows (the same reads as <see cref="LoadRules"/>), or null.</summary>
+    private double? SavedNumber(NumberBox nb)
+    {
+        if (nb == GraceMin) return ConfigService.ReminderGraceMinutes();
+        if (nb == RepeatMin) return ConfigService.ReminderIntervalMinutes();
+        if (nb == IdleMin) return ConfigService.IdleThresholdMinutes();
+        if (nb == RetentionDays) return ConfigService.DiaryRetentionDays();
+        if (nb == LateDayReminderHours)
+            return ConfigService.Root.TryGetProperty("late_day_task_reminder_hours", out var v) && v.TryGetDouble(out var n) ? n : 2.0;
+        foreach (var rule in ScoringRules.All)
+            if (_scoringBoxes[rule.Key] == nb) return ConfigService.ScoringRate(rule.Key);
+        return null;
+    }
+
+    /// <summary>The stored value a text box shows (the same reads as the page's load), or null for a box with no
+    /// stored value of its own.</summary>
+    private string? SavedText(TextBox tb)
+    {
+        if (tb == YourName) return ConfigService.UserName;
+        if (tb == WorkStart) return ConfigService.WorkStartTime().ToIsoTimeOfDay();
+        if (tb == WorkEnd) return ConfigService.WorkEndTime().ToIsoTimeOfDay();
+        if (tb == EodTimeBox) return EodTime();
+        if (tb == RulesOn) return ConfigWords("activity_rules", DiaryCategory.OnPlan);
+        if (tb == RulesOff) return ConfigWords("activity_rules", DiaryCategory.OffPlan);
+        if (tb == RulesNeutral) return ConfigWords("activity_rules", DiaryCategory.Neutral);
+        if (tb == IdleOn) return ConfigWords("idle_activity_rules", DiaryCategory.OnPlan);
+        if (tb == IdleOff) return ConfigWords("idle_activity_rules", DiaryCategory.OffPlan);
+        if (tb == IdleNeutral) return ConfigWords("idle_activity_rules", DiaryCategory.Neutral);
+        if (tb == AiModelBox) return ConfigService.AiModelStored;
+        if (tb == AiCapBox) return AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
+        return null;
+    }
+
+    private static string ConfigWords(string section, string key) =>
+        ConfigService.Root.TryGetProperty(section, out var s) && s.TryGetProperty(key, out var arr)
+            ? string.Join("\n", arr.EnumerateArray().Select(v => v.GetString() ?? "").Where(v => v.Length > 0))
+            : "";
+
+    /// <summary>True when the box's text says the same as its stored value (lines trimmed, blank lines and line-break
+    /// style ignored: a TextBox hands back "\r" where "\n" was set). A leave with nothing changed saves nothing.</summary>
+    private bool ShowsSavedValue(TextBox tb)
+    {
+        if (SavedText(tb) is not { } saved) return false;
+        static string Norm(string s) => string.Join("\n", s.Split('\n', '\r').Select(l => l.Trim()).Where(l => l.Length > 0));
+        return Norm(tb.Text ?? "") == Norm(saved);
+    }
+
+    /// <summary>The last refusal SaveRules put in the status strip, and the boxes it is about (Esc in one of them
+    /// clears it).</summary>
+    private string? _rulesRefusal;
+    private Control[] _rulesRefusedBoxes = [];
 
     /// <summary>The element in this page that last received focus (whatever the cause). See Page_GettingFocus.</summary>
     private DependencyObject? _lastFocusedInPage;
@@ -1082,6 +1231,9 @@ public sealed partial class SettingsPage : Page
     private void Rules_Changed(object sender, RoutedEventArgs e)
     {
         if (_initialising) return;
+        // G12: leaving a box that still shows its stored value (after Esc, or a Tab passing through it) saves nothing,
+        // so no "Saved — tracker restarted" for a change that was not made. Read from the box's text now.
+        if (sender is TextBox tb && ShowsSavedValue(tb)) return;
         SaveRules();
     }
 
@@ -1105,9 +1257,11 @@ public sealed partial class SettingsPage : Page
     /// the page, means a bad field anywhere else here can never block that save again.</summary>
     private void SaveRules()
     {
+        _rulesRefusal = null;
         if (!SaveHoursAndEod(out var hoursError))
         {
             SaveStatus.Text = hoursError;
+            _rulesRefusal = hoursError;
             return;
         }
 
@@ -1129,6 +1283,7 @@ public sealed partial class SettingsPage : Page
             // Hours/EOD are already safely on disk at this point — say so, so a genuine
             // partial save never reads as a total failure.
             SaveStatus.Text = $"Working hours saved. {rulesError}";
+            _rulesRefusal = SaveStatus.Text;
         }
     }
 
@@ -1142,6 +1297,7 @@ public sealed partial class SettingsPage : Page
         {
             if (!DateExtensions.TryParseTimeOfDay(box.Text.Trim(), out _))
             {
+                _rulesRefusedBoxes = [box];
                 error = $"{label} must be HH:MM (e.g. 08:00).";
                 return false;
             }
@@ -1154,6 +1310,7 @@ public sealed partial class SettingsPage : Page
         DateExtensions.TryParseTimeOfDay(WorkEnd.Text.Trim(), out var workEnd);
         if (workStart >= workEnd)
         {
+            _rulesRefusedBoxes = [WorkStart, WorkEnd];
             error = "\"Work start\" must be earlier than \"Work end\" — " +
                     "otherwise nothing gets tracked at all.";
             return false;
@@ -1200,6 +1357,7 @@ public sealed partial class SettingsPage : Page
         {
             if (double.IsNaN(_scoringBoxes[rule.Key].Value))
             {
+                _rulesRefusedBoxes = [_scoringBoxes[rule.Key]];
                 error = $"\"{rule.Label}\" needs a number (default: {rule.Default}) — the rest of this page wasn't saved.";
                 return false;
             }
@@ -1210,6 +1368,7 @@ public sealed partial class SettingsPage : Page
         {
             if (double.IsNaN(box.Value))
             {
+                _rulesRefusedBoxes = [box];
                 error = $"\"{label}\" needs a number — the rest of this page wasn't saved.";
                 return false;
             }
@@ -1293,6 +1452,7 @@ public sealed partial class SettingsPage : Page
     private void YourName_Changed(object sender, RoutedEventArgs e)
     {
         if (_initialising) return;
+        if (ShowsSavedValue(YourName)) return;   // G12: nothing changed (Esc, or a Tab passing through)
         try
         {
             ConfigService.Mutate(cfg => cfg["user_name"] = YourName.Text.Trim());
@@ -1429,6 +1589,68 @@ public sealed partial class SettingsPage : Page
         AIStatus.Text = "";
     }
 
+    private void AiModelBox_LostFocus(object sender, RoutedEventArgs e) => AfterAiBoxLeft(AiModelBox);
+
+    private void AiCapBox_LostFocus(object sender, RoutedEventArgs e) => AfterAiBoxLeft(AiCapBox);
+
+    /// <summary>G12: the model and the monthly limit save on leaving their box (Tab, a click elsewhere, a blank click),
+    /// like every other Settings box. Decided once focus has settled (LostFocus arrives late): nothing happens if the
+    /// cursor is back in the box, or if the leave was a mouse press on Save (its Click saves both). The API key is not
+    /// saved on leaving; it waits for Save or Enter.</summary>
+    private void AfterAiBoxLeft(TextBox box)
+    {
+        if (_initialising) return;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (XamlRoot == null) return;
+            var focused = FocusManager.GetFocusedElement(XamlRoot);
+            if (ReferenceEquals(focused, box)) return;
+            if (ReferenceEquals(focused, AiSaveBtn) && AiSaveBtn.FocusState == FocusState.Pointer) return;
+            try
+            {
+                if (box == AiModelBox) SaveAiModelOnLeave();
+                else SaveAiCapOnLeave();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("SettingsPage.AiLeaveSave", ex);
+                SetAiStatus(Log.Friendly("Couldn't save the AI settings", ex), failure: true);
+            }
+        });
+    }
+
+    /// <summary>Saves a changed model (trimmed; empty means the default) and shows the stored value.</summary>
+    private void SaveAiModelOnLeave()
+    {
+        var model = AiModelBox.Text.Trim();
+        if (model != ConfigService.AiModelStored)
+        {
+            ConfigService.SetAiModel(model);
+            SetAiStatus("Model saved.", failure: false);
+            RefreshAiPanel();
+        }
+        AiModelBox.Text = ConfigService.AiModelStored;
+    }
+
+    /// <summary>Saves a changed valid limit and shows it as stored; a refused limit keeps its text and says why
+    /// (the same check and wording as Save).</summary>
+    private void SaveAiCapOnLeave()
+    {
+        var problem = AiSpendCap.ValidateCap(AiCapBox.Text, out var cap);
+        if (problem is not null)
+        {
+            RefuseAiInput(AiCapBox, problem);
+            return;
+        }
+        if (cap != ConfigService.AiMonthlyCapEur)
+        {
+            ConfigService.SetAiMonthlyCapEur(cap);
+            SetAiStatus("Monthly limit saved.", failure: false);
+            RefreshAiPanel();
+        }
+        AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
+    }
+
     private void AiSave_Click(object sender, RoutedEventArgs e) => SaveAi();
 
     private void AiBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -1457,18 +1679,19 @@ public sealed partial class SettingsPage : Page
 
         if (key.Length == 0)
         {
-            if (!AiKey.Has() && !capChanged)
+            // G12: the model saves with or without a key (it also saves on leaving its box).
+            if (!AiKey.Has() && !capChanged && !modelChanged)
             {
                 RefuseAiInput(AiKeyBox, "Not saved: paste your API key first.");
                 return;
             }
-            if (modelChanged && AiKey.Has()) ConfigService.SetAiModel(model);
+            if (modelChanged) ConfigService.SetAiModel(model);
             if (capChanged) ConfigService.SetAiMonthlyCapEur(capValue);
+            AiModelBox.Text = ConfigService.AiModelStored;   // G12: the box only ever shows the stored model
             AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
-            var savedModel = modelChanged && AiKey.Has();
-            SetAiStatus(savedModel && capChanged ? "Model and monthly limit saved."
+            SetAiStatus(modelChanged && capChanged ? "Model and monthly limit saved."
                 : capChanged ? "Monthly limit saved."
-                : savedModel ? "Model saved." : "Nothing to save.", failure: false);
+                : modelChanged ? "Model saved." : "Nothing to save.", failure: false);
             RefreshAiPanel();
             return;
         }
@@ -1485,6 +1708,7 @@ public sealed partial class SettingsPage : Page
         }
         ConfigService.SetAiModel(model);
         if (capChanged) ConfigService.SetAiMonthlyCapEur(capValue);
+        AiModelBox.Text = ConfigService.AiModelStored;
         AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
         AiKeyBox.Password = "";
         SetAiStatus((AiKey.InMemory

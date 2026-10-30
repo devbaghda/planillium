@@ -22,6 +22,10 @@ public static class MoneyFormat
     /// <see cref="MaxIntegerDigits"/> is refused as too large (B1g).</summary>
     public const int BoxIntegerDigits = 15;
 
+    /// <summary>The highest monthly amount any money box accepts (G12, user rule 2026-10-30): EUR 100 000,00. It applies to
+    /// the salary, every payable-tag amount and a new payable tag; a higher amount is refused and never saved.</summary>
+    public const double MaxAmountEur = 100_000;
+
     /// <summary>Decimal digits kept in a box; further typed digits are dropped.</summary>
     public const int MaxDecimalDigits = 2;
 

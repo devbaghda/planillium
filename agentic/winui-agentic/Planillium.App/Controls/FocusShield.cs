@@ -183,6 +183,33 @@ public static class FocusShield
         finally { _requested = null; }
     }
 
+    /// <summary>True only inside <see cref="ContinueTab"/>: the moves it makes are the user's own Tab.</summary>
+    private static bool _continuingTab;
+
+    /// <summary>G12: Tab / Shift+Tab pressed while focus is parked continues from <paramref name="from"/>, the box (or
+    /// control) focus was parked away from, as if the key had been pressed there: focus goes back to it and moves one
+    /// step on (WinUI has no "next element after X" query for tab order, only a move from the focused element). Never
+    /// starts from the hidden park or from a menu outside the box's area. Returns false, without moving focus, when
+    /// <paramref name="from"/> can no longer take focus (removed, hidden, disabled); the caller then lets the key do its
+    /// default.</summary>
+    public static bool ContinueTab(Control from, bool shift, Button park)
+    {
+        if (from.XamlRoot is not { } root || !from.IsLoaded || !from.IsEnabled) return false;
+        _continuingTab = true;
+        try
+        {
+            if (!from.Focus(FocusState.Keyboard)) return false;
+            // The park's own LostFocus (which drops its tab stop) arrives later; drop it now so the move below can
+            // never land back on the park.
+            park.IsTabStop = false;
+            // If there is nothing to move to, focus stays on the box that was left (the key was still used).
+            FocusManager.TryMoveFocus(shift ? FocusNavigationDirection.Previous : FocusNavigationDirection.Next,
+                new FindNextElementOptions { SearchRoot = root.Content });
+            return true;
+        }
+        finally { _continuingTab = false; }
+    }
+
     private static void OnGettingFocus(State st, GettingFocusEventArgs args)
     {
         var target = args.NewFocusedElement;
@@ -192,6 +219,7 @@ public static class FocusShield
             var allowed = args.InputDevice is FocusInputDeviceKind.Mouse or FocusInputDeviceKind.Touch
                               or FocusInputDeviceKind.Pen or FocusInputDeviceKind.Keyboard
                           || Environment.TickCount64 - st.LastTabAt < 600
+                          || _continuingTab
                           || (st.Last != null && st.Last.TryGetTarget(out var last) && ReferenceEquals(last, target))
                           || (_requested != null && IsWithin(target, _requested));
             if (!allowed)

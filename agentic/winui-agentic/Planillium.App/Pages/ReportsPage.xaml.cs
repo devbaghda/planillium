@@ -203,13 +203,16 @@ public sealed partial class ReportsPage : Page
             using var income = new IncomeService(db);
             var (incomeNet, _) = income.SumForPeriodWithCredit(_period, score);
 
-            // EUR columns of the summary table (B1i). The Total cells keep the figures the removed
-            // cards showed (period net rounded to the cent; unrounded paid sum); the row cells are
-            // the per-day parts, rounded so they add up to those totals (EurCents).
-            var paidSum = income.PaidEarningsForPeriod(_period).Sum(e => e.Eur);
-            var daily = income.DailyIncome(ReportData.PeriodStart(_period, today), score);
+            // EUR columns of the summary table (B1i). Net: the Total cell keeps the period net rounded
+            // to the cent; the row cells are the per-day parts, rounded so they add up to it (EurCents).
+            // Paid work (G12): every row's cents are cut from ONE running total that starts at the
+            // ledger start, so a week shows the same cents in the Week, Month and Year views; the
+            // Total cell is the sum of the rows shown (G11).
+            var periodStart = ReportData.PeriodStart(_period, today);
+            var daily = income.DailyIncome(periodStart, score);
             var netTotalCents = EurCents.Of(Math.Round(incomeNet, 2));
-            var paidTotalCents = EurCents.Of(paidSum);
+            var paidRun = new EurCents.Running(income.DailyPaid(
+                periodStart < IncomeService.LedgerStart ? periodStart : IncomeService.LedgerStart));
 
             // ── summary table ─────────────────────────────────────────────
             Body.Children.Add(Section(periodName));
@@ -217,7 +220,7 @@ public sealed partial class ReportsPage : Page
             // 2026-08-05) and the card would otherwise clip the last of them off in silence on a
             // narrow window — see Scrollable's own comment for the measurement.
             if (_period is ReportPeriod.Day or ReportPeriod.Week)
-                Body.Children.Add(Card(Scrollable(DayTable(weekStats, daily, netTotalCents, paidTotalCents))));
+                Body.Children.Add(Card(Scrollable(DayTable(weekStats, daily, netTotalCents, paidRun))));
             else
             {
                 // Year keeps a month with no activity when it has income or paid work: the ledger
@@ -234,7 +237,7 @@ public sealed partial class ReportsPage : Page
                 // which reads as broken rather than simply empty.
                 Body.Children.Add(buckets.Count == 0
                     ? Dim("No activity logged yet.")
-                    : Card(Scrollable(BucketTable(buckets, daily, netTotalCents, paidTotalCents))));
+                    : Card(Scrollable(BucketTable(buckets, daily, netTotalCents, paidRun))));
             }
 
             // ── top distractions (grouped: "Chrome - YouTube") ────────────

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix: Settings: Esc in any text or number box (name, hours, scoring, keywords, idle, AI key, model, monthly limit) takes the cursor out, puts the saved value back and removes the message about what was typed. Clicking empty space takes the cursor out too; Tab or Shift+Tab afterwards continues from the box you left. Number boxes' up/down buttons work as before.
+- Fix: Settings -> AI: the model name and the monthly limit are saved when you leave the box or press Enter, not only with Save; the model box always shows the saved model.
+- Change: Settings -> Income: the salary, payable-tag amounts and a new tag's amount accept at most EUR 100 000,00 a month. A higher amount shows "Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept." and nothing is saved.
+- Fix: Reports: a week's "Of which paid work" figure is now the same to the cent in the Week, Month and Year views; the Total is still the sum of the rows shown.
 - Fix: Reports, Time diary: a payable tag whose name matches a built-in tag apart from capital letters (for example "Studioshoo") is listed once in the tag filter and the Edit/Split tag lists, with one "Mark all" button.
 - Fix: Reports, Time diary, App filter: rows titled "- Telegram" or "– Telegram" (Telegram with no chat name) now count under "Telegram", not "Other".
 - Fix: Reports summary table: the "Income lost/gained" and "Of which paid work" headers wrap onto two lines, so the table fits the default window more often; when it still does not fit, it scrolls sideways as before.

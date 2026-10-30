@@ -246,6 +246,19 @@
     same integer cents the split was pinned to (`ReportsPage.Tables.cs` `DayTable`/`BucketTable`). Verified
     by code reading in G11: both tables already did this (the off-by-a-cent Total was a regular-side defect).
     Any new table with a money Total must build its rows the same way, never round each row on its own.
+    **Paid work since G12 (2026-10-30, user rule "a week's paid work is the same cent in every view"):** the
+    "Of which paid work" rows are cut from ONE running total of paid work per day that starts at the
+    ledger start (`EurCents.Running` over `IncomeService.DailyPaid`; decimal sums; row = cents(through
+    its last day) - cents(through the day before its first day)), and that column's Total is the sum of
+    the rows shown. So the same days give the same cents in the Week total, a Month row and a Year row.
+    The "Income lost/gained" column still uses `SplitRows` pinned to the period net. Hours rounding is
+    not touched.
+19. **Money ceiling: EUR 100 000,00 a month (G12, user rule 2026-10-30).** The salary, every payable-tag
+    amount and a new payable tag refuse a higher amount (`MoneyFormat.MaxAmountEur`, checked in
+    `MoneyBox.ProblemFor`): nothing is saved, the box shows the saved amount again (salary, tag amounts)
+    and the message is exactly "Amount is too large - at most EUR 100 000,00 a month. The saved amount was
+    kept." (`MoneyBox.TooLargeText`, shown without prefix). Open (not decided): an amount stored above the
+    ceiling before G12 is kept and still shown, but leaving its box shows the message.
 
 ### Standing lessons
 _The durable ones. Every entry here cost a real bug to learn; none may be dropped in a
@@ -505,4 +518,24 @@ compaction. General versions of several now also live in the global `windows-app
   - **A title parser must handle the separator with nothing on one side** ("- Telegram"): `AppNames.TryTelegramSuffix` accepts a leading dash, so Group, FilterGroup ("Other" excludes it), Sub and Label all agree.
   - **A table that can be wider than the window: wrap long figure headers at a space (`HeaderMaxWidth`, bottom-aligned) and keep the sideways scroller.** WinUI's auto-hiding scroll indicator makes an overflowing header look cut off ("Of which pa") even though the table scrolls.
   - **A refusal message is tied to the box it refuses** (Settings -> AI `_aiRefusedBox`): editing that box clears it, which covers every way of leaving the box. A summary line that depends on stored state (AI spend) refreshes from an event raised by the single writer (`AiSpend.Changed`), not only on page load.
+- **(2026-10-30, G12) Esc, blank click and Tab in every Settings box, standing lessons:**
+  - **Esc in any Settings text, number or key box takes the cursor out, puts the saved value back and
+    clears the message about the discarded text** (`SettingsPage` `EscapableBox`/`DiscardAndPark`/
+    `PutSavedBack`; Income keeps its own B1g MoneyBox path). A NumberBox gets NaN first, then the saved
+    value, because setting an equal Value does not refresh its text. Write the table of every exit path
+    (Esc, Enter, Tab/Shift+Tab, blank click, click on another control, section switch, Tab after a park)
+    times every box kind before coding; the table is the comment above the G12 block.
+  - **A handler that sets its own box's text gets the echo back as a change:** `Rules_Changed` and
+    `YourName_Changed` skip when the box already shows the saved value (`ShowsSavedValue`, line breaks
+    normalised: a TextBox hands back "
+").
+  - **After a blank-click park, Tab and Shift+Tab continue from the box that was left** (the park records
+    it in its GettingFocus; `FocusShield.ContinueTab` puts focus back on it, drops the park's tab stop and
+    moves on), never from the park or the nav list. The guard lets that move through (`_continuingTab`).
+  - **A box whose value is saved only by a button loses typed text on every other way out.** The AI model
+    and limit boxes now save on leaving (and Enter), and the model box only ever shows the stored value.
+    Leave logic reads the box's current text, never cached state, and is deferred one turn so a click on
+    Save is not counted twice.
+  - **Money shown per view must be cut from one running total over a fixed start**, or the same week
+    rounds to different cents in different views; decimals make the total independent of grouping.
 - **(2026-10-29, G6) The sidebar Today dot is derived from the banner's own overdue total (`TodayPage.CountBannerOverdue`), never from a second definition of overdue.** Standing lesson: before adding a UI indicator for a state another widget already shows, reuse that widget's condition through one shared function and refresh it from the one call every mutating action already makes (`RefreshScore`), so it updates on every page; check first whether the indicator exists at all (grep XAML and code) before assuming a bug.

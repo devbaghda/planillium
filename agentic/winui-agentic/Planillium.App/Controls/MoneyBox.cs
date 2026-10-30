@@ -64,17 +64,21 @@ public sealed class MoneyBox : TextBox
 
     public const string NegativeText = "Amounts can't be negative.";
     public const string ZeroText = "Amount must be more than 0.";
-    public const string TooLargeText = "Amount is too large (9 digits at most).";
+    /// <summary>G12 (user rule 2026-10-30): the exact message for an amount above <see cref="MoneyFormat.MaxAmountEur"/>.
+    /// It already says the saved amount stays, so the page shows it as it is (no extra prefix or suffix).</summary>
+    public const string TooLargeText = "Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.";
 
     /// <summary>The message for an invalid box text, or null: <see cref="NegativeText"/> for a minus anywhere,
-    /// <see cref="TooLargeText"/> for more than <see cref="MoneyFormat.MaxIntegerDigits"/> integer digits (B1g),
-    /// <see cref="ZeroText"/> for a zero amount when <paramref name="allowZero"/> is false. Empty is not a problem
-    /// here (each caller decides what empty means).</summary>
+    /// <see cref="TooLargeText"/> for an amount above <see cref="MoneyFormat.MaxAmountEur"/> (G12; it also covers the
+    /// older B1g limit of <see cref="MoneyFormat.MaxIntegerDigits"/> integer digits), <see cref="ZeroText"/> for a zero
+    /// amount when <paramref name="allowZero"/> is false. Empty is not a problem here (each caller decides what empty
+    /// means).</summary>
     public static string? ProblemFor(string? text, bool allowZero)
     {
         text ??= "";
         if (MoneyFormat.ContainsMinus(text)) return NegativeText;
         if (MoneyFormat.IntegerDigitCount(text) > MoneyFormat.MaxIntegerDigits) return TooLargeText;
+        if (MoneyFormat.Parse(text) > MoneyFormat.MaxAmountEur) return TooLargeText;
         if (!allowZero && MoneyFormat.Parse(text) == 0) return ZeroText;
         return null;
     }

@@ -18,7 +18,7 @@ public sealed partial class ReportsPage
     private const double HeaderMaxWidth = 84;
 
     private static Grid DayTable(List<ReportData.DayStat> weekStats,
-        Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, long paidTotalCents)
+        Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, EurCents.Running paidRun)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var rows = _period == ReportPeriod.Day
@@ -43,8 +43,10 @@ public sealed partial class ReportsPage
             "Income lost/gained", "Of which paid work"]);
 
         // Row cents add up exactly to the totals shown (running-total rounding, see EurCents).
+        // Paid work (G12): each day cut from the one running total since the ledger start; Total = sum of rows.
         var netRows = EurCents.SplitRows([.. rows.Select(s => daily[s.Date].Net)], netTotalCents);
-        var paidRows = EurCents.SplitRows([.. rows.Select(s => daily[s.Date].Paid)], paidTotalCents);
+        long[] paidRows = [.. rows.Select(s => paidRun.Span(s.Date, s.Date))];
+        var paidTotalCents = paidRows.Sum();
 
         for (var ri = 0; ri < rows.Count; ri++)
         {
@@ -166,7 +168,7 @@ public sealed partial class ReportsPage
     }
 
     private static Grid BucketTable(List<ReportData.BucketStat> buckets,
-        Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, long paidTotalCents)
+        Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, EurCents.Running paidRun)
     {
         // Same shared alignment grid as DayTable above — which also means switching Week↔Month
         // no longer shifts the figures sideways, since the two tables' first columns were 110
@@ -186,7 +188,10 @@ public sealed partial class ReportsPage
 
         // EUR per row = the per-day figures over the bucket's dates; cents add up to the totals shown.
         var netRows = EurCents.SplitRows([.. buckets.Select(b => RowNet(b, daily))], netTotalCents);
-        var paidRows = EurCents.SplitRows([.. buckets.Select(b => RowPaid(b, daily))], paidTotalCents);
+        // Paid work (G12): each bucket cut from the one running total since the ledger start, so a week has the same
+        // cents here as in the Week view and inside its Year row; Total = sum of the rows shown (G11).
+        long[] paidRows = [.. buckets.Select(b => paidRun.Span(b.From, b.To))];
+        var paidTotalCents = paidRows.Sum();
 
         for (var bi = 0; bi < buckets.Count; bi++)
         {

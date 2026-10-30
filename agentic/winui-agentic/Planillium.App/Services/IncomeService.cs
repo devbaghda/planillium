@@ -175,7 +175,8 @@ public sealed class IncomeService : IDisposable
         return posted + credit + PaidEarnings(LedgerStart, yesterday).Sum(e => e.Eur);
     }
 
-    private static readonly DateOnly LedgerStart = new(2025, 12, 4);
+    /// <summary>First day of the income ledger. Internal (G12) so Reports can start its paid-work running total here.</summary>
+    internal static readonly DateOnly LedgerStart = new(2025, 12, 4);
 
     /// <summary>One payable tag's share of a period: diary minutes carrying that tag × its hourly value.</summary>
     public sealed record PaidEarning(PaidTag Tag, int Minutes)
@@ -263,6 +264,29 @@ public sealed class IncomeService : IDisposable
                 posted[DateOnly.ParseExact(r.GetString(0), "yyyy-MM-dd", inv)] = Convert.ToDouble(r.GetValue(1), inv);
         }
 
+        var paidByDay = DailyPaid(from);
+        var result = new Dictionary<DateOnly, (double Net, double Paid)>();
+        for (var d = from; d <= today; d = d.AddDays(1))
+        {
+            var paid = paidByDay[d];
+            double net;
+            if (d < today)
+                net = (posted.TryGetValue(d, out var p) ? p : 0) + CreditRange(d, d, score);
+            else
+                net = TodayPreview() + TodayCredit(score);
+            result[d] = (net + paid, paid);
+        }
+        return result;
+    }
+
+    /// <summary>Paid work per day, <paramref name="from"/>..today inclusive (0 before <see cref="LedgerStart"/>): the
+    /// paid part of <see cref="DailyIncome"/>, and what Reports adds up from <see cref="LedgerStart"/> so a week's paid
+    /// figure rounds to the same cent in every view (G12). One grouped read.</summary>
+    public Dictionary<DateOnly, double> DailyPaid(DateOnly from)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
         // Minutes per (date, tag); the clamp to LedgerStart is the one PaidEarnings applies.
         var minutes = new Dictionary<(DateOnly, string), int>();
         var paidFrom = from < LedgerStart ? LedgerStart : from;
@@ -283,7 +307,7 @@ public sealed class IncomeService : IDisposable
         }
 
         var tags = PaidTags.All();
-        var result = new Dictionary<DateOnly, (double Net, double Paid)>();
+        var result = new Dictionary<DateOnly, double>();
         for (var d = from; d <= today; d = d.AddDays(1))
         {
             double paid = 0;
@@ -291,13 +315,7 @@ public sealed class IncomeService : IDisposable
                 foreach (var tag in tags)   // per entry, duplicates included, like PaidEarnings
                     if (minutes.TryGetValue((d, tag.Value), out var m) && m > 0)
                         paid += new PaidEarning(tag, m).Eur;
-
-            double net;
-            if (d < today)
-                net = (posted.TryGetValue(d, out var p) ? p : 0) + CreditRange(d, d, score);
-            else
-                net = TodayPreview() + TodayCredit(score);
-            result[d] = (net + paid, paid);
+            result[d] = paid;
         }
         return result;
     }
