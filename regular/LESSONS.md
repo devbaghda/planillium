@@ -8,6 +8,7 @@
 - A default value in an input ("0") can pass validation that only checks "empty"; start optional amounts empty and refuse 0 where 0 is meaningless.
 - A box that shows a stored value must never sit blank on leaving: revert or keep the text with a visible message.
 - After any click, check where focus ended up, not only what the click was on (containers may hand focus to the first focusable box). Guard this page-wide, not per section, and include password boxes (G12 D1: a blank click in AI put the cursor in the key box).
+- Every way of parking focus (Esc, blank click, Enter) must record the box that was left, so Tab/Shift+Tab continue from it; one path that skips this falls back to the park button's own tab order (G12 round 2 D1).
 
 ## User rules (Settings -> Income, 2026-10-25)
 - Esc in a saved box (salary, payable tag) reverts to the saved amount, saves nothing, cursor ends nowhere (B1h, 2026-10-27).
@@ -62,4 +63,9 @@
 - Once a dialog is open, find controls by walking all elements, not the usual name lookup.
 - Prove sideways scrolling by scrolling and re-reading the header, not from a screenshot at rest.
 - Take progress-line times from the clock, not guesses.
+- After any Tab/Shift+Tab test, put focus back in the page before the next step: focus left in the nav list turns typed letters into navigation ("t" opened Today).
+- Pick "blank" click points by checking the element under the point, not by an offset from a box (an offset landed on a NumberBox).
+- Check every park result against the Esc path; a reference that happens to match (salary Shift+Tab -> nav item) can hide a fallback bug.
+- Compact NumberBox spin buttons sit in an unnamed popup; click them by position (top half = up).
+- A stale scratch instance holds its MENTOR_INSTANCE_SUFFIX lock and makes a new instance with the same suffix exit at once; use a unique suffix per run.
 - Every Settings text/number box needs Esc and blank-area-click exits that release focus (AI cap/Model/Key boxes still failed after G11); cap salary amounts with a visible "too large" message.
