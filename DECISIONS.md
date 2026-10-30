@@ -276,6 +276,11 @@
     that mark newly taught (only those; never rules that existed before). (i) A mark with nothing
     ticked teaches no keywords. (j) Idle rows are skipped when teaching keywords ("idle" is never
     learned). (k) Clear actions in Settings also delete all backups; backups hold full window titles.
+20. **A missing data folder never falls back to the real data (G14, user ruling 2026-10-30).** When a
+    test build is started with MENTOR_ROOT set to a folder that does not exist, the app refuses to
+    start with a plain message naming that folder; it never searches for another data folder (the
+    search used to find the real one next to the repo and open the user's real database). With
+    MENTOR_ROOT not set, nothing changes; Release builds never read MENTOR_ROOT at all.
 
 ---
 

@@ -229,12 +229,27 @@ public sealed partial class ReportsPage
     private const string IncomeHeader = "Income lost/gained";
     private const string PaidHeader = "Of which paid work";
 
+    /// <summary>G14 (user ruling 2026-10-30): a header of two or more words is broken onto two lines at the space
+    /// nearest its middle ("Income / lost/gained", "Of which / paid work"), so the columns are only as wide as
+    /// their figures and every header reads in full at the default window (1180x780) instead of being cut.
+    /// One-word headers stay on one line. Headers sit at the bottom of their row, so every header stays right
+    /// above its figures whether it has one line or two.</summary>
+    internal static string TwoLineHeader(string header)
+    {
+        var mid = header.Length / 2.0;
+        var best = -1;
+        for (var i = 0; i < header.Length; i++)
+            if (header[i] == ' ' && (best < 0 || Math.Abs(i - mid) < Math.Abs(best - mid))) best = i;
+        return best < 0 ? header : header[..best] + "\n" + header[(best + 1)..];
+    }
+
     private static void AddHeaderRow(Grid grid, params string[] headers)
     {
         grid.RowDefinitions.Add(new RowDefinition());
         for (var c = 0; c < headers.Length; c++)
         {
-            var h = Caption(headers[c]);
+            var h = Caption(TwoLineHeader(headers[c]));
+            h.VerticalAlignment = VerticalAlignment.Bottom;
             Grid.SetColumn(h, c); Grid.SetRow(h, 0);
             grid.Children.Add(h);
         }

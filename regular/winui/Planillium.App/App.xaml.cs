@@ -55,6 +55,21 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // G14 (user ruling 2026-10-30): a test run whose MENTOR_ROOT names a folder that does not exist refuses to
+        // start, before anything (the log included) resolves the data folder. Without this the walk-up search found
+        // the REAL data folder next to the repo and the "scratch" run opened the user's real database.
+        if (AppPaths.MissingScratchFolder is { } missing)
+        {
+            MessageBoxW(IntPtr.Zero,
+                $"{AppInfo.DisplayName} can't start: the data folder it was told to use does not exist.\n\n" +
+                $"{missing}\n\n" +
+                "Create that folder (an empty one is fine) or point MENTOR_ROOT at a folder that exists. " +
+                "No other data folder was opened.",
+                $"{AppInfo.DisplayName} — data folder missing", MbIconError);
+            Environment.Exit(1);
+            return;
+        }
+
         Log.Info($"{AppInfo.DisplayName} v{AppVersion.Current} starting");
 
         // Optional test-only isolation: MENTOR_INSTANCE_SUFFIX lets a build

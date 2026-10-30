@@ -47,6 +47,10 @@ public static class AppPaths
             // — see CONTEXT.md for what was and wasn't cleaned up.
             if (ScratchRoot() is { } scratch)
                 return _root = scratch;
+            // G14 (user ruling 2026-10-30): MENTOR_ROOT set to a folder that does not exist never falls back to the
+            // walk-up below, which would find the REAL data folder next to the repo. Refuse instead.
+            if (MissingScratchFolder is { } missing)
+                throw new DirectoryNotFoundException($"The data folder set by MENTOR_ROOT does not exist: {missing}");
 
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
@@ -87,6 +91,22 @@ public static class AppPaths
 #else
             return false;
 #endif
+        }
+    }
+
+    /// <summary>G14: the MENTOR_ROOT path when a Debug / test build was started with it set to a folder that does not
+    /// exist, else null. The app then refuses to start (App.OnLaunched) and <see cref="Root"/> throws, so a mistyped
+    /// scratch path can never open the real data. Always null in Release, where MENTOR_ROOT is never read.</summary>
+    public static string? MissingScratchFolder
+    {
+        get
+        {
+#if DEBUG || PLANILLIUM_TESTS
+            var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
+            if (!string.IsNullOrEmpty(env) && !Directory.Exists(env))
+                return env;
+#endif
+            return null;
         }
     }
 

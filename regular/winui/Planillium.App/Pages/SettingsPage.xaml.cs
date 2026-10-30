@@ -48,6 +48,7 @@ public sealed partial class SettingsPage : Page
         WatchMoneyBox(MonthlyIncomeBox, () => "Previous salary needs a number");
         SalaryHost.Children.Add(RateRow(MonthlyIncomeBox, null));
         PreviewKeyDown += Page_PreviewKeyDown;   // G12: Esc on every other Settings box
+        GotFocus += Page_GotFocus;               // G14: a "too large" refusal clears when another box is entered
         NewPaidTagRate.Value = double.NaN;
         WatchMoneyBox(NewPaidTagRate, null);
         var (lineHint, showLineHint) = ErrorHint();
@@ -56,7 +57,7 @@ public sealed partial class SettingsPage : Page
         NewPaidTagRate.NegativeChanged += (_, _) => SyncNewTagHint();
         // B1d: a refusal message stays until the line is actually changed (compared by value, so a
         // text re-format of the same number does not wipe the message it just caused).
-        NewPaidTagRate.ValueChanged += (_, _) => { if (!NewPaidTagRate.Value.Equals(_refusedAmount)) ClearNewTagError(); };
+        NewPaidTagRate.ValueChanged += (_, _) => { if (!NewPaidTagRate.Value.Equals(_refusedAmount)) ClearNewTagError(); SyncNewTagHint(); };
         NewPaidTagName.TextChanged += (_, _) => { if ((NewPaidTagName.Text ?? "").Trim() != _refusedName) ClearNewTagError(); };
         // handledEventsToo: a click on a button or text box marks the press handled, but it must
         // still count as "outside the new-tag line".
@@ -393,14 +394,25 @@ public sealed partial class SettingsPage : Page
     /// <summary>B1c: the "can't be negative" message for one money box — error colour, an error icon
     /// (so it doesn't rely on colour alone), semibold, and announced by screen readers when it
     /// appears. Visible exactly while the box's text is negative (<see cref="MoneyBox.IsNegative"/>),
-    /// whether or not the box still has focus.</summary>
+    /// whether or not the box still has focus.
+    /// G14 (user ruling 2026-10-30): the same line also says "Amount is too large" while the typed amount is
+    /// above the box's ceiling, as the user types; nothing is saved until the box is left (then the box shows
+    /// the saved amount again and the status line says the amount was refused).</summary>
     private static StackPanel NegativeHint(MoneyBox box)
     {
         var (panel, show) = ErrorHint();
-        box.NegativeChanged += (_, on) => show(on ? NegativeText : null);
-        show(box.IsNegative ? NegativeText : null);
+        void Sync() => show(LiveMoneyProblem(box));
+        box.NegativeChanged += (_, _) => Sync();
+        box.ValueChanged += (_, _) => Sync();
+        Sync();
         return panel;
     }
+
+    /// <summary>What is wrong with a money box's text right now: the minus first, then an amount above its ceiling.</summary>
+    private static string? LiveMoneyProblem(MoneyBox box) =>
+        box.IsNegative ? NegativeText
+        : !double.IsNaN(box.Value) && box.Value > box.Maximum ? TooLargeText
+        : null;
 
     /// <summary>B1d: the red message line itself (error colour, error icon, semibold, announced by
     /// screen readers), with a setter: a text shows it, null hides it. Shared by the money rows'
@@ -434,15 +446,41 @@ public sealed partial class SettingsPage : Page
     private void WatchMoneyBox(MoneyBox box, Func<string>? revertReason)
     {
         box.NegativeChanged += (_, on) => { if (on) SaveStatus.Text = ""; };
+        // G14: the live "too large" line appearing means nothing is being saved now: a stale "Saved." goes too.
+        var wasTooLarge = false;
+        box.ValueChanged += (_, _) =>
+        {
+            var tooLarge = !double.IsNaN(box.Value) && box.Value > box.Maximum;
+            if (tooLarge && !wasTooLarge && SaveStatus.Text == "Saved.") SaveStatus.Text = "";
+            wasTooLarge = tooLarge;
+        };
         if (revertReason is not null)
             box.Reverted += (_, _) => SaveStatus.Text = revertReason() + " — the saved amount was kept.";
         // G12: an absurd amount (e.g. 999 999 999 999) is never saved; the box already shows the stored amount.
-        box.TooLarge += (_, _) => SaveStatus.Text = TooLargeText + " The saved amount was kept.";
+        box.TooLarge += (_, _) =>
+        {
+            SaveStatus.Text = TooLargeRefused;
+            _tooLargeFrom = box;
+        };
     }
 
     /// <summary>G12: the refusal for an amount above <see cref="IncomeService.MaxMonthlyEur"/>.</summary>
     private static string TooLargeText =>
         $"Amount is too large — at most {MainWindow.FormatEur(IncomeService.MaxMonthlyEur)} a month.";
+
+    private static string TooLargeRefused => TooLargeText + " The saved amount was kept.";
+
+    /// <summary>G14: the money box whose refused amount the status line is reporting, until the cursor goes into
+    /// another box; then the message is cleared (user ruling 2026-10-30: it no longer describes anything on screen).</summary>
+    private MoneyBox? _tooLargeFrom;
+
+    private void Page_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (_tooLargeFrom is null) return;
+        if (e.OriginalSource is not (TextBox or PasswordBox) || ReferenceEquals(e.OriginalSource, _tooLargeFrom)) return;
+        _tooLargeFrom = null;
+        if (SaveStatus.Text == TooLargeRefused) SaveStatus.Text = "";
+    }
 
     // ── the new-tag line's message (B1c minus, B1d refusals) ─────────────
 
@@ -451,8 +489,11 @@ public sealed partial class SettingsPage : Page
     private string? _refusedName;
     private double _refusedAmount = double.NaN;
 
-    /// <summary>The minus message wins while the amount is negative; otherwise the last refusal.</summary>
-    private void SyncNewTagHint() => _showNewTagHint(NewPaidTagRate.IsNegative ? NegativeText : _newTagError);
+    /// <summary>The minus message wins while the amount is negative; then (G14), while typing, an amount above
+    /// the ceiling (Add refuses it with the same words); otherwise the last refusal.</summary>
+    private void SyncNewTagHint() => _showNewTagHint(NewPaidTagRate.IsNegative ? NegativeText
+        : !double.IsNaN(NewPaidTagRate.Value) && NewPaidTagRate.Value > IncomeService.MaxMonthlyEur ? TooLargeText
+        : _newTagError);
 
     private void ClearNewTagError()
     {
