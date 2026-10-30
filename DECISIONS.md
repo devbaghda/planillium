@@ -201,7 +201,9 @@
       password box on Settings: Esc puts back what is saved, drops the validation message about the discarded text
       and leaves the box; a click on blank space leaves the box too and saves as before. The AI cap and the Model box
       also save on leaving the box or Enter (Model: user ruling, round 2) and then show exactly what is stored; the API
-      key still saves only with Save (Esc discards a typed key). A blank click leaves no box holding the cursor.
+      key still saves only with Save (Esc discards a typed key). A blank click leaves no box holding the cursor. After
+      leaving a box by Esc or a blank click, Tab/Shift+Tab continue from that box (round 3); Esc in the new
+      payable tag line empties it and leaves the cursor nowhere, like every other box.
     - **A tag's identity ignores letter case (G11).** "Studioshoo" and "studioshoo" are one tag: listed once in
       every tag list and the Diary tag filter, one Mark button, one payable entry, and payable minutes are matched
       case-insensitively (never counted twice).

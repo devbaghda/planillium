@@ -523,7 +523,9 @@ public sealed partial class SettingsPage : Page
         if (e.Key != Windows.System.VirtualKey.Escape) return;
         e.Handled = true;
         ClearNewPaidTagLine();
-        SectionList.Focus(FocusState.Programmatic);
+        // G12 round 3: the cursor ends nowhere like after Esc in every other box (it used to go to the
+        // section list); Tab/Shift+Tab then carry on from the box that was left.
+        Park(e.OriginalSource as UIElement ?? NewPaidTagName);
     }
 
     // ── "the cursor is nowhere" (B1b park, B1c Enter/blank-click/Tab rules) ──
@@ -595,13 +597,16 @@ public sealed partial class SettingsPage : Page
         var src = e.OriginalSource as DependencyObject;
         _pressSource = src;
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        _pressLeftFrom = focused is TextBox or PasswordBox && IsWithin(focused, this)
+            ? (UIElement)(OwningNumberBox(focused) ?? focused)
+            : ReferenceEquals(focused, IncomeFocusPark) ? _parkedFrom : null;
         var inLine = focused is not null && InNewPaidTagLine(focused);
         var blank = IsNonInteractive(src);
         // B1b/B1c: a click on a heading, caption or blank space takes the cursor out of a money box
         // (or the new-tag line) and leaves it nowhere. A click on another control lets that control
         // take focus as usual. G12: the same for every text, number and password box on the page;
         // leaving the box saves it as before.
-        if ((focused is TextBox or PasswordBox || inLine) && blank) Park(focused as UIElement);
+        if ((focused is TextBox or PasswordBox || inLine) && blank) Park(_pressLeftFrom ?? focused as UIElement);
         // B1d: whatever the click did, the cursor must not end up in an Income box the click was not
         // on (WinUI may hand focus to the first focusable box when a container takes a click —
         // the salary box is that first box). Checked once the press, and again once the release,
@@ -638,8 +643,14 @@ public sealed partial class SettingsPage : Page
         var box = (Control)Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
         DependencyObject owner = OwningNumberBox(box) ?? (DependencyObject)box;
         if (!IsWithin(box, this) || IsWithin(src, owner) || ReferenceEquals(box, _focusIntent)) return;
-        Park(box);
+        // G12 round 3 (QA D1): the park remembers the box the user was in before the click, not the
+        // box WinUI handed focus to (the section's first box), so Tab/Shift+Tab continue from it.
+        Park(_pressLeftFrom ?? box);
     }
+
+    /// <summary>The box the cursor was in when the last press began (or the box a park already
+    /// stood for); the element a stray-focus park continues from.</summary>
+    private UIElement? _pressLeftFrom;
 
     private static bool IsWithin(DependencyObject? d, DependencyObject container)
     {

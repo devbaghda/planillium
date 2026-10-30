@@ -51,7 +51,8 @@ The spent figure updates as soon as an AI call is answered. The cap must be more
 and the model save when you leave their box or press Enter (or with Save); the API key saves with Save.
 In any box on Settings, Esc throws away what you typed, shows the saved value again and takes the
 cursor out of the box (a typed API key is discarded); clicking an empty part of the page also takes
-the cursor out, and saves what you typed.
+the cursor out, and saves what you typed. Either way, Tab or Shift+Tab then carries on from the box you
+left.
 Nothing is lost, the copy-and-paste screens and the rest of the app keep working, and a new month
 starts at zero.
 
