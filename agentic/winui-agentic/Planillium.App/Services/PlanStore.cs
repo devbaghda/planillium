@@ -11,6 +11,7 @@ public static class PlanStore
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
+        TypeInfoResolver = JsonFileIO.Resolver, // G11
     };
 
     public static List<Plan> LoadActivePlans() => LoadActivePlans(out _);

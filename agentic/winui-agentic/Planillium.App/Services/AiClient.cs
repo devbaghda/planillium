@@ -67,9 +67,13 @@ public static class AiSettings
     public const string ProductionBaseUrl = "https://api.anthropic.com";
     public const string BaseUrlEnvironmentVariable = "PLANILLIUM_AI_BASE_URL";
     public const string CredentialName = "anthropic_api_key";
-    /// <summary>Used only while the test override is active, so QA's fake keys never touch the
-    /// user's real key in Credential Manager.</summary>
+    /// <summary>Used only while the test override is active outside a scratch run, so a fake key
+    /// never touches the user's real key in Credential Manager. A scratch run (MENTOR_ROOT set) uses
+    /// no credential at all: its key is in memory (AiKey, G11).</summary>
     public const string TestCredentialName = "anthropic_api_key_test";
+    /// <summary>G11: the API key a Debug scratch run starts with, kept in memory only (AiKey). Read
+    /// only when MENTOR_ROOT is set; used only while PLANILLIUM_AI_BASE_URL points at a stub.</summary>
+    public const string ScratchKeyEnvironmentVariable = "PLANILLIUM_SCRATCH_AI_KEY";
     public const string TestConnectionPrompt = "Reply with the word OK.";
     public const int TestConnectionMaxTokens = 16;
 
@@ -86,7 +90,7 @@ public static class AiSettings
         }
     }
 
-    /// <summary>True in a scratch run (MENTOR_ROOT set) without the local stub: no AI key is read.</summary>
+    /// <summary>True in a scratch run (MENTOR_ROOT set) without the local stub: no AI key is used.</summary>
     public static bool ScratchBlocked => AppPaths.IsScratchRun && !TestOverrideActive;
     public const string ScratchBlockedMessage =
         "AI is off in this test copy (MENTOR_ROOT is set). Set PLANILLIUM_AI_BASE_URL to a local stub to use it.";
@@ -100,7 +104,7 @@ public static class AiSettings
         return ProductionBaseUrl;
     }
 
-    /// <summary>The Credential Manager name the key is stored under (see AiKey).</summary>
+    /// <summary>The Credential Manager name the key is stored under outside a scratch run (see AiKey).</summary>
     public static string CredentialKey => TestOverrideActive ? TestCredentialName : CredentialName;
 }
 

@@ -254,7 +254,7 @@
                                  HorizontalAlignment="Left" PasswordRevealMode="Hidden"
                                  PlaceholderText="sk-ant-…"
                                  AutomationProperties.Name="Anthropic API key"
-                                 KeyDown="AiBox_KeyDown"/>
+                                 KeyDown="AiBox_KeyDown" PasswordChanged="AiKeyBox_PasswordChanged"/>
                     <TextBox x:Name="AiModelBox" Header="Model" Width="260"
                              HorizontalAlignment="Left" PlaceholderText="claude-sonnet-5-5"
                              AutomationProperties.Name="Model" KeyDown="AiBox_KeyDown"/>
@@ -263,7 +263,8 @@
                                Text="Leave empty to use the default (claude-sonnet-5-5). Change it here if Anthropic retires this model — no app update needed."/>
                     <TextBox x:Name="AiCapBox" Header="Monthly AI limit (EUR)" Width="260"
                              HorizontalAlignment="Left" PlaceholderText="5"
-                             AutomationProperties.Name="Monthly AI limit" KeyDown="AiBox_KeyDown"/>
+                             AutomationProperties.Name="Monthly AI limit" KeyDown="AiBox_KeyDown"
+                             TextChanged="AiCapBox_TextChanged"/>
                     <TextBlock x:Name="AiSpendLine" TextWrapping="Wrap" FontSize="13"
                                AutomationProperties.Name="AI spend this month"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>

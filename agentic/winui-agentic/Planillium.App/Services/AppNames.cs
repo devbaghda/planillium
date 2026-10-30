@@ -200,7 +200,7 @@ public static class AppNames
 
     /// <summary>
     /// G9a (rule 19 f): true for a stored Telegram row without the LTR mark: "Chat – Telegram" (the form
-    /// WindowTitleResolver writes), "(3) Chat – Telegram" or a bare "Telegram". <paramref name="chat"/> is
+    /// WindowTitleResolver writes), "(3) Chat – Telegram", a bare "Telegram" or "– Telegram" / "- Telegram" with no chat (G11). <paramref name="chat"/> is
     /// the chat name (everything before the LAST " – Telegram"; "" when none), so a chat name that itself
     /// contains " - " is kept whole instead of being split at its own dash.
     /// </summary>
@@ -210,6 +210,11 @@ public static class AppNames
         if (string.IsNullOrWhiteSpace(window)) return false;
         var n = ActivityTracker.StripUnreadBadge(NormaliseTitle(window));
         if (n.Equals("Telegram", StringComparison.OrdinalIgnoreCase)) return true;
+        // G11: "- Telegram" / "– Telegram" (dash, no chat name) is Telegram with no chat, not a
+        // dashless title for "Other".
+        if (n.Length > 0 && Array.IndexOf(DashChars, n[0]) >= 0 &&
+            n.TrimStart(DashChars).Trim().Equals("Telegram", StringComparison.OrdinalIgnoreCase))
+            return true;
         foreach (var c in DashChars)
         {
             var suffix = $" {c} Telegram";

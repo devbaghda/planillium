@@ -64,7 +64,7 @@ public static class StateService
         if (_cached != null) return _cached;
         try
         {
-            _cached = JsonSerializer.Deserialize<AppState>(File.ReadAllText(PathOf));
+            _cached = JsonSerializer.Deserialize<AppState>(File.ReadAllText(PathOf), JsonFileIO.Plain);
         }
         catch (FileNotFoundException) { /* first run — defaults are correct */ }
         catch (Exception ex) { Log.Error("StateService.Load (falling back to defaults)", ex); }
@@ -80,7 +80,6 @@ public static class StateService
         // window that helper exists to close, and this file is saved at the
         // moment the app closes, i.e. the most likely time to also be killed
         // (audit finding #2).
-        JsonFileIO.WriteAllTextAtomic(PathOf, JsonSerializer.Serialize(s,
-            new JsonSerializerOptions { WriteIndented = true }));
+        JsonFileIO.WriteAllTextAtomic(PathOf, JsonSerializer.Serialize(s, JsonFileIO.Indented));
     }
 }

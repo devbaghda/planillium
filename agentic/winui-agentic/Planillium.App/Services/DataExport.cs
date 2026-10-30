@@ -17,10 +17,7 @@ public static class DataExport
         using var db = new Database();
         var tables = db.ExportAllTables();
 
-        var json = JsonSerializer.Serialize(tables, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-        });
+        var json = JsonSerializer.Serialize(tables, JsonFileIO.Indented);
 
         var outPath = Path.Combine(AppPaths.Root, "data", ExportFiles.FullExportJson);
         Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);

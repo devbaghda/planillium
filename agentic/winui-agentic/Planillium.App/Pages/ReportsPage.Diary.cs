@@ -531,7 +531,9 @@ public sealed partial class ReportsPage
             bool MatchesPage(ReportData.DiaryEntry e) =>
                 DiaryFilter.Matches(_diaryPageFilter, AppNames.Sub(e.Window), StringComparer.OrdinalIgnoreCase);
             bool MatchesTag(ReportData.DiaryEntry e) =>
-                DiaryFilter.Matches(_diaryTagFilter, e.Tag, StringComparer.Ordinal);
+                // G11: ignoring case, like DiaryTag.Options, so the one "Studioshoo" entry also finds
+                // rows tagged with a differently-cased payable-tag value.
+                DiaryFilter.Matches(_diaryTagFilter, e.Tag, StringComparer.OrdinalIgnoreCase);
             bool MatchesSearch(ReportData.DiaryEntry e) =>
                 !searching ||
                 DiaryFilter.SearchMatches(_diarySearchField, q, AppNames.Label(e.Window),

@@ -96,6 +96,9 @@ public sealed partial class SettingsPage : Page
             AiModelBox.Text = ConfigService.AiModelStored;
             AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
             RefreshAiPanel();
+            // G11: the spend line follows every recorded AI call while this page is shown.
+            AiSpend.Changed -= RefreshAiSpend;
+            AiSpend.Changed += RefreshAiSpend;
             LoadIncome();
             LoadRules();
             // After LoadRules, not before: the keyword counts are read off the boxes it fills.
@@ -113,6 +116,7 @@ public sealed partial class SettingsPage : Page
         Unloaded += (_, _) =>
         {
             if (App.MainWindow is MainWindow win) win.TrackingStateChanged -= RefreshTrackerInfo;
+            AiSpend.Changed -= RefreshAiSpend;
             // A box still focused when the page goes away: save what was typed (nothing is saved per keystroke).
             foreach (var box in _committableBoxes.ToList()) box.Commit();
         };
@@ -135,7 +139,7 @@ public sealed partial class SettingsPage : Page
             return;
         }
         // The AI status line is per-visit: it clears when the user leaves the AI section.
-        if (_panels[_lastSection] == AIPanel) AIStatus.Text = "";
+        if (_panels[_lastSection] == AIPanel) { AIStatus.Text = ""; _aiRefusedBox = null; }
         _lastSection = SectionList.SelectedIndex;
         for (var i = 0; i < _panels.Length; i++)
             _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
@@ -1381,8 +1385,14 @@ public sealed partial class SettingsPage : Page
     private void RefreshAiSpend() =>
         AiSpendLine.Text = AiSpendCap.StatusLine(AiSpend.SpentThisMonth(), ConfigService.AiMonthlyCapEur);
 
+    /// <summary>G11: the box whose value the current AI status line refuses ("must be more than 0",
+    /// "paste your API key first"), or null. Editing that box clears the line, so leaving it by any
+    /// path (Tab, a click elsewhere, another section) never shows a refusal about text that is gone.</summary>
+    private Control? _aiRefusedBox;
+
     private void SetAiStatus(string text, bool failure)
     {
+        _aiRefusedBox = null;
         AIStatus.Text = text;
         AIStatus.Foreground = (Brush)Application.Current.Resources[failure
             ? "SystemFillColorCriticalBrush" : "TextFillColorPrimaryBrush"];
@@ -1399,6 +1409,24 @@ public sealed partial class SettingsPage : Page
         AiTestBtn.IsEnabled = hasKey;
         AiRemoveBtn.IsEnabled = hasKey;
         AiProgressRow.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>A refusal about what is typed in <paramref name="box"/> (see <see cref="_aiRefusedBox"/>).</summary>
+    private void RefuseAiInput(Control box, string text)
+    {
+        SetAiStatus(text, failure: true);
+        _aiRefusedBox = box;
+    }
+
+    private void AiCapBox_TextChanged(object sender, TextChangedEventArgs e) => ClearRefusalFor(AiCapBox);
+
+    private void AiKeyBox_PasswordChanged(object sender, RoutedEventArgs e) => ClearRefusalFor(AiKeyBox);
+
+    private void ClearRefusalFor(Control box)
+    {
+        if (_aiRefusedBox != box) return;
+        _aiRefusedBox = null;
+        AIStatus.Text = "";
     }
 
     private void AiSave_Click(object sender, RoutedEventArgs e) => SaveAi();
@@ -1422,7 +1450,7 @@ public sealed partial class SettingsPage : Page
         var capProblem = AiSpendCap.ValidateCap(AiCapBox.Text, out var capValue);
         if (capProblem is not null)
         {
-            SetAiStatus(capProblem, failure: true);
+            RefuseAiInput(AiCapBox, capProblem);
             return;
         }
         var capChanged = capValue != ConfigService.AiMonthlyCapEur;
@@ -1431,7 +1459,7 @@ public sealed partial class SettingsPage : Page
         {
             if (!AiKey.Has() && !capChanged)
             {
-                SetAiStatus("Not saved: paste your API key first.", failure: true);
+                RefuseAiInput(AiKeyBox, "Not saved: paste your API key first.");
                 return;
             }
             if (modelChanged && AiKey.Has()) ConfigService.SetAiModel(model);
@@ -1459,7 +1487,9 @@ public sealed partial class SettingsPage : Page
         if (capChanged) ConfigService.SetAiMonthlyCapEur(capValue);
         AiCapBox.Text = AiSpendCap.CapText(ConfigService.AiMonthlyCapEur);
         AiKeyBox.Password = "";
-        SetAiStatus("✓ Key saved. It is stored in Windows Credential Manager and is not shown again." +
+        SetAiStatus((AiKey.InMemory
+                ? "✓ Key saved for this test run only (kept in memory, not in Windows Credential Manager)."
+                : "✓ Key saved. It is stored in Windows Credential Manager and is not shown again.") +
             (capChanged ? " Monthly limit saved." : ""), failure: false);
         RefreshAiPanel();
     }

@@ -13,6 +13,10 @@ public sealed partial class ReportsPage
     /// <summary>Money cell text and colour for whole cents: integer cents, so a cell is never "-€0.00".</summary>
     private static string CentsText(long cents) => MainWindow.FormatEur(cents / 100.0);
 
+    /// <summary>G11: widest a figure column's header may be before it wraps at a space. Fits every
+    /// one-word header and "lost/gained" (~73 dip at the caption style) on one line.</summary>
+    private const double HeaderMaxWidth = 84;
+
     private static Grid DayTable(List<ReportData.DayStat> weekStats,
         Dictionary<DateOnly, (double Net, double Paid)> daily, long netTotalCents, long paidTotalCents)
     {
@@ -255,6 +259,18 @@ public sealed partial class ReportsPage
         for (var c = 0; c < headers.Length; c++)
         {
             var h = Caption(headers[c]);
+            // G11: a figure column's header wraps at a space onto two lines ("Of which / paid work"),
+            // so the two long EUR headers no longer set their columns' width (~119 dip each, wider
+            // than any value) and the table fits the default 1180 window far more often. Bottom-
+            // aligned so one-line headers sit on the same baseline as the second line. The text
+            // itself is unchanged (UIA reads the same name). Whatever still does not fit scrolls
+            // sideways (Scrollable). The label column is left alone (shared alignment grid).
+            if (c > 0)
+            {
+                h.TextWrapping = TextWrapping.WrapWholeWords;
+                h.MaxWidth = HeaderMaxWidth;
+            }
+            h.VerticalAlignment = VerticalAlignment.Bottom;
             Grid.SetColumn(h, c); Grid.SetRow(h, 0);
             grid.Children.Add(h);
         }

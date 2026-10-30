@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fix: Reports, Time diary: a payable tag whose name matches a built-in tag apart from capital letters (for example "Studioshoo") is listed once in the tag filter and the Edit/Split tag lists, with one "Mark all" button.
+- Fix: Reports, Time diary, App filter: rows titled "- Telegram" or "– Telegram" (Telegram with no chat name) now count under "Telegram", not "Other".
+- Fix: Reports summary table: the "Income lost/gained" and "Of which paid work" headers wrap onto two lines, so the table fits the default window more often; when it still does not fit, it scrolls sideways as before.
+- Fix: Settings -> AI, monthly limit: a negative limit now says "must be more than 0", like zero. After a refused limit or key, editing that box clears the message. The "This month" spend line updates after every AI call, without leaving Settings.
+- Change: a test copy of the app (started with MENTOR_ROOT set) never uses Windows Credential Manager, not even a test entry; an AI key saved there is kept in memory for that run only. Normal runs are unchanged.
+- Fix: Ask Claude and plan files: JSON reading and writing no longer depends on a .NET default that can be switched off, so a compact Claude reply always turns into a preview.
+
 - New: monthly AI cost limit. Settings -> AI shows "Monthly AI limit (EUR)" (default 5) and "This month: EUR x of EUR y used (estimated)". When the month's estimated cost reaches the limit, Ask Claude and Test connection are refused before anything is sent, with a message saying the limit was reached, how much was spent and where to raise it; plans, prompts and non-AI features are unaffected, and the copy-the-prompt route still works. The spend restarts at zero each calendar month. An empty, negative, zero or text limit is refused with a message and not saved. The cost is an estimate (reply size at Anthropic's list prices), not an invoice.
 - Fix: Time diary: a Telegram chat whose name contains " - " (for example "Team - Alpha") is now told apart by its whole chat name in the App/Page columns, the filters and search, instead of being split at its own dash and landing under a wrong app. Telegram windows without a chat name still show as plain "Telegram"; other apps are unchanged.
 

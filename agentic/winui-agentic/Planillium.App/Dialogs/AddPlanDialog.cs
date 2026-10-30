@@ -543,7 +543,7 @@ public static class AddPlanDialog
                 return $"A queued idea with id '{id}' already exists.";
 
             // Fill defaults the Python importer would have asked for.
-            var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)!;
+            var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonFileIO.Plain)!;
             var output = new Dictionary<string, object?>();
             foreach (var (k, v) in dict) output[k] = v;
             if (!queueOnly && !dict.ContainsKey("start_date"))
@@ -586,6 +586,7 @@ public static class AddPlanDialog
                         PropertyNameCaseInsensitive = true,
                         ReadCommentHandling = JsonCommentHandling.Skip,
                         AllowTrailingCommas = true,
+                        TypeInfoResolver = JsonFileIO.Resolver, // G11
                     });
                     if (plan is not null) planTools = PlanStore.DistinctTools(plan);
                 }

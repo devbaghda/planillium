@@ -34,8 +34,10 @@ public static class CredentialStore
         public string? TargetAlias; public string? UserName;
     }
 
-    /// <summary>In a scratch run only the stub's test key slot may be touched; real secrets never are.</summary>
-    private static bool Blocked(string key) => AppPaths.IsScratchRun && key != AiSettings.TestCredentialName;
+    /// <summary>In a scratch run (MENTOR_ROOT set) Windows Credential Manager is never read, written or
+    /// deleted, for any name (G11, 2026-10-30; G7 still allowed the AI test slot). The scratch AI key
+    /// lives in memory in <see cref="AiKey"/> instead.</summary>
+    private static bool Blocked(string key) => AppPaths.IsScratchRun;
 
     public static string? Read(string key)
     {

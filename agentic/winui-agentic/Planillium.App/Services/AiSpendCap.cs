@@ -77,6 +77,9 @@ public static class AiSpendCap
 
     public const string CapHelp = "Enter an amount in euros, for example 5 or 7.50.";
 
+    /// <summary>The one refusal for a zero or negative cap (G11).</summary>
+    public const string CapNotPositive = "Not saved: the monthly limit must be more than 0. " + CapHelp;
+
     /// <summary>Calendar-month key ("2026-10") of the given local time.</summary>
     public static string MonthKey(DateTime now) => now.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
@@ -104,8 +107,8 @@ public static class AiSpendCap
         if (!decimal.TryParse(t, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
                 CultureInfo.InvariantCulture, out var d))
             return "Not saved: the monthly limit must be a number. " + CapHelp;
-        if (d < 0) return "Not saved: the monthly limit cannot be negative. " + CapHelp;
-        if (d == 0) return "Not saved: the monthly limit must be more than 0. " + CapHelp;
+        // G11: zero and negative get one wording ("-5" used to say "cannot be negative").
+        if (d <= 0) return CapNotPositive;
         if (d > (decimal)MaxCapEur) return $"Not saved: the monthly limit is too large (at most {MaxCapEur:0} euros).";
         capEur = (double)Math.Round(d, 2);
         if (capEur <= 0) return "Not saved: the monthly limit must be at least 0.01 euros.";
@@ -149,6 +152,10 @@ public static class AiSpend
         return AiSpendCap.IsReached(spent, cap) ? AiSpendCap.RefusalMessage(spent, cap) : null;
     }
 
+    /// <summary>G11: raised after every <see cref="Record"/>, on the caller's (UI) thread, so a visible
+    /// spend line (Settings -> AI) refreshes after any successful AI call, wherever it was made.</summary>
+    public static event Action? Changed;
+
     public static void Record(double eur)
     {
         var s = StateService.Load();
@@ -156,5 +163,6 @@ public static class AiSpend
         s.AiSpendMonth = month;
         s.AiSpendEur = total;
         StateService.Save(s);
+        Changed?.Invoke();
     }
 }

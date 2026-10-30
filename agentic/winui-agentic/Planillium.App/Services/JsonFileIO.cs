@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Planillium.App.Services;
 
@@ -9,14 +10,24 @@ namespace Planillium.App.Services;
 /// </summary>
 internal static class JsonFileIO
 {
-    /// <summary>A JsonSerializerOptions built from scratch (rather than copied
-    /// from .Default) has no TypeInfoResolver and throws on ToJsonString as
-    /// soon as the tree holds a node added via the generic JsonArray/JsonObject
-    /// .Add&lt;T&gt;() — this workaround, and its explanatory comment, used to be
-    /// duplicated across PlanStore and ConfigService (2026-07-14 round-6 audit
-    /// finding #20).</summary>
+    /// <summary>G11 (2026-10-30): the one resolver every JsonSerializerOptions in this app names
+    /// explicitly. An options object without a TypeInfoResolver throws "must specify a
+    /// TypeInfoResolver" when JsonNode.ToJsonString / GetTypeInfo marks it read-only, and every
+    /// JsonSerializer call fails if reflection-by-default is ever switched off (trimming, AOT,
+    /// JsonSerializerIsReflectionEnabledByDefault=false). Naming it makes each call independent of
+    /// that switch and of which call touched a shared options object first.</summary>
+    public static readonly IJsonTypeInfoResolver Resolver = new DefaultJsonTypeInfoResolver();
+
+    /// <summary>Default settings with the explicit resolver: use instead of the parameterless
+    /// JsonSerializer overloads (which fall back to JsonSerializerOptions.Default).</summary>
+    public static readonly JsonSerializerOptions Plain = new() { TypeInfoResolver = Resolver };
+
+    /// <summary>A JsonSerializerOptions built from scratch with no TypeInfoResolver throws on
+    /// ToJsonString as soon as the tree holds a node added via the generic JsonArray/JsonObject
+    /// .Add&lt;T&gt;() (2026-07-14 round-6 audit finding #20; was a copy of .Default, whose resolver
+    /// is empty when reflection is off — now the explicit <see cref="Resolver"/>, G11).</summary>
     public static readonly JsonSerializerOptions Indented =
-        new(JsonSerializerOptions.Default) { WriteIndented = true };
+        new() { WriteIndented = true, TypeInfoResolver = Resolver };
 
     /// <summary>Write-to-temp-then-replace so a crash or kill mid-write can
     /// never leave the real file half-written, unreadable on the next launch

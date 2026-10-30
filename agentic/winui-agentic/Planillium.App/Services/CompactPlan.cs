@@ -29,6 +29,7 @@ public static class CompactPlan
     {
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        TypeInfoResolver = JsonFileIO.Resolver, // G11: never depends on reflection-by-default
     };
 
     private const string TaskShape = "[day, title, detail, mentor note, category, minutes, tools]";

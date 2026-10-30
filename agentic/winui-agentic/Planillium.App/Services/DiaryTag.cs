@@ -43,16 +43,21 @@ public static class DiaryTag
 
     /// <summary>The built-in tags plus any payable tag the user added in Settings
     /// (<see cref="PaidTags"/>), re-read on every access so a new tag shows up in the next dropdown
-    /// opened without a restart. Callers must not cache the array across user actions.</summary>
+    /// opened without a restart. Callers must not cache the array across user actions.
+    /// G11: each tag is listed once. Values are compared ignoring case, so a payable tag saved as
+    /// "Studioshoo" (hand-edited config) is the built-in "studioshoo", not a second entry with a
+    /// second "Mark all" button; the first entry wins (built-in first, then payable tags in order).</summary>
     public static (string Label, string Value)[] Options =>
-        BuiltIn.Concat(PaidTags.All()
-                .Where(p => Array.FindIndex(BuiltIn, b => b.Value == p.Value) < 0)
-                .Select(p => (p.Label, p.Value)))
+        BuiltIn.Concat(PaidTags.All().Select(p => (p.Label, p.Value)))
+            .DistinctBy(o => o.Value, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
     /// <summary>Value → label, or null for an unrecognised/legacy value — used wherever a raw
     /// column value needs to become display text (the diary row's details column, search
-    /// matching) without every call site re-walking <see cref="Options"/> by hand.</summary>
+    /// matching) without every call site re-walking <see cref="Options"/> by hand. Case is ignored,
+    /// like <see cref="Options"/> (G11).</summary>
     public static string? LabelOf(string? value) =>
-        value is null ? null : Array.Find(Options, o => o.Value == value).Label is { Length: > 0 } l ? l : null;
+        value is null ? null
+            : Array.Find(Options, o => string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase)).Label
+                is { Length: > 0 } l ? l : null;
 }

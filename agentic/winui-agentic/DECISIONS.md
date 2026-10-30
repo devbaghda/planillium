@@ -199,7 +199,9 @@
 
 16. **Optional AI layer ("Ask Claude", added 2026-10-13, ai-layer spec).** The API key lives only in
     Windows Credential Manager under `anthropic_api_key@Planillium` (`anthropic_api_key_test` in
-    DEBUG/test builds with `PLANILLIUM_AI_BASE_URL` set; never the real slot). It is never written to
+    DEBUG/test builds with `PLANILLIUM_AI_BASE_URL` set; never the real slot). A scratch run (`MENTOR_ROOT`
+    set) never uses Credential Manager at all (G11): its key lives only in memory (`AiKey`), seeded in
+    Debug from the environment variable `PLANILLIUM_SCRATCH_AI_KEY` or typed in Settings. It is never written to
     config.json, the DB, a log or a file, and is not shown after saving. The model name is
     `ai.model` in config.json (default `claude-sonnet-5-5`). The call sends only the prompt the dialog
     shows; the first use asks once (`ai_notice_accepted` in the app state). Claude's reply never applies
@@ -237,6 +239,13 @@
     backup replaces the oldest, last 5 kept (unchanged), and Settings > Change history says backups hold
     full window titles. The remaining defaults of SPEC section 8 (Q3, Q4, Q6, Q7, Q9, Q10) were accepted
     by the user.
+18. **A money Total is the sum of the rows shown above it, to the cent (G11, 2026-10-30).** In the Reports
+    summary tables (Day/Week/Month/Year; both "Income lost/gained" and "Of which paid work") the Total row
+    equals the sum of the displayed row amounts exactly. Rows are split in whole cents by
+    `EurCents.SplitRows` (running-total rounding, last row takes the Total), and the Total cell shows the
+    same integer cents the split was pinned to (`ReportsPage.Tables.cs` `DayTable`/`BucketTable`). Verified
+    by code reading in G11: both tables already did this (the off-by-a-cent Total was a regular-side defect).
+    Any new table with a money Total must build its rows the same way, never round each row on its own.
 
 ### Standing lessons
 _The durable ones. Every entry here cost a real bug to learn; none may be dropped in a
@@ -297,8 +306,9 @@ compaction. General versions of several now also live in the global `windows-app
   change (the harness's auto-mode classifier enforces this and rejects a vague "yes"). Read-only
   queries against it are always fine.
 - **A run with `MENTOR_ROOT` set never touches real Credential Manager entries (G7, 2026-10-27).**
-  `CredentialStore` (the single store) refuses Read/Write/Delete for every name except the AI test slot
-  `anthropic_api_key_test`; keyed on the env var alone (`AppPaths.IsScratchRun`), not `#if DEBUG`, so a
+  `CredentialStore` (the single store) refuses Read/Write/Delete for every name, with no exception (G11,
+  2026-10-30, removed the `anthropic_api_key_test` exception; the scratch AI key is in-memory in `AiKey`,
+  seeded in Debug from `PLANILLIUM_SCRATCH_AI_KEY`); keyed on the env var alone (`AppPaths.IsScratchRun`), not `#if DEBUG`, so a
   Release build or a mistyped path still fails closed. Services built on the secrets (AI, TickTick) then
   fail cleanly with a message. Standing lesson: guard the delete and write paths of secrets too (a scratch
   "Disconnect" / "Clear all my data" would otherwise delete the user's real tokens), and guard once at the
@@ -488,4 +498,11 @@ compaction. General versions of several now also live in the global `windows-app
   - (round 2) Two end points of one long run do not show a leak: run one scenario per launch for 15 min, sample every 30 s, and split committed memory into the GC reservation vs native (`qa/g5_creep.py`, `VirtualQueryEx`). A GC sawtooth or a rise that levels off is not a leak; only a native or GC floor that keeps climbing is. G5's "24 MB creep" was a GC sawtooth (All-time refresh reloading ~9300 rows) read near its top.
 - **(2026-10-29, G8) Every scroller and dialog that holds a text box gets the Income focus protection, through one helper (`Controls/FocusShield.cs`).** A ScrollViewer that is not a tab stop focuses its first focusable child on an unclaimed release, so: (1) claim releases at the scroller's template root (`FocusShield.ClaimReleases`; covers padding, scrollbar strip and the area below short content with no layout change) for every page root scroller and every inner scroller created in code (Schedule day cards, Reports diary filter/tag/results rows, summary tables) and every dialog's own and template scroller; (2) a blank press while a box has the cursor parks focus on an invisible 1x1 park (`Attach`); (3) on pages, a guard lets a box take focus only from the user's mouse/touch/pen/keyboard, a Tab, a restore, or `FocusShield.RequestFocus` (cancel + park otherwise). Dialogs are wired centrally in `DialogControls.Build` (auto-detects a box; no guard, opening focus unchanged). Standing lesson: a new scroller built in code, or a new programmatic `Focus` into a box on a page, must go through FocusShield (`ClaimReleases` / `RequestFocus`), or it reopens the jump or is blocked by the guard. Settings -> Income keeps its own B1f code (skipped by the helper). Open defaults (G8 SPEC section 11): see `CONTEXT.md` section 5.
 - **(2026-10-29, G10b) The Diary has no row cap.** Paging reaches every match and Select all ticks every match. Standing lesson: when a display cap is removed, delete the cap's whole chain (constant, truncation, "showing N most recent" notice, paging `reachable` limit, the Show-all callback that re-pointed Select all's row set) instead of raising the number, and grep the old figure in comments; keep the list virtualized so the largest list costs references only.
+- **(2026-10-30, G11) Group-QA fixes, standing lessons:**
+  - **Every `JsonSerializerOptions` the app builds carries an explicit resolver (`JsonFileIO.Resolver`).** `JsonNode.ToJsonString(options)` / `GetTypeInfo` throw "must specify a TypeInfoResolver" on resolver-less options when reflection-by-default is off (trimming, AOT, `JsonSerializerIsReflectionEnabledByDefault=false`, a runtimeconfig switch), while unit tests run with it on and pass. Shared options: `JsonFileIO.Plain` / `JsonFileIO.Indented`; a custom one sets `TypeInfoResolver = JsonFileIO.Resolver`; never call `Serialize/Deserialize` with no options. On this side reflection is on (no switch in the csproj/runtimeconfig), so the regular-side crash could not occur; hardened anyway, proven in a scratch console with reflection forced off.
+  - **A scratch run uses no Credential Manager entry at all; its AI key is in memory.** Guard at the single store with no name exceptions; an exception for a "test" name still writes to the user's real vault.
+  - **Compare tag values ignoring case everywhere a tag is matched or de-duplicated** (`DiaryTag.Options`/`LabelOf`, the diary tag filter): a hand-edited or older config can hold "Studioshoo" next to the built-in "studioshoo", and an exact comparison lists it twice. Open: income SQL still matches the stored paid value exactly (see `CONTEXT.md` section 5).
+  - **A title parser must handle the separator with nothing on one side** ("- Telegram"): `AppNames.TryTelegramSuffix` accepts a leading dash, so Group, FilterGroup ("Other" excludes it), Sub and Label all agree.
+  - **A table that can be wider than the window: wrap long figure headers at a space (`HeaderMaxWidth`, bottom-aligned) and keep the sideways scroller.** WinUI's auto-hiding scroll indicator makes an overflowing header look cut off ("Of which pa") even though the table scrolls.
+  - **A refusal message is tied to the box it refuses** (Settings -> AI `_aiRefusedBox`): editing that box clears it, which covers every way of leaving the box. A summary line that depends on stored state (AI spend) refreshes from an event raised by the single writer (`AiSpend.Changed`), not only on page load.
 - **(2026-10-29, G6) The sidebar Today dot is derived from the banner's own overdue total (`TodayPage.CountBannerOverdue`), never from a second definition of overdue.** Standing lesson: before adding a UI indicator for a state another widget already shows, reuse that widget's condition through one shared function and refresh it from the one call every mutating action already makes (`RefreshScore`), so it updates on every page; check first whether the indicator exists at all (grep XAML and code) before assuming a bug.
