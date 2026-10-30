@@ -75,3 +75,15 @@
 - Git Bash: use `cmdkey //list`; compare sorted names, not a hash (order changes per call).
 - Dismiss startup dialogs again right before the first real click; confirm the cursor is in the box before typing.
 - A PasswordBox cannot be read through UIA: prove it empty by behaviour (Save stores a typed key; a Save leaving "No key" means empty).
+- A QA harness that brings the app to the front can steal the desktop user's keystrokes: keep scripts short, revert any box holding text the script did not type.
+- NumberBox arrow click: click the box, move the mouse off and back onto the arrow, wait ~0.7 s, click 12 px above (up) or below (down).
+- Take each Tab/Shift+Tab expectation from a plain Tab out of the box in the same run, then compare blank-click and Esc paths to it.
+- A QA worktree with a changed file that cannot switch commits: add a fresh worktree, do not discard.
+
+## QA technique (G14 2026-10-30)
+- A worktree-isolated QA cannot Write/Edit the shared checkout: keep per-run scripts in the scratchpad and import regular/qa helpers via sys.path.
+- The Win32 startup message box ignores posted clicks: close it with UIA Invoke on its OK button.
+- The live app writes data/ every minute (log :49, WAL :51): a before/after timestamp check of data/ must allow for that rhythm.
+- A "blank" click on page text (title, info line) is not a blank click: check the element under the point first (G14 caveat: such a click loses the Tab position).
+- Do not poll a background build's output file in a loop; wait for its completion notice.
+- Reproduce each ruled item on the current build before changing code; an item may already be built (G14 item 3 was done in G12).

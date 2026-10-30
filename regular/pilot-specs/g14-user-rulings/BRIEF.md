@@ -1,0 +1,2 @@
+# G14 brief
+Scope = REQUEST.md only; reuse existing mechanisms; no refactor. Precheck (strict build + suite) green before hand-off. One QA only after the build, 30-minute cap, ACCEPTANCE 1-7. QA: new empty scratch root, foreground check before every input, G7 in-memory store, cmdkey /list before and after, never touch the live Release app or real data. Item 1 is verified in a scratch run only (a missing scratch path). Write reports to files first. Add DECISIONS entry for item 1 (rule: missing data folder never falls back to real data).
