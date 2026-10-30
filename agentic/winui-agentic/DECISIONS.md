@@ -538,4 +538,9 @@ compaction. General versions of several now also live in the global `windows-app
     Save is not counted twice.
   - **Money shown per view must be cut from one running total over a fixed start**, or the same week
     rounds to different cents in different views; decimals make the total independent of grouping.
+- **(2026-10-30, G13) An API key is stored only by a deliberate save of the key itself: Save, or Enter in the key box.**
+  Enter (or leaving) in the Model or monthly-limit box saves that box alone and never reads the key box; a blank click
+  or Esc with a typed key empties the key box and stores nothing; Tab or a click on another control keeps the typed key
+  unsaved. Standing lesson: a shared Save that writes several fields must not run from one field's Enter; each box's
+  Enter saves only that box, and a secret is written only from its own box or button.
 - **(2026-10-29, G6) The sidebar Today dot is derived from the banner's own overdue total (`TodayPage.CountBannerOverdue`), never from a second definition of overdue.** Standing lesson: before adding a UI indicator for a state another widget already shows, reuse that widget's condition through one shared function and refresh it from the one call every mutating action already makes (`RefreshScore`), so it updates on every page; check first whether the indicator exists at all (grep XAML and code) before assuming a bug.

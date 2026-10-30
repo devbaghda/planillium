@@ -826,9 +826,12 @@ public sealed partial class SettingsPage : Page
     //   box kinds: single-line text (name, work start/end, review time, AI model, AI limit), multi-line keyword boxes,
     //              password (API key), number boxes (Hours, Scoring), money boxes (Income: own B1g rules, skipped here).
     //   Esc        -> saved value back, message about the discarded text cleared, cursor parked (DiscardAndPark).
-    //   Enter      -> AI boxes save (SaveAi); other boxes unchanged (number boxes commit their value, which saves).
+    //   Enter      -> AI boxes save, each only itself (G13: key box = SaveAi, model/limit = their leave-save, never the
+    //              key); other boxes unchanged (number boxes commit their value, which saves).
     //   Tab / click on another control / section switch / blank click -> leave-save (LostFocus / ValueChanged; AI
     //              model and limit since G12); a leave with nothing changed saves nothing and says nothing.
+    //              API key (G13): never saved on leaving; a blank click (park) empties it like Esc; Tab / a click on
+    //              another control keeps the typed text unsaved until Save or Enter in the key box.
     //   Tab or Shift+Tab after a park -> continues from the box that was left (ContinueTab).
 
     /// <summary>The control focus was last parked away from (weak: a rebuilt row must not be kept alive).</summary>
@@ -839,6 +842,13 @@ public sealed partial class SettingsPage : Page
         // No old element (focus restored to the park after a window switch): keep what was recorded.
         if (args.OldFocusedElement is not DependencyObject old || ReferenceEquals(old, FocusPark)) return;
         _parkedFrom = old is Control c && IsWithin(c, SectionContent) ? new WeakReference<Control>(c) : null;
+        // G13: the cursor leaving the API key box for nowhere (a blank click; Esc does the same in DiscardAndPark)
+        // discards a typed key: the box empties and nothing is stored. Only Save or Enter in the key box stores a key.
+        if (ReferenceEquals(old, AiKeyBox) && AiKeyBox.Password.Length > 0)
+        {
+            PutSavedBack(AiKeyBox);
+            ClearRefusalFor(AiKeyBox);
+        }
     }
 
     /// <summary>The box Esc applies to: a text box, password box or number box (the focused element is its inner text
@@ -1653,14 +1663,27 @@ public sealed partial class SettingsPage : Page
 
     private void AiSave_Click(object sender, RoutedEventArgs e) => SaveAi();
 
+    /// <summary>G13: Enter saves only the box it is pressed in. In the key box it is a deliberate save of the key (the
+    /// Save button's logic); in the model or limit box it saves that box alone and never reads or stores the key box, so
+    /// a key typed and abandoned there is never stored by someone else's Enter.</summary>
     private void AiBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Enter) return;
         e.Handled = true;
-        SaveAi();
+        if (ReferenceEquals(sender, AiKeyBox)) { SaveAi(); return; }
+        try
+        {
+            if (ReferenceEquals(sender, AiModelBox)) SaveAiModelOnLeave();
+            else if (ReferenceEquals(sender, AiCapBox)) SaveAiCapOnLeave();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.AiEnterSave", ex);
+            SetAiStatus(Log.Friendly("Couldn't save the AI settings", ex), failure: true);
+        }
     }
 
-    /// <summary>The Save button's logic, also run by Enter in either box. The key is trimmed by
+    /// <summary>The Save button's logic, also run by Enter in the key box. The key is trimmed by
     /// AiKey.Save; an empty box with no saved key is refused, and writes nothing.</summary>
     private void SaveAi()
     {
