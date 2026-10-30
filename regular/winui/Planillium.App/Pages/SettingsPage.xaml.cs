@@ -1067,7 +1067,7 @@ public sealed partial class SettingsPage : Page
     // Esc in any text, number or password box puts back the last SAVED value, drops the validation
     // message that belonged to the discarded text, and leaves the box (to the park). The money boxes
     // keep their own Esc (B1h) and the new-tag line keeps its own (B1). The AI cap saves when it is
-    // left or Enter is pressed, like the other autosaving boxes; Model and key still save with Save.
+    // left or Enter is pressed, like the other autosaving boxes, and so does Model (round 2); the key saves with Save.
 
     /// <summary>A box whose next LostFocus must not save: Esc just put its saved value back.</summary>
     private object? _skipSaveFor;
@@ -1092,9 +1092,17 @@ public sealed partial class SettingsPage : Page
 
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
-            if (!ReferenceEquals(focused, AiCapBox)) return;
-            e.Handled = true;
-            if (SaveCapFromBox()) Park(AiCapBox);
+            if (ReferenceEquals(focused, AiCapBox))
+            {
+                e.Handled = true;
+                if (SaveCapFromBox()) Park(AiCapBox);
+            }
+            else if (ReferenceEquals(focused, AiModelBox))
+            {
+                e.Handled = true;
+                SaveModelFromBox();
+                Park(AiModelBox);
+            }
             return;
         }
 
@@ -1194,6 +1202,32 @@ public sealed partial class SettingsPage : Page
 
     private static string SavedCapText() =>
         AiSpend.CapEur.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void AiModelBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_initialising || SkipSave(sender)) return;
+        SaveModelFromBox();
+    }
+
+    /// <summary>G12 round 2 (user ruling): the Model box saves when it is left or Enter is pressed, and then
+    /// shows exactly what is stored (an empty box stores the default model), so it never shows an unsaved value.</summary>
+    private void SaveModelFromBox()
+    {
+        if (AiModelBox.Text.Trim() == AiSettings.Model) { AiModelBox.Text = AiSettings.Model; return; }
+        try
+        {
+            AiSettings.SaveModel(AiModelBox.Text);
+            AiResult.Text = "Saved.";
+            _refusedCapText = null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage (AI model save)", ex);
+            AiResult.Text = "Couldn't save the model. Nothing was changed.";
+        }
+        AiModelBox.Text = AiSettings.Model;
+        SumAi.Text = AiSettings.HasKey ? "Key saved · " + AiSettings.Model : "No key — manual copy/paste";
+    }
 
     private void AiCapBox_LostFocus(object sender, RoutedEventArgs e)
     {

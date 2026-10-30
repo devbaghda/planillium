@@ -48,7 +48,7 @@ month. The spend is an estimate: the AI service reports usage, not money, so the
 usage by a fixed price, slightly on the high side. When the month's spend reaches the cap, the AI
 buttons (Ask Claude, Test connection) stop with a message saying so; raise the cap there to continue.
 The spent figure updates as soon as an AI call is answered. The cap must be more than 0. The cap
-saves when you leave its box or press Enter (or with Save); the model and the API key save with Save.
+and the model save when you leave their box or press Enter (or with Save); the API key saves with Save.
 In any box on Settings, Esc throws away what you typed, shows the saved value again and takes the
 cursor out of the box (a typed API key is discarded); clicking an empty part of the page also takes
 the cursor out, and saves what you typed.

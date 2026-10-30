@@ -7,7 +7,7 @@
 - Set every piece of a control's state before raising its change events (a readout read a stale sign and stuck on "= --/h").
 - A default value in an input ("0") can pass validation that only checks "empty"; start optional amounts empty and refuse 0 where 0 is meaningless.
 - A box that shows a stored value must never sit blank on leaving: revert or keep the text with a visible message.
-- After any click, check where focus ended up, not only what the click was on (containers may hand focus to the first focusable box).
+- After any click, check where focus ended up, not only what the click was on (containers may hand focus to the first focusable box). Guard this page-wide, not per section, and include password boxes (G12 D1: a blank click in AI put the cursor in the key box).
 
 ## User rules (Settings -> Income, 2026-10-25)
 - Esc in a saved box (salary, payable tag) reverts to the saved amount, saves nothing, cursor ends nowhere (B1h, 2026-10-27).
@@ -17,13 +17,14 @@
 
 ## QA and testing
 - QA must run the standing input-box checks (app-qa-checks section 5); a line passing on one path is not a pass on all paths.
-- Focus tests need real mouse clicks and keystrokes, window-relative coordinates, and a "type 9, nothing changes" check.
+- Focus tests need real mouse clicks and keystrokes, window-relative coordinates, and a "type 9, nothing changes" check. Record which element got focus, not only that the box lost it.
 - Pre-seed today's kickoff and review as done in the scratch state before launch, or timed prompts steal focus.
 - Read the status line by its own ID, separately from inline red messages.
 - Run QA scripts with `PYTHONIOENCODING=utf-8`: amounts contain a thin space (U+2009) that crashes cp1252 console output.
 - A scratch MENTOR_ROOT does not isolate Windows Credential Manager secrets (AI key, TickTick); check the Settings AI/TickTick rows before assuming a test instance is clean.
 - Reuse the B1d harness (`qa/b1d_h.py`) by setting its module globals instead of writing a new one.
 - MoneyBox is a WinUI control; the source-link test project cannot unit-test it (extracting its logic is an open offer, not a decision).
+- A new empty MENTOR_ROOT opens three dialogs at first launch (name welcome, Welcome back, Good morning); dismiss them by name before the first real click.
 - Seed scratch data in two steps: first launch creates the schema, kill the app, seed `time_diary` with sqlite3, relaunch; a seeded diary gap triggers a "Welcome back" dialog to skip before driving the UI.
 - A QA worktree may start on another branch's commit: `git checkout --detach winui-rebuild` before building, or old code runs.
 - The shell wrapper refuses compound commands containing git inside a worktree; run git commands on their own.
@@ -48,3 +49,17 @@
 
 ## Context
 - Read `../CONTEXT.md` in full yourself; the project CLAUDE.md no longer auto-loads it.
+
+## QA technique (group QA 2026-10-29)
+- Find dialog buttons by automation id, never by the name "Close": that hits the main window's Close and hides the app to the tray.
+- Scroll the Diary into view before clicking its filters; use Invoke on "Show N more" links (zero-size rectangle).
+- Scratch secrets live only in memory: re-enter the fake key after every relaunch.
+- A green unit test of a JSON helper does not prove the in-app path: run a real stub reply through the dialog and read mentor-winui.log (CompactReply serializer failed only in-app).
+- Check on-screen rows against the Total row, not only the Total against a reference figure (cent rounding).
+- Flaky: ActivityTrackerPendingGapTests.AlreadyAccountedForGapIsNotAskedAboutAgain failed once in a full run, passed alone and on reruns; rerun before treating as red.
+- Before every real click, check the foreground window belongs to the app's process; stop if not (6 clicks once landed in the user's mail client).
+- Kill a helper by the PID saved at launch, never by name match (the killing command matched itself and ended QA's shell).
+- Once a dialog is open, find controls by walking all elements, not the usual name lookup.
+- Prove sideways scrolling by scrolling and re-reading the header, not from a screenshot at rest.
+- Take progress-line times from the clock, not guesses.
+- Every Settings text/number box needs Esc and blank-area-click exits that release focus (AI cap/Model/Key boxes still failed after G11); cap salary amounts with a visible "too large" message.

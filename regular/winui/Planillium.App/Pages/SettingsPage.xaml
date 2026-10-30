@@ -248,7 +248,7 @@
                                Text="With an Anthropic API key, &quot;Ask Claude&quot; in Replace remaining and Add plan sends the prompt for you and fills in the reply — no copying and pasting. The key is stored encrypted by Windows on this PC only: never in config.json, the database, the repo or the installer. Without a key the manual copy/paste screens keep working."/>
                     <TextBlock x:Name="AiStatus" TextWrapping="Wrap"/>
                     <PasswordBox x:Name="AiKeyBox" Header="API key" PlaceholderText="sk-ant-…" MaxWidth="460" HorizontalAlignment="Left"/>
-                    <TextBox x:Name="AiModelBox" Header="Model" MaxWidth="460" HorizontalAlignment="Left"/>
+                    <TextBox x:Name="AiModelBox" Header="Model" MaxWidth="460" HorizontalAlignment="Left" LostFocus="AiModelBox_LostFocus"/>
                     <TextBox x:Name="AiCapBox" Header="Monthly AI cap (€)" PlaceholderText="5" MaxWidth="460" HorizontalAlignment="Left"
                              AutomationProperties.Name="Monthly AI cap in euro" TextChanged="AiCapBox_TextChanged" LostFocus="AiCapBox_LostFocus"/>
                     <TextBlock x:Name="AiSpendText" TextWrapping="Wrap" FontSize="12"
