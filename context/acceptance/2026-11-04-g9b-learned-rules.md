@@ -7,6 +7,7 @@
 - After hours: nothing tracked, except activity a confident rule marks as work (on-plan -> points, paid work -> income, same as in-hours; amends rule 1).
 - Settings: list of rules with examples + range, searchable, delete only (no hand editing). Diary needs a "Rule status" filter.
 - Learning counts the whole Diary history, all categorised rows (user, 2026-11-04). Known effect: keyword-made rows make a rule look surer than hand marks alone would.
+- Counts table kept forever (user, 2026-11-04); pre-existing pruned days cannot be recovered.
 - NOT in this feature: AI helper, merging synonyms across languages, hand-written rules.
 
 ## Cases (PASS only if seen; scratch MENTOR_ROOT, no real data, no AI)
@@ -19,6 +20,9 @@
 - A6 No shared word exists: proposal offers app-only rule or none; never an empty-word rule.
 
 - A7 Examples and ranges are computed from ALL past Diary rows with a category (hand-marked or keyword-classified, entire history), not only the rows in the current mark. Rows without a category (idle, empty) are not counted. Proposal counts must equal a count done directly on the data (scratch DB with known rows).
+
+- A8 Raw Diary rows are kept 90 days. Before a row is pruned its (app, normalised title words, category) is added to a permanent counts table; learning and ranges use live rows + that table, so no example is counted twice and none is lost when pruned. Rows already pruned before this feature exist only as daily totals and cannot contribute.
+- A9 Settings Clear actions that delete Diary history also delete the counts table (DECISIONS 19k); Export-all-my-data and backup include or knowingly exclude it (state which).
 
 **B. Matching**
 - B1 Whole-word match: rule word "quote" does not match "quotefree".
