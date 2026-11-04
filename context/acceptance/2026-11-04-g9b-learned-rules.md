@@ -4,8 +4,8 @@
 - Combination = app + title words, general for every app (Excel was only an example); save *alike* combinations, not exact words.
 - Learned from marks (Bulk Mark); proposed first, user confirms. MOST SPECIFIC WINS (more conditions beats fewer).
 - Act alone only with >=10 examples AND Wilson 95% lower bound >=85% (DECISIONS 19c); otherwise a suggestion in the Diary, one-click accept, nothing asks live.
-- After hours: nothing tracked, except activity a confident rule marks as work (counts for score and income; amends rule 1).
-- Settings: list of rules with examples + range, delete only (no hand editing). Diary needs a "Rule status" filter.
+- After hours: nothing tracked, except activity a confident rule marks as work (on-plan -> points, paid work -> income, same as in-hours; amends rule 1).
+- Settings: list of rules with examples + range, searchable, delete only (no hand editing). Diary needs a "Rule status" filter.
 - NOT in this feature: AI helper, merging synonyms across languages, hand-written rules.
 
 ## Cases (PASS only if seen; scratch MENTOR_ROOT, no real data, no AI)
@@ -36,12 +36,14 @@
 **E. Settings**
 - E1 List of learned rules: app, words, category, N examples, range, status.
 - E2 Delete asks confirmation, removes the rule; rows it had acted on keep their stored values.
+- E4 A search box filters the rules list (app, words, category), live, case-insensitive; empty search shows all.
 - E3 Rule creation/deletion is covered by Undo and by the pre-change backup (19b).
 
 **F. After hours**
 - F1 Outside working hours with no confident work rule: nothing is recorded (unchanged).
-- F2 Outside working hours with a confident rule saying on-plan: the activity is recorded, counts for score and income.
-- F3 Outside working hours with a suggestion-only rule: not recorded.
+- F2 Outside working hours, a confident rule saying on-plan: recorded and adds score points as in-hours on-plan time does.
+- F2b Outside working hours, a confident rule saying paid work: recorded and adds income as in-hours paid time does (and points where paid time earns them).
+- F3 Outside working hours with a suggestion-only rule: not recorded (no points, no income).
 - F4 Off-plan or neutral rule after hours: not recorded.
 
 **G. Safety / regression**
