@@ -118,6 +118,12 @@
     <Compile Include="..\Planillium.App\Services\IncomeService.cs" Link="App\IncomeService.cs" />
     <!-- B1 money-box text rules (2026-10-23), QA-linked 2026-10-24. -->
     <Compile Include="..\Planillium.App\Services\MoneyFormat.cs" Link="App\MoneyFormat.cs" />
+    <!-- G9b learned combination rules, stage 1 engine (2026-11-04): pure C#, no I/O. -->
+    <Compile Include="..\Planillium.App\Services\TitleWords.cs" Link="App\TitleWords.cs" />
+    <Compile Include="..\Planillium.App\Services\LearnedRules.cs" Link="App\LearnedRules.cs" />
+    <Compile Include="..\Planillium.App\Services\LearnedRuleStore.cs" Link="App\LearnedRuleStore.cs" />
+    <!-- The data-change door (G3); G9b adds rule_state restore and rule Undo to it. -->
+    <Compile Include="..\Planillium.App\Services\DataChangeDoor.cs" Link="App\DataChangeDoor.cs" />
   </ItemGroup>
 
   <ItemGroup>

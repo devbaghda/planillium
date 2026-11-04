@@ -263,6 +263,44 @@ public sealed class Database : IDisposable
             "  previous_category TEXT," +
             "  PRIMARY KEY (change_id, keyword)" +
             ");" +
+            // G9b (2026-11-04): learned combination rules (app + title words -> category) and the
+            // permanent per-(app, word set, category) counts they are measured against. Raw diary
+            // rows are pruned after 90 days; the counts table is tallied from them just before that
+            // delete, so a rule's examples and range keep using the whole history. words / word_key
+            // are normalised words (TitleWords) joined by one space.
+            "CREATE TABLE IF NOT EXISTS learned_rules (" +
+            "  id       INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "  app      TEXT    NOT NULL," +
+            "  words    TEXT    NOT NULL," +
+            "  category TEXT    NOT NULL," +
+            "  created  TEXT    NOT NULL" +
+            ");" +
+            // Rules a change created or deleted, so the data-change door's Undo can reverse them.
+            "CREATE TABLE IF NOT EXISTS change_log_rule_ops (" +
+            "  change_id INTEGER NOT NULL," +
+            "  op        TEXT    NOT NULL," +
+            "  rule_id   INTEGER NOT NULL," +
+            "  app       TEXT    NOT NULL," +
+            "  words     TEXT    NOT NULL," +
+            "  category  TEXT    NOT NULL" +
+            ");" +
+            // G9c: like rule_word_counts but remembers the diary tag ('' = untagged), so tag rules are
+            // measured against pruned rows too (only rows pruned since G9c: older ones lost their tag).
+            "CREATE TABLE IF NOT EXISTS rule_tag_counts (" +
+            "  app      TEXT    NOT NULL," +
+            "  word_key TEXT    NOT NULL," +
+            "  category TEXT    NOT NULL," +
+            "  tag      TEXT    NOT NULL," +
+            "  n        INTEGER NOT NULL," +
+            "  PRIMARY KEY (app, word_key, category, tag)" +
+            ");" +
+            "CREATE TABLE IF NOT EXISTS rule_word_counts (" +
+            "  app      TEXT    NOT NULL," +
+            "  word_key TEXT    NOT NULL," +
+            "  category TEXT    NOT NULL," +
+            "  n        INTEGER NOT NULL," +
+            "  PRIMARY KEY (app, word_key, category)" +
+            ");" +
             // Read-only reporting views — nothing in either app queries
             // these, they exist purely so an external tool (Power Query,
             // Excel, a BI dashboard) can point straight at progress.db
@@ -305,6 +343,27 @@ public sealed class Database : IDisposable
                 alter.ExecuteNonQuery();
             }
         }
+        // G9b: time_diary.rule_state ('auto' | 'suggested' | 'manual', NULL = no rule involved) and
+        // change_log_rows.old_rule_state (what Undo puts back). Same detect-then-ALTER pattern.
+        AddColumnIfMissing("time_diary", "rule_state", "TEXT");
+        AddColumnIfMissing("change_log_rows", "old_rule_state", "TEXT");
+        // G9c: a learned rule may also carry a diary tag (e.g. a paid tag); NULL = category-only rule.
+        AddColumnIfMissing("learned_rules", "tag", "TEXT");
+        AddColumnIfMissing("change_log_rule_ops", "tag", "TEXT");
+    }
+
+    private void AddColumnIfMissing(string table, string column, string type)
+    {
+        using var cols = CreateCommand();
+        cols.CommandText = $"PRAGMA table_info({table})";
+        var has = false;
+        using (var r = cols.ExecuteReader())
+            while (r.Read())
+                if (string.Equals(r.GetString(1), column, StringComparison.OrdinalIgnoreCase)) { has = true; break; }
+        if (has) return;
+        using var alter = CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {type}";
+        alter.ExecuteNonQuery();
     }
 
     /// <summary>
@@ -344,6 +403,9 @@ public sealed class Database : IDisposable
                 rollup.Parameters.AddWithValue("$cutoff", cutoff);
                 rollup.ExecuteNonQuery();
             }
+            // G9b: tally what is about to be deleted into the permanent counts table first, in the
+            // same transaction — a row is counted exactly once (live now, in the table after).
+            LearnedRuleStore.TallyBeforePrune(this, cutoff);
             using (var del = CreateCommand())
             {
                 del.CommandText = "DELETE FROM time_diary WHERE date < $cutoff";
@@ -474,7 +536,9 @@ public sealed class Database : IDisposable
             using var cmd = CreateCommand();
             // The change history (G3) holds old diary values too, so it goes with the diary.
             cmd.CommandText = "DELETE FROM time_diary; DELETE FROM diary_daily_rollup; " +
-                              "DELETE FROM change_log_rows; DELETE FROM change_log_rules; DELETE FROM change_log;";
+                              // G9b: the learned rules and their counts are derived from window titles.
+                              "DELETE FROM learned_rules; DELETE FROM rule_word_counts; DELETE FROM rule_tag_counts; " +
+                              "DELETE FROM change_log_rows; DELETE FROM change_log_rules; DELETE FROM change_log_rule_ops; DELETE FROM change_log;";
             cmd.ExecuteNonQuery();
         });
         VacuumAndCheckpoint();
@@ -486,7 +550,10 @@ public sealed class Database : IDisposable
         "score_ledger", "reflections", "ticktick_sync", "time_diary", "diary_daily_rollup",
         // G3: the bulk-change history (old diary values) is user data like the rest — exported
         // with it, counted and wiped by "Clear all my data".
-        "change_log", "change_log_rows", "change_log_rules",
+        "change_log", "change_log_rows", "change_log_rules", "change_log_rule_ops",
+        // G9b (A9): the learned rules and permanent counts are exported, counted and wiped with
+        // the rest — they hold window-title words, so "Clear" must reach them.
+        "learned_rules", "rule_word_counts", "rule_tag_counts",
     };
 
     /// <summary>Total row count across every user-data table — for the "Clear all my
@@ -641,6 +708,7 @@ public sealed class Database : IDisposable
         using var cmd = CreateCommand();
         cmd.CommandText =
             "UPDATE time_diary SET start_time=$start, end_time=$end, duration_min=$dur, " +
+            "rule_state=CASE WHEN category <> $cat THEN 'manual' ELSE rule_state END, " +
             "category=$cat, description=$desc, tag=$tag WHERE id=$id";
         cmd.Parameters.AddWithValue("$start", startTime);
         cmd.Parameters.AddWithValue("$end", endTime);

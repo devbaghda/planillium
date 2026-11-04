@@ -51,6 +51,10 @@ public sealed class ActivityTracker : IDisposable
     private DateTime? _sessionStart;
     private string? _sessionApp;
     private string? _sessionClass;
+    private string? _sessionTag;         // G9c: tag a confident rule applies, stamped on the row
+    private string? _pollTag;            // G9c: tag of the poll being handled (set before the handlers run)
+    private string? _sessionRuleState;   // G9b: 'auto' | 'suggested' | null, stamped on the row
+    private bool _sessionAfterHours;      // G9b: the open session started outside the diary hours
     private bool _idleNotified;
     private DateTime? _idleSince;
     private DateTime? _lastPollAt;
@@ -204,7 +208,7 @@ public sealed class ActivityTracker : IDisposable
             try
             {
                 using var conn = AppPaths.OpenConnection();
-                DiaryWriter.LogSession(conn, ss, lp, _sessionClass!, _sessionApp);
+                DiaryWriter.LogSession(conn, ss, lp, _sessionClass!, _sessionApp, ruleState: _sessionRuleState, tag: _sessionTag);
             }
             catch (Exception ex) { Log.Error("ActivityTracker.StopForRestart", ex); }
         }
@@ -215,6 +219,29 @@ public sealed class ActivityTracker : IDisposable
     // ── classification (delegated to ActivityClassifier) ─────────────────
 
     public string Classify(string title) => _classifier.Classify(title);
+
+    /// <summary>Category and learned-rule state for a title (G9b); see
+    /// <see cref="ActivityClassifier.ClassifyDetailed"/>.</summary>
+    internal (string Category, string? RuleState) ClassifyDetailed(string title) => _classifier.ClassifyDetailed(title);
+    internal (string Category, string? RuleState, string? Tag) ClassifyRule(string title) => _classifier.ClassifyRule(title);
+
+    private DateOnly _rulesLoadedOn;
+
+    /// <summary>Reloads the learned rules and the history their evidence is measured against. Called
+    /// at start, after any rule change, and once per day (evidence moves as the Diary grows). Safe
+    /// from any thread; a failure keeps the previous rules and is logged.</summary>
+    public void ReloadRules()
+    {
+        try
+        {
+            using var db = new Database();
+            _classifier.SetRules(RuleBook.Load(db));
+            _rulesLoadedOn = DateOnly.FromDateTime(DateTime.Today);
+        }
+        catch (Exception ex) { Log.Error("ActivityTracker.ReloadRules", ex); }
+    }
+
+    internal void SetRulesForTest(RuleBook rules) => _classifier.SetRules(rules);
 
     public string ClassifyIdleText(string? description) => _classifier.ClassifyIdleText(description);
 
@@ -419,6 +446,17 @@ public sealed class ActivityTracker : IDisposable
     /// PendingDayGap's open-session clamp deterministically.</summary>
     internal void SimulateOpenSession(DateTime start, string app, string cls) => SetSession(start, app, cls);
 
+    /// <summary>Test-only hook: one outside-the-diary-hours poll for a window title (G9b), with the
+    /// idle time and clock the test chooses.</summary>
+    internal void SimulateAfterHoursPoll(DateTime now, string title, double idleS)
+    {
+        var (raw, state, tag) = ClassifyRule(title);
+        _pollTag = tag;
+        using var conn = AppPaths.OpenConnection();
+        HandleAfterHours(conn, now, now.Date + _workEnd.ToTimeSpan(), title, EffectiveClass(raw), idleS,
+            _idleThresholdMin * 60, state);
+    }
+
     /// <summary>
     /// Records that the diary is now filled through <paramref name="end"/> by
     /// an out-of-band reconcile (the review's gap sweep), so the poll loop's
@@ -436,11 +474,14 @@ public sealed class ActivityTracker : IDisposable
     /// eight separately-typed triples across this file, which is exactly the shape that let the
     /// lock-protected mirror below silently miss a site if it had been added by hand at each one
     /// instead of centralized here (2026-08-05).</summary>
-    private void SetSession(DateTime? start, string? app, string? cls)
+    private void SetSession(DateTime? start, string? app, string? cls, string? ruleState = null, string? tag = null)
     {
+        _sessionTag = start is null ? null : tag;
         _sessionStart = start;
         _sessionApp = app;
         _sessionClass = cls;
+        _sessionRuleState = start is null ? null : ruleState;
+        _sessionAfterHours = false;   // the after-hours path sets it right after opening its session
         lock (_openSessionLock) _openSessionStart = start;
     }
 
@@ -475,7 +516,7 @@ public sealed class ActivityTracker : IDisposable
         _lastAlert = S(_lastAlert, delta);
         _idleSince = S(_idleSince, delta);
         _lastPollAt = S(_lastPollAt, delta);
-        SetSession(S(_sessionStart, delta), _sessionApp, _sessionClass);
+        SetSession(S(_sessionStart, delta), _sessionApp, _sessionClass, _sessionRuleState, _sessionTag);
         lock (_dayStateLock) { _accountedUntil = S(_accountedUntil, delta); }
         PaidUntil = S(PaidUntil, delta);
     }
@@ -560,7 +601,10 @@ public sealed class ActivityTracker : IDisposable
 
         var title = ActiveWindowTitle();
         var idleS = IdleSeconds();
-        var cls = EffectiveClass(Classify(title));
+        if (_rulesLoadedOn != DateOnly.FromDateTime(now)) ReloadRules();
+        var (rawCls, ruleState, ruleTag) = ClassifyRule(title);
+        _pollTag = ruleTag;
+        var cls = EffectiveClass(rawCls);
         var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
         var idleThresholdSec = _idleThresholdMin * 60;
 
@@ -595,11 +639,49 @@ public sealed class ActivityTracker : IDisposable
         OnStatus?.Invoke(cls, title);
 
         if (_idleNotified && idleS < idleThresholdSec)
-            HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS);
+            HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS, ruleState);
         else if (InWorkingHours())
-            HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec);
-        else if (_sessionStart is DateTime open && _sessionApp != null)
-            HandleOutsideDiaryHours(conn, now, diaryEndToday, open);
+        {
+            // An after-hours session (G9b) ends where the diary day begins: log it up to now and
+            // let the normal in-hours path open the next one.
+            if (_sessionAfterHours && _sessionStart is DateTime early && _sessionApp != null)
+            {
+                if (now > early) DiaryWriter.LogSession(conn, early, now, _sessionClass!, _sessionApp, ruleState: _sessionRuleState, tag: _sessionTag);
+                SetSession(null, null, null);
+            }
+            HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec, ruleState);
+        }
+        else
+            HandleAfterHours(conn, now, diaryEndToday, title, cls, idleS, idleThresholdSec, ruleState);
+    }
+
+    /// <summary>G9b: outside the diary hours nothing is tracked EXCEPT activity a confident learned
+    /// rule marks as on-plan work (e.g. Excel + quotation at 22:00). Such a session is logged
+    /// as it happens and closes at "now" the moment the window changes, the rule stops matching,
+    /// or the user goes idle (idle is never recorded after hours). A session that merely
+    /// crossed the end-of-day boundary is still cut at the boundary, as before.</summary>
+    private void HandleAfterHours(SqliteConnection conn, DateTime now, DateTime diaryEndToday, string title,
+        string cls, double idleS, int idleThresholdSec, string? ruleState)
+    {
+        var qualifies = ruleState == RuleStates.Auto && cls == DiaryCategory.OnPlan && idleS < idleThresholdSec;
+        if (_sessionStart is DateTime open && _sessionApp != null)
+        {
+            if (!_sessionAfterHours)
+                HandleOutsideDiaryHours(conn, now, diaryEndToday, open);
+            else if (qualifies && title == _sessionApp)
+                return;                                           // still the same confident work
+            else
+            {
+                var end = idleS >= idleThresholdSec ? now.AddSeconds(-idleS) : now;
+                if (end > open) DiaryWriter.LogSession(conn, open, end, _sessionClass!, _sessionApp, ruleState: _sessionRuleState, tag: _sessionTag);
+                SetSession(null, null, null);
+            }
+        }
+        if (qualifies && _sessionStart is null)
+        {
+            SetSession(now, title, cls, ruleState, _pollTag);
+            _sessionAfterHours = true;
+        }
     }
 
     /// <summary>Windows session lock/unlock (Win+L, screen-saver): close out
@@ -613,7 +695,7 @@ public sealed class ActivityTracker : IDisposable
             _lockPending = false;
             if (_sessionStart is DateTime lockedSs && _sessionApp != null)
             {
-                DiaryWriter.LogSession(conn, lockedSs, now, _sessionClass!, _sessionApp);
+                DiaryWriter.LogSession(conn, lockedSs, now, _sessionClass!, _sessionApp, ruleState: _sessionRuleState, tag: _sessionTag);
                 SetSession(null, null, null);
             }
             _idleSince = now;
@@ -654,7 +736,7 @@ public sealed class ActivityTracker : IDisposable
 
         if (_sessionStart is DateTime ss && _sessionApp != null)
         {
-            DiaryWriter.LogSession(conn, ss, last, _sessionClass!, _sessionApp);
+            DiaryWriter.LogSession(conn, ss, last, _sessionClass!, _sessionApp, ruleState: _sessionRuleState, tag: _sessionTag);
             SetSession(null, null, null);
         }
         _idleSince = last;
@@ -664,7 +746,7 @@ public sealed class ActivityTracker : IDisposable
     /// <summary>Returned from idle/sleep: log the gap (or ask where the user
     /// was, if a UI handler is wired up), then resume a fresh session.</summary>
     private void HandleIdleReturn(SqliteConnection conn, DateTime now, string title, string cls,
-        DateTime diaryEndToday, double idleS)
+        DateTime diaryEndToday, double idleS, string? ruleState = null)
     {
         var idleEnd = now < diaryEndToday ? now : diaryEndToday;
         var idleStart = _idleSince ?? now.AddSeconds(-idleS);
@@ -709,14 +791,14 @@ public sealed class ActivityTracker : IDisposable
         _idleNotified = false;
         _idleSince = null;
         if (InWorkingHours())
-            SetSession(now, title, cls);
+            SetSession(now, title, cls, ruleState, _pollTag);
     }
 
     /// <summary>Normal in-hours bookkeeping: notice fresh idling, start the
     /// first session of the day, or roll over to a new session when the
     /// foreground app changes.</summary>
     private void HandleActiveSession(SqliteConnection conn, DateTime now, string title, string cls,
-        double idleS, int idleThresholdSec)
+        double idleS, int idleThresholdSec, string? ruleState = null)
     {
         if (idleS >= idleThresholdSec)
         {
@@ -736,7 +818,7 @@ public sealed class ActivityTracker : IDisposable
             var idleStartPoint = now.AddSeconds(-idleS);
             if (_sessionStart is DateTime ss && _sessionApp != null)
             {
-                DiaryWriter.LogSession(conn, ss, idleStartPoint, _sessionClass!, _sessionApp);
+                DiaryWriter.LogSession(conn, ss, idleStartPoint, _sessionClass!, _sessionApp, ruleState: _sessionRuleState, tag: _sessionTag);
                 SetSession(null, null, null);
             }
             _idleSince = idleStartPoint;
@@ -755,12 +837,12 @@ public sealed class ActivityTracker : IDisposable
         }
         else if (_sessionStart is null)
         {
-            SetSession(now, title, cls);
+            SetSession(now, title, cls, ruleState, _pollTag);
         }
         else if (title != _sessionApp)
         {
-            DiaryWriter.LogSession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!);
-            SetSession(now, title, cls);
+            DiaryWriter.LogSession(conn, _sessionStart.Value, now, _sessionClass!, _sessionApp!, ruleState: _sessionRuleState, tag: _sessionTag);
+            SetSession(now, title, cls, ruleState, _pollTag);
         }
     }
 
@@ -772,7 +854,7 @@ public sealed class ActivityTracker : IDisposable
     {
         var end = now < diaryEndToday ? now : diaryEndToday;
         if (end > open)
-            DiaryWriter.LogSession(conn, open, end, _sessionClass!, _sessionApp!);
+            DiaryWriter.LogSession(conn, open, end, _sessionClass!, _sessionApp!, ruleState: _sessionRuleState, tag: _sessionTag);
         SetSession(null, null, null);
     }
 }

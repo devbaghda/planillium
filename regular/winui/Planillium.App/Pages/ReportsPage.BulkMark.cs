@@ -153,6 +153,13 @@ public sealed partial class ReportsPage
             // the ones it newly taught (G3 round 2). Marking all filter matches teaches nothing;
             // tags never teach.
             var learned = new List<string>();
+            var newRules = new List<long>();
+            if (!isCategory && teach && value is not null
+                && PaidTags.All().Any(p => DiaryTag.Same(p.Value, value)))
+            {
+                // G9c: marking ticked rows with a PAID tag may also teach an app + words -> tag rule.
+                newRules = await OfferLearnedRulesAsync(result.ChangeId, "", valueLabel, rows, value);
+            }
             if (isCategory)
             {
                 if (teach)
@@ -172,6 +179,8 @@ public sealed partial class ReportsPage
                     }
                     catch (Exception ex) { Log.Error("ReportsPage.BulkMark.Learn", ex); }
                     if (learned.Count > 0) (App.MainWindow as MainWindow)?.RestartTracker();
+                    // G9b: propose app + title-word rules for the same ticked rows (confirm / edit / skip).
+                    newRules = await OfferLearnedRulesAsync(result.ChangeId, value!, valueLabel, rows);
                 }
                 (App.MainWindow as MainWindow)?.RefreshScore();
             }
@@ -187,6 +196,8 @@ public sealed partial class ReportsPage
                 parts.Add($"Keywords learned for {valueLabel}: {string.Join(", ", learned.Take(8))}" +
                           (learned.Count > 8 ? $" and {learned.Count - 8} more" : "") +
                           " (Undo forgets these too).");
+            if (newRules.Count > 0)
+                parts.Add($"{FormatCount(newRules.Count)} rule{(newRules.Count == 1 ? "" : "s")} saved (Undo removes them too).");
             ShowDiaryNotice(new(InfoBarSeverity.Success,
                 clearing
                     ? $"Cleared the tag on {FormatCount(result.Changed)} {RowsWord(result.Changed)}"
@@ -269,6 +280,7 @@ public sealed partial class ReportsPage
         {
             var result = await Task.Run(() => DataChangeDoor.Undo(changeId));
             if (result.KeywordsForgotten.Count > 0) (App.MainWindow as MainWindow)?.RestartTracker();
+            if (result.RulesRemoved + result.RulesRestored > 0) (App.MainWindow as MainWindow)?.ReloadTrackerRules();
             (App.MainWindow as MainWindow)?.RefreshScore();
             ShowDiaryNotice(new(result.Skipped > 0 ? InfoBarSeverity.Warning : InfoBarSeverity.Success,
                 "Change undone", DataChangeDoor.DescribeUndo(result), null));

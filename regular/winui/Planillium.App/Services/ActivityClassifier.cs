@@ -44,6 +44,37 @@ internal sealed class ActivityClassifier
         _idleNeutral = Words(config, "idle_activity_rules", DiaryCategory.Neutral);
     }
 
+    // G9b: learned combination rules (app + title words). Swapped whole, never mutated, so the
+    // poll thread can read it while the UI thread replaces it after a rule change.
+    private volatile RuleBook _rules = RuleBook.Empty;
+
+    internal RuleBook Rules => _rules;
+    internal void SetRules(RuleBook rules) => _rules = rules;
+
+    /// <summary>Category plus how a learned rule took part: the most specific matching rule governs
+    /// (G9b). When its evidence clears the bar it decides the category alone ("auto"); otherwise it
+    /// only leaves a suggestion ("suggested") and the keyword lists still decide the category.
+    /// <c>RuleState</c> is null when no rule matched. Never throws: a rule problem must not stop tracking.</summary>
+    internal (string Category, string? RuleState) ClassifyDetailed(string title)
+    {
+        var (cat, state, _) = ClassifyRule(title);
+        return (cat, state);
+    }
+
+    /// <summary>As <see cref="ClassifyDetailed"/>, plus the diary tag a confident rule carries (G9c;
+    /// null for category-only rules, suggestions and no match).</summary>
+    internal (string Category, string? RuleState, string? Tag) ClassifyRule(string title)
+    {
+        try
+        {
+            var hit = _rules.Match(AppNames.Group(title), title);
+            if (hit is { Confident: true }) return (hit.Rule.Category, RuleStates.Auto, hit.Rule.Tag);
+            if (hit != null) return (Classify(title), RuleStates.Suggested, null);
+        }
+        catch (Exception ex) { Log.Error("ActivityClassifier.ClassifyDetailed", ex); }
+        return (Classify(title), null, null);
+    }
+
     internal string Classify(string title)
     {
         var t = title.ToLowerInvariant();

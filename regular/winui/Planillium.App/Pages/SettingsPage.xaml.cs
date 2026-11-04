@@ -123,6 +123,7 @@ public sealed partial class SettingsPage : Page
         for (var i = 0; i < _panels.Length; i++)
             _panels[i].Visibility = i == _lastSection ? Visibility.Visible : Visibility.Collapsed;
         if (_panels[_lastSection] == HistoryPanel) LoadChangeHistory();
+        if (_panels[_lastSection] == KeywordsPanel) LoadLearnedRules();
         SectionScroll.ChangeView(null, 0, null, disableAnimation: true);
     }
 

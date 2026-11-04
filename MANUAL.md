@@ -227,7 +227,11 @@ The app includes configurable settings for:
 the off-plan reminder can nag you — and they're also the window in which your activity is
 recorded at all. Outside them nothing is tracked, and time away isn't counted against you or
 back-filled as unaccounted time. So if you want early mornings or evenings on the record, widen
-your working hours; if you only want your working day logged, leave them as they are.
+your working hours; if you only want your working day logged, leave them as they are. One exception: after hours, work that a confident learned rule marks as on-plan is still recorded.
+
+**Learned rules.** When you tick Diary rows and mark them, Planillium offers a rule (an app plus words from the window title, with how many examples agree and a range); you confirm it and can edit the words. A rule acts alone only after at least 10 examples with a safe margin; before that it only suggests: the Diary row shows an Accept button. The most specific rule wins. Settings ▸ Activity keywords lists your rules (search box; Delete asks first; Undo is in Change history). The Diary's "Rule status" filter shows rows by rule: acted automatically, suggested, marked by you, or no rule.
+
+**Rules with a tag, and adding entries by hand.** When you tick Diary rows and mark them with a paid tag (for example Studioshoo), Planillium can offer a rule "app + words -> Studioshoo"; it works like any learned rule (10 examples and a safe margin before it acts alone) and shows in Settings > Activity keywords. After working hours, a confident rule that marks on-plan work and carries a tag records that work with the tag, so it counts as paid work, in income and in points; a rule that marks it neutral records nothing. To log time yourself (for example an evening session that was not tracked), press "Add entry" in the Diary: date, start, end, category, optional tag and note. An entry that overlaps an existing one is refused and the message names the clash; entries that only touch are fine. A backup is saved first and the message offers Undo (also in Settings > Change history).
 
 **Scoring.** Every rule in the score formula is editable: what a completed task is worth, the
 bonus for extra tasks the same day, what a missed task costs, points per hour on-plan and

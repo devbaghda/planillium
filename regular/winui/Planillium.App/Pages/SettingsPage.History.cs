@@ -51,10 +51,16 @@ public sealed partial class SettingsPage
     private Border HistoryRow(DataChangeDoor.Change c)
     {
         var rows = $"{c.RowCount.ToString("N0", CultureInfo.CurrentCulture)} {(c.RowCount == 1 ? "row" : "rows")}";
-        var what = c.Field == DataChangeDoor.Field.DiaryCategory ? "diary category" : "diary tag";
+        var what = c.Field switch
+        {
+            DataChangeDoor.Field.DiaryCategory => "diary category",
+            DataChangeDoor.Field.LearnedRules => "learned rule",
+            DataChangeDoor.Field.DiaryAdd => "added entry",
+            _ => "diary tag",
+        };
         var title = new TextBlock
         {
-            Text = $"{c.Label} · {rows}",
+            Text = c.RowCount == 0 ? c.Label : $"{c.Label} · {rows}",
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
@@ -135,6 +141,7 @@ public sealed partial class SettingsPage
                 RefreshSummaries();
                 (App.MainWindow as MainWindow)?.RestartTracker();
             }
+            if (result.RulesRemoved + result.RulesRestored > 0) (App.MainWindow as MainWindow)?.ReloadTrackerRules();
             (App.MainWindow as MainWindow)?.RefreshScore();
             SaveStatus.Text = status;
         }

@@ -57,3 +57,26 @@
 - G1 Scratch run never touches real data or Credential Manager; no network call.
 - G2 Strict build 0 warnings; existing suite green; new unit tests for normalising, whole-word match, specificity, Wilson bar.
 - G3 Sweep siblings: every place that classifies titles (tracker, bulk mark, reports, idle text) uses the same classifier.
+
+---
+## Verdict (2026-11-04, solo flow, isolated worktree, scratch root, no AI, no real data)
+Build: strict Debug 0 warnings / 0 errors. Suite: 268/268 (new: engine 19, storage 10, classifier 6, after-hours 4).
+
+UI (seen happening in the app, UIA-driven, scratch DB):
+- A1 PASS: ticked 4 rows, Mark on-plan -> "Learn this rule?" dialog, "Drafter + quotation", evidence "30 of 30 agree (range 89-100%)".
+- A4 PASS: editing the words live-updated evidence (4 of 4, 51-100%); restoring words restored 30 of 30.
+- A5 PASS: Save rules -> rule row created; notice "1 rule saved (Undo removes them too)".
+- C3 PASS: suggested row -> Accept button -> row on_plan, rule_state manual, backup + Undo entry in Change history.
+- D1 PASS: Rule status filter offers Auto / Suggested / Marked by you / No rule.
+- D2 PASS: counts match data: Auto 1, Suggested 1, Marked by you 5, No rule 26.
+- E1 PASS: Settings list shows "Drafter + quotation -> on-plan, acts alone, 32 of 32 agree, range 89-100%".
+- E4 PASS: search live, case-insensitive, AND of terms; no match -> message.
+- E2 PASS: Delete asks confirmation (Cancel keeps rule); Delete removes it; marked rows keep rule_state.
+- E3 PASS: Change history Undo brought the deleted rule back.
+- Marking all filter matches without ticks teaches no rule (existing G3 behaviour, observed).
+
+Covered by unit tests (PASS by test evidence): A2, A3, A6-A9, B1-B4, C1, C2, C4, F1, F2, F3, F4 (tracker hook SimulateAfterHoursPoll), G2.
+G1 PASS: scratch root only, fake key, no network.  G3 PASS: sibling sweep, all LogSession calls carry rule state, no external Classify callers.
+
+F2b NOT ACHIEVABLE as written: category `paid` is bought entertainment, not income (income is tag-based), so "paid work" cannot be a rule category. After hours records only confident on_plan rules (F2). Needs a decision if income-after-hours is wanted.
+UNTESTABLE live: real after-hours clock path (needs real late-evening activity); covered by the 4 unit tests instead.

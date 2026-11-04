@@ -56,6 +56,9 @@ public sealed partial class ReportsPage
     // The DiaryTag axis (2026-08-06) — same null-means-no-filter, survives-navigation
     // treatment as the three filters above.
     private static readonly HashSet<string> _diaryTagFilter = new(StringComparer.OrdinalIgnoreCase); // G11: tag case ignored
+    // G9b: "Rule status" — who set the row's category: a confident learned rule (auto), a rule that
+    // only suggests (suggested), the user (manual), or nothing learned (none = DiaryNoValue).
+    private static readonly HashSet<string> _diaryRuleFilter = new(StringComparer.OrdinalIgnoreCase);
 
     // 2026-07-23 request: filters/search normally scope to whichever single day the date
     // nav/picker is showing; this widens that scope to the full retention window (same range
@@ -139,7 +142,7 @@ public sealed partial class ReportsPage
             Body.Children.Add(ReflectionCallout(reflection));
 
         var (searchBox, searchFieldBox) = BuildDiarySearchBox();
-        var (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
+        var (categoryBox, appBox, pageBox, tagBox, ruleBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
 
         // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
         // below, right along with the list itself.
@@ -261,6 +264,9 @@ public sealed partial class ReportsPage
             bool MatchesTag(ReportData.DiaryEntry e) =>
                 _diaryTagFilter.Count == 0 ||
                 (string.IsNullOrWhiteSpace(e.Tag) ? _diaryTagFilter.Contains(DiaryNoValue) : _diaryTagFilter.Contains(e.Tag));
+            bool MatchesRule(ReportData.DiaryEntry e) =>
+                _diaryRuleFilter.Count == 0 ||
+                (string.IsNullOrEmpty(e.RuleState) ? _diaryRuleFilter.Contains(DiaryNoValue) : _diaryRuleFilter.Contains(e.RuleState));
             bool Has(string? text) => text is { Length: > 0 } && text.Contains(q, StringComparison.OrdinalIgnoreCase);
             bool MatchesSearch(ReportData.DiaryEntry e) =>
                 !searching || _diarySearchField switch
@@ -276,7 +282,7 @@ public sealed partial class ReportsPage
                 };
 
             syncingFilters = true;
-            var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e))
+            var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e))
                 .Select(e => AppNames.FilterGroup(e.Window))
                 .Where(a => a != "—")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -286,7 +292,7 @@ public sealed partial class ReportsPage
             _diaryAppFilter.RemoveWhere(x => x != DiaryNoValue && !appsInView.Contains(x, StringComparer.OrdinalIgnoreCase));
             appBox.SetOptions(appsInView.Select(x => (x, x)).Prepend((DiaryNoValue, "-")));
 
-            var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesSearch(e))
+            var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e))
                 .Select(e => AppNames.Sub(e.Window))
                 .Where(p => p is { Length: > 0 })
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -299,6 +305,11 @@ public sealed partial class ReportsPage
             // "-" first in each list (G2).
             categoryBox.SetOptions(DiaryCategory.EditableOptions.Select(o => (o.Value, o.Label)).Prepend((DiaryNoValue, "-")));
             tagBox.SetOptions(DiaryTag.Options.Select(o => (o.Value, o.Label)).Prepend((DiaryNoValue, "-")));
+            ruleBox.SetOptions(new[]
+            {
+                (RuleStates.Auto, "Auto (learned rule)"), (RuleStates.Suggested, "Suggested"),
+                (RuleStates.Manual, "Marked by you"), (DiaryNoValue, "No rule"),
+            });
             allTimeBox.IsChecked = _diaryAllTime;
             syncingFilters = false;
 
@@ -306,9 +317,9 @@ public sealed partial class ReportsPage
             // dropdown-option narrowing above and the results below can never disagree with
             // each other, since both read from the same single definition of each filter.
             var filteredList = rows.Where(e =>
-                MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesTag(e) && MatchesSearch(e)).ToList();
+                MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e)).ToList();
             var filtersActive = _diaryCategoryFilter.Count > 0 || _diaryAppFilter.Count > 0 ||
-                _diaryPageFilter.Count > 0 || _diaryTagFilter.Count > 0;
+                _diaryPageFilter.Count > 0 || _diaryTagFilter.Count > 0 || _diaryRuleFilter.Count > 0;
 
             var totalMin = filteredList.Sum(e => e.Dur);
             subtotalText.Text = filteredList.Count == 0
@@ -347,7 +358,7 @@ public sealed partial class ReportsPage
             // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
             static string Key(HashSet<string> f) => string.Join(',', f.OrderBy(x => x, StringComparer.Ordinal));
             var scopeKey = string.Join('|', _diaryDate, q, _diarySearchField, Key(_diaryCategoryFilter), Key(_diaryAppFilter),
-                Key(_diaryPageFilter), Key(_diaryTagFilter), _diaryAllTime);
+                Key(_diaryPageFilter), Key(_diaryTagFilter), Key(_diaryRuleFilter), _diaryAllTime);
             if (scopeKey != _diaryRowsShownScopeKey)
             {
                 _diaryRowsShown = DefaultDiaryRowsShown;
@@ -369,7 +380,7 @@ public sealed partial class ReportsPage
         }
         RenderDiaryResults();
 
-        foreach (var box in new[] { categoryBox, appBox, pageBox, tagBox })
+        foreach (var box in new[] { categoryBox, appBox, pageBox, tagBox, ruleBox })
             box.Changed = () => { if (!syncingFilters) RenderDiaryResults(); };
         // Unlike the category/app/page boxes, this needs a full Render() (not just
         // RenderDiaryResults()) — it changes wideMode, which DiaryHeader() also reads to decide
@@ -383,6 +394,7 @@ public sealed partial class ReportsPage
             _diaryAppFilter.Clear();
             _diaryPageFilter.Clear();
             _diaryTagFilter.Clear();
+            _diaryRuleFilter.Clear();
             _diaryAllTime = false;
             // The search box sits directly above this button and reads as part of the same
             // filter row — leaving it untouched made "Clear filters" look broken when a typed
@@ -543,7 +555,7 @@ public sealed partial class ReportsPage
     /// call; this method only constructs them, seeded with whatever filter state already
     /// persisted from before.</summary>
     private (MultiPicker CategoryBox, MultiPicker AppBox, MultiPicker PageBox, MultiPicker TagBox,
-        CheckBox AllTimeBox, Button ClearFiltersBtn) BuildDiaryFilterRow()
+        MultiPicker RuleBox, CheckBox AllTimeBox, Button ClearFiltersBtn) BuildDiaryFilterRow()
     {
         var categoryBox = new MultiPicker("Category", _diaryCategoryFilter, 140, "Filter diary by category");
         var appBox = new MultiPicker("App", _diaryAppFilter, 150, "Filter diary by app");
@@ -551,6 +563,7 @@ public sealed partial class ReportsPage
         // The DiaryTag axis (2026-08-06) — fixed option list like Category (not rebuilt from
         // what's in view like App/Page, which are open-ended value sets).
         var tagBox = new MultiPicker("Tag", _diaryTagFilter, 140, "Filter diary by tag");
+        var ruleBox = new MultiPicker("Rule status", _diaryRuleFilter, 150, "Filter diary by rule status");
 
         var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
         AutomationProperties.SetName(allTimeBox,
@@ -568,6 +581,7 @@ public sealed partial class ReportsPage
         filterRow.Children.Add(appBox.Button);
         filterRow.Children.Add(pageBox.Button);
         filterRow.Children.Add(tagBox.Button);
+        filterRow.Children.Add(ruleBox.Button);
         filterRow.Children.Add(allTimeBox);
         filterRow.Children.Add(clearFiltersBtn);
         // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
@@ -584,7 +598,7 @@ public sealed partial class ReportsPage
             Content = filterRow,
         });
 
-        return (categoryBox, appBox, pageBox, tagBox, allTimeBox, clearFiltersBtn);
+        return (categoryBox, appBox, pageBox, tagBox, ruleBox, allTimeBox, clearFiltersBtn);
     }
 
     /// <summary>The "select all / mark on-plan / off-plan / neutral" bulk-action toolbar —
@@ -618,6 +632,11 @@ public sealed partial class ReportsPage
         markToolbar.Children.Add(markOnBtn);
         markToolbar.Children.Add(markOffBtn);
         markToolbar.Children.Add(markNeutralBtn);
+        // G9c: add a row by hand (any time of day, incl. after hours; overlaps refused).
+        var addEntryBtn = new Button { Content = "Add entry" };
+        AutomationProperties.SetName(addEntryBtn, "Add diary entry");
+        addEntryBtn.Click += (_, _) => _ = AddDiaryEntryAsync();
+        markToolbar.Children.Add(addEntryBtn);
         // G3: the buttons now carry a row count, which widens both rows — scroll sideways on a
         // narrow window instead of clipping the last buttons (same treatment as the filter row).
         Body.Children.Add(new ScrollViewer
@@ -896,9 +915,18 @@ public sealed partial class ReportsPage
         // edge.
         var list = new StackPanel { Spacing = 4, MinWidth = DiaryListWidth };
 
+        // G9b: the rule book is read only when a row on screen came from a suggestion-only rule —
+        // it is what says which category that rule suggests. A failed read just hides the buttons.
+        RuleBook? ruleBook = null;
+        if (diary.Any(d => d.RuleState == RuleStates.Suggested))
+        {
+            try { using var rdb = new Database(); ruleBook = RuleBook.Load(rdb); }
+            catch (Exception ex) { Log.Error("ReportsPage.Diary.RuleBook", ex); }
+        }
+
         Grid BuildRow(ReportData.DiaryEntry entry)
         {
-            var (id, date, start, end, dur, cat, window, desc, tag) = entry;
+            var (id, date, start, end, dur, cat, window, desc, tag, ruleState) = entry;
             // Left, not the FrameworkElement default Stretch (2026-07-28 — the MinWidth
             // changes above turned out not to be enough on their own): a Stretch-aligned
             // Grid gets ARRANGED at whatever final size its ancestor chain hands it, and
@@ -949,6 +977,7 @@ public sealed partial class ReportsPage
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(135) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // G9b: accept a suggestion
 
             var select = new CheckBox
             {
@@ -972,6 +1001,13 @@ public sealed partial class ReportsPage
                 Foreground = (Brush)Application.Current.Resources[CategoryBrushKey(cat)],
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            ToolTipService.SetToolTip(catText, ruleState switch
+            {
+                RuleStates.Auto => "Set by a learned rule",
+                RuleStates.Suggested => "A learned rule suggests a category, but has too few examples to act alone",
+                RuleStates.Manual => "Marked by you",
+                _ => cat.Replace('_', '-'),
+            });
             var tagLabelText = DiaryTag.LabelOf(tag) ?? "—";
             var tagText = new TextBlock
             {
@@ -1074,6 +1110,60 @@ public sealed partial class ReportsPage
             row.Children.Add(details);
             row.Children.Add(edit);
             row.Children.Add(split);
+
+            // G9b (C3): a suggestion-only rule shows its category with a one-click accept. Accepting
+            // goes through the data-change door (backup, change history, Undo) like any bulk mark.
+            if (ruleState == RuleStates.Suggested && ruleBook != null
+                && ruleBook.Match(appGroup, window)?.Rule is { } suggestedRule
+                && (suggestedRule.Category != cat
+                    || (suggestedRule.Tag != null && !string.Equals(tag ?? "", suggestedRule.Tag, StringComparison.OrdinalIgnoreCase))))
+            {
+                var suggested = suggestedRule.Category;
+                var suggestedTag = suggestedRule.Tag;
+                var needCat = suggested != cat;
+                var needTag = suggestedTag != null
+                    && !string.Equals(tag ?? "", suggestedTag, StringComparison.OrdinalIgnoreCase);
+                var acceptLabel = (needCat ? suggested.Replace('_', '-') : "") +
+                                  (needCat && needTag ? " + " : "") + (needTag ? suggestedTag : "");
+                var accept = new Button
+                {
+                    Content = $"Accept: {acceptLabel}",
+                    Padding = new Thickness(8, 4, 8, 4), MinWidth = 0, MinHeight = 0,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                AutomationProperties.SetName(accept, $"Accept suggested {acceptLabel}: {windowLabel}, {start}–{end}");
+                accept.Click += async (_, _) =>
+                {
+                    accept.IsEnabled = false;
+                    try
+                    {
+                        var res = await Task.Run(() =>
+                        {
+                            var last = needCat
+                                ? DataChangeDoor.Apply($"Accepted suggestion: {suggested.Replace('_', '-')}", new[] { id },
+                                    DataChangeDoor.Field.DiaryCategory, suggested)
+                                : null;
+                            if (needTag)
+                                last = DataChangeDoor.Apply($"Accepted suggestion: {suggestedTag}", new[] { id },
+                                    DataChangeDoor.Field.DiaryTag, suggestedTag);
+                            return last!;
+                        });
+                        (App.MainWindow as MainWindow)?.RefreshScore();
+                        Render();
+                        ShowDiaryNotice(new(InfoBarSeverity.Success, $"Marked as {acceptLabel}",
+                            "A backup was saved first.", res.ChangeId));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error("ReportsPage.Diary.AcceptSuggestion", ex);
+                        accept.IsEnabled = true;
+                        ShowDiaryNotice(new(InfoBarSeverity.Error, "Couldn't save that change",
+                            Log.Friendly("Nothing was changed", ex), null));
+                    }
+                };
+                Grid.SetColumn(accept, 9);
+                row.Children.Add(accept);
+            }
             return row;
         }
 

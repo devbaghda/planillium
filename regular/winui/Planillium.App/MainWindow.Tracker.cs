@@ -24,6 +24,9 @@ public sealed partial class MainWindow
     /// "Resume tracking" label lying about what was actually running. While paused,
     /// this just stops and stays stopped — the new config takes effect whenever the
     /// user resumes from the tray themselves.</summary>
+    /// <summary>G9b: re-reads the learned rules into the running tracker (no restart, no gap in tracking).</summary>
+    public void ReloadTrackerRules() => Tracker?.ReloadRules();
+
     public void RestartTracker()
     {
         var resumeFrom = Tracker?.StopForRestart();

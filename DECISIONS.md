@@ -18,7 +18,7 @@
    They decide when the off-plan nag may fire *and* when activity is recorded at all
    (`ActivityTracker.InWorkingHours`, the single predicate both use). Outside them nothing is
    tracked and no gap is counted against the user. **Amended 2026-10-28 (rule 19d): work-classified
-   activity after hours will be recorded and counted -- takes effect when G3+G9 is built.**
+   activity after hours will be recorded and counted. Built 2026-11-04 (G9b): after hours records only activity a confident learned rule (>=10 examples, Wilson 95% lower bound >=85%) marks on-plan; suggestion-only, off-plan, neutral and idle are not recorded. G9c (2026-11-04): a confident on-plan rule that carries a tag records the row with that tag, so it counts as paid work and income after hours; neutral earns nothing (user ruling). Rows can also be added by hand at any hour (any overlap refused).**
 2. The diary window used to be a pair of hardcoded 06:00/20:00 statics in `ActivityTracker`,
    unrelated to working hours and unreachable from the UI — so moving the working day to 08:00
    left 06:00–08:00 still tracked and back-filled as "unaccounted time" every morning (the
@@ -292,6 +292,12 @@ compaction. General versions of several now also live in the global `windows-app
 `windows-app-tester` skills._
 
 **Verification discipline**
+- **Names that must sort by age need a fixed-width, sortable stamp and a collision scheme that sorts after the plain name.** The backup name (to the second, `-2` on a clash) made the newest backup sort first, so pruning deleted it (found 2026-11-04 in G9c). Now millisecond stamp and `~n`; test it with two backups in one second.
+- **When a lookup picks "the oldest wins" on ties, a rule added later that is more specific is ignored.** A tag rule on the same words as a category-only rule never applied (G9c sibling sweep). Ties now prefer the rule with a tag, then the older.
+- **`dotnet test --no-build` runs whatever DLL is already there.** The x64 app build puts the test DLL elsewhere, so it can be stale; build the tests project itself (plain `dotnet build -warnaserror`) first.
+- **Tag-rule evidence is only as old as the tags.** Rows pruned before G9c lost their tags, so tag rules count only rows pruned since; say so when explaining a tag rule's example count.
+- **Before promising a rule on a category, check what the category means in the data.** G9b's plan said "paid work -> income after hours", but `paid` is bought entertainment; income is tag-based. Found at build time, not in review.
+- **Teaching (rules, keywords) happens only for ticked rows**, so a UI test of the rule dialog must tick rows (Select all), not just press Mark.
 - **A long-running .NET process caches the timezone (`TimeZoneInfo.Local`) at first use and never
   refreshes it.** Left running across a Windows timezone change or DST switch, every `DateTime.Now`
   is wrong by the offset until restart (2026-09-29: 2h-ahead diary rows). `ActivityTracker` now
