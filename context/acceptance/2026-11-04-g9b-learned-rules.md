@@ -6,6 +6,7 @@
 - Act alone only with >=10 examples AND Wilson 95% lower bound >=85% (DECISIONS 19c); otherwise a suggestion in the Diary, one-click accept, nothing asks live.
 - After hours: nothing tracked, except activity a confident rule marks as work (on-plan -> points, paid work -> income, same as in-hours; amends rule 1).
 - Settings: list of rules with examples + range, searchable, delete only (no hand editing). Diary needs a "Rule status" filter.
+- Learning counts the whole Diary history, all categorised rows (user, 2026-11-04). Known effect: keyword-made rows make a rule look surer than hand marks alone would.
 - NOT in this feature: AI helper, merging synonyms across languages, hand-written rules.
 
 ## Cases (PASS only if seen; scratch MENTOR_ROOT, no real data, no AI)
@@ -16,6 +17,8 @@
 - A4 Confirm saves the rule; Skip saves nothing; editing the words before confirming saves the edited words.
 - A5 Nothing ticked, or only idle rows marked: no proposal (DECISIONS 19i, j).
 - A6 No shared word exists: proposal offers app-only rule or none; never an empty-word rule.
+
+- A7 Examples and ranges are computed from ALL past Diary rows with a category (hand-marked or keyword-classified, entire history), not only the rows in the current mark. Rows without a category (idle, empty) are not counted. Proposal counts must equal a count done directly on the data (scratch DB with known rows).
 
 **B. Matching**
 - B1 Whole-word match: rule word "quote" does not match "quotefree".
