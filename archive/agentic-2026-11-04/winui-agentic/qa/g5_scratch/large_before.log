@@ -1,0 +1,23 @@
+A Today idle                       privWS    73.1  privBytes   111.7  WS   192.8  
+B Reports Week, diary=today        privWS    90.4  privBytes   133.1  WS   214.7  
+C All time, default rows shown     privWS   128.0  privBytes   177.6  WS   253.4  
+D Day, default rows                privWS   149.6  privBytes   200.9  WS   275.2  
+D Week, default rows               privWS   181.3  privBytes   237.9  WS   307.0  
+D Month, default rows              privWS   202.0  privBytes   262.8  WS   328.0  
+D Year, default rows               privWS   198.0  privBytes   258.7  WS   324.3  
+E idle Week default rows +1 min    privWS   204.5  privBytes   261.2  WS   329.9  
+E idle Week default rows +2 min    privWS   202.4  privBytes   285.4  WS   329.0  
+F Show all                         privWS   342.0  privBytes   435.9  WS   468.7  Showing 40 of 300
+G Day, show all                    privWS   496.5  privBytes   623.1  WS   623.3  
+G Week, show all                   privWS   639.1  privBytes   801.2  WS   765.9  
+G Month, show all                  privWS   721.7  privBytes   909.8  WS   848.5  
+G Year, show all                   privWS   786.2  privBytes   996.4  WS   913.1  
+G after 3 more period cycles, Week privWS  1427.6  privBytes  2677.5  WS  1547.3  
+H idle Week show all +1 min        privWS  1687.7  privBytes  2689.7  WS  1807.2  
+H idle Week show all +2 min        privWS  1515.4  privBytes  1929.6  WS  1635.7  
+H idle Week show all +3 min        privWS  1314.5  privBytes  2034.4  WS  1434.1  
+H idle Week show all +4 min        privWS  1259.6  privBytes  1838.1  WS  1377.0  
+I Today (Reports cached)           privWS   932.8  privBytes  1249.6  WS  1054.0  
+I Today +1 min                     privWS   310.2  privBytes  1244.7  WS   367.5  
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5_before_large.json
+EXIT 0

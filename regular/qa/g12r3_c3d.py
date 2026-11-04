@@ -1,0 +1,5 @@
+exec(open("g12r3_c3c.py",encoding="utf-8").read().split("print(\"cfg0\"")[0])
+keys("{ESC}"); print("after Esc Grace=", val(G()), "focus", focused())
+click(G()); gx,gy=glyph(G()); guard(); mouse.move(coords=(gx,gy)); time.sleep(0.6)
+click(coords=(gx,gy-9)); time.sleep(0.6); print("A up(focused in Grace): Grace", val(G()), "focus", focused()); shot("c3_up.png")
+click(coords=(gx,gy+9)); time.sleep(0.6); print("A down: Grace", val(G()), "focus", focused())

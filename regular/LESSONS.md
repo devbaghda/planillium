@@ -46,7 +46,7 @@
 - Watch private bytes as well as working set: Windows trims the working set of an idle app.
 
 ## Models
-- Focus / key-event work: consider opus (B1b sonnet needed 5 QA rounds; B1c and B1d opus passed in 1). QA for real-click focus work: opus.
+- Model: sonnet for build, checks, corrections and QA, opus only for rare planning (user rule 2026-10-30, global). Focus / key-event work gets a tighter spec and a smaller step, not a bigger model. (History: B1b sonnet needed 5 QA rounds; B1c and B1d opus passed in 1; user still ruled sonnet.)
 
 ## Context
 - Read `../CONTEXT.md` in full yourself; the project CLAUDE.md no longer auto-loads it.

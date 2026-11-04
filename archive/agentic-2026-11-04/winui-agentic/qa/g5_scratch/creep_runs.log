@@ -1,0 +1,137 @@
+== rep_alltime
+  0.00 min  privWS   99.9  privBytes  135.6  gcCommit   16.5  otherCommit   98.8  start rep_alltime
+  0.50 min  privWS   98.5  privBytes  135.3  gcCommit   16.6  otherCommit   98.3  
+  1.00 min  privWS  100.3  privBytes  137.4  gcCommit   17.6  otherCommit   99.5  
+  1.50 min  privWS  100.1  privBytes  137.4  gcCommit   17.7  otherCommit   99.4  
+  2.00 min  privWS   87.8  privBytes  139.4  gcCommit   20.1  otherCommit   99.1  
+  2.50 min  privWS   89.1  privBytes  140.8  gcCommit   21.3  otherCommit   99.2  
+  3.01 min  privWS   69.1  privBytes  145.5  gcCommit   25.9  otherCommit   99.2  
+  3.51 min  privWS   70.8  privBytes  147.1  gcCommit   27.6  otherCommit   99.2  
+  4.01 min  privWS   79.4  privBytes  143.9  gcCommit   24.3  otherCommit   99.3  
+  4.51 min  privWS   76.0  privBytes  140.5  gcCommit   21.0  otherCommit   99.1  
+  5.01 min  privWS   64.0  privBytes  140.6  gcCommit   21.1  otherCommit   99.2  
+  5.51 min  privWS   56.6  privBytes  140.8  gcCommit   21.2  otherCommit   99.2  
+  6.01 min  privWS   49.9  privBytes  130.8  gcCommit   11.2  otherCommit   99.3  
+  6.51 min  privWS   51.5  privBytes  132.2  gcCommit   12.8  otherCommit   99.2  
+  7.01 min  privWS   56.8  privBytes  135.9  gcCommit   16.4  otherCommit   99.2  
+  7.51 min  privWS   60.0  privBytes  141.0  gcCommit   21.6  otherCommit   99.2  
+  8.01 min  privWS   64.4  privBytes  146.4  gcCommit   26.9  otherCommit   99.2  
+  8.51 min  privWS   44.0  privBytes  147.7  gcCommit   28.1  otherCommit   99.2  
+  9.02 min  privWS   49.1  privBytes  129.0  gcCommit    9.5  otherCommit   99.2  
+  9.52 min  privWS   50.4  privBytes  130.5  gcCommit   11.1  otherCommit   99.1  
+ 10.02 min  privWS   45.1  privBytes  133.0  gcCommit   13.5  otherCommit   99.2  
+ 10.50 min  privWS   39.3  privBytes  137.5  gcCommit   17.9  otherCommit   99.2  
+ 11.00 min  privWS   61.2  privBytes  136.9  gcCommit   17.3  otherCommit   99.3  
+ 11.50 min  privWS   61.5  privBytes  136.8  gcCommit   17.3  otherCommit   99.2  
+ 12.00 min  privWS   68.2  privBytes  141.3  gcCommit   20.9  otherCommit  100.1  
+ 12.50 min  privWS   71.2  privBytes  143.8  gcCommit   22.9  otherCommit  100.5  
+ 13.00 min  privWS   69.1  privBytes  142.6  gcCommit   21.7  otherCommit  100.6  
+ 13.51 min  privWS   69.2  privBytes  142.6  gcCommit   21.7  otherCommit  100.5  
+ 14.01 min  privWS   66.4  privBytes  142.6  gcCommit   21.7  otherCommit  100.5  
+ 14.51 min  privWS   61.3  privBytes  142.6  gcCommit   21.7  otherCommit  100.6  
+ 15.01 min  privWS   60.3  privBytes  135.0  gcCommit   13.7  otherCommit  100.9  
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5c_r1_rep_alltime.json
+EXIT rep_alltime 0
+== today
+  0.00 min  privWS   69.3  privBytes  102.9  gcCommit    4.1  otherCommit   78.7  start today
+  0.50 min  privWS   70.0  privBytes  104.0  gcCommit    4.9  otherCommit   78.9  
+  1.00 min  privWS   53.7  privBytes  101.2  gcCommit    4.9  otherCommit   76.1  
+  1.50 min  privWS   53.1  privBytes  101.1  gcCommit    4.9  otherCommit   76.0  
+  2.00 min  privWS   18.2  privBytes   98.7  gcCommit    4.9  otherCommit   73.6  
+  2.51 min  privWS   17.2  privBytes   98.6  gcCommit    4.9  otherCommit   73.6  
+  3.01 min  privWS   17.4  privBytes   98.7  gcCommit    4.9  otherCommit   73.7  
+  3.51 min  privWS   17.1  privBytes   98.6  gcCommit    4.9  otherCommit   73.6  
+  4.01 min  privWS   15.8  privBytes   98.7  gcCommit    4.9  otherCommit   73.7  
+  4.51 min  privWS   15.7  privBytes   98.6  gcCommit    4.9  otherCommit   73.6  
+  5.01 min  privWS   17.2  privBytes   98.7  gcCommit    4.9  otherCommit   73.6  
+  5.51 min  privWS   16.7  privBytes   98.6  gcCommit    4.9  otherCommit   73.6  
+  6.01 min  privWS   18.7  privBytes   98.7  gcCommit    4.9  otherCommit   73.7  
+  6.51 min  privWS   17.6  privBytes   98.7  gcCommit    4.9  otherCommit   73.6  
+  7.01 min  privWS   19.6  privBytes   99.3  gcCommit    5.5  otherCommit   73.6  
+  7.51 min  privWS   19.4  privBytes   99.2  gcCommit    5.5  otherCommit   73.6  
+  8.01 min  privWS   20.6  privBytes  101.2  gcCommit    5.5  otherCommit   75.5  
+  8.51 min  privWS   17.8  privBytes  101.2  gcCommit    5.5  otherCommit   75.5  
+  9.02 min  privWS   16.3  privBytes   99.1  gcCommit    5.6  otherCommit   73.3  
+  9.52 min  privWS   16.1  privBytes   99.1  gcCommit    5.6  otherCommit   73.3  
+ 10.02 min  privWS   18.5  privBytes  100.5  gcCommit    5.6  otherCommit   74.8  
+ 10.50 min  privWS   17.8  privBytes  100.5  gcCommit    5.6  otherCommit   74.7  
+ 11.00 min  privWS   18.6  privBytes  100.4  gcCommit    5.6  otherCommit   74.6  
+ 11.50 min  privWS   18.4  privBytes  100.4  gcCommit    5.6  otherCommit   74.6  
+ 12.00 min  privWS   19.1  privBytes  100.5  gcCommit    5.7  otherCommit   74.6  
+ 12.50 min  privWS   18.9  privBytes  100.5  gcCommit    5.7  otherCommit   74.6  
+ 13.00 min  privWS   19.6  privBytes  100.6  gcCommit    5.8  otherCommit   74.6  
+ 13.51 min  privWS   19.4  privBytes  100.5  gcCommit    5.8  otherCommit   74.6  
+ 14.01 min  privWS   29.9  privBytes   96.9  gcCommit    2.1  otherCommit   74.6  
+ 14.51 min  privWS   29.6  privBytes   96.9  gcCommit    2.1  otherCommit   74.6  
+ 15.01 min  privWS   30.2  privBytes   97.0  gcCommit    2.1  otherCommit   74.6  
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5c_r1_today.json
+EXIT today 0
+== rep_today
+  0.00 min  privWS   77.3  privBytes  112.5  gcCommit    4.3  otherCommit   87.9  start rep_today
+  0.50 min  privWS   78.9  privBytes  115.2  gcCommit    3.9  otherCommit   91.0  
+  1.00 min  privWS   79.1  privBytes  115.1  gcCommit    4.0  otherCommit   90.8  
+  1.50 min  privWS   78.9  privBytes  115.1  gcCommit    4.0  otherCommit   90.8  
+  2.00 min  privWS   78.8  privBytes  115.0  gcCommit    4.2  otherCommit   90.6  
+  2.50 min  privWS   78.8  privBytes  115.1  gcCommit    4.2  otherCommit   90.6  
+  3.01 min  privWS   79.1  privBytes  115.2  gcCommit    4.3  otherCommit   90.6  
+  3.51 min  privWS   78.9  privBytes  115.3  gcCommit    4.4  otherCommit   90.7  
+  4.01 min  privWS   78.7  privBytes  114.7  gcCommit    3.8  otherCommit   90.6  
+  4.51 min  privWS   79.0  privBytes  114.8  gcCommit    3.9  otherCommit   90.6  
+  5.01 min  privWS   51.9  privBytes  122.7  gcCommit    2.7  otherCommit   99.7  
+  5.51 min  privWS   53.8  privBytes  122.5  gcCommit    2.7  otherCommit   99.5  
+  6.01 min  privWS   53.7  privBytes  122.5  gcCommit    2.7  otherCommit   99.5  
+  6.51 min  privWS   32.6  privBytes  122.5  gcCommit    2.7  otherCommit   99.5  
+  7.01 min  privWS   19.2  privBytes  122.6  gcCommit    2.7  otherCommit   99.5  
+  7.51 min  privWS   23.7  privBytes  122.5  gcCommit    2.7  otherCommit   99.5  
+  8.01 min  privWS   24.9  privBytes  122.5  gcCommit    2.7  otherCommit   99.4  
+  8.52 min  privWS   19.4  privBytes  122.5  gcCommit    2.7  otherCommit   99.4  
+  9.02 min  privWS   21.2  privBytes  122.3  gcCommit    2.7  otherCommit   99.3  
+  9.52 min  privWS   19.8  privBytes  122.3  gcCommit    2.7  otherCommit   99.3  
+ 10.00 min  privWS   22.7  privBytes  123.2  gcCommit    2.7  otherCommit  100.2  
+ 10.50 min  privWS   21.7  privBytes  123.2  gcCommit    2.7  otherCommit  100.2  
+ 11.00 min  privWS   22.2  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 11.50 min  privWS   22.0  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 12.00 min  privWS   21.1  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 12.50 min  privWS   18.4  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 13.00 min  privWS   17.8  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 13.51 min  privWS   17.2  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 14.01 min  privWS   18.2  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 14.51 min  privWS   17.4  privBytes  123.1  gcCommit    2.7  otherCommit  100.0  
+ 15.01 min  privWS   30.4  privBytes  123.1  gcCommit    2.7  otherCommit  100.1  
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5c_r1_rep_today.json
+EXIT rep_today 0
+== switch
+  0.00 min  privWS   99.8  privBytes  136.8  gcCommit   16.6  otherCommit   99.9  start switch
+  0.51 min  privWS  100.3  privBytes  137.2  gcCommit   15.0  otherCommit  101.9  switches=10
+  1.03 min  privWS  101.9  privBytes  139.1  gcCommit   17.6  otherCommit  101.2  switches=20
+  1.54 min  privWS  103.5  privBytes  143.2  gcCommit   15.6  otherCommit  107.3  switches=30
+  2.05 min  privWS  106.9  privBytes  146.4  gcCommit   17.6  otherCommit  108.5  switches=40
+  2.51 min  privWS   83.8  privBytes  142.2  gcCommit   15.6  otherCommit  106.2  switches=49
+  3.02 min  privWS   82.1  privBytes  142.2  gcCommit   15.7  otherCommit  106.2  switches=59
+  3.54 min  privWS   77.2  privBytes  144.6  gcCommit   15.6  otherCommit  108.6  switches=69
+  4.05 min  privWS   74.3  privBytes  142.8  gcCommit   15.6  otherCommit  106.8  switches=79
+  4.51 min  privWS   82.4  privBytes  149.2  gcCommit   21.6  otherCommit  107.2  switches=88
+  5.02 min  privWS   78.7  privBytes  145.2  gcCommit   16.1  otherCommit  108.8  switches=98
+  5.53 min  privWS   77.1  privBytes  143.5  gcCommit   18.1  otherCommit  105.0  switches=108
+  6.04 min  privWS   77.1  privBytes  146.4  gcCommit   16.1  otherCommit  109.9  switches=118
+  6.51 min  privWS   76.6  privBytes  143.8  gcCommit   15.8  otherCommit  107.6  switches=127
+  7.02 min  privWS   74.0  privBytes  139.9  gcCommit   15.8  otherCommit  103.7  switches=137
+  7.53 min  privWS   77.5  privBytes  145.6  gcCommit   17.8  otherCommit  107.5  switches=147
+  8.05 min  privWS   80.3  privBytes  147.4  gcCommit   18.5  otherCommit  108.6  switches=157
+  8.51 min  privWS   76.0  privBytes  143.2  gcCommit   16.5  otherCommit  106.4  switches=166
+  9.02 min  privWS   77.7  privBytes  146.2  gcCommit   18.5  otherCommit  107.4  switches=176
+  9.53 min  privWS   78.7  privBytes  146.8  gcCommit   16.4  otherCommit  110.0  switches=186
+ 10.04 min  privWS   78.0  privBytes  147.1  gcCommit   16.5  otherCommit  110.3  switches=196
+ 10.50 min  privWS   67.6  privBytes  135.8  gcCommit    9.6  otherCommit  105.8  switches=205
+ 11.02 min  privWS   69.4  privBytes  140.5  gcCommit   12.1  otherCommit  108.0  switches=215
+ 11.53 min  privWS   71.0  privBytes  142.1  gcCommit   12.2  otherCommit  109.5  switches=225
+ 12.04 min  privWS   76.7  privBytes  146.6  gcCommit   16.7  otherCommit  109.5  switches=235
+ 12.50 min  privWS   73.2  privBytes  142.9  gcCommit   18.2  otherCommit  104.4  switches=244
+ 13.01 min  privWS   74.3  privBytes  145.4  gcCommit   16.3  otherCommit  108.7  switches=254
+ 13.53 min  privWS   76.2  privBytes  144.9  gcCommit   15.7  otherCommit  108.8  switches=264
+ 14.04 min  privWS   71.5  privBytes  138.1  gcCommit   13.7  otherCommit  104.0  switches=274
+ 14.55 min  privWS   77.4  privBytes  147.3  gcCommit   16.7  otherCommit  110.3  switches=284
+ 15.01 min  privWS   75.8  privBytes  144.1  gcCommit   13.5  otherCommit  110.3  switches=293
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5c_r1_switch.json
+EXIT switch 0
+ALLDONE

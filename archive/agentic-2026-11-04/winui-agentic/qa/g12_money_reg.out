@@ -1,0 +1,6 @@
+salary '-5' {TAB} -> box '-5' stored 2925 focus EmployedToggle|toggle switch msgs ["Not saved: Amounts can't be negative."]
+salary '' {ENTER} -> box '2\u2009925' stored 2925 focus Nav|custom msgs ['Empty amount not saved; the saved amount is back in the box.']
+salary 'abc' {TAB} -> box '2\u2009925' stored 2925 focus EmployedToggle|toggle switch msgs ['Empty amount not saved; the saved amount is back in the box.']
+salary '   ' {ENTER} -> box '2\u2009925' stored 2925 focus Nav|custom msgs ['Empty amount not saved; the saved amount is back in the box.']
+salary '0' {TAB} -> box '0' stored 0 focus EmployedToggle|toggle switch msgs []
+B1h: saved 3333 then 4444 Esc -> box '3\u2009333' stored 3333 focus Nav|custom

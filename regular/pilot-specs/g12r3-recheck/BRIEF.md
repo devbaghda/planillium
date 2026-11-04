@@ -1,0 +1,2 @@
+# G12 round 3 re-check brief
+No building unless QA finds a defect. One QA only, 25-minute cap, ACCEPTANCE lines 1-5. QA: new empty scratch MENTOR_ROOT, MENTOR_INSTANCE_SUFFIX=verify, G7 in-memory key store, foreground check before every input, cmdkey /list before and after, never touch the live Release app (PID 7148) or real data. Write reports to files first. Report verdict, defects, NOT RUN lines. Read qa-extra.md first.

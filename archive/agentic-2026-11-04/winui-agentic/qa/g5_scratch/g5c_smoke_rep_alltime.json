@@ -1,0 +1,42 @@
+[
+ {
+  "min": 0.0,
+  "priv_ws": 100.5,
+  "priv_bytes": 142.9,
+  "gc_commit": 15.8,
+  "other_commit": 106.3,
+  "gc_res_gb": 256.0,
+  "note": "start rep_alltime",
+  "t": "10:16:15"
+ },
+ {
+  "min": 0.33,
+  "priv_ws": 100.4,
+  "priv_bytes": 142.8,
+  "gc_commit": 15.8,
+  "other_commit": 106.2,
+  "gc_res_gb": 256.0,
+  "note": "",
+  "t": "10:16:35"
+ },
+ {
+  "min": 0.67,
+  "priv_ws": 84.0,
+  "priv_bytes": 139.5,
+  "gc_commit": 13.2,
+  "other_commit": 105.4,
+  "gc_res_gb": 256.0,
+  "note": "",
+  "t": "10:16:56"
+ },
+ {
+  "min": 1.0,
+  "priv_ws": 86.2,
+  "priv_bytes": 145.6,
+  "gc_commit": 19.2,
+  "other_commit": 105.5,
+  "gc_res_gb": 256.0,
+  "note": "",
+  "t": "10:17:16"
+ }
+]

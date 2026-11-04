@@ -1,0 +1,27 @@
+empty: Today idle                  privWS    83.5  privBytes   117.4  WS   201.7  
+empty: Reports Week                privWS    87.1  privBytes   120.9  WS   209.8  
+empty: Reports +30s                privWS    82.1  privBytes   117.0  WS   204.9  
+filled 9300 diary rows; total 9301
+A Today idle                       privWS    71.0  privBytes   104.2  WS   188.9  
+B Reports Week, diary=today        privWS    79.6  privBytes   115.0  WS   203.2  
+C All time, default rows shown     privWS    87.2  privBytes   127.2  WS   212.0  
+D Day, default rows                privWS    79.2  privBytes   127.3  WS   204.1  
+D Week, default rows               privWS    71.6  privBytes   127.9  WS   197.2  
+D Month, default rows              privWS    73.2  privBytes   130.7  WS   198.9  
+D Year, default rows               privWS    69.7  privBytes   129.7  WS   195.9  
+E idle Week default rows +1 min    privWS    70.6  privBytes   135.1  WS   196.9  
+E idle Week default rows +2 min    privWS    67.4  privBytes   139.3  WS   193.7  
+F Show all                         privWS    70.2  privBytes   134.4  WS   196.7  Showing 40 of 300
+G Day, show all                    privWS    71.6  privBytes   135.7  WS   198.0  
+G Week, show all                   privWS    73.4  privBytes   136.6  WS   199.8  
+G Month, show all                  privWS    76.0  privBytes   139.2  WS   202.6  
+G Year, show all                   privWS    81.0  privBytes   143.4  WS   207.7  
+G after 3 more period cycles, Week privWS    80.4  privBytes   141.6  WS   207.6  
+H idle Week show all +1 min        privWS    77.0  privBytes   138.7  WS   204.3  
+H idle Week show all +2 min        privWS    61.5  privBytes   139.5  WS   188.9  
+H idle Week show all +3 min        privWS    66.2  privBytes   143.3  WS   193.6  
+H idle Week show all +4 min        privWS    72.4  privBytes   151.1  WS   199.8  
+I Today (Reports cached)           privWS   101.0  privBytes   158.2  WS   228.8  
+I Today +1 min                     privWS    85.6  privBytes   141.1  WS   213.5  
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5_after_all.json
+EXIT 0

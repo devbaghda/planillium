@@ -1,0 +1,6 @@
+empty: Today idle                  privWS    84.1  privBytes   118.4  WS   201.8  
+empty: Reports Week                privWS    95.0  privBytes   130.4  WS   217.3  
+empty: Reports +30s                privWS    93.9  privBytes   130.1  WS   216.3  
+filled 9300 diary rows; total 9300
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5_before_build.json
+EXIT 0

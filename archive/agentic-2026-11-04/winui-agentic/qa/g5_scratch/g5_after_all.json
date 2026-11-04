@@ -1,0 +1,194 @@
+[
+ {
+  "step": "empty: Today idle",
+  "private_ws_mb": 83.5,
+  "private_bytes_mb": 117.4,
+  "ws_mb": 201.7,
+  "note": "",
+  "t": "09:28:30"
+ },
+ {
+  "step": "empty: Reports Week",
+  "private_ws_mb": 87.1,
+  "private_bytes_mb": 120.9,
+  "ws_mb": 209.8,
+  "note": "",
+  "t": "09:28:38"
+ },
+ {
+  "step": "empty: Reports +30s",
+  "private_ws_mb": 82.1,
+  "private_bytes_mb": 117.0,
+  "ws_mb": 204.9,
+  "note": "",
+  "t": "09:29:15"
+ },
+ {
+  "step": "A Today idle",
+  "private_ws_mb": 71.0,
+  "private_bytes_mb": 104.2,
+  "ws_mb": 188.9,
+  "note": "",
+  "t": "09:29:44"
+ },
+ {
+  "step": "B Reports Week, diary=today",
+  "private_ws_mb": 79.6,
+  "private_bytes_mb": 115.0,
+  "ws_mb": 203.2,
+  "note": "",
+  "t": "09:29:53"
+ },
+ {
+  "step": "C All time, default rows shown",
+  "private_ws_mb": 87.2,
+  "private_bytes_mb": 127.2,
+  "ws_mb": 212.0,
+  "note": "",
+  "t": "09:30:00"
+ },
+ {
+  "step": "D Day, default rows",
+  "private_ws_mb": 79.2,
+  "private_bytes_mb": 127.3,
+  "ws_mb": 204.1,
+  "note": "",
+  "t": "09:30:06"
+ },
+ {
+  "step": "D Week, default rows",
+  "private_ws_mb": 71.6,
+  "private_bytes_mb": 127.9,
+  "ws_mb": 197.2,
+  "note": "",
+  "t": "09:30:12"
+ },
+ {
+  "step": "D Month, default rows",
+  "private_ws_mb": 73.2,
+  "private_bytes_mb": 130.7,
+  "ws_mb": 198.9,
+  "note": "",
+  "t": "09:30:19"
+ },
+ {
+  "step": "D Year, default rows",
+  "private_ws_mb": 69.7,
+  "private_bytes_mb": 129.7,
+  "ws_mb": 195.9,
+  "note": "",
+  "t": "09:30:25"
+ },
+ {
+  "step": "E idle Week default rows +1 min",
+  "private_ws_mb": 70.6,
+  "private_bytes_mb": 135.1,
+  "ws_mb": 196.9,
+  "note": "",
+  "t": "09:31:25"
+ },
+ {
+  "step": "E idle Week default rows +2 min",
+  "private_ws_mb": 67.4,
+  "private_bytes_mb": 139.3,
+  "ws_mb": 193.7,
+  "note": "",
+  "t": "09:32:25"
+ },
+ {
+  "step": "F Show all",
+  "private_ws_mb": 70.2,
+  "private_bytes_mb": 134.4,
+  "ws_mb": 196.7,
+  "note": "Showing 40 of 300",
+  "t": "09:32:32"
+ },
+ {
+  "step": "G Day, show all",
+  "private_ws_mb": 71.6,
+  "private_bytes_mb": 135.7,
+  "ws_mb": 198.0,
+  "note": "",
+  "t": "09:32:38"
+ },
+ {
+  "step": "G Week, show all",
+  "private_ws_mb": 73.4,
+  "private_bytes_mb": 136.6,
+  "ws_mb": 199.8,
+  "note": "",
+  "t": "09:32:45"
+ },
+ {
+  "step": "G Month, show all",
+  "private_ws_mb": 76.0,
+  "private_bytes_mb": 139.2,
+  "ws_mb": 202.6,
+  "note": "",
+  "t": "09:32:51"
+ },
+ {
+  "step": "G Year, show all",
+  "private_ws_mb": 81.0,
+  "private_bytes_mb": 143.4,
+  "ws_mb": 207.7,
+  "note": "",
+  "t": "09:32:57"
+ },
+ {
+  "step": "G after 3 more period cycles, Week",
+  "private_ws_mb": 80.4,
+  "private_bytes_mb": 141.6,
+  "ws_mb": 207.6,
+  "note": "",
+  "t": "09:33:30"
+ },
+ {
+  "step": "H idle Week show all +1 min",
+  "private_ws_mb": 77.0,
+  "private_bytes_mb": 138.7,
+  "ws_mb": 204.3,
+  "note": "",
+  "t": "09:34:30"
+ },
+ {
+  "step": "H idle Week show all +2 min",
+  "private_ws_mb": 61.5,
+  "private_bytes_mb": 139.5,
+  "ws_mb": 188.9,
+  "note": "",
+  "t": "09:35:30"
+ },
+ {
+  "step": "H idle Week show all +3 min",
+  "private_ws_mb": 66.2,
+  "private_bytes_mb": 143.3,
+  "ws_mb": 193.6,
+  "note": "",
+  "t": "09:36:30"
+ },
+ {
+  "step": "H idle Week show all +4 min",
+  "private_ws_mb": 72.4,
+  "private_bytes_mb": 151.1,
+  "ws_mb": 199.8,
+  "note": "",
+  "t": "09:37:30"
+ },
+ {
+  "step": "I Today (Reports cached)",
+  "private_ws_mb": 101.0,
+  "private_bytes_mb": 158.2,
+  "ws_mb": 228.8,
+  "note": "",
+  "t": "09:37:36"
+ },
+ {
+  "step": "I Today +1 min",
+  "private_ws_mb": 85.6,
+  "private_bytes_mb": 141.1,
+  "ws_mb": 213.5,
+  "note": "",
+  "t": "09:38:36"
+ }
+]

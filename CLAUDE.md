@@ -68,16 +68,11 @@ progress — that's the part with no substitute.
   `ProjectReference` without first confirming `dotnet build` on this machine can actually handle
   a `UseWinUI=true` transitive reference (it couldn't as of 2026-07-09).
 
-## Workflow agents (company model, 2026-10-25)
-Features run through the global `workflow-generalist` (regular side, `regular/winui/`) and `workflow-lead`
-(agentic side, `agentic/winui-agentic/`); method in `~/.claude/reference/feature-workflow.md`. The four
-`planillium-*` agents are retired (archived in `.claude/agents-retired/`, gitignored) — their project rules
-now live here and apply to every `workflow-*` agent working on Planillium:
-- **Foreground only, one at a time**, never both sides at once (`sequential-agents.sh` enforces; keeps token/time numbers clean).
-- **Own side only.** Never read the other side's source, spec or write-ups for the feature (contamination rule).
+## Workflow
+**Solo flow (user, 2026-11-04):** features and updates are built and tested by the main session alone, per `~/.claude/reference/feature-workflow.md`; tests follow `~/.claude/reference/testing-playbook.md`. The old agentic twin is archived in `archive/agentic-2026-11-04/` (history; do not edit). No dashboards unless asked. The four `planillium-*` agents are retired (archived in `.claude/agents-retired/`, gitignored) — their project rules now live here:
 - **Real data is off limits:** `data/`, `config.json`, `plans/` and the live `Planillium.App.exe` (under `bind\Release`) are never read, written or run against.
-- **Build strict:** `dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental` from `<side>/Planillium.App/`, then `dotnet test --no-build` from `<side>/Planillium.App.Tests/`. Test project source-links plain C# files; no `ProjectReference` to the WinUI app.
-- **Builders don't write tests; QA does.** QA must run in an isolated worktree, build Debug, and run the app against a scratch `MENTOR_ROOT` (empty DB, no `progress.db*` copied) with `MENTOR_INSTANCE_SUFFIX=verify`, driven by UI Automation (`PrintWindow` flag 2 for screenshots). AI calls go to a local `HttpListener` stub via `PLANILLIUM_AI_BASE_URL`; never a real key. Kill only the process it started. UI lines are PASS only if seen happening; otherwise UNTESTABLE.
+- **Build strict:** `dotnet build -p:Platform=x64 -c Debug -warnaserror --no-incremental` from `regular/winui/Planillium.App/`, then `dotnet test --no-build` from `regular/winui/Planillium.App.Tests/`. Test project source-links plain C# files; no `ProjectReference` to the WinUI app.
+- **Tests run in an isolated worktree** (never in the live tree), build Debug, and run the app against a scratch `MENTOR_ROOT` (empty DB, no `progress.db*` copied) with `MENTOR_INSTANCE_SUFFIX=verify`, driven by UI Automation (`PrintWindow` flag 2 for screenshots). AI calls go to a local `HttpListener` stub via `PLANILLIUM_AI_BASE_URL`; never a real key. Kill only the process it started. UI lines are PASS only if seen happening; otherwise UNTESTABLE.
 - UNTESTABLE is allowed only for: would touch real data · needs credentials/hardware unavailable · code-only line. Slow is not a reason.
 
 ## Verifying UI fixes without breaking things

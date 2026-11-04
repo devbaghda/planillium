@@ -1,0 +1,12 @@
+P1 start {'sum': ['No key ? copy and paste'], 'test_enabled': False, 'keylen': 0} cfg ai None
+P1 after model Enter (no key typed) {'sum': ['No key ? copy and paste'], 'test_enabled': False, 'keylen': 0} focus AiModelBox|Model|edit cfg ai {'model': 'qa-m1'}
+P1 key typed + blank {'sum': ['No key ? copy and paste'], 'test_enabled': False, 'keylen': 16} focus Nav||custom
+P1 model blank after abandoned key {'sum': ['No key ? copy and paste'], 'test_enabled': False, 'keylen': 16} focus Nav||custom cfg ai {'model': 'qa-m2'}
+P4 cap valid Enter focus AiCapBox|Monthly AI limit|edit cap 9 cfg ai {'model': 'qa-m2', 'monthly_cap_eur': 9}
+P2 salary click, Shift+Tab (no Esc) SettingsItem|Settings|list item
+P2b salary click, Esc, Tab EmployedToggle|Currently employed|toggle switch
+P3 buttons near Grace []
+P3 at right of box +8 ('', '', 'pane') ('UpDownPopup', 'Popup', 'window')
+P3 at right of box +20 ('', '', 'pane') ('', '', 'pane')
+P3 at right of box +34 ('InputBox', 'Repeat every (min) Minimum1', 'edit') ('InputBox', 'Grace before alert (min) Minim', 'edit')
+P3 at right of box +50 ('InputBox', 'Repeat every (min) Minimum1', 'edit') ('InputBox', 'Grace before alert (min) Minim', 'edit')

@@ -1,0 +1,26 @@
+[
+ {
+  "step": "empty: Today idle",
+  "private_ws_mb": 65.2,
+  "private_bytes_mb": 114.9,
+  "ws_mb": 182.7,
+  "note": "",
+  "t": "09:18:40"
+ },
+ {
+  "step": "empty: Reports Week",
+  "private_ws_mb": 66.3,
+  "private_bytes_mb": 130.5,
+  "ws_mb": 188.8,
+  "note": "",
+  "t": "09:18:48"
+ },
+ {
+  "step": "empty: Reports +30s",
+  "private_ws_mb": 66.9,
+  "private_bytes_mb": 130.4,
+  "ws_mb": 189.6,
+  "note": "",
+  "t": "09:19:24"
+ }
+]

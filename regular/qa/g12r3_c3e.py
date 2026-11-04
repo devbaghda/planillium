@@ -1,0 +1,5 @@
+exec(open("g12r3_c3c.py",encoding="utf-8").read().split("print(\"cfg0\"")[0])
+click(G()); keys("^a15{TAB}"); print("set 15 + Tab: Grace", val(G()), "focus", focused(), "status", status())
+click(G()); gx,gy=glyph(G()); guard(); mouse.move(coords=(gx,gy)); time.sleep(0.6)
+print("popup:", popup()); shot("c3_hover2.png")
+click(coords=(gx,gy-9)); time.sleep(0.6); print("A up(focused in Grace): Grace", val(G()), "focus", focused())

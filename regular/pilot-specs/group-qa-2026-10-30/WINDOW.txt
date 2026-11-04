@@ -1,1 +1,2 @@
 start: 2026-10-30T08:41:14Z
+ end: 2026-10-30T10:06:26Z (logged late by PM: re-QA ended when G12 started; reconstructed)

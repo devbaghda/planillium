@@ -25,5 +25,5 @@ release/output/
 .claude/
 regular/winui/**/bin/
 regular/winui/**/obj/
-agentic/winui-agentic/**/bin/
-agentic/winui-agentic/**/obj/
+archive/**/bin/
+archive/**/obj/

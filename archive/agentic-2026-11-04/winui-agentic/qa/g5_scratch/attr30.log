@@ -1,0 +1,14 @@
+empty: Today idle                  privWS    65.2  privBytes   114.9  WS   182.7  
+empty: Reports Week                privWS    66.3  privBytes   130.5  WS   188.8  
+empty: Reports +30s                privWS    66.9  privBytes   130.4  WS   189.6  
+filled 9300 diary rows; total 9301
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5_attr30_build.json
+A Today idle                       privWS    69.6  privBytes   103.4  WS   187.3  
+B Reports Week, diary=today        privWS    85.1  privBytes   120.5  WS   208.6  
+C All time, default rows shown     privWS   122.6  privBytes   164.9  WS   247.9  
+D Day, default rows                privWS   144.9  privBytes   191.0  WS   270.5  
+D Week, default rows               privWS   165.4  privBytes   222.3  WS   291.0  
+D Month, default rows              privWS   185.3  privBytes   253.3  WS   311.5  
+D Year, default rows               privWS   181.6  privBytes   246.1  WS   307.9  
+wrote D:\CLAUDE\Planillium\agentic\winui-agentic\qa\g5_scratch\g5_attr30_large.json
+EXIT 0

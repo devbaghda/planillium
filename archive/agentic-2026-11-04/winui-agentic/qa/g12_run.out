@@ -1,0 +1,90 @@
+cmdkey before (253, 3)
+dialogs left: []
+sections: ['Today', 'Schedule', 'Reports', 'Plans', 'Settings', 'General', 'Income', 'Hours and reminders', 'Scoring', 'Activity keywords', 'Idle-answer library', 'TickTick', 'AI', 'Data', 'Change history']
+AI section True
+blank point (1091, 832, ('SectionScroll', '', 'pane'))
+AI edits [('AiKeyBox', 'Anthropic API key'), ('AiModelBox', 'Model'), ('AiCapBox', 'Monthly AI limit')]
+start cap='5' model='' cfg={'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}]} msgs=[]
+== L1 cap type 7, Esc
+focus Nav||custom cap 5 cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}]} msgs []
+== L3 cap -5 Enter, Esc
+after Enter focus AiCapBox|Monthly AI limit|edit cap -5 msgs ['Not saved: the monthly limit must be more than 0. Enter an amount in euros, for example 5 or 7.50.']
+after Esc focus Nav||custom cap 5 cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}]} msgs []
+== L4 cap 12, blank click
+blank (1091, 832, ('SectionScroll', '', 'pane')) focus Nav||custom cap 12 cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 12}} msgs []
+== L11 cap 6, blank, then 9
+focus after blank Nav||custom
+after 9: focus Nav||custom cap 6 model  keylen 0 cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 6}}
+== L13a cap 8, blank, Shift+Tab
+after Shift+Tab focus AiModelBox|Model|edit cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 8}}
+reset focus Nav||custom
+== L13a' cap, Esc, Shift+Tab
+after Esc+Shift+Tab focus AiModelBox|Model|edit
+== L13a'' cap, blank, Tab
+after blank+Tab focus AiSaveBtn|Save|button
+== L2 model type, Esc
+focus Nav||custom model  was  cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 8}}
+== L2 key type, Esc
+focus Nav||custom keylen 0 cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 8}} msgs [] cmdkey (253, 3)
+== key type, blank click
+focus Nav||custom keylen 12 cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 8}} msgs []
+== L10 model type, blank
+focus Nav||custom model qa-model-new cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 8, 'model': 'qa-model-new'}}
+== model type, Enter
+focus AiModelBox|Model|edit model qa-model-enter cfg {'paid_tags': [{'tag': 'Studioshoo', 'label': 'Studioshoo', 'monthly_net_eur': 1600}], 'ai': {'monthly_cap_eur': 8, 'model': 'qa-model-enter'}}
+== reopen Settings
+nav ['Today', 'Reports']
+after reopen model qa-model-enter cap 8
+== Income
+income edits [('', 'Previous salary ? monthly net (?)'), ('', 'Studioshoo ? monthly net (?)'), ('NewPaidTagName', 'New payable tag'), ('NewPaidTagRate', 'Monthly net (?)')]
+start salary 2?925 2925 tag 1?600 [('Studioshoo', 1600)]
+== L5 tag 1234 Esc
+focus Nav||custom tag 1?600 [('Studioshoo', 1600)] msgs ['Key saved ? qa-model-enter']
+== L6 salary 999999999999 Tab
+while typed msgs ['Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.', 'Key saved ? qa-model-enter']
+focus EmployedToggle|Currently employed|toggle switch salary box 2?925 stored 2925 msgs ['Key saved ? qa-model-enter', 'Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.']
+== salary 999999999999 Enter
+focus Nav||custom salary box 2?925 stored 2925 msgs ['Key saved ? qa-model-enter', 'Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.']
+== salary 100000,01 blank
+focus Nav||custom salary box 2?925 stored 2925 msgs ['Key saved ? qa-model-enter', 'Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.']
+== salary 100000 Enter (at ceiling)
+focus Nav||custom salary box 100?000 stored 100000 msgs ['Key saved ? qa-model-enter']
+== tag 999999999999 Enter
+focus Nav||custom tag 1?600 [('Studioshoo', 1600)] msgs ['Key saved ? qa-model-enter', 'Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.']
+== L7 salary 2925 Enter
+focus Nav||custom salary box 2?925 stored 2925 msgs ['Key saved ? qa-model-enter']
+== L7b salary 3100,5 Tab
+focus EmployedToggle|Currently employed|toggle switch salary box 3?100,5 stored 3100.5 msgs ['Key saved ? qa-model-enter']
+== L12 salary click, Esc, Shift+Tab
+focus SettingsItem|Settings|list item
+== L13b tag click, blank, Tab
+focus |Remove|button
+== tag click, blank, Shift+Tab
+focus EmployedToggle|Currently employed|toggle switch
+== L14 new tag name abc Esc
+focus Nav||custom name  [('Studioshoo', 1600)]
+rate box NewPaidTagRate Monthly net (?)
+== new tag rate 55 Esc
+focus Nav||custom rate  [('Studioshoo', 1600)]
+== new tag name+rate 200000 Enter
+focus NewPaidTagRate|Monthly net (?)|edit [('Studioshoo', 1600)] msgs ['Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.', 'Key saved ? qa-model-enter', 'Amount is too large - at most EUR 100 000,00 a month. The saved amount was kept.']
+== sibling General
+Your name: before='QA' afterEsc='QA' focusEsc=Nav||custom focusBlank=Nav||custom
+== sibling Hours and reminders
+Work start: before='08:00' afterEsc='08:00' focusEsc=Nav||custom focusBlank=Nav||custom
+Work end: before='20:00' afterEsc='20:00' focusEsc=Nav||custom focusBlank=Nav||custom
+Day review at: before='23:59' afterEsc='23:59' focusEsc=Nav||custom focusBlank=Nav||custom
+Grace before alert: before='15' afterEsc='15' focusEsc=Nav||custom focusBlank=Nav||custom
+Repeat every: before='5' afterEsc='5' focusEsc=Nav||custom focusBlank=Nav||custom
+Idle after: before='10' afterEsc='10' focusEsc=Nav||custom focusBlank=Nav||custom
+Keep detailed diary: before='90' afterEsc='90' focusEsc=Nav||custom focusBlank=Nav||custom
+Warn before day ends: before='2' afterEsc='2' focusEsc=Nav||custom focusBlank=Nav||custom
+== sibling Activity keywords
+On-plan: before='' afterEsc='' focusEsc=Nav||custom focusBlank=Nav||custom
+== sibling Idle-answer library
+Off-plan: before='' afterEsc='' focusEsc=Nav||custom focusBlank=Nav||custom
+Scoring Per task completed Minimum0 Maximum500: before='10' afterEsc='10' focusEsc=Nav||custom focusBlank=Nav||custom
+Scoring Bonus per extra task that day Minimum0 Maximum500: before='3' afterEsc='3' focusEsc=Nav||custom focusBlank=Nav||custom
+== L15 spin
+value 15 spin buttons []
+cmdkey after (253, 3)

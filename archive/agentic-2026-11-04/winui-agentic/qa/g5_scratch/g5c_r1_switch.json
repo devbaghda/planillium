@@ -1,0 +1,312 @@
+[
+ {
+  "min": 0.0,
+  "priv_ws": 99.8,
+  "priv_bytes": 136.8,
+  "gc_commit": 16.6,
+  "other_commit": 99.9,
+  "gc_res_gb": 256.0,
+  "note": "start switch",
+  "t": "11:04:08"
+ },
+ {
+  "min": 0.51,
+  "priv_ws": 100.3,
+  "priv_bytes": 137.2,
+  "gc_commit": 15.0,
+  "other_commit": 101.9,
+  "gc_res_gb": 256.0,
+  "note": "switches=10",
+  "t": "11:04:39"
+ },
+ {
+  "min": 1.03,
+  "priv_ws": 101.9,
+  "priv_bytes": 139.1,
+  "gc_commit": 17.6,
+  "other_commit": 101.2,
+  "gc_res_gb": 256.0,
+  "note": "switches=20",
+  "t": "11:05:09"
+ },
+ {
+  "min": 1.54,
+  "priv_ws": 103.5,
+  "priv_bytes": 143.2,
+  "gc_commit": 15.6,
+  "other_commit": 107.3,
+  "gc_res_gb": 256.0,
+  "note": "switches=30",
+  "t": "11:05:40"
+ },
+ {
+  "min": 2.05,
+  "priv_ws": 106.9,
+  "priv_bytes": 146.4,
+  "gc_commit": 17.6,
+  "other_commit": 108.5,
+  "gc_res_gb": 256.0,
+  "note": "switches=40",
+  "t": "11:06:11"
+ },
+ {
+  "min": 2.51,
+  "priv_ws": 83.8,
+  "priv_bytes": 142.2,
+  "gc_commit": 15.6,
+  "other_commit": 106.2,
+  "gc_res_gb": 256.0,
+  "note": "switches=49",
+  "t": "11:06:38"
+ },
+ {
+  "min": 3.02,
+  "priv_ws": 82.1,
+  "priv_bytes": 142.2,
+  "gc_commit": 15.7,
+  "other_commit": 106.2,
+  "gc_res_gb": 256.0,
+  "note": "switches=59",
+  "t": "11:07:09"
+ },
+ {
+  "min": 3.54,
+  "priv_ws": 77.2,
+  "priv_bytes": 144.6,
+  "gc_commit": 15.6,
+  "other_commit": 108.6,
+  "gc_res_gb": 256.0,
+  "note": "switches=69",
+  "t": "11:07:40"
+ },
+ {
+  "min": 4.05,
+  "priv_ws": 74.3,
+  "priv_bytes": 142.8,
+  "gc_commit": 15.6,
+  "other_commit": 106.8,
+  "gc_res_gb": 256.0,
+  "note": "switches=79",
+  "t": "11:08:11"
+ },
+ {
+  "min": 4.51,
+  "priv_ws": 82.4,
+  "priv_bytes": 149.2,
+  "gc_commit": 21.6,
+  "other_commit": 107.2,
+  "gc_res_gb": 256.0,
+  "note": "switches=88",
+  "t": "11:08:38"
+ },
+ {
+  "min": 5.02,
+  "priv_ws": 78.7,
+  "priv_bytes": 145.2,
+  "gc_commit": 16.1,
+  "other_commit": 108.8,
+  "gc_res_gb": 256.0,
+  "note": "switches=98",
+  "t": "11:09:09"
+ },
+ {
+  "min": 5.53,
+  "priv_ws": 77.1,
+  "priv_bytes": 143.5,
+  "gc_commit": 18.1,
+  "other_commit": 105.0,
+  "gc_res_gb": 256.0,
+  "note": "switches=108",
+  "t": "11:09:40"
+ },
+ {
+  "min": 6.04,
+  "priv_ws": 77.1,
+  "priv_bytes": 146.4,
+  "gc_commit": 16.1,
+  "other_commit": 109.9,
+  "gc_res_gb": 256.0,
+  "note": "switches=118",
+  "t": "11:10:10"
+ },
+ {
+  "min": 6.51,
+  "priv_ws": 76.6,
+  "priv_bytes": 143.8,
+  "gc_commit": 15.8,
+  "other_commit": 107.6,
+  "gc_res_gb": 256.0,
+  "note": "switches=127",
+  "t": "11:10:38"
+ },
+ {
+  "min": 7.02,
+  "priv_ws": 74.0,
+  "priv_bytes": 139.9,
+  "gc_commit": 15.8,
+  "other_commit": 103.7,
+  "gc_res_gb": 256.0,
+  "note": "switches=137",
+  "t": "11:11:09"
+ },
+ {
+  "min": 7.53,
+  "priv_ws": 77.5,
+  "priv_bytes": 145.6,
+  "gc_commit": 17.8,
+  "other_commit": 107.5,
+  "gc_res_gb": 256.0,
+  "note": "switches=147",
+  "t": "11:11:40"
+ },
+ {
+  "min": 8.05,
+  "priv_ws": 80.3,
+  "priv_bytes": 147.4,
+  "gc_commit": 18.5,
+  "other_commit": 108.6,
+  "gc_res_gb": 256.0,
+  "note": "switches=157",
+  "t": "11:12:11"
+ },
+ {
+  "min": 8.51,
+  "priv_ws": 76.0,
+  "priv_bytes": 143.2,
+  "gc_commit": 16.5,
+  "other_commit": 106.4,
+  "gc_res_gb": 256.0,
+  "note": "switches=166",
+  "t": "11:12:38"
+ },
+ {
+  "min": 9.02,
+  "priv_ws": 77.7,
+  "priv_bytes": 146.2,
+  "gc_commit": 18.5,
+  "other_commit": 107.4,
+  "gc_res_gb": 256.0,
+  "note": "switches=176",
+  "t": "11:13:09"
+ },
+ {
+  "min": 9.53,
+  "priv_ws": 78.7,
+  "priv_bytes": 146.8,
+  "gc_commit": 16.4,
+  "other_commit": 110.0,
+  "gc_res_gb": 256.0,
+  "note": "switches=186",
+  "t": "11:13:40"
+ },
+ {
+  "min": 10.04,
+  "priv_ws": 78.0,
+  "priv_bytes": 147.1,
+  "gc_commit": 16.5,
+  "other_commit": 110.3,
+  "gc_res_gb": 256.0,
+  "note": "switches=196",
+  "t": "11:14:10"
+ },
+ {
+  "min": 10.5,
+  "priv_ws": 67.6,
+  "priv_bytes": 135.8,
+  "gc_commit": 9.6,
+  "other_commit": 105.8,
+  "gc_res_gb": 256.0,
+  "note": "switches=205",
+  "t": "11:14:38"
+ },
+ {
+  "min": 11.02,
+  "priv_ws": 69.4,
+  "priv_bytes": 140.5,
+  "gc_commit": 12.1,
+  "other_commit": 108.0,
+  "gc_res_gb": 256.0,
+  "note": "switches=215",
+  "t": "11:15:09"
+ },
+ {
+  "min": 11.53,
+  "priv_ws": 71.0,
+  "priv_bytes": 142.1,
+  "gc_commit": 12.2,
+  "other_commit": 109.5,
+  "gc_res_gb": 256.0,
+  "note": "switches=225",
+  "t": "11:15:39"
+ },
+ {
+  "min": 12.04,
+  "priv_ws": 76.7,
+  "priv_bytes": 146.6,
+  "gc_commit": 16.7,
+  "other_commit": 109.5,
+  "gc_res_gb": 256.0,
+  "note": "switches=235",
+  "t": "11:16:10"
+ },
+ {
+  "min": 12.5,
+  "priv_ws": 73.2,
+  "priv_bytes": 142.9,
+  "gc_commit": 18.2,
+  "other_commit": 104.4,
+  "gc_res_gb": 256.0,
+  "note": "switches=244",
+  "t": "11:16:38"
+ },
+ {
+  "min": 13.01,
+  "priv_ws": 74.3,
+  "priv_bytes": 145.4,
+  "gc_commit": 16.3,
+  "other_commit": 108.7,
+  "gc_res_gb": 256.0,
+  "note": "switches=254",
+  "t": "11:17:09"
+ },
+ {
+  "min": 13.53,
+  "priv_ws": 76.2,
+  "priv_bytes": 144.9,
+  "gc_commit": 15.7,
+  "other_commit": 108.8,
+  "gc_res_gb": 256.0,
+  "note": "switches=264",
+  "t": "11:17:39"
+ },
+ {
+  "min": 14.04,
+  "priv_ws": 71.5,
+  "priv_bytes": 138.1,
+  "gc_commit": 13.7,
+  "other_commit": 104.0,
+  "gc_res_gb": 256.0,
+  "note": "switches=274",
+  "t": "11:18:10"
+ },
+ {
+  "min": 14.55,
+  "priv_ws": 77.4,
+  "priv_bytes": 147.3,
+  "gc_commit": 16.7,
+  "other_commit": 110.3,
+  "gc_res_gb": 256.0,
+  "note": "switches=284",
+  "t": "11:18:41"
+ },
+ {
+  "min": 15.01,
+  "priv_ws": 75.8,
+  "priv_bytes": 144.1,
+  "gc_commit": 13.5,
+  "other_commit": 110.3,
+  "gc_res_gb": 256.0,
+  "note": "switches=293",
+  "t": "11:19:09"
+ }
+]

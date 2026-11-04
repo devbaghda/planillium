@@ -1,0 +1,9 @@
+large: Today idle                  privWS    73.3  privBytes   113.2  WS   193.1  
+large: Reports Week, diary today   privWS    89.3  privBytes   132.9  WS   213.8  
+large: All time, 40 shown (default) privWS   128.6  privBytes   177.8  WS   254.2  
+large: Show all                    privWS   299.0  privBytes   377.9  WS   424.9  Showing 40 of 300
+large: period Day (show all)       privWS   670.1  privBytes   922.9  WS   796.3  
+large: period Week (show all)      privWS   944.2  privBytes  1366.9  WS  1070.6  
+large: period Month (show all)     privWS   940.4  privBytes  1281.8  WS  1067.7  
+large: period Year (show all)      privWS   981.5  privBytes  1384.2  WS  1110.0  
+EXIT 1
