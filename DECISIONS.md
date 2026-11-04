@@ -276,6 +276,7 @@
     that mark newly taught (only those; never rules that existed before). (i) A mark with nothing
     ticked teaches no keywords. (j) Idle rows are skipped when teaching keywords ("idle" is never
     learned). (k) Clear actions in Settings also delete all backups; backups hold full window titles.
+    **Added 2026-11-04 (G9b design):** (l) A combination rule is app + one or more window-title words, learned from Bulk Mark; the rule with more conditions wins (words-only keyword boxes remain the simple rules). (m) A rule below the act-alone bar (19c) shows as a suggestion on matching Diary rows with one-click accept; nothing asks live. (n) After-hours: only activity a confident learned rule marks as work is recorded outside working hours; all else stays untracked (amends rule 1 when built).
 20. **A missing data folder never falls back to the real data (G14, user ruling 2026-10-30).** When a
     test build is started with MENTOR_ROOT set to a folder that does not exist, the app refuses to
     start with a plain message naming that folder; it never searches for another data folder (the
