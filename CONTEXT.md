@@ -39,6 +39,10 @@ Phase: **shipped, in daily live use** (v1.2.0+, public GitHub repo). **The WinUI
 time-of-day-dependent flake (previously time-of-day-dependent within ~3h of midnight) is fixed,
 not just unlucky-not-to-hit; see `context/todos.md` Session log 09-22.
 
+**Latest (2026-11-05, pushed 0eb183d, live Release rebuilt):** Reports tables carry Paid hours / Unearned income / Paid-work income / Balance (first column 130 px so no sideways scroll); Diary bulk marks are two menus (Set category incl. Paid, Set tag), Paid/Idle teach no rules; apps pie is a donut with legend share bars. Suite 286/286. Detail: `context/todos.md` 2026-11-05.
+
+**2026-11-05 (later, built, not yet pushed/rebuilt live):** saved learned rules act at once (no 10/22-example bar), also after hours for on-plan work; Settings shows Learned rules above Activity keywords (keywords kept, fallback only). Suite 287/287. Acceptance: `context/acceptance/2026-11-05-rules-act-at-once.md`.
+
 Data formats and reference: `context/domain.md` — "Plan JSON format", "Database schema", "config.json
 key fields".
 

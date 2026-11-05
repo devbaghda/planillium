@@ -88,8 +88,8 @@ public sealed partial class ReportsPage
         panel.Children.Add(new TextBlock
         {
             Text = "Teach Planillium a rule so this is marked automatically next time. A rule is an app plus " +
-                   "words from the window title; it acts by itself only after at least 10 examples with a " +
-                   "safe margin (85%), and until then it only suggests in the Diary.",
+                   "words from the window title; once saved it acts at once, also outside working hours " +
+                   "for on-plan work.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],

@@ -53,11 +53,25 @@ public sealed class LearnedRuleAfterHoursTests
     }
 
     [Fact]
-    public void Rule_that_only_suggests_records_nothing_after_hours()
+    public void Saved_rule_with_few_examples_records_on_plan_work_after_hours()
     {
-        var (t, app) = Make(9, 9);
+        var (t, app) = Make(1, 1);
         var title = $"Quotation_Acme - {app}";
         t.SimulateAfterHoursPoll(At(22), title, 0);
+        t.SimulateAfterHoursPoll(At(22, 30), "Something else", 0);
+        var row = Assert.Single(Rows(app));
+        Assert.Equal(DiaryCategory.OnPlan, row.Category);
+        Assert.Equal("22:30", row.End);
+    }
+
+    [Fact]
+    public void Off_plan_rule_after_hours_records_nothing()
+    {
+        var app = "AppZ" + Guid.NewGuid().ToString("N")[..10];
+        var t = new ActivityTracker(ConfigService.Root);
+        t.SetRulesForTest(new RuleBook(new[] { new LearnedRule(1, app, new[] { "quotation" }, DiaryCategory.OffPlan) },
+            new List<HistoryRow>()));
+        t.SimulateAfterHoursPoll(At(22), $"Quotation_Acme - {app}", 0);
         t.SimulateAfterHoursPoll(At(22, 30), "Something else", 0);
         Assert.Empty(Rows(app));
     }

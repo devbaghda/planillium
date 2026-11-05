@@ -18,7 +18,7 @@ public sealed partial class SettingsPage
     private List<RuleLine> _ruleLines = new();
     private bool _rulesBusy;
 
-    private static string RuleStatusText(RuleEvidence ev) => ev.Confident ? "acts alone" : "suggests only";
+    private static string RuleStatusText(RuleEvidence ev) => "acts at once";
 
     private static string RuleRange(RuleEvidence ev)
     {

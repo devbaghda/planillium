@@ -18,7 +18,7 @@
    They decide when the off-plan nag may fire *and* when activity is recorded at all
    (`ActivityTracker.InWorkingHours`, the single predicate both use). Outside them nothing is
    tracked and no gap is counted against the user. **Amended 2026-10-28 (rule 19d): work-classified
-   activity after hours will be recorded and counted. Built 2026-11-04 (G9b): after hours records only activity a confident learned rule (>=10 examples, Wilson 95% lower bound >=85%) marks on-plan; suggestion-only, off-plan, neutral and idle are not recorded. G9c (2026-11-04): a confident on-plan rule that carries a tag records the row with that tag, so it counts as paid work and income after hours; neutral earns nothing (user ruling). Rows can also be added by hand at any hour (any overlap refused).**
+   activity after hours will be recorded and counted. Built 2026-11-04 (G9b): after hours records only activity a learned rule marks on-plan (SUPERSEDED 2026-11-05, user: every saved rule acts at once - the >=10 examples / Wilson 85% bar no longer gates acting, evidence is display only); suggestion-only, off-plan, neutral and idle are not recorded. G9c (2026-11-04): a confident on-plan rule that carries a tag records the row with that tag, so it counts as paid work and income after hours; neutral earns nothing (user ruling). Rows can also be added by hand at any hour (any overlap refused).**
 2. The diary window used to be a pair of hardcoded 06:00/20:00 statics in `ActivityTracker`,
    unrelated to working hours and unreachable from the UI — so moving the working day to 08:00
    left 06:00–08:00 still tracked and back-filled as "unaccounted time" every morning (the

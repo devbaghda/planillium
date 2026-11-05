@@ -199,9 +199,10 @@ internal sealed class RuleBook
 {
     internal sealed record Hit(LearnedRule Rule, RuleEvidence Evidence)
     {
-        internal bool Confident => Evidence.Confident;
-        /// <summary>"auto" when the rule may act alone, else "suggested".</summary>
-        internal string State => Confident ? RuleStates.Auto : RuleStates.Suggested;
+        /// <summary>2026-11-05 (user): a saved rule always acts at once - the user confirmed it. The
+        /// evidence is kept for display only; the old 10-example/85% bar no longer gates it.</summary>
+        internal bool Confident => true;
+        internal string State => RuleStates.Auto;
     }
 
     private readonly List<LearnedRule> _rules;

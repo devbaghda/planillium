@@ -35,29 +35,27 @@ public class LearnedRuleClassifierTests
     }
 
     [Fact]
-    public void Rule_below_the_bar_only_suggests_keyword_lists_still_decide()
+    public void Saved_rule_with_few_examples_still_acts_at_once_and_beats_keywords()
     {
         var c = Make("""{"activity_rules":{"off_plan":["excel"]}}""");
         var rule = new LearnedRule(1, "Excel", new[] { "quotation" }, DiaryCategory.OnPlan);
-        c.SetRules(Book(new[] { rule }, new HistoryRow("Excel", S("quotation"), DiaryCategory.OnPlan, 9)));
+        c.SetRules(Book(new[] { rule }, new HistoryRow("Excel", S("quotation"), DiaryCategory.OnPlan, 1)));
         var (cat, state) = c.ClassifyDetailed("Quotation - Excel");
-        Assert.Equal(DiaryCategory.OffPlan, cat);
-        Assert.Equal(RuleStates.Suggested, state);
+        Assert.Equal(DiaryCategory.OnPlan, cat);
+        Assert.Equal(RuleStates.Auto, state);
     }
 
     [Fact]
-    public void Contradicting_history_drops_a_rule_below_the_bar()
+    public void Saved_rule_acts_even_with_no_history_at_all()
     {
         var c = Make();
         var rule = new LearnedRule(1, "Excel", new[] { "quotation" }, DiaryCategory.OnPlan);
-        c.SetRules(Book(new[] { rule },
-            new HistoryRow("Excel", S("quotation"), DiaryCategory.OnPlan, 30),
-            new HistoryRow("Excel", S("quotation"), DiaryCategory.OffPlan, 10)));
-        Assert.Equal(RuleStates.Suggested, c.ClassifyDetailed("Quotation - Excel").RuleState);
+        c.SetRules(Book(new[] { rule }));
+        Assert.Equal((DiaryCategory.OnPlan, RuleStates.Auto), c.ClassifyDetailed("Quotation - Excel"));
     }
 
     [Fact]
-    public void Most_specific_rule_wins_even_when_it_only_suggests()
+    public void Most_specific_rule_wins_and_acts()
     {
         var c = Make();
         var general = new LearnedRule(1, "Excel", new[] { "quotation" }, DiaryCategory.OnPlan);
@@ -65,10 +63,8 @@ public class LearnedRuleClassifierTests
         c.SetRules(Book(new[] { general, specific },
             new HistoryRow("Excel", S("quotation"), DiaryCategory.OnPlan, 100),
             new HistoryRow("Excel", S("acme", "quotation"), DiaryCategory.OffPlan, 3)));
-        var (cat, state) = c.ClassifyDetailed("Acme quotation - Excel");
-        Assert.Equal(RuleStates.Suggested, state);        // the specific rule governs; not enough proof to act
-        Assert.Equal(DiaryCategory.Neutral, cat);         // keyword lists empty -> neutral
-        Assert.Equal(RuleStates.Auto, c.ClassifyDetailed("Other quotation - Excel").RuleState);
+        Assert.Equal((DiaryCategory.OffPlan, RuleStates.Auto), c.ClassifyDetailed("Acme quotation - Excel"));
+        Assert.Equal((DiaryCategory.OnPlan, RuleStates.Auto), c.ClassifyDetailed("Other quotation - Excel"));
     }
 
     [Fact]

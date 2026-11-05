@@ -197,8 +197,19 @@
                 </StackPanel>
 
                 <StackPanel x:Name="KeywordsPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
-                    <TextBlock Text="Activity keywords" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <TextBlock Text="One per line, matched inside window titles. A window whose title contains one of these words is counted as that kind of time."
+                    <!-- G9b: learned combination rules (app + title words). Filled in code
+                         (LoadLearnedRules); delete only, creation happens from Bulk Mark in the Diary.
+                         2026-11-05: first on the page - they take priority over the keywords below. -->
+                    <TextBlock Text="Learned rules" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="Rules Planillium learned from your Bulk Marks: an app plus words in its window title. A saved rule acts at once and beats the keywords below. You can delete a rule here (Undo is in Change history)."
+                               TextWrapping="Wrap"
+                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <TextBox x:Name="LearnedRulesSearch" PlaceholderText="Search rules (app, words, category, status)"
+                             AutomationProperties.Name="Search learned rules" TextChanged="LearnedRulesSearch_Changed"/>
+                    <StackPanel x:Name="LearnedRulesList" Spacing="6"/>
+
+                    <TextBlock Text="Activity keywords" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,16,0,0"/>
+                    <TextBlock Text="Used only when no learned rule matches. One per line, matched inside window titles. A window whose title contains one of these words is counted as that kind of time."
                                TextWrapping="Wrap"
                                FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <Grid ColumnSpacing="12">
@@ -209,16 +220,6 @@
                         <TextBox x:Name="RulesOff" Grid.Column="1" Header="Off-plan" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
                         <TextBox x:Name="RulesNeutral" Grid.Column="2" Header="Neutral" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
                     </Grid>
-
-                    <!-- G9b: learned combination rules (app + title words). Filled in code
-                         (LoadLearnedRules); delete only, creation happens from Bulk Mark in the Diary. -->
-                    <TextBlock Text="Learned rules" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,16,0,0"/>
-                    <TextBlock Text="Rules Planillium learned from your Bulk Marks: an app plus words in its window title. A rule acts by itself only with at least 10 examples and a safe margin; otherwise it only suggests in the Diary. You can delete a rule here (Undo is in Change history)."
-                               TextWrapping="Wrap"
-                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <TextBox x:Name="LearnedRulesSearch" PlaceholderText="Search rules (app, words, category, status)"
-                             AutomationProperties.Name="Search learned rules" TextChanged="LearnedRulesSearch_Changed"/>
-                    <StackPanel x:Name="LearnedRulesList" Spacing="6"/>
                 </StackPanel>
 
                 <StackPanel x:Name="IdlePanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">

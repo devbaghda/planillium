@@ -77,12 +77,13 @@ public sealed class G9cOffHoursAndManualRowsTests
     // ── H6 ────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void H6_tag_rule_below_the_bar_records_nothing_after_hours()
+    public void H6_saved_tag_rule_with_few_examples_records_after_hours_2026_11_05()
     {
+        // Was "below the bar records nothing"; the user ruled on 2026-11-05 that saved rules act at once.
         var (t, app) = MakeTagRule(DiaryCategory.OnPlan, 9, 9);
         t.SimulateAfterHoursPoll(At(48, 22), $"Quotation_Acme - {app}", 0);
         t.SimulateAfterHoursPoll(At(48, 22, 30), "Something else", 0);
-        Assert.Empty(Rows(app));
+        Assert.Single(Rows(app));
     }
 
     // ── H3 / H1 evidence ──────────────────────────────────────────────────────
