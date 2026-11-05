@@ -526,6 +526,55 @@ public static class DataChangeDoor
         return changeId;
     }
 
+    /// <summary>2026-11-05 (user): edits a saved rule's words, category and tag (the app stays). One history
+    /// entry holding a "deleted" op for the old rule and an "added" op for the new one, so Undo puts the old
+    /// rule back and removes the new. Backup first. Returns the change id, 0 when the rule is gone. Throws
+    /// ArgumentException (message is user-readable) for no usable word, a rule identical to the old one, or a
+    /// duplicate of another saved rule - checked before anything is written.</summary>
+    public static long EditRule(long ruleId, IEnumerable<string> words, string category, string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) tag = null;
+        var norm = words.Select(w => TitleWords.NormalizeWord(w)).Where(w => w.Length > 0).Distinct().ToList();
+        if (norm.Count == 0) throw new ArgumentException("Type at least one word from the window title.");
+        var key = LearnedRuleStore.JoinWords(norm);
+        using (var peek = new Database())
+        {
+            var all = LearnedRuleStore.LoadRules(peek);
+            var old = all.FirstOrDefault(x => x.Id == ruleId);
+            if (old == null) return 0;
+            bool Same(LearnedRule x) => string.Equals(x.App, old.App, StringComparison.OrdinalIgnoreCase)
+                && LearnedRuleStore.JoinWords(x.Words) == key && x.Category == category
+                && string.Equals(x.Tag ?? "", tag ?? "", StringComparison.OrdinalIgnoreCase);
+            if (Same(old)) throw new ArgumentException("Nothing changed.");
+            if (all.Any(x => x.Id != ruleId && Same(x)))
+                throw new ArgumentException("Another saved rule already says exactly this.");
+        }
+        MakeBackup();
+        using var db = new Database();
+        long changeId = 0;
+        db.RunInTransaction(() =>
+        {
+            var old = LearnedRuleStore.GetRule(db, ruleId);
+            if (old == null) return;
+            using (var log = db.CreateCommand())
+            {
+                log.CommandText =
+                    "INSERT INTO change_log (ts, label, tbl, field, new_value, row_count) " +
+                    "VALUES ($ts, $label, 'learned_rules', 'learned_rules', NULL, 0); SELECT last_insert_rowid();";
+                log.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
+                log.Parameters.AddWithValue("$label", $"Edited rule: {old.App} + {key}");
+                changeId = Convert.ToInt64(log.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+            InsertRuleOp(db, changeId, "deleted", old);
+            LearnedRuleStore.DeleteRule(db, ruleId);
+            var newId = LearnedRuleStore.AddRule(db, old.App, norm, category, tag);
+            var made = LearnedRuleStore.GetRule(db, newId);
+            if (made != null) InsertRuleOp(db, changeId, "added", made);
+            Prune(db);
+        });
+        return changeId;
+    }
+
     private static void InsertRuleOp(Database db, long changeId, string op, LearnedRule rule)
     {
         using var cmd = db.CreateCommand();

@@ -86,7 +86,7 @@ internal sealed record RuleProposal(string App, IReadOnlyList<string> Words, str
 internal static class RuleProposer
 {
     /// <summary>Most words a proposed rule carries.</summary>
-    internal const int MaxWords = 2;
+    internal const int MaxWords = 5;
 
     /// <summary>Proposal for one app group of a Bulk Mark. <paramref name="marked"/> are the title
     /// word sets just marked <paramref name="category"/>; <paramref name="history"/> is every
@@ -133,16 +133,21 @@ internal static class RuleProposer
 
         // A second word only when the first is not already pure and the pair keeps the rule shared
         // by every row that the first word was shared by, yet clearly purer.
-        if (chosenScore.Precision < 0.95 && MaxWords >= 2)
+        // 2026-11-05 (user: "not only 2 parameters"): keeps adding words, one at a time, up to MaxWords,
+        // while the rule is not yet pure and the extra word clearly improves it.
+        while (chosenScore.Precision < 0.95 && chosen.Count < MaxWords)
         {
-            var pair = candidates.Where(w => w != chosen[0])
-                .Select(w => (IReadOnlyList<string>)new[] { chosen[0], w }.OrderBy(x => x, StringComparer.Ordinal).ToArray())
+            var current = chosen;
+            var next = candidates.Where(w => !current.Contains(w))
+                .Select(w => (IReadOnlyList<string>)current.Append(w).OrderBy(x => x, StringComparer.Ordinal).ToArray())
                 .Select(ws => (Words: ws, Sh: Share(ws), Sc: Score(ws)))
                 .Where(x => x.Sh == best.Sh && x.Sc.Precision >= chosenScore.Precision + 0.05)
                 .OrderByDescending(x => x.Sc.Precision).ThenByDescending(x => x.Sc.Support)
                 .ThenBy(x => string.Join(' ', x.Words), StringComparer.Ordinal)
                 .FirstOrDefault();
-            if (pair.Words != null) { chosen = pair.Words; }
+            if (next.Words == null) break;
+            chosen = next.Words;
+            chosenScore = next.Sc;
         }
 
         var rule = new LearnedRule(0, app, chosen, category, tag);

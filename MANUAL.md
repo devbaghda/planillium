@@ -281,7 +281,8 @@ tool, not a cloud-first collaboration app. Specifically:
   "Day off" is different: tracking keeps running as normal on that day — only the off-plan
   reminder is silenced, so the diary can still record what you did without nagging you about it.
 - **Evening review and idle answers.** Anything you type into the evening review or an idle-time
-  prompt is stored as free text, locally, exactly as you wrote it.
+  prompt is stored as free text, locally, exactly as you wrote it. The idle prompt remembers the
+  category you gave each answer and pre-selects it the next time you give the same answer.
 - **Retention.** Diary detail (including window titles) is kept for a configurable number of days
   (90 by default, adjustable in Settings) before being rolled up into daily totals and the
   per-entry detail is discarded. A file you create yourself with "Export all my data" is a

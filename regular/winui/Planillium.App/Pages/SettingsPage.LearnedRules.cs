@@ -109,11 +109,18 @@ public sealed partial class SettingsPage
         AutomationProperties.SetName(delete, $"Delete rule: {r.App} + {words}");
         delete.Click += async (_, _) => await DeleteRuleAsync(line, delete);
 
+        var edit = new Button { Content = "Edit", VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(edit, $"Edit rule: {r.App} + {words}");
+        edit.Click += async (_, _) => await EditRuleAsync(line, edit);
+
         var grid = new Grid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(delete, 1);
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(edit, 1);
+        Grid.SetColumn(delete, 2);
         grid.Children.Add(text);
+        grid.Children.Add(edit);
         grid.Children.Add(delete);
         return new Border
         {
@@ -124,6 +131,78 @@ public sealed partial class SettingsPage
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
         };
+    }
+
+    /// <summary>2026-11-05 (user: "make rules editable"): change a rule's words (any number), category and tag.
+    /// Goes through DataChangeDoor.EditRule (backup, change history, Undo). A refused edit shows its
+    /// reason and reopens the dialog with what was typed.</summary>
+    private async Task EditRuleAsync(RuleLine line, Button trigger)
+    {
+        if (_rulesBusy) return;
+        var r = line.Rule;
+        var wordsText = string.Join(" ", r.Words);
+        var category = r.Category;
+        var tag = r.Tag;
+        string? error = null;
+        while (true)
+        {
+            var wordsBox = new TextBox { Header = "Words from the window title (any number, separated by spaces)", Text = wordsText };
+            var catBox = new ComboBox { Header = "Category", HorizontalAlignment = HorizontalAlignment.Stretch };
+            foreach (var (label, value) in DiaryCategory.EditableOptions)
+                catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+            catBox.SelectedIndex = Math.Max(0, Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == category));
+            var tagBox = new ComboBox { Header = "Tag (optional)", HorizontalAlignment = HorizontalAlignment.Stretch };
+            tagBox.Items.Add(new ComboBoxItem { Content = "(none)", Tag = null });
+            foreach (var (label, value) in DiaryTag.Options)
+                tagBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+            var tagIdx = tag == null ? 0 : Array.FindIndex(DiaryTag.Options, t => string.Equals(t.Value, tag, StringComparison.OrdinalIgnoreCase)) + 1;
+            tagBox.SelectedIndex = Math.Max(0, tagIdx);
+            AutomationProperties.SetName(wordsBox, "Rule words");
+
+            var panel = new StackPanel { Spacing = 12, MinWidth = 380 };
+            panel.Children.Add(new TextBlock { Text = $"App: {r.App}", FontWeight = FontWeights.SemiBold });
+            panel.Children.Add(wordsBox);
+            panel.Children.Add(catBox);
+            panel.Children.Add(tagBox);
+            if (error != null)
+                panel.Children.Add(new TextBlock
+                {
+                    Text = error, TextWrapping = TextWrapping.Wrap,
+                    Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+                });
+            var dialog = Dialogs.DialogControls.Build(XamlRoot, "Edit rule", "", primaryButtonText: "Save", closeButtonText: "Cancel");
+            dialog.Content = panel;
+            if (await Dialogs.DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return;
+
+            wordsText = wordsBox.Text ?? "";
+            category = (catBox.SelectedItem as ComboBoxItem)?.Tag as string ?? category;
+            tag = (tagBox.SelectedItem as ComboBoxItem)?.Tag as string;
+            _rulesBusy = true;
+            trigger.IsEnabled = false;
+            try
+            {
+                var words = wordsText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                await Task.Run(() => DataChangeDoor.EditRule(r.Id, words, category, tag));
+                (App.MainWindow as MainWindow)?.ReloadTrackerRules();
+                SaveStatus.Text = "Rule changed. Undo is in Change history.";
+                return;
+            }
+            catch (ArgumentException ex)
+            {
+                error = ex.Message;       // refused edit: show why, keep what was typed
+            }
+            catch (Exception ex)
+            {
+                Log.Error("SettingsPage.LearnedRules.Edit", ex);
+                SaveStatus.Text = Log.Friendly("Couldn't change that rule", ex);
+                return;
+            }
+            finally
+            {
+                _rulesBusy = false;
+                LoadLearnedRules();
+            }
+        }
     }
 
     private async Task DeleteRuleAsync(RuleLine line, Button trigger)

@@ -206,7 +206,10 @@
                                FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <TextBox x:Name="LearnedRulesSearch" PlaceholderText="Search rules (app, words, category, status)"
                              AutomationProperties.Name="Search learned rules" TextChanged="LearnedRulesSearch_Changed"/>
-                    <StackPanel x:Name="LearnedRulesList" Spacing="6"/>
+                    <ScrollViewer Height="340" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  AutomationProperties.Name="Learned rules list">
+                        <StackPanel x:Name="LearnedRulesList" Spacing="6" Margin="0,0,12,0"/>
+                    </ScrollViewer>
 
                     <TextBlock Text="Activity keywords" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,16,0,0"/>
                     <TextBlock Text="Used only when no learned rule matches. One per line, matched inside window titles. A window whose title contains one of these words is counted as that kind of time."

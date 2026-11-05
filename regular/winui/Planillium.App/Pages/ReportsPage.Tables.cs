@@ -28,8 +28,7 @@ public sealed partial class ReportsPage
         var columns = 4 + MoneyHeaders.Length + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            { Width = c == 0 ? new GridLength(TableLabelWidth) : GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TableColumnWidth(c)) });
         AddHeaderRow(grid, ["Day", "Tasks",
             .. CategoryColumns.Select(c => c.Label), "Total", "Score", .. MoneyHeaders]);
 
@@ -68,6 +67,7 @@ public sealed partial class ReportsPage
                     tb.Foreground = MoneyBrush(c - (columns - MoneyHeaders.Length), money.Balance, money.Unearned);
                 else if (!isToday)
                     tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                RightAlignNumber(tb, c);
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
                 grid.Children.Add(tb);
             }
@@ -150,6 +150,7 @@ public sealed partial class ReportsPage
                 TextWrapping = TextWrapping.NoWrap,
             };
             if (fore != null) tb.Foreground = fore;
+            RightAlignNumber(tb, column);
             Grid.SetColumn(tb, column); Grid.SetRow(tb, totalRow);
             grid.Children.Add(tb);
         }
@@ -168,8 +169,7 @@ public sealed partial class ReportsPage
         var columns = 4 + MoneyHeaders.Length + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            { Width = c == 0 ? new GridLength(TableLabelWidth) : GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TableColumnWidth(c)) });
         AddHeaderRow(grid, ["Period", "Tasks",
             .. CategoryColumns.Select(c => c.Label), "Total", "Score", .. MoneyHeaders]);
 
@@ -199,6 +199,7 @@ public sealed partial class ReportsPage
                             ? MoneyBrush(c - (columns - MoneyHeaders.Length), money.Balance, money.Unearned)
                         : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 };
+                RightAlignNumber(tb, c);
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
                 grid.Children.Add(tb);
             }
@@ -232,6 +233,29 @@ public sealed partial class ReportsPage
     /// card at 1180px otherwise and the user asked for no sideways scrolling. The longest label
     /// ("Thu 05.11" + "Day off", or a month name) needs ~100px.</summary>
     private const double TableLabelWidth = 130;
+
+    /// <summary>2026-11-05 (user): every column of the Day/Week/Month/Year tables has one fixed width,
+    /// the same in all four periods (so switching period never moves a column), and every figure and its
+    /// header sit flush right. Column 0 (the label) stays left. Order: label, Tasks, five categories,
+    /// Total, Score, Paid hours, three money columns - sized for the longest figure each can show
+    /// ("1076,3 h", "-€26 102,53").</summary>
+    private static double TableColumnWidth(int column) => column switch
+    {
+        0 => TableLabelWidth,
+        1 => 44,                                   // Tasks "25/28"
+        <= 6 => 48,                                // the five category columns
+        7 => 56,                                   // Total
+        8 => 40,                                   // Score
+        9 => 48,                                   // Paid hours
+        _ => 72,                                   // money
+    };
+
+    private static void RightAlignNumber(TextBlock tb, int column)
+    {
+        if (column == 0) return;
+        tb.HorizontalAlignment = HorizontalAlignment.Right;
+        tb.TextAlignment = TextAlignment.Right;
+    }
 
     private static readonly string[] MoneyHeaders = ["Paid hours", "Unearned income", "Paid-work income", "Balance"];
 
@@ -283,6 +307,7 @@ public sealed partial class ReportsPage
         {
             var h = Caption(TwoLineHeader(headers[c]));
             h.VerticalAlignment = VerticalAlignment.Bottom;
+            RightAlignNumber(h, c);
             Grid.SetColumn(h, c); Grid.SetRow(h, 0);
             grid.Children.Add(h);
         }

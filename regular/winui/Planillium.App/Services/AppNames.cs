@@ -119,6 +119,27 @@ public static class AppNames
         return OtherGroup;
     }
 
+    /// <summary>
+    /// 2026-11-05 (user: the apps filter listed names of dialog windows): a row whose title has no readable
+    /// program name (<see cref="FilterGroup"/> = "Other") takes the app of the row just before it in time,
+    /// since a dialog belongs to the app that opened it. The first row, idle rows and "—" rows keep their
+    /// own value. Display and filtering only; nothing stored changes. Returns Id → app.
+    /// </summary>
+    public static Dictionary<long, string> InheritedFilterGroups(IEnumerable<(long Id, DateOnly Date, string Start, string Window)> rows)
+    {
+        var map = new Dictionary<long, string>();
+        string? prev = null;
+        foreach (var r in rows.OrderBy(x => x.Date).ThenBy(x => x.Start, StringComparer.Ordinal).ThenBy(x => x.Id))
+        {
+            var g = FilterGroup(r.Window);
+            var skip = g == "—" || r.Window == "idle";
+            if (!skip && g == OtherGroup && prev != null) g = prev;
+            map[r.Id] = g;
+            if (!skip) prev = g;
+        }
+        return map;
+    }
+
     /// <summary>Chat / site / project / filename sub-item, or null.</summary>
     public static string? Sub(string window)
     {

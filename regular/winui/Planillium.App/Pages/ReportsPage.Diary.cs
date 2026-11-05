@@ -65,6 +65,8 @@ public sealed partial class ReportsPage
     // free-text search already uses) without requiring a search term. Same survives-navigation
     // treatment as the other diary state.
     private static bool _diaryAllTime;
+    // Id -> app for the rows in view, dialog windows folded into the app opened just before (AppNames.InheritedFilterGroups).
+    private Dictionary<long, string> _diaryEffectiveApp = new();
 
     // How many rows the "Show more" batching (DiaryList) currently has revealed, and which
     // exact scope it was revealed for (see RenderDiaryResults) — added 2026-07-28 same-day
@@ -246,10 +248,14 @@ public sealed partial class ReportsPage
             bool MatchesCategory(ReportData.DiaryEntry e) =>
                 _diaryCategoryFilter.Count == 0 || _diaryCategoryFilter.Contains(e.Cat) ||
                 (string.IsNullOrWhiteSpace(e.Cat) && _diaryCategoryFilter.Contains(DiaryNoValue));
+            // Dialog windows (no readable program name) count under the app opened just before them.
+            _diaryEffectiveApp = AppNames.InheritedFilterGroups(rows.Select(e => (e.Id, e.Date, e.Start, e.Window)));
+            string EffGroup(ReportData.DiaryEntry e) =>
+                _diaryEffectiveApp.TryGetValue(e.Id, out var eg) ? eg : AppNames.FilterGroup(e.Window);
             bool MatchesApp(ReportData.DiaryEntry e)
             {
                 if (_diaryAppFilter.Count == 0) return true;
-                var g = AppNames.FilterGroup(e.Window);
+                var g = EffGroup(e);
                 return g == "—" ? _diaryAppFilter.Contains(DiaryNoValue) : _diaryAppFilter.Contains(g);
             }
             bool MatchesPage(ReportData.DiaryEntry e)
@@ -280,7 +286,7 @@ public sealed partial class ReportsPage
 
             syncingFilters = true;
             var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e))
-                .Select(e => AppNames.FilterGroup(e.Window))
+                .Select(e => EffGroup(e))
                 .Where(a => a != "—")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(a => a == AppNames.OtherGroup ? 1 : 0)   // "Other" last
@@ -944,10 +950,13 @@ public sealed partial class ReportsPage
             // used) — narrowing just makes that the common case instead of the rare one, so the
             // row's natural width stops outgrowing the page (see DiaryListWidth's own comment).
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(115) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(135) });
+            // 2026-11-05 (user: empty strip right of Split): the time-only view is 40px narrower than the
+            // dated one and the always-present (usually empty) accept column added a spacing gap, so the
+            // row ended short of DiaryListWidth. Details takes the slack; the accept column is added only
+            // on a row that actually shows an accept button (index 9, below).
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 147 : 187) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // G9b: accept a suggestion
 
             var select = new CheckBox
             {
@@ -992,6 +1001,9 @@ public sealed partial class ReportsPage
             // (kept below for accessible names/tooltips) and for the app/page filters.
             var windowLabel = AppNames.Label(window);
             var appGroup = AppNames.Group(window);
+            // A dialog window shows the app opened just before it (AppNames.InheritedFilterGroups).
+            var appShown = _diaryEffectiveApp.TryGetValue(id, out var inheritedApp) && inheritedApp != AppNames.OtherGroup && window != "idle"
+                ? inheritedApp : appGroup;
             var rawPageSub = AppNames.Sub(window);
             // idle/dismissed entries (and anything else with no app-detected sub-item) have
             // nothing else to show in the Page column — but once the user's answered "what
@@ -1005,11 +1017,11 @@ public sealed partial class ReportsPage
             var pageSub = descInPage ? desc! : rawPageSub ?? "—";
             var appText = new TextBlock
             {
-                Text = appGroup,
+                Text = appShown,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            ToolTipService.SetToolTip(appText, appGroup);
+            ToolTipService.SetToolTip(appText, appShown);
             var pageText = new TextBlock
             {
                 Text = pageSub,
@@ -1131,6 +1143,7 @@ public sealed partial class ReportsPage
                             Log.Friendly("Nothing was changed", ex), null));
                     }
                 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 Grid.SetColumn(accept, 9);
                 row.Children.Add(accept);
             }

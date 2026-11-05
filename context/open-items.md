@@ -5,6 +5,10 @@
 
 ## Still open (verbatim)
 
+0i. **(opened 2026-11-05, user) Light theme redesign.** "The dark theme looks good, but the light one is too pale,
+   the coloring is not good. Work on it." Keep dark as is; rework light colours (contrast, card/background
+   separation, accents). Check with `ui-ux-pro-max` before building, and compare against dark in a screenshot.
+   Not started; user had asked to pause building at the time.
 
 0. **(opened 2026-10-01) Eight-item batch, both workflows — regular app visuals OK'd by user 2026-10-02; agentic app review in progress (fixes logged in its own docs)** of
    pie, diary multi-select filters, Top Distractions columns and the away dialog, in both apps.

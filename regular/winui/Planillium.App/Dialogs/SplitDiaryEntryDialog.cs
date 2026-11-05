@@ -82,7 +82,7 @@ public static class SplitDiaryEntryDialog
         // a block gets split (2026-07-28 request) — same data EditDiaryEntryDialog now uses.
         // Best-effort: a DB read failure just means no suggestions, not a broken dialog.
         List<string> frequent;
-        try { using var db = new Database(); frequent = db.MostFrequentDescriptions(); }
+        try { using var db = new Database(); frequent = db.MostFrequentDescriptions(category: category); }
         catch (Exception ex) { Log.Error("SplitDiaryEntryDialog.MostFrequentDescriptions", ex); frequent = new(); }
 
         // Real one-tap chips, not just the AutoSuggestBox dropdown above — MostFrequentDescriptions'

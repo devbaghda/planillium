@@ -83,15 +83,18 @@ public static class IdleReturnDialog
         if (window.Tracker is not { } tracker) return;
 
         List<string> frequent;
+        Dictionary<string, string> learnedCats;
         try
         {
             using var db = new Database();
             frequent = db.MostFrequentIdleAnswers();
+            learnedCats = db.IdleAnswerCategories();
         }
         catch (Exception ex)
         {
             Log.Error("IdleReturnDialog.MostFrequentIdleAnswers", ex);
             frequent = new List<string>();
+            learnedCats = new(StringComparer.OrdinalIgnoreCase);
         }
         var chips = FixedChips
             .Concat(frequent.Where(f => !FixedChips.Contains(f, StringComparer.OrdinalIgnoreCase)))
@@ -171,7 +174,10 @@ public static class IdleReturnDialog
         void AutoClassifyCat(string text)
         {
             if (catTouched) return;
-            var guess = tracker.ClassifyIdleText(text);
+            // 2026-11-05: what you chose for this exact answer last time wins; the keyword lists only
+            // guess for answers never given before.
+            var guess = learnedCats.TryGetValue((text ?? "").Trim(), out var learned)
+                ? learned : tracker.ClassifyIdleText(text);
             var idx = Array.FindIndex(DiaryCategory.EditableOptions, c => c.Value == guess);
             if (idx < 0) return;
             programmaticCatChange = true;

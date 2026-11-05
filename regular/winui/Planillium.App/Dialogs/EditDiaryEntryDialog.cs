@@ -61,7 +61,7 @@ public static class EditDiaryEntryDialog
         // the DB read fails, same as IdleReturnDialog's own MostFrequentIdleAnswers guard —
         // a missing convenience, not a broken dialog.
         List<string> frequent;
-        try { using var db = new Database(); frequent = db.MostFrequentDescriptions(); }
+        try { using var db = new Database(); frequent = db.MostFrequentDescriptions(category: category); }
         catch (Exception ex) { Log.Error("EditDiaryEntryDialog.MostFrequentDescriptions", ex); frequent = new(); }
 
         var descBox = new AutoSuggestBox

@@ -431,19 +431,57 @@ public sealed class Database : IDisposable
     /// as a real answer.</summary>
     public List<string> MostFrequentIdleAnswers(int topN = 6)
     {
+        // 2026-11-05: same fix as MostFrequentDescriptions - the last 60 days first, so the library
+        // follows what the user does now; older answers only fill the remaining slots.
         var result = new List<string>();
+        var cutoff = DateTime.Today.AddDays(-60).ToString("yyyy-MM-dd");
+        foreach (var recentOnly in new[] { true, false })
+        {
+            if (result.Count >= topN) break;
+            using var cmd = CreateCommand();
+            cmd.CommandText =
+                "SELECT description FROM time_diary " +
+                "WHERE window='idle' AND description IS NOT NULL AND description <> '' " +
+                "AND description NOT IN ($ph, $legacyPh) " + (recentOnly ? "AND date >= $cut " : "") +
+                "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC, MAX(date) DESC LIMIT $n";
+            cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+            cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
+            if (recentOnly) cmd.Parameters.AddWithValue("$cut", cutoff);
+            cmd.Parameters.AddWithValue("$n", topN * 3);
+            using var r = cmd.ExecuteReader();
+            while (r.Read() && result.Count < topN)
+            {
+                var d = r.GetString(0);
+                if (!result.Contains(d, StringComparer.OrdinalIgnoreCase)) result.Add(d);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>2026-11-05 (user: "idle answer library is not learning"): the category you chose the last
+    /// time you gave each idle answer (case-insensitive). The idle dialog pre-selects it when you type
+    /// or tap the same answer again; the keyword lists stay the fallback for answers never seen.
+    /// An answer last filed as plain idle (no real category) is not remembered.</summary>
+    public Dictionary<string, string> IdleAnswerCategories()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         using var cmd = CreateCommand();
         cmd.CommandText =
-            "SELECT description FROM time_diary " +
+            "SELECT description, category FROM time_diary " +
             "WHERE window='idle' AND description IS NOT NULL AND description <> '' " +
             "AND description NOT IN ($ph, $legacyPh) " +
-            "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
+            "ORDER BY date ASC, start_time ASC";
         cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
         cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
-        cmd.Parameters.AddWithValue("$n", topN);
         using var r = cmd.ExecuteReader();
-        while (r.Read()) result.Add(r.GetString(0));
-        return result;
+        while (r.Read())
+        {
+            var cat = r.GetString(1);
+            var key = r.GetString(0).Trim();
+            if (cat == DiaryCategory.Idle) map.Remove(key);
+            else map[key] = cat;   // later rows overwrite earlier ones
+        }
+        return map;
     }
 
     /// <summary>Most common past diary descriptions across every category (not just idle,
@@ -451,20 +489,45 @@ public sealed class Database : IDisposable
     /// Edit/Split diary entry, so retyping the same handful of descriptions by hand every
     /// time isn't the only option (2026-07-28 request). Same placeholder exclusions as
     /// the idle-only version, for the same reason: neither is a real description.</summary>
-    public List<string> MostFrequentDescriptions(int topN = 8)
+    public List<string> MostFrequentDescriptions(int topN = 8, string? category = null, int recentDays = 60)
     {
+        // 2026-11-05 (user: "the list is fixed and not changing"): was all-time counts only, so the
+        // same eight stayed on top forever. Now: descriptions used in the last recentDays first, those
+        // used with the same category ahead of the rest, then most-used; all-time only fills what is left.
         var result = new List<string>();
-        using var cmd = CreateCommand();
-        cmd.CommandText =
+        var cutoff = DateTime.Today.AddDays(-recentDays).ToString("yyyy-MM-dd");
+        using (var cmd = CreateCommand())
+        {
+            cmd.CommandText =
+                "SELECT description FROM time_diary " +
+                "WHERE description IS NOT NULL AND description <> '' " +
+                "AND description NOT IN ($ph, $legacyPh) AND date >= $cut " +
+                "GROUP BY description COLLATE NOCASE " +
+                "ORDER BY MAX(CASE WHEN category = $cat THEN 1 ELSE 0 END) DESC, COUNT(*) DESC, MAX(date) DESC LIMIT $n";
+            cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+            cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
+            cmd.Parameters.AddWithValue("$cut", cutoff);
+            cmd.Parameters.AddWithValue("$cat", category ?? "");
+            cmd.Parameters.AddWithValue("$n", topN);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) result.Add(r.GetString(0));
+        }
+        if (result.Count >= topN) return result;
+        using var all = CreateCommand();
+        all.CommandText =
             "SELECT description FROM time_diary " +
             "WHERE description IS NOT NULL AND description <> '' " +
             "AND description NOT IN ($ph, $legacyPh) " +
             "GROUP BY description COLLATE NOCASE ORDER BY COUNT(*) DESC LIMIT $n";
-        cmd.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
-        cmd.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
-        cmd.Parameters.AddWithValue("$n", topN);
-        using var r = cmd.ExecuteReader();
-        while (r.Read()) result.Add(r.GetString(0));
+        all.Parameters.AddWithValue("$ph", DiaryCategory.IdlePlaceholder);
+        all.Parameters.AddWithValue("$legacyPh", DiaryCategory.LegacyIdlePlaceholder);
+        all.Parameters.AddWithValue("$n", topN * 3);
+        using var ar = all.ExecuteReader();
+        while (ar.Read() && result.Count < topN)
+        {
+            var d = ar.GetString(0);
+            if (!result.Contains(d, StringComparer.OrdinalIgnoreCase)) result.Add(d);
+        }
         return result;
     }
 
