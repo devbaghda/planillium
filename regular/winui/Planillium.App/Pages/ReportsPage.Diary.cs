@@ -160,7 +160,7 @@ public sealed partial class ReportsPage
         // G3: the "Marked N rows as X" message with its Undo sits right above the toolbar it
         // answers, not at the top of the page where it would be scrolled out of sight.
         Body.Children.Add(BuildDiaryChangeNotice());
-        var (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons) = BuildDiaryMarkToolbar();
+        var (selectAllBox, selectedLabel, actionButtons, categoryItems, tagItems) = BuildDiaryMarkToolbar();
 
         var diaryResults = BuildDiaryResultsArea();
 
@@ -182,12 +182,9 @@ public sealed partial class ReportsPage
             // button says how many rows that is.
             var target = n > 0 ? n : lastRows.Count;
             selectedLabel.Text = n > 0 ? $"{FormatCount(n)} selected"
-                : lastRows.Count > 0 ? $"Mark applies to all {FormatCount(lastRows.Count)} matches" : "";
-            foreach (var btn in new[] { markOnBtn, markOffBtn, markNeutralBtn }.Concat(tagMarkButtons.Select(t => t.Btn)))
-            {
-                btn.Content = $"{btn.Tag} ({FormatCount(target)})";
+                : lastRows.Count > 0 ? $"Actions apply to all {FormatCount(lastRows.Count)} matches" : "";
+            foreach (var btn in actionButtons)
                 btn.IsEnabled = target > 0 && !_diaryBulkBusy;
-            }
 
             syncingSelectAll = true;
             selectAllBox.IsEnabled = lastRows.Count > 0;
@@ -415,14 +412,11 @@ public sealed partial class ReportsPage
             selectedIds.Count > 0 ? lastRows.Where(r => selectedIds.Contains(r.Id)).ToList() : lastRows.ToList();
         void Refresh() { RenderDiaryResults(); }
         HashSet<long> ShownIds() => lastRows.Select(r => r.Id).ToHashSet();
-        markOnBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.OnPlan,
-            MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
-        markOffBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.OffPlan,
-            MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
-        markNeutralBtn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, DiaryCategory.Neutral,
-            MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
-        foreach (var (tagValue, btn) in tagMarkButtons)
-            btn.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryTag, tagValue,
+        foreach (var (categoryValue, item) in categoryItems)
+            item.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, categoryValue,
+                MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
+        foreach (var (tagValue, item) in tagItems)
+            item.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryTag, tagValue,
                 MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
         _diaryRerenderAction = RenderDiaryResults;
 
@@ -572,48 +566,43 @@ public sealed partial class ReportsPage
 
         var clearFiltersBtn = new Button { Content = "Clear filters", Padding = new Thickness(8, 4, 8, 4) };
 
-        var filterRow = new StackPanel
+        // 2026-11-05 (user: "the horizontal scroll here is excessive and not comfortable"): no
+        // scrolling. The five pickers share the row width equally (star columns, so they shrink with
+        // the window instead of running off it - the old fixed-width row pushed "Clear filters" out of
+        // sight once the Rule status picker was added); "All time" and "Clear filters" sit on a second
+        // line, always visible. The picker button text clips inside its own button when long.
+        var filterGrid = new Grid { ColumnSpacing = 8, RowSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        filterGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        filterGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var pickers = new[] { categoryBox, appBox, pageBox, tagBox, ruleBox };
+        for (var i = 0; i < pickers.Length; i++)
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-        };
-        filterRow.Children.Add(categoryBox.Button);
-        filterRow.Children.Add(appBox.Button);
-        filterRow.Children.Add(pageBox.Button);
-        filterRow.Children.Add(tagBox.Button);
-        filterRow.Children.Add(ruleBox.Button);
-        filterRow.Children.Add(allTimeBox);
-        filterRow.Children.Add(clearFiltersBtn);
-        // This row's combined MinWidth (categoryBox+appBox+pageBox+checkbox+button, ~750-800px)
-        // can exceed the actual content width at the app's enforced 900px window floor once the
-        // NavigationView pane and page padding are subtracted — without this, "Clear filters"
-        // and the "All time" checkbox can be clipped off-screen with no way to reach them
-        // (2026-07-24 audit finding #1, a regression from the App/Page column split). Same
-        // HorizontalScrollBarVisibility="Auto" treatment as diaryScroller below, just for one row.
-        Body.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Margin = new Thickness(0, 0, 0, 8),
-            Content = filterRow,
-        });
+            filterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            pickers[i].Button.MinWidth = 0;
+            pickers[i].Button.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Grid.SetColumn(pickers[i].Button, i);
+            filterGrid.Children.Add(pickers[i].Button);
+        }
+        Grid.SetRow(allTimeBox, 1); Grid.SetColumnSpan(allTimeBox, 3);
+        Grid.SetRow(clearFiltersBtn, 1); Grid.SetColumn(clearFiltersBtn, 3); Grid.SetColumnSpan(clearFiltersBtn, 2);
+        clearFiltersBtn.HorizontalAlignment = HorizontalAlignment.Right;
+        filterGrid.Children.Add(allTimeBox);
+        filterGrid.Children.Add(clearFiltersBtn);
+        Body.Children.Add(filterGrid);
 
         return (categoryBox, appBox, pageBox, tagBox, ruleBox, allTimeBox, clearFiltersBtn);
     }
 
-    /// <summary>The "select all / mark on-plan / off-plan / neutral" bulk-action toolbar —
-    /// split out of BuildDiarySection for the same reason as the two methods above.
+    /// <summary>The bulk-action toolbar: "Select all", the count of rows the actions apply to, a
+    /// "Set category" menu, a "Set tag" menu and "Add entry" - one row, no sideways scrolling
+    /// (2026-11-05, user request; it used to be nine buttons across two scrolling rows).
     /// UpdateMarkToolbar (which stays in BuildDiarySection, since it also touches
-    /// selectedIds/lastRows) flips these controls' enabled/label state as the selection
-    /// changes; this method only constructs them, starting disabled/empty.</summary>
-    private (CheckBox SelectAllBox, TextBlock SelectedLabel, Button MarkOnBtn, Button MarkOffBtn,
-        Button MarkNeutralBtn, List<(string? Tag, Button Btn)> TagMarkButtons)
+    /// selectedIds/lastRows) flips the menu buttons' enabled state and the count text as the
+    /// selection changes; this method only constructs them, starting disabled/empty.</summary>
+    private (CheckBox SelectAllBox, TextBlock SelectedLabel, List<DropDownButton> ActionButtons,
+        List<(string Value, MenuFlyoutItem Item)> CategoryItems, List<(string? Tag, MenuFlyoutItem Item)> TagItems)
         BuildDiaryMarkToolbar()
     {
-        var markToolbar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8),
-        };
         // IsThreeState so it can show "some but not all selected" as a
         // dash rather than lying with a plain checked/unchecked state.
         var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
@@ -621,73 +610,54 @@ public sealed partial class ReportsPage
         {
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };
-        // Tag holds the base label; UpdateMarkToolbar appends the row count (G3).
-        var markOnBtn = new Button { Content = "Mark on-plan", Tag = "Mark on-plan", IsEnabled = false };
-        var markOffBtn = new Button { Content = "Mark off-plan", Tag = "Mark off-plan", IsEnabled = false };
-        var markNeutralBtn = new Button { Content = "Mark neutral", Tag = "Mark neutral", IsEnabled = false };
-        markToolbar.Children.Add(selectAllBox);
-        markToolbar.Children.Add(selectedLabel);
-        markToolbar.Children.Add(markOnBtn);
-        markToolbar.Children.Add(markOffBtn);
-        markToolbar.Children.Add(markNeutralBtn);
+
+        // Set category: the five categories of the Edit dialog (On-plan, Off-plan, Paid, Neutral, Idle).
+        var categoryItems = new List<(string Value, MenuFlyoutItem Item)>();
+        var categoryFlyout = new MenuFlyout();
+        foreach (var (label, value) in DiaryCategory.EditableOptions)
+        {
+            var item = new MenuFlyoutItem { Text = label };
+            categoryFlyout.Items.Add(item);
+            categoryItems.Add((value, item));
+        }
+        var categoryBtn = new DropDownButton { Content = "Set category", Flyout = categoryFlyout, IsEnabled = false };
+        AutomationProperties.SetName(categoryBtn, "Set category");
+
+        // Set tag: every tag (built-in and payable), then "Clear tag" last (the common actions first).
+        var tagItems = new List<(string? Tag, MenuFlyoutItem Item)>();
+        var tagFlyout = new MenuFlyout();
+        foreach (var (label, value) in DiaryTag.Options)
+        {
+            var item = new MenuFlyoutItem { Text = label };
+            tagFlyout.Items.Add(item);
+            tagItems.Add((value, item));
+        }
+        tagFlyout.Items.Add(new MenuFlyoutSeparator());
+        var clearTagItem = new MenuFlyoutItem { Text = "Clear tag" };
+        tagFlyout.Items.Add(clearTagItem);
+        tagItems.Add((null, clearTagItem));
+        var tagBtn = new DropDownButton { Content = "Set tag", Flyout = tagFlyout, IsEnabled = false };
+        AutomationProperties.SetName(tagBtn, "Set tag");
+
         // G9c: add a row by hand (any time of day, incl. after hours; overlaps refused).
         var addEntryBtn = new Button { Content = "Add entry" };
         AutomationProperties.SetName(addEntryBtn, "Add diary entry");
         addEntryBtn.Click += (_, _) => _ = AddDiaryEntryAsync();
-        markToolbar.Children.Add(addEntryBtn);
-        // G3: the buttons now carry a row count, which widens both rows — scroll sideways on a
-        // narrow window instead of clipping the last buttons (same treatment as the filter row).
-        Body.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = markToolbar,
-        });
 
-        // Second row, its own independent axis (2026-08-07 request) — kept off the row
-        // above rather than appended to it: on-plan/off-plan/neutral plus five tags plus
-        // "Clear tag" would be eight buttons wide, well past what a plain horizontal
-        // StackPanel (no wrapping in this app's toolkit) can show without running off the
-        // page. A leading "Tag:" label reads it as the same kind of row as the category
-        // one above, not an unrelated second toolbar.
-        var tagToolbar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8),
-        };
-        tagToolbar.Children.Add(new TextBlock
-        {
-            Text = "Tag:",
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 12,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        });
-        var tagMarkButtons = new List<(string? Tag, Button Btn)>();
-        foreach (var (label, value) in DiaryTag.Options)
-        {
-            var btn = new Button { Content = $"Mark {label}", Tag = $"Mark {label}", IsEnabled = false };
-            tagToolbar.Children.Add(btn);
-            tagMarkButtons.Add((value, btn));
-        }
-        // (none) last, not first — the five real tags are the common case and read left to
-        // right in the same order as every other tag picker in this app; clearing is the
-        // exception, same reasoning EditDiaryEntryDialog's combo puts "(none)" first in a
-        // dropdown (scanned top-down) but this button belongs at the end of a row (scanned
-        // left-right, common actions first).
-        var clearTagBtn = new Button { Content = "Clear tag", Tag = "Clear tag", IsEnabled = false };
-        tagToolbar.Children.Add(clearTagBtn);
-        tagMarkButtons.Add((null, clearTagBtn));
-        // G3: the buttons now carry a row count, which widens both rows — scroll sideways on a
-        // narrow window instead of clipping the last buttons (same treatment as the filter row).
-        Body.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = tagToolbar,
-        });
+        var bar = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var parts = new FrameworkElement[] { selectAllBox, selectedLabel, categoryBtn, tagBtn, addEntryBtn };
+        for (var i = 0; i < parts.Length; i++) { Grid.SetColumn(parts[i], i); bar.Children.Add(parts[i]); }
+        Body.Children.Add(bar);
 
-        return (selectAllBox, selectedLabel, markOnBtn, markOffBtn, markNeutralBtn, tagMarkButtons);
+        return (selectAllBox, selectedLabel, [categoryBtn, tagBtn], categoryItems, tagItems);
     }
 
     /// <summary>The diary list's own scrollable area — split out of BuildDiarySection for

@@ -587,3 +587,10 @@ WinUI / layout. Layout not UIA-measured at 900 DIP (user eyeballed it).
 ## 2026-10-30 -- G14 (user rulings) built, regular side
 
 - (1) `AppPaths.MissingScratchFolder` + `Root` throws, `App.OnLaunched` refuses to start first (before the log resolves the data folder) with a message box naming the folder: a Debug run whose MENTOR_ROOT does not exist no longer walks up to the real data folder (DECISIONS rule 20). (2) `ReportsPage.Tables.TwoLineHeader`: multi-word headers split at the middle space, bottom-aligned; measured at 1180x780 on an empty scratch root, the Week table ends ~95 px inside the card (no sideways scroll). (3) Enter in AI cap / Model already saved and parked (G12); reproduced on a scratch run, no change. (4) `SettingsPage.Page_GotFocus`: the "too large ... kept" status line clears when another text/password box gets focus. (5) the money row's red hint (and the new-tag line's) shows "Amount is too large" live while the typed amount is above the ceiling; a stale "Saved." is cleared. Precheck: strict Debug build 0 warnings, 229/229 tests.
+
+## 2026-11-05 -- Diary toolbar, Reports money columns, apps donut (solo flow)
+
+- Diary: filters in one 5-column row + Clear filters; bulk marks are two menus (Set category incl. Paid, Set tag incl. Clear tag); Paid/Idle bulk marks teach no keyword/rule (LearnActivityRule takes on/off/neutral only).
+- Tables (all four periods): Paid hours, Unearned income, Paid-work income, Balance; Unearned = Balance - Paid work in cents; `IncomeService.DailyFigures` and `BucketStat` carry `PaidMin`; table first column 130 px (`TableLabelWidth`) so 13 columns fit at 1180 with no scrollbar (the 230 shared axis stays for the bar sections).
+- Pie: ring slices (centre empty, total inside), legend rows with a share bar scaled to the biggest row.
+- Tests: `ReportPaidHoursTests` (suite 286/286); verified on scratch root (window 1180x780): no horizontal scrollbar on Day/Week/Month/Year, totals add to the cent, Paid bulk mark -> `paid` in DB, confirm + backup + Undo shown. Lesson: a translucent card brush cannot be used as a cut-out "hole" over a shape - draw the ring itself.

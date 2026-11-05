@@ -71,7 +71,6 @@ public sealed partial class ReportsPage
                 header.Children.Add(back);
             }
             header.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold });
-            header.Children.Add(Dim($"{ReportData.FmtHours(total)} total"));
             host.Children.Add(header);
             if (trail.Count == 0)
                 host.Children.Add(Dim("Click a slice or a name to see what's inside it."));
@@ -81,7 +80,11 @@ public sealed partial class ReportsPage
             body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var pie = new Grid { Width = PieSize, Height = PieSize, VerticalAlignment = VerticalAlignment.Top };
-            var legend = new StackPanel { Spacing = 4, MinWidth = 280 };
+            var legend = new StackPanel { Spacing = 4 };
+            // 2026-11-05 (user: "too much empty space"): each legend row carries a share bar between its
+            // name and its figures, sized against the biggest row, so the row's width shows the ranking
+            // instead of sitting empty. The pie keeps the exact shares.
+            var biggest = Math.Max(level.Max(n => n.Minutes), 1);
             var angle = -90.0;      // start at 12 o'clock
             for (var i = 0; i < level.Count; i++)
             {
@@ -100,6 +103,7 @@ public sealed partial class ReportsPage
 
                 var row = new Grid { ColumnSpacing = 8 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
@@ -121,8 +125,18 @@ public sealed partial class ReportsPage
                 hours.TextAlignment = TextAlignment.Right;
                 var pct = Dim($"{share:P0}");
                 pct.TextAlignment = TextAlignment.Right;
-                Grid.SetColumn(name, 1); Grid.SetColumn(hours, 2); Grid.SetColumn(pct, 3);
-                foreach (var el in new FrameworkElement[] { swatch, name, hours, pct }) row.Children.Add(el);
+                var bar = new Grid { Height = 6, VerticalAlignment = VerticalAlignment.Center };
+                var frac = (double)node.Minutes / biggest;
+                bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(frac, GridUnitType.Star) });
+                bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(1 - frac, 0), GridUnitType.Star) });
+                bar.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(3),
+                    Background = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+                    Opacity = opacity,
+                });
+                Grid.SetColumn(name, 1); Grid.SetColumn(bar, 2); Grid.SetColumn(hours, 3); Grid.SetColumn(pct, 4);
+                foreach (var el in new FrameworkElement[] { swatch, name, bar, hours, pct }) row.Children.Add(el);
                 ToolTipService.SetToolTip(row, tip);
 
                 if (open)
@@ -144,11 +158,16 @@ public sealed partial class ReportsPage
                         Glyph = "", FontSize = 12, VerticalAlignment = VerticalAlignment.Center,
                         Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                     };
-                    Grid.SetColumn(chevron, 4);
+                    Grid.SetColumn(chevron, 5);
                     row.Children.Add(chevron);
                 }
                 legend.Children.Add(row);
             }
+            // Donut: the slices are rings, so the middle is empty and carries the total.
+            var centre = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, IsHitTestVisible = false };
+            centre.Children.Add(new TextBlock { Text = ReportData.FmtHours(total), FontSize = 20, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center });
+            centre.Children.Add(new TextBlock { Text = "total", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
+            pie.Children.Add(centre);
             Grid.SetColumn(legend, 1);
             body.Children.Add(pie);
             body.Children.Add(legend);
@@ -166,20 +185,32 @@ public sealed partial class ReportsPage
     {
         var fill = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
         var edge = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"];
-        if (endDeg - startDeg >= 359.99)
-            return new Ellipse { Width = PieSize, Height = PieSize, Fill = fill, Opacity = opacity };
-
         const double r = PieSize / 2;
-        Windows.Foundation.Point At(double deg) => new(
-            r + r * Math.Cos(deg * Math.PI / 180), r + r * Math.Sin(deg * Math.PI / 180));
-        var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(r, r), IsClosed = true };
-        figure.Segments.Add(new LineSegment { Point = At(startDeg) });
+        const double ri = r * 0.5;   // hole radius: the ring is the outer half of the pie
+        if (endDeg - startDeg >= 359.99)
+        {
+            // Two concentric circles with even-odd filling = a ring (one arc whose ends coincide draws nothing).
+            var ring = new GeometryGroup { FillRule = FillRule.EvenOdd };
+            ring.Children.Add(new EllipseGeometry { Center = new Windows.Foundation.Point(r, r), RadiusX = r, RadiusY = r });
+            ring.Children.Add(new EllipseGeometry { Center = new Windows.Foundation.Point(r, r), RadiusX = ri, RadiusY = ri });
+            return new Microsoft.UI.Xaml.Shapes.Path { Data = ring, Fill = fill, Opacity = opacity };
+        }
+
+        Windows.Foundation.Point At(double deg, double rad) => new(
+            r + rad * Math.Cos(deg * Math.PI / 180), r + rad * Math.Sin(deg * Math.PI / 180));
+        var large = endDeg - startDeg > 180;
+        var figure = new PathFigure { StartPoint = At(startDeg, ri), IsClosed = true };
+        figure.Segments.Add(new LineSegment { Point = At(startDeg, r) });
         figure.Segments.Add(new ArcSegment
         {
-            Point = At(endDeg),
-            Size = new Windows.Foundation.Size(r, r),
-            SweepDirection = SweepDirection.Clockwise,
-            IsLargeArc = endDeg - startDeg > 180,
+            Point = At(endDeg, r), Size = new Windows.Foundation.Size(r, r),
+            SweepDirection = SweepDirection.Clockwise, IsLargeArc = large,
+        });
+        figure.Segments.Add(new LineSegment { Point = At(endDeg, ri) });
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = At(startDeg, ri), Size = new Windows.Foundation.Size(ri, ri),
+            SweepDirection = SweepDirection.Counterclockwise, IsLargeArc = large,
         });
         var geometry = new PathGeometry();
         geometry.Figures.Add(figure);

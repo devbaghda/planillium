@@ -184,17 +184,17 @@ public sealed class IncomeService : IDisposable
     /// <summary>The figures <see cref="SumForPeriod"/> and <see cref="PaidEarnings"/> add up, split by day
     /// (B1i, 2026-10-27): for each date <paramref name="from"/>..today, Income = that day's ledger delta
     /// (today: the live preview) + its plan-completion credit + its paid-work earnings, and Paid = the paid-work
-    /// earnings alone. Same ingredients as SumForPeriod, just not yet added across days, so the days of a period
+    /// earnings alone, PaidMin = the minutes of payable-tagged work behind them. Same ingredients as SumForPeriod, just not yet added across days, so the days of a period
     /// sum to that period's figure (up to floating-point rounding). Dates before <see cref="StartDate"/> carry 0.</summary>
-    public Dictionary<DateOnly, (double Income, double Paid)> DailyFigures(ScoreService score, DateOnly from)
+    public Dictionary<DateOnly, (double Income, double Paid, int PaidMin)> DailyFigures(ScoreService score, DateOnly from)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var yesterday = today.AddDays(-1);
-        var result = new Dictionary<DateOnly, (double Income, double Paid)>();
-        void Add(DateOnly d, double income, double paid)
+        var result = new Dictionary<DateOnly, (double Income, double Paid, int PaidMin)>();
+        void Add(DateOnly d, double income, double paid, int paidMin = 0)
         {
             result.TryGetValue(d, out var cur);
-            result[d] = (cur.Income + income, cur.Paid + paid);
+            result[d] = (cur.Income + income, cur.Paid + paid, cur.PaidMin + paidMin);
         }
         if (from < StartDate) from = StartDate;
         if (from > today) return result;
@@ -234,7 +234,7 @@ public sealed class IncomeService : IDisposable
             while (r.Read())
             {
                 var eur = r.GetInt32(1) / 60.0 * tag.HourlyEur;
-                if (r.GetInt32(1) > 0) Add(DateOnly.Parse(r.GetString(0)), eur, eur);
+                if (r.GetInt32(1) > 0) Add(DateOnly.Parse(r.GetString(0)), eur, eur, r.GetInt32(1));
             }
         }
         return result;

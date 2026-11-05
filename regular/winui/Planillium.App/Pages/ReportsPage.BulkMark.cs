@@ -162,7 +162,9 @@ public sealed partial class ReportsPage
             }
             if (isCategory)
             {
-                if (teach)
+                // Paid (bought entertainment) and Idle are states, not a kind of activity: marking rows
+                // with them teaches no keyword or rule (2026-11-05, Set category menu got Paid and Idle).
+                if (teach && value is DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)
                 {
                     var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var row in rows)

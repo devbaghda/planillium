@@ -11,7 +11,7 @@ namespace Planillium.App.Pages;
 public sealed partial class ReportsPage
 {
     private static Grid DayTable(List<ReportData.DayStat> weekStats,
-        IReadOnlyDictionary<DateOnly, (double Income, double Paid)> daily)
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid, int PaidMin)> daily)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var rows = _period == ReportPeriod.Day
@@ -25,13 +25,13 @@ public sealed partial class ReportsPage
         //
         // Columns: Day, Tasks, then one per category (2026-08-05 request), then the row's own
         // Total and Score. Score stays last, where it has always been.
-        var columns = 6 + CategoryColumns.Length;
+        var columns = 4 + MoneyHeaders.Length + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
-            { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
+            { Width = c == 0 ? new GridLength(TableLabelWidth) : GridLength.Auto });
         AddHeaderRow(grid, ["Day", "Tasks",
-            .. CategoryColumns.Select(c => c.Label), "Total", "Score", IncomeHeader, PaidHeader]);
+            .. CategoryColumns.Select(c => c.Label), "Total", "Score", .. MoneyHeaders]);
 
         foreach (var s in rows)
         {
@@ -39,7 +39,7 @@ public sealed partial class ReportsPage
             grid.RowDefinitions.Add(new RowDefinition());
             var isToday = s.Date == today;
             daily.TryGetValue(s.Date, out var raw);
-            var money = (Income: Cents(raw.Income), Paid: Cents(raw.Paid));
+            var money = MoneyOf(raw.Income, raw.Paid, raw.PaidMin);
             // A day off correctly zeroes on/off-plan minutes here (same rule the score
             // uses), but showing that as a bare "0m/0m" reads identically to a tracking
             // failure or a genuinely idle day everywhere else in the app labels a day off
@@ -52,8 +52,7 @@ public sealed partial class ReportsPage
                 .. CategoryColumns.Select(c => ReportData.FmtHours(s.Minutes.Of(c.Category))),
                 ReportData.FmtHours(s.Minutes.TotalMin),
                 s.Score.ToString(),
-                MainWindow.FormatEur(money.Income),
-                MainWindow.FormatEur(money.Paid),
+                .. money.Cells,
             ];
             for (var c = 0; c < cells.Length; c++)
             {
@@ -63,12 +62,10 @@ public sealed partial class ReportsPage
                     FontWeight = isToday ? FontWeights.SemiBold : FontWeights.Normal,
                     TextWrapping = c == 0 ? TextWrapping.Wrap : TextWrapping.NoWrap,
                 };
-                if (c == columns - 3)
+                if (c == columns - 5)
                     tb.Foreground = ScoreBrush(s.Score);
-                else if (c == columns - 2)
-                    tb.Foreground = IncomeBrush(money.Income);
-                else if (c == columns - 1)
-                    tb.Foreground = PaidBrush();
+                else if (c >= columns - MoneyHeaders.Length)
+                    tb.Foreground = MoneyBrush(c - (columns - MoneyHeaders.Length), money.Balance, money.Unearned);
                 else if (!isToday)
                     tb.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
@@ -91,14 +88,14 @@ public sealed partial class ReportsPage
         if (rows.Count > 1)
         {
             var periodTotals = SumOfShown(rows.Select(s => daily.GetValueOrDefault(s.Date)));
+            var m = MoneyOf(periodTotals.Income, periodTotals.Paid, periodTotals.PaidMin);
             AddTotalsRow(grid, columns,
                 [($"{rows.Sum(s => s.Done)}/{rows.Sum(s => s.Total)}", 1, null),
                  .. CategoryColumns.Select((c, i) =>
                      (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
-                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), columns - 4, null),
-                 (rows.Sum(s => s.Score).ToString(), columns - 3, null),
-                 (MainWindow.FormatEur(periodTotals.Income), columns - 2, IncomeBrush(periodTotals.Income)),
-                 (MainWindow.FormatEur(periodTotals.Paid), columns - 1, PaidBrush())]);
+                 (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), columns - 6, null),
+                 (rows.Sum(s => s.Score).ToString(), columns - 5, null),
+                 .. MoneyTotals(m, columns)]);
         }
         return grid;
     }
@@ -108,11 +105,12 @@ public sealed partial class ReportsPage
     /// unrounded period figure, which drifted a cent from the rows once several rows carried fractions of a cent.)</summary>
     private static double Cents(double v) => ReportData.Cents(v);
 
-    private static (double Income, double Paid) SumOfShown(IEnumerable<(double Income, double Paid)> rows)
+    private static (double Income, double Paid, int PaidMin) SumOfShown(IEnumerable<(double Income, double Paid, int PaidMin)> rows)
     {
         decimal income = 0, paid = 0;
-        foreach (var (i, p) in rows) { income += (decimal)Cents(i); paid += (decimal)Cents(p); }
-        return ((double)income, (double)paid);
+        var min = 0;
+        foreach (var (i, p, pm) in rows) { income += (decimal)Cents(i); paid += (decimal)Cents(p); min += pm; }
+        return ((double)income, (double)paid, min);
     }
 
     /// <summary>The category columns both summary tables carry — the shared
@@ -167,18 +165,19 @@ public sealed partial class ReportsPage
         // Tasks and Score columns as well as the categories (2026-08-05 request) — the Day/Week
         // table has carried both all along, and a Month or Year row that can't tell you what it
         // scored is the summary missing the one figure the whole app is built around.
-        var columns = 6 + CategoryColumns.Length;
+        var columns = 4 + MoneyHeaders.Length + CategoryColumns.Length;
         var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
         for (var c = 0; c < columns; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition
-            { Width = c == 0 ? new GridLength(LabelColumnWidth) : GridLength.Auto });
+            { Width = c == 0 ? new GridLength(TableLabelWidth) : GridLength.Auto });
         AddHeaderRow(grid, ["Period", "Tasks",
-            .. CategoryColumns.Select(c => c.Label), "Total", "Score", IncomeHeader, PaidHeader]);
+            .. CategoryColumns.Select(c => c.Label), "Total", "Score", .. MoneyHeaders]);
 
         foreach (var b in buckets)
         {
             var row = grid.RowDefinitions.Count;
             grid.RowDefinitions.Add(new RowDefinition());
+            var money = MoneyOf(b.Income, b.Paid, b.PaidMin);
             string[] cells =
             [
                 b.Label,
@@ -186,8 +185,7 @@ public sealed partial class ReportsPage
                 .. CategoryColumns.Select(c => ReportData.FmtHours(b.Minutes.Of(c.Category))),
                 ReportData.FmtHours(b.Minutes.TotalMin),
                 b.Score.ToString(),
-                MainWindow.FormatEur(Cents(b.Income)),
-                MainWindow.FormatEur(Cents(b.Paid)),
+                .. money.Cells,
             ];
             for (var c = 0; c < cells.Length; c++)
             {
@@ -196,9 +194,9 @@ public sealed partial class ReportsPage
                     Text = cells[c],
                     // Score keeps the same green/amber/red reading it has in the Day/Week table,
                     // so the one figure people actually look for is found the same way in both.
-                    Foreground = c == columns - 3 ? ScoreBrush(b.Score)
-                        : c == columns - 2 ? IncomeBrush(Cents(b.Income))
-                        : c == columns - 1 ? PaidBrush()
+                    Foreground = c == columns - 5 ? ScoreBrush(b.Score)
+                        : c >= columns - MoneyHeaders.Length
+                            ? MoneyBrush(c - (columns - MoneyHeaders.Length), money.Balance, money.Unearned)
                         : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 };
                 Grid.SetColumn(tb, c); Grid.SetRow(tb, row);
@@ -212,22 +210,57 @@ public sealed partial class ReportsPage
         // substitutes a "No activity logged yet" message instead).
         if (buckets.Count > 0)
         {
-            var periodTotals = SumOfShown(buckets.Select(b => (b.Income, b.Paid)));
+            var periodTotals = SumOfShown(buckets.Select(b => (b.Income, b.Paid, b.PaidMin)));
+            var m = MoneyOf(periodTotals.Income, periodTotals.Paid, periodTotals.PaidMin);
             AddTotalsRow(grid, columns,
                 [($"{buckets.Sum(b => b.Done)}/{buckets.Sum(b => b.Total)}", 1, null),
                  .. CategoryColumns.Select((c, i) =>
                      (ReportData.FmtHours(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
-                 (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), columns - 4, null),
-                 (buckets.Sum(b => b.Score).ToString(), columns - 3, null),
-                 (MainWindow.FormatEur(periodTotals.Income), columns - 2, IncomeBrush(periodTotals.Income)),
-                 (MainWindow.FormatEur(periodTotals.Paid), columns - 1, PaidBrush())]);
+                 (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), columns - 6, null),
+                 (buckets.Sum(b => b.Score).ToString(), columns - 5, null),
+                 .. MoneyTotals(m, columns)]);
         }
         return grid;
     }
 
-    // B1i (2026-10-27): the two EUR columns that replaced the Score card and income card row.
-    private const string IncomeHeader = "Income lost/gained";
-    private const string PaidHeader = "Of which paid work";
+    // B1i (2026-10-27) added two EUR columns; 2026-11-05 (user request) renamed them and added two more,
+    // in every period: hours of paid work, income not earned, income earned by paid work, and the
+    // balance of the two ("Income lost/gained" and "Of which paid work" were confusing).
+    // Balance = Unearned income + Paid-work income, exactly, in cents.
+    /// <summary>First-column width of the Day/Week/Month/Year tables. Narrower than the page-wide
+    /// <see cref="LabelColumnWidth"/> (2026-11-05): thirteen columns, four of them money, do not fit the
+    /// card at 1180px otherwise and the user asked for no sideways scrolling. The longest label
+    /// ("Thu 05.11" + "Day off", or a month name) needs ~100px.</summary>
+    private const double TableLabelWidth = 130;
+
+    private static readonly string[] MoneyHeaders = ["Paid hours", "Unearned income", "Paid-work income", "Balance"];
+
+    /// <summary>One row's money cells: paid hours, unearned (balance minus paid work, so it is the
+    /// negative "lost" part), paid-work income, balance - all in cents so rows add to the Total.</summary>
+    private static (string[] Cells, double Balance, double Unearned) MoneyOf(double income, double paid, int paidMin)
+    {
+        var balance = Cents(income);
+        var work = Cents(paid);
+        var unearned = (double)((decimal)balance - (decimal)work);
+        return ([ReportData.FmtHours(paidMin), MainWindow.FormatEur(unearned), MainWindow.FormatEur(work),
+                 MainWindow.FormatEur(balance)], balance, unearned);
+    }
+
+    /// <summary>Colour per money column (by position among them): hours and paid-work income use the
+    /// paid-work green, unearned and balance the green/amber/red sign reading.</summary>
+    private static Brush MoneyBrush(int moneyColumn, double balance, double unearned) => moneyColumn switch
+    {
+        1 => IncomeBrush(unearned),
+        3 => IncomeBrush(balance),
+        _ => PaidBrush(),
+    };
+
+    private static (string Text, int Column, Brush? Fore)[] MoneyTotals(
+        (string[] Cells, double Balance, double Unearned) m, int columns)
+    {
+        var first = columns - MoneyHeaders.Length;
+        return [.. m.Cells.Select((t, i) => (t, first + i, (Brush?)MoneyBrush(i, m.Balance, m.Unearned)))];
+    }
 
     /// <summary>G14 (user ruling 2026-10-30): a header of two or more words is broken onto two lines at the space
     /// nearest its middle ("Income / lost/gained", "Of which / paid work"), so the columns are only as wide as

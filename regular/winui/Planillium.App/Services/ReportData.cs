@@ -50,7 +50,7 @@ public static class ReportData
     /// <summary>Income/Paid (B1i): the bucket's lost/gained income and its paid-work part, EUR, folded from
     /// the per-day figures when the caller supplies them; 0 otherwise.</summary>
     public sealed record BucketStat(string Label, CategoryMinutes Minutes, int Score, int Done, int Total,
-        double Income = 0, double Paid = 0)
+        double Income = 0, double Paid = 0, int PaidMin = 0)
     {
         public int OnMin => Minutes.On;
         public int OffMin => Minutes.Off;
@@ -138,7 +138,7 @@ public static class ReportData
     /// period-check branch was exactly the "two unrelated code paths in one function"
     /// shape the code-quality checklist flags (audit finding #5).</summary>
     public static List<BucketStat> MonthBuckets(SqliteConnection conn, ScoreService score,
-        IReadOnlyDictionary<DateOnly, (double Income, double Paid)>? daily = null)
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid, int PaidMin)>? daily = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var start = PeriodStart(ReportPeriod.Month, today);
@@ -163,7 +163,7 @@ public static class ReportData
     /// bucket and how that bucket is labelled.</summary>
     private static List<BucketStat> Bucket(SqliteConnection conn, ScoreService score, DateOnly from,
         Func<DateOnly, string> keyOf, Func<string, string> labelOf, bool keepEmpty,
-        IReadOnlyDictionary<DateOnly, (double Income, double Paid)>? daily = null)
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid, int PaidMin)>? daily = null)
     {
         var buckets = new SortedDictionary<string, BucketStat>();
         foreach (var r in DailyRows(conn, score, from))
@@ -171,7 +171,7 @@ public static class ReportData
             var key = keyOf(r.Date);
             var b = buckets.TryGetValue(key, out var cur)
                 ? cur : new BucketStat(labelOf(key), CategoryMinutes.Zero, 0, 0, 0);
-            var inc = daily != null && daily.TryGetValue(r.Date, out var f) ? f : (Income: 0.0, Paid: 0.0);
+            var inc = daily != null && daily.TryGetValue(r.Date, out var f) ? f : (Income: 0.0, Paid: 0.0, PaidMin: 0);
             buckets[key] = b with
             {
                 Minutes = b.Minutes.Plus(r.Minutes),
@@ -182,6 +182,7 @@ public static class ReportData
                 // Month/Year row equals the same week's Total in the Week view to the cent.
                 Income = (double)((decimal)b.Income + (decimal)Cents(inc.Income)),
                 Paid = (double)((decimal)b.Paid + (decimal)Cents(inc.Paid)),
+                PaidMin = b.PaidMin + inc.PaidMin,
             };
         }
         // The Year view drops months with nothing in them at all: a fresh install would
@@ -190,7 +191,7 @@ public static class ReportData
         // B1i: a month carrying an income figure is not "nothing" - dropping it would make the
         // rows stop adding up to the Total row.
         return [.. buckets.Values.Where(b => keepEmpty ||
-            b.Minutes.TotalMin > 0 || b.Score != 0 || b.Total > 0 || b.Income != 0 || b.Paid != 0)];
+            b.Minutes.TotalMin > 0 || b.Score != 0 || b.Total > 0 || b.Income != 0 || b.Paid != 0 || b.PaidMin != 0)];
     }
 
     /// <summary>Calendar-month buckets for this year, January through the current
@@ -202,7 +203,7 @@ public static class ReportData
     /// only gets a rollup row once its raw rows are pruned), so summing both sources
     /// is safe.</summary>
     public static List<BucketStat> YearBuckets(SqliteConnection conn, ScoreService score,
-        IReadOnlyDictionary<DateOnly, (double Income, double Paid)>? daily = null)
+        IReadOnlyDictionary<DateOnly, (double Income, double Paid, int PaidMin)>? daily = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         // Per-date (not per-month) so a day-off date is handled before it's folded into its
