@@ -345,7 +345,6 @@ public static class AddPlanDialog
 
         var imported = await DialogGate.ShowAsync(dialog) == ContentDialogResult.Primary;
         ai.CancelRunning();
-        if (imported) await TeachPlanTools.RunAsync(host.XamlRoot, planTools);
         return imported;
     }
 

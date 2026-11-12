@@ -40,10 +40,12 @@ public class LearnedRulesEngineTests
 
     // ---- B1 whole word ----
     [Fact]
-    public void Whole_word_only()
+    public void Whole_word_start_only()
     {
+        // 2026-11-12: a rule word fires on word forms (title word STARTS with it), never on a word that merely contains it
         var rules = new[] { R(1, "Excel", "on_plan", "quote") };
-        Assert.Null(RuleMatcher.Match(rules, "Excel", "quotefree.xlsx"));
+        Assert.Null(RuleMatcher.Match(rules, "Excel", "freequote.xlsx"));
+        Assert.NotNull(RuleMatcher.Match(rules, "Excel", "quotes.xlsx"));
         Assert.NotNull(RuleMatcher.Match(rules, "Excel", "Quote.xlsx"));
     }
 
@@ -70,9 +72,10 @@ public class LearnedRulesEngineTests
     }
 
     [Fact]
-    public void Rule_without_words_never_matches()
+    public void Rule_without_words_is_an_app_only_rule_matching_its_own_app_only()
     {
-        Assert.Null(RuleMatcher.Match(new[] { R(1, "Excel", "on_plan") }, "Excel", "anything"));
+        Assert.NotNull(RuleMatcher.Match(new[] { R(1, "Excel", "on_plan") }, "Excel", "anything"));
+        Assert.Null(RuleMatcher.Match(new[] { R(1, "Excel", "on_plan") }, "Word", "anything"));
     }
 
     // ---- C Wilson bar ----
@@ -143,11 +146,16 @@ public class LearnedRulesEngineTests
     }
 
     [Fact]
-    public void No_shared_word_gives_no_proposal_never_empty_rule()
+    public void Unshared_words_are_ORed_into_one_rule_and_junk_only_gives_none()
     {
         var marked = new[] { W("alpha one"), W("beta two"), W("gamma three"), W("delta four") };
         var hist = marked.Select(m => new HistoryRow("Excel", m, "on_plan")).ToList();
-        Assert.Null(RuleProposer.Propose("Excel", "on_plan", marked, hist));
+        var p = RuleProposer.Propose("Excel", "on_plan", marked, hist)!;
+        Assert.InRange(p.Words.Count, 1, RuleProposer.MaxWords);
+        Assert.All(marked, m => Assert.Contains(p.Words, w => m.Contains(w)));   // every marked row is covered
+        // only filler / app-name words left: no proposal, never an empty rule
+        var junk = new[] { S("and"), S("google") };
+        Assert.Null(RuleProposer.Propose("Chrome", "on_plan", junk, junk.Select(m => new HistoryRow("Chrome", m, "on_plan")).ToList()));
     }
 
     [Fact]
@@ -160,13 +168,66 @@ public class LearnedRulesEngineTests
     }
 
     [Fact]
-    public void Adds_second_word_when_first_is_not_pure()
+    public void Inflected_forms_marked_together_become_one_word_that_covers_them_all()
     {
-        var marked = new[] { W("acme quotation"), W("acme quotation v2"), W("acme quotation final") };
+        var marked = new[] { S("contract"), S("contracts"), S("contracted") };
+        var hist = marked.Select(m => new HistoryRow("Word", m, "on_plan")).ToList();
+        var p = RuleProposer.Propose("Word", "on_plan", marked, hist)!;
+        Assert.Equal(new[] { "contract" }, p.Words.ToArray());   // "contract" already covers contracts/contracted
+    }
+
+    [Fact]
+    public void A_further_word_is_refused_when_it_makes_the_rule_impure()
+    {
+        var marked = new[] { S("acme", "plan"), S("zeta", "plan") };
         var hist = marked.Select(m => new HistoryRow("Excel", m, "on_plan")).ToList();
-        hist.Add(new HistoryRow("Excel", W("holiday quotation"), "off_plan", 6));
-        hist.Add(new HistoryRow("Excel", W("acme holiday"), "off_plan", 6));
+        hist.Add(new HistoryRow("Excel", S("zeta"), "off_plan", 20));   // "zeta" alone is mostly off-plan
         var p = RuleProposer.Propose("Excel", "on_plan", marked, hist)!;
-        Assert.Equal(new[] { "acme", "quotation" }, p.Words.OrderBy(x => x).ToArray());
+        Assert.DoesNotContain("zeta", p.Words);
+    }
+
+    // ---- 2026-11-11 OR matching ----
+    [Fact]
+    public void Any_one_word_matches_and_more_hits_win()
+    {
+        var either = R(4, "Excel", "on_plan", "contract", "contracts");
+        Assert.Equal(4, RuleMatcher.Match(new[] { either }, "Excel", "contracts_2 - Excel")!.Id);
+        Assert.Null(RuleMatcher.Match(new[] { either }, "Excel", "report - Excel"));
+        var two = R(9, "Excel", "off_plan", "acme", "report");
+        var one = R(2, "Excel", "on_plan", "report");
+        Assert.Equal(9, RuleMatcher.Match(new[] { one, two }, "Excel", "acme report")!.Id);       // 2 hits beat 1
+        Assert.Equal(2, RuleMatcher.Match(new[] { one, two }, "Excel", "report only")!.Id);       // 1 hit each: older
+        var tagged = new LearnedRule(7, "Excel", new[] { "report" }, "neutral", "studioshoo");
+        Assert.Equal(7, RuleMatcher.Match(new[] { R(8, "Excel", "on_plan", "report"), tagged }, "Excel", "report")!.Id);   // tie: tag
+    }
+
+    [Fact]
+    public void Evidence_counts_rows_containing_any_rule_word()
+    {
+        var hist = new List<HistoryRow>
+        {
+            new("Excel", S("contract"), "on_plan", 2), new("Excel", S("contracts"), "on_plan", 3),
+            new("Excel", S("contracts"), "off_plan", 1), new("Excel", S("budget"), "on_plan", 9),
+        };
+        var ev = RuleMatcher.Evidence(R(1, "Excel", "on_plan", "contract", "contracts"), hist);
+        Assert.Equal((5, 6), (ev.Examples, ev.Total));
+    }
+
+    [Theory]
+    [InlineData("and")] [InlineData("The")] [InlineData("для")] [InlineData("ab")] [InlineData("google")]
+    [InlineData("Chrome")] [InlineData("2026")] [InlineData("docx")] [InlineData("excel")]
+    public void Junk_words_are_refused_when_typed(string word)
+    {
+        var r = TitleWords.ParseTyped(word, "Word");
+        Assert.Empty(r.Words);
+        Assert.NotEmpty(r.Refused);
+    }
+
+    [Fact]
+    public void Typed_words_split_on_comma_and_keep_good_ones()
+    {
+        var r = TitleWords.ParseTyped("Contract, budget ,\nакт; and", "Word");
+        Assert.Equal(new[] { "contract", "budget", "акт" }, r.Words.ToArray());
+        Assert.Equal(new[] { "and" }, r.Refused.ToArray());
     }
 }

@@ -28,11 +28,12 @@ internal static class LearnedRuleStore
 
     /// <summary>Adds a rule (words normalised, sorted). Returns the new id; the existing id when the
     /// same app+words+category rule is already saved; 0 when no usable word is left.</summary>
-    internal static long AddRule(Database db, string app, IEnumerable<string> words, string category, string? tag = null)
+    internal static long AddRule(Database db, string app, IEnumerable<string> words, string category, string? tag = null,
+        bool allowAppOnly = false)
     {
         if (string.IsNullOrWhiteSpace(tag)) tag = null;
         var norm = words.Select(w => TitleWords.NormalizeWord(w)).Where(w => w.Length > 0).Distinct().ToList();
-        if (norm.Count == 0 || string.IsNullOrWhiteSpace(app)) return 0;
+        if ((norm.Count == 0 && !allowAppOnly) || string.IsNullOrWhiteSpace(app)) return 0;
         var key = JoinWords(norm);
         foreach (var e in LoadRules(db))
             if (string.Equals(e.App, app, StringComparison.OrdinalIgnoreCase) && JoinWords(e.Words) == key && e.Category == category
@@ -207,14 +208,23 @@ internal sealed class RuleBook
 
     private readonly List<LearnedRule> _rules;
     private readonly Dictionary<long, RuleEvidence> _evidence = new();
+    private readonly IReadOnlyList<HistoryRow> _history;
+    private readonly IReadOnlyList<HistoryRow> _tagHistory;
 
     internal RuleBook(IEnumerable<LearnedRule> rules, IReadOnlyList<HistoryRow> history,
         IReadOnlyList<HistoryRow>? tagHistory = null)
     {
         _rules = rules.ToList();
+        _history = history;
+        _tagHistory = tagHistory ?? Array.Empty<HistoryRow>();
         foreach (var r in _rules)
-            _evidence[r.Id] = RuleMatcher.Evidence(r, r.Tag != null ? (tagHistory ?? Array.Empty<HistoryRow>()) : history);
+            _evidence[r.Id] = RuleMatcher.Evidence(r, r.Tag != null ? _tagHistory : _history);
     }
+
+    /// <summary>Evidence for a rule that is not stored as such - the merged words of an app + category + tag
+    /// group shown as one line in Settings.</summary>
+    internal RuleEvidence EvidenceOf(LearnedRule rule) =>
+        RuleMatcher.Evidence(rule, rule.Tag != null ? _tagHistory : _history);
 
     internal static readonly RuleBook Empty = new(Array.Empty<LearnedRule>(), Array.Empty<HistoryRow>());
     internal IReadOnlyList<LearnedRule> Rules => _rules;

@@ -663,7 +663,10 @@ public sealed class ActivityTracker : IDisposable
     private void HandleAfterHours(SqliteConnection conn, DateTime now, DateTime diaryEndToday, string title,
         string cls, double idleS, int idleThresholdSec, string? ruleState)
     {
-        var qualifies = ruleState == RuleStates.Auto && cls == DiaryCategory.OnPlan && idleS < idleThresholdSec;
+        // On-plan work, or paid work (a payable tag on a neutral rule), is recorded; user ruling
+        // 2026-11-11 (reverses G9c H5). Neutral earns no points, but the tag still counts as income.
+        var qualifies = ruleState == RuleStates.Auto && idleS < idleThresholdSec
+            && (cls == DiaryCategory.OnPlan || (cls == DiaryCategory.Neutral && _pollTag != null));
         if (_sessionStart is DateTime open && _sessionApp != null)
         {
             if (!_sessionAfterHours)

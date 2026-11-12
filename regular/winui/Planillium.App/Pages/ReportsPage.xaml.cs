@@ -57,7 +57,9 @@ public sealed partial class ReportsPage : Page
     // typing into the search box. Fixed by narrowing Category/Tag/App/Page/Details another 80px
     // (see BuildRow) so the row fits within this same 870 budget even at the wider Time width —
     // no change needed here, the constant was fine, the columns summing past it were the bug.
-    internal const double DiaryListWidth = 870;
+    // 2026-11-05: 870 -> 815 (Tag/App/Page columns trimmed, Details is a Star column with a small floor) so
+    // the Diary fits an 1180px window without a sideways bar; the page's own width cap below stays as it was.
+    internal const double DiaryListWidth = 815;
     internal const double DiaryCardWidth = DiaryListWidth + 36;
 
     // Was a flat 880 — comfortably fit every OTHER section (they all stretch/wrap fine at
@@ -65,7 +67,7 @@ public sealed partial class ReportsPage : Page
     // still needed horizontal scrolling to reach Edit/Split even on a wide window with
     // plenty of unused space either side (2026-07-28 request). Widened to fit Diary too,
     // with a little breathing room past what it strictly needs.
-    private const double MaxContentWidth = DiaryCardWidth + 20;
+    private const double MaxContentWidth = 926;
 
     // See PageLayout's own doc comment for why this can't be HorizontalAlignment/MaxWidth on
     // ContentColumn directly — this page originated that fix (2026-07-28); every other page now

@@ -4,9 +4,9 @@ namespace Planillium.App.Services;
 
 /// <summary>
 /// Decides whether a window title (or an idle answer the user typed) counts as on-plan,
-/// off-plan or neutral, by case-insensitive substring match against the keyword lists in
-/// config.json — the same lists Settings' ACTIVITY KEYWORDS boxes edit and
-/// <see cref="ConfigService.LearnActivityRule"/> teaches into.
+/// off-plan or neutral. Window titles are decided by the learned rules alone (2026-11-12: the Activity
+/// keywords lists were removed - a window no rule matches is neutral); an idle answer the user typed is
+/// matched against the idle-answer library in config.json.
 ///
 /// Split out of <see cref="ActivityTracker"/> on 2026-08-04 (2026-07-23 audit finding #8). The
 /// keyword lists are read once at construction and never mutated, and nothing here touches the
@@ -20,8 +20,6 @@ namespace Planillium.App.Services;
 /// </summary>
 internal sealed class ActivityClassifier
 {
-    private readonly List<string> _onPlan;
-    private readonly List<string> _offPlan;
     private readonly List<string> _idleOnPlan;
     private readonly List<string> _idleOffPlan;
     private readonly List<string> _idleNeutral;
@@ -37,8 +35,6 @@ internal sealed class ActivityClassifier
             return list;
         }
 
-        _onPlan = Words(config, "activity_rules", DiaryCategory.OnPlan);
-        _offPlan = Words(config, "activity_rules", DiaryCategory.OffPlan);
         _idleOnPlan = Words(config, "idle_activity_rules", DiaryCategory.OnPlan);
         _idleOffPlan = Words(config, "idle_activity_rules", DiaryCategory.OffPlan);
         _idleNeutral = Words(config, "idle_activity_rules", DiaryCategory.Neutral);
@@ -53,7 +49,7 @@ internal sealed class ActivityClassifier
 
     /// <summary>Category plus how a learned rule took part: the most specific matching rule governs
     /// (G9b). When its evidence clears the bar it decides the category alone ("auto"); otherwise it
-    /// only leaves a suggestion ("suggested") and the keyword lists still decide the category.
+    /// only leaves a suggestion ("suggested") and the category stays neutral.
     /// <c>RuleState</c> is null when no rule matched. Never throws: a rule problem must not stop tracking.</summary>
     internal (string Category, string? RuleState) ClassifyDetailed(string title)
     {
@@ -75,13 +71,8 @@ internal sealed class ActivityClassifier
         return (Classify(title), null, null);
     }
 
-    internal string Classify(string title)
-    {
-        var t = title.ToLowerInvariant();
-        foreach (var kw in _onPlan) if (t.Contains(kw)) return DiaryCategory.OnPlan;
-        foreach (var kw in _offPlan) if (t.Contains(kw)) return DiaryCategory.OffPlan;
-        return DiaryCategory.Neutral;
-    }
+    /// <summary>What a window no confident rule decides counts as: neutral (the keyword lists are gone).</summary>
+    internal string Classify(string title) => DiaryCategory.Neutral;
 
     /// <summary>Falls back to <see cref="DiaryCategory.Idle"/>, not neutral: an unmatched idle
     /// answer is unclassified time, and scoring treats those differently.</summary>

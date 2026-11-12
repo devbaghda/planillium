@@ -199,30 +199,28 @@
                 <StackPanel x:Name="KeywordsPanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
                     <!-- G9b: learned combination rules (app + title words). Filled in code
                          (LoadLearnedRules); delete only, creation happens from Bulk Mark in the Diary.
-                         2026-11-05: first on the page - they take priority over the keywords below. -->
+                         2026-11-12: the Activity keywords boxes were removed (rules are the only classifier). -->
                     <TextBlock Text="Learned rules" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                    <TextBlock Text="Rules Planillium learned from your Bulk Marks: an app plus words in its window title. A saved rule acts at once and beats the keywords below. You can delete a rule here (Undo is in Change history)."
+                    <TextBlock Text="Rules Planillium learned from your Bulk Marks: an app plus words in its window title. A saved rule acts at once. A rule matches when ANY of its words is in the title. Leave the words empty for a rule that covers every window of an app (e.g. AnyDesk). One line per app; add, edit or delete rules here (Undo is in Change history)."
                                TextWrapping="Wrap"
                                FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <TextBox x:Name="LearnedRulesSearch" PlaceholderText="Search rules (app, words, category, status)"
-                             AutomationProperties.Name="Search learned rules" TextChanged="LearnedRulesSearch_Changed"/>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="LearnedRulesSearch" PlaceholderText="Search rules (app, words, category, tag)"
+                                 AutomationProperties.Name="Search learned rules" TextChanged="LearnedRulesSearch_Changed"/>
+                        <Button x:Name="ApplyRulesHistoryButton" Grid.Column="1" Content="Apply to history" Click="ApplyRulesHistory_Click"
+                                AutomationProperties.Name="Apply rules to history"/>
+                        <Button x:Name="AddRuleButton" Grid.Column="2" Content="Add rule" Click="AddRule_Click"
+                                AutomationProperties.Name="Add rule"/>
+                    </Grid>
                     <ScrollViewer Height="340" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   AutomationProperties.Name="Learned rules list">
                         <StackPanel x:Name="LearnedRulesList" Spacing="6" Margin="0,0,12,0"/>
                     </ScrollViewer>
-
-                    <TextBlock Text="Activity keywords" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,16,0,0"/>
-                    <TextBlock Text="Used only when no learned rule matches. One per line, matched inside window titles. A window whose title contains one of these words is counted as that kind of time."
-                               TextWrapping="Wrap"
-                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="RulesOn" Grid.Column="0" Header="On-plan" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="RulesOff" Grid.Column="1" Header="Off-plan" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                        <TextBox x:Name="RulesNeutral" Grid.Column="2" Header="Neutral" AcceptsReturn="True" Height="220" TextWrapping="NoWrap" LostFocus="Rules_Changed"/>
-                    </Grid>
                 </StackPanel>
 
                 <StackPanel x:Name="IdlePanel" Spacing="12" VerticalAlignment="Top" Visibility="Collapsed">
@@ -315,7 +313,7 @@
                     <TextBlock Text="Change history" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <TextBlock TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="Bulk changes to past data, newest first — the last 20, each kept for 30 days. Undo puts back the old values of that one change, and forgets the activity keywords it taught. Rows changed since (edited, split, re-marked or deleted) are skipped and keep their newer values. A backup of your data is saved before every bulk change and every undo; the last 5 are kept in the data folder's backups subfolder. Each backup is a full copy of your data, including the full window titles of your diary — keep that folder private."/>
+                               Text="Bulk changes to past data, newest first — the last 20, each kept for 30 days. Undo puts back the old values of that one change. Rows changed since (edited, split, re-marked or deleted) are skipped and keep their newer values. A backup of your data is saved before every bulk change and every undo; the last 5 are kept in the data folder's backups subfolder. Each backup is a full copy of your data, including the full window titles of your diary — keep that folder private."/>
                     <StackPanel x:Name="HistoryList" Spacing="8"/>
                 </StackPanel>
             </Grid>
@@ -370,9 +368,9 @@
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>
                 </ListViewItem>
-                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Activity keywords">
+                <ListViewItem HorizontalContentAlignment="Stretch" AutomationProperties.Name="Learned rules">
                     <StackPanel Padding="0,4">
-                        <TextBlock Text="Activity keywords" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="Learned rules" FontWeight="SemiBold" FontSize="13"/>
                         <TextBlock x:Name="SumKeywords" FontSize="11" TextWrapping="Wrap" MaxLines="2"
                                    TextTrimming="CharacterEllipsis"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>

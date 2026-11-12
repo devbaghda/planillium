@@ -10,23 +10,15 @@ public sealed class RulesBatch20261105Tests
 {
     private static IReadOnlySet<string> W(params string[] w) => new HashSet<string>(w);
 
-    // ── A5 ────────────────────────────────────────────────────────────────────
+    // ── A5 (OR since 2026-11-11: words are added only to cover marked rows the first missed) ──
     [Fact]
-    public void Proposer_adds_a_third_word_when_two_are_not_enough()
+    public void Proposer_adds_further_OR_words_to_cover_marked_rows()
     {
-        // no single word, pair or triple is pure; only all four words together single out the marked rows.
-        var marked = new[] { W("aaa", "bbb", "ccc", "ddd"), W("aaa", "bbb", "ccc", "ddd") };
-        var history = new List<HistoryRow>
-        {
-            new("App", W("aaa", "bbb", "ccc", "ddd"), "on_plan", 5),
-            new("App", W("aaa", "bbb", "ccc"), "off_plan", 5),
-            new("App", W("aaa", "bbb", "ddd"), "off_plan", 5),
-            new("App", W("aaa", "ccc", "ddd"), "off_plan", 5),
-            new("App", W("bbb", "ccc", "ddd"), "off_plan", 5),
-        };
+        var marked = new[] { W("aaa"), W("bbb"), W("ccc") };
+        var history = marked.Select(m => new HistoryRow("App", m, "on_plan", 5)).ToList();
         var p = RuleProposer.Propose("App", "on_plan", marked, history);
         Assert.NotNull(p);
-        Assert.Equal(4, p!.Words.Count);
+        Assert.Equal(new[] { "aaa", "bbb", "ccc" }, p!.Words.ToArray());
     }
 
     [Fact]
@@ -129,10 +121,17 @@ public sealed class RulesBatch20261105Tests
             a = LearnedRuleStore.AddRule(db, app, new[] { "alpha" }, DiaryCategory.OnPlan);
             b = LearnedRuleStore.AddRule(db, app, new[] { "beta" }, DiaryCategory.OnPlan);
         }
-        Assert.Throws<ArgumentException>(() => DataChangeDoor.EditRule(a, Array.Empty<string>(), DiaryCategory.OnPlan, null));
-        Assert.Throws<ArgumentException>(() => DataChangeDoor.EditRule(a, new[] { "alpha" }, DiaryCategory.OnPlan, null));
-        Assert.Throws<ArgumentException>(() => DataChangeDoor.EditRule(b, new[] { "alpha" }, DiaryCategory.OnPlan, null));
+        // (empty words are an app-only rule since 2026-11-12, no longer refused)
+        Assert.Throws<ArgumentException>(() => DataChangeDoor.EditRule(a, new[] { "and" }, DiaryCategory.OnPlan, null));
+        var solo = "AppS" + Guid.NewGuid().ToString("N")[..10];
+        long c;
+        using (var dbs = new Database()) c = LearnedRuleStore.AddRule(dbs, solo, new[] { "alpha" }, DiaryCategory.OnPlan);
+        Assert.Throws<ArgumentException>(() => DataChangeDoor.EditRule(c, new[] { "alpha" }, DiaryCategory.OnPlan, null));
+        // same app + category + tag as another rule: the words merge into one rule (user 2026-11-11)
+        Assert.True(DataChangeDoor.EditRule(b, new[] { "beta" }, DiaryCategory.OnPlan, null) > 0);
         using var db2 = new Database();
-        Assert.Equal(2, LearnedRuleStore.LoadRules(db2).Count(x => x.App == app));
+        var left = LearnedRuleStore.LoadRules(db2).Where(x => x.App == app).ToList();
+        Assert.Single(left);
+        Assert.Equal(new[] { "alpha", "beta" }, left[0].Words.OrderBy(w => w).ToArray());
     }
 }

@@ -14,6 +14,18 @@
 
 ## Done
 
+### 2026-11-12 -- Activity keywords removed (Settings boxes, classifier fallback, teaching from Bulk Mark and plan tools); Cyrillic/Armenian root-change matching. Tests 345/345.
+
+### 2026-11-12 -- Rule words match word forms (title word starts with the rule word): TitleWords.Covers; tests 327/327.
+
+### 2026-11-12 -- App-only rules (no words = every window of the app), 79 live rules merged to 28 (backup data/backups/progress-2026-11-12-pre-rules-merge.db), Release rebuilt (solo flow, local, uncommitted). RuleEvidence.Stated; tests 322/322.
+
+### 2026-11-11 -- Learned rules v3: OR words, one card per app, add by hand, junk words (solo flow, local, uncommitted)
+Acceptance `context/acceptance/2026-11-11-rules-or-words-one-line-per-app.md`. `RuleMatcher.Match`/`Evidence` count ANY word (most hits wins, then tag, then older); `RuleProposer` OR-greedy (<=5 words, purity floor) and never proposes junk (`TitleWords.IsJunk`: fillers, <3 letters, app/brand names, digits/extensions); `TitleWords.ParseTyped` (comma list, refuses junk); `DataChangeDoor.SaveRule/AddRuleByHand/DeleteRules` (group = app+category+tag, merges, one undoable change; undo removes "added" before restoring "deleted"); Settings: one card per app, sub-row per category+tag, comma words, Add rule dialog; Reports proposal dialog uses commas. Storage unchanged (old multi-word rules simply became OR). Strict build 0 warnings, suite 319/319, scratch-root UI PASS (list, Add with junk refused, merge on save, Edit shows commas). Not yet in live Release.
+
+### 2026-11-11 -- After-hours paid work recorded (solo flow, local, uncommitted)
+Report: after-hours tracking "stopped after one day". Cause: only 2 of 79 rules were on-plan; neutral+tag rules (studioshoo) were dropped after hours (G9c H5). User ruling: paid work (tag) must be recognised. Fix: `ActivityTracker.HandleAfterHours` also records neutral confident rules that carry a tag. Tests H5 changed, H5b added; suite 296/296. Not yet in live Release.
+
 ### 2026-11-05 -- Rules window + Diary/Reports batch (solo flow, local, uncommitted)
 Acceptance `context/acceptance/2026-11-05-diary-rules-batch.md` (A1-A9). Built: `DataChangeDoor.EditRule` + Edit dialog + scrolling list; `RuleProposer.MaxWords` 5 (loop); `AppNames.InheritedFilterGroups` (display/filter only); `Database.IdleAnswerCategories` + recency in `MostFrequentIdleAnswers`/`MostFrequentDescriptions`; Diary row accept column added only when used, Details width 147/187; Reports table widths + right-align. Strict build 0/0, suite 295/295. NOT live-UI-verified (A1, A4, A9 are visual) - pending a scratch-root run.
 
@@ -600,3 +612,8 @@ WinUI / layout. Layout not UIA-measured at 900 DIP (user eyeballed it).
 
 ## 2026-11-05 (later) -- Saved rules act at once; keywords below rules (solo flow)
 User: rules not marking activities; keywords obsolete; working time after hours not counted. Rulings: saved rules act at once (RuleBook.Hit.Confident always true; Wilson kept for display/proposals), after hours still only on-plan (+tag); keywords kept visible but below Learned rules. Tests rewritten for the new rule (287/287), strict build 0/0. Acceptance: context/acceptance/2026-11-05-rules-act-at-once.md. Not UI-verified live (needs Release rebuild).
+
+## 2026-11-06 -- Follow-up: no sideways bar, Diary fills, light theme pass, FINAL BALANCE (solo flow)
+User: Reports tables got a scroll bar (rule: sideways scroll only as last resort); Diary empty space right of text, minutes right-aligned; light theme work; sidebar shows final balance instead of lost income. Twice reported fixed from build+tests, failed: ScrollViewer gives content unlimited width so Star columns never filled. Fix: `Scrollable()` sizes content to viewport with a MinWidth floor; Reports tables proportional columns; Diary diaryResults width follows its scroller; page column Star (weight 3, spans the Details column when a row has no note), minutes own right-aligned column. Light brushes in ThemeSync + App.xaml Light dict + `AppGroundBrush` on ContentFrame. Sidebar label fixed "FINAL BALANCE" (sign shows lost/gained). Rule in DECISIONS.md (UI: sideways scroll last resort); global playbook now requires a looked-at screenshot for visual work. Verified by screenshot on scratch root; strict build 0/0, suite 295/295, Release rebuilt. Not seen: see CONTEXT 0j.
+
+- **2026-11-12** Test runs had written fake "Test plan" files/rows into the REAL data (test classes outside the TestRoot collection read AppPaths.Root before the fixture set MENTOR_ROOT). Fixed: ModuleInitializer in TestRootFixture.cs sets MENTOR_ROOT at assembly load. Cleaned (user confirmed): 15 rr-*.json, 68 task_completions, 49 task_overrides, 8 plan_days_off; backup data/backups/progress-2026-11-12-pre-test-cleanup.db. Real income_ledger/score_ledger were also overwritten and later restored from the 29 Sep backup (income) and by deleting the 2 fake score rows. Diary 30 Sep-12 Nov unrecoverable. Built the same day: Apply rules to history (Settings > Learned rules; DataChangeDoor.ApplyRulesToHistory, Field.DiaryRules, change_log_rows.old_tag; test RulesOnHistoryTests).

@@ -15,11 +15,12 @@ public class LearnedRuleClassifierTests
         new(rules, history);
 
     [Fact]
-    public void No_rules_means_keyword_lists_and_no_rule_state()
+    public void No_rules_means_neutral_and_no_rule_state()
     {
+        // 2026-11-12: the keyword lists are gone - an old "activity_rules" key in config.json is ignored
         var c = Make("""{"activity_rules":{"on_plan":["excel"]}}""");
         var (cat, state) = c.ClassifyDetailed("Budget - Excel");
-        Assert.Equal(DiaryCategory.OnPlan, cat);
+        Assert.Equal(DiaryCategory.Neutral, cat);
         Assert.Null(state);
     }
 

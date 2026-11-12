@@ -262,22 +262,6 @@ public sealed partial class PlansPage : Page
         archive.Click += async (_, _) => await ArchiveAsync(plan);
         actions.Children.Add(archive);
 
-        // Only shown when the plan file actually has a "tools" entry somewhere — covers a
-        // plan whose tools were added (or edited) some way other than a fresh "Add Plan"
-        // import, e.g. hand-editing the plan JSON for a plan that was already active before
-        // this feature existed (2026-07-28). A fresh import already teaches its tools
-        // automatically; this just lets that same step be re-run on demand.
-        var tools = PlanStore.DistinctTools(plan);
-        if (tools.Count > 0)
-        {
-            var teach = new MenuFlyoutItem { Text = "Teach on-plan apps…" };
-            ToolTipService.SetToolTip(teach,
-                "Add this plan's tools list to your on-plan activity keywords (Settings > ACTIVITY KEYWORDS)");
-            AutomationProperties.SetName(teach, $"Teach on-plan apps: {plan.Name}");
-            teach.Click += async (_, _) => await TeachPlanTools.RunAsync(XamlRoot, tools);
-            more.Items.Add(teach);
-        }
-
         var moreBtn = new Button { Content = "More ▾", Flyout = more };
         AutomationProperties.SetName(moreBtn, $"More actions: {plan.Name}");
         actions.Children.Add(moreBtn);

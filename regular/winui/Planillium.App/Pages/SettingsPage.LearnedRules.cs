@@ -8,12 +8,15 @@ using Planillium.App.Services;
 
 namespace Planillium.App.Pages;
 
-// G9b (2026-11-04): Settings ▸ Activity keywords ▸ Learned rules — a searchable list, delete only.
-// Deleting leaves rows the rule already marked exactly as they are (E2) and is undoable from
-// Change history (E3).
+// G9b (2026-11-04): Settings ▸ Learned rules — a searchable list.
+// 2026-11-11 (user): words are an OR list separated by commas; one line per app with a sub-row per
+// category + tag; rules can be added by hand. Deleting leaves rows the rule already marked exactly as
+// they are (E2) and every change is undoable from Change history (E3).
 public sealed partial class SettingsPage
 {
-    private sealed record RuleLine(LearnedRule Rule, RuleEvidence Evidence, string Status, string Text);
+    /// <summary>One sub-row: every stored rule of an app with the same category + tag, shown as one rule
+    /// whose words are the union of theirs. <see cref="Rule"/> is that merged view (Id of the first).</summary>
+    private sealed record RuleLine(LearnedRule Rule, IReadOnlyList<long> Ids, RuleEvidence Evidence, string Status, string Text);
 
     private List<RuleLine> _ruleLines = new();
     private bool _rulesBusy;
@@ -38,14 +41,20 @@ public sealed partial class SettingsPage
             {
                 using var db = new Database();
                 var book = RuleBook.Load(db);
-                return book.Rules.Select(r =>
-                {
-                    var ev = book.EvidenceFor(r.Id);
-                    var status = RuleStatusText(ev);
-                    var words = string.Join(" ", r.Words);
-                    return new RuleLine(r, ev, status,
-                        $"{r.App} {words} {r.Category.Replace('_', ' ')} {r.Tag} {status}");
-                }).OrderBy(l => l.Rule.App, StringComparer.OrdinalIgnoreCase).ThenBy(l => l.Rule.Id).ToList();
+                return book.Rules
+                    .GroupBy(r => (App: r.App.ToLowerInvariant(), r.Category, Tag: (r.Tag ?? "").ToLowerInvariant(), AppOnly: r.Words.Count == 0))
+                    .Select(g =>
+                    {
+                        var first = g.OrderBy(r => r.Id).First();
+                        var words = g.SelectMany(r => r.Words).Distinct().OrderBy(w => w, StringComparer.Ordinal).ToList();
+                        var merged = new LearnedRule(first.Id, first.App, words, first.Category, first.Tag);
+                        var ev = book.EvidenceOf(merged);
+                        var status = RuleStatusText(ev);
+                        return new RuleLine(merged, g.Select(r => r.Id).ToList(), ev, status,
+                            $"{first.App} {(words.Count == 0 ? "any window" : string.Join(" ", words))} {first.Category.Replace('_', ' ')} {first.Tag} {status}");
+                    })
+                    .OrderBy(l => l.Rule.App, StringComparer.OrdinalIgnoreCase).ThenBy(l => l.Rule.Category, StringComparer.Ordinal)
+                    .ThenBy(l => l.Rule.Tag, StringComparer.OrdinalIgnoreCase).ToList();
             });
             _ruleLines = lines;
         }
@@ -83,17 +92,35 @@ public sealed partial class SettingsPage
             });
             return;
         }
-        foreach (var line in shown) LearnedRulesList.Children.Add(RuleRow(line));
+        foreach (var app in shown.GroupBy(l => l.Rule.App, StringComparer.OrdinalIgnoreCase))
+            LearnedRulesList.Children.Add(AppCard(app.Key, app.ToList()));
     }
 
-    private Border RuleRow(RuleLine line)
+    /// <summary>One card per app (user 2026-11-11: "one line for an app"), its rules listed inside.</summary>
+    private Border AppCard(string app, List<RuleLine> lines)
+    {
+        var stack = new StackPanel { Spacing = 8 };
+        stack.Children.Add(new TextBlock { Text = app, FontWeight = FontWeights.SemiBold, FontSize = 15 });
+        foreach (var line in lines) stack.Children.Add(RuleRow(line));
+        return new Border
+        {
+            Child = stack,
+            Padding = new Thickness(12, 8, 12, 8),
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+        };
+    }
+
+    private Grid RuleRow(RuleLine line)
     {
         var r = line.Rule;
-        var words = string.Join(" ", r.Words);
+        var words = r.Words.Count == 0 ? "any window of this app" : string.Join(", ", r.Words);
         var title = new TextBlock
         {
-            Text = $"{r.App} + {words}  →  {r.Category.Replace('_', '-')}" + (r.Tag != null ? $" + {r.Tag}" : ""),
-            FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+            Text = $"{words}  →  {r.Category.Replace('_', '-')}" + (r.Tag != null ? $" + {r.Tag}" : ""),
+            TextWrapping = TextWrapping.Wrap,
         };
         var detail = new TextBlock
         {
@@ -122,31 +149,95 @@ public sealed partial class SettingsPage
         grid.Children.Add(text);
         grid.Children.Add(edit);
         grid.Children.Add(delete);
-        return new Border
-        {
-            Child = grid,
-            Padding = new Thickness(12, 8, 12, 8),
-            CornerRadius = new CornerRadius(6),
-            BorderThickness = new Thickness(1),
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-        };
+        return grid;
     }
 
-    /// <summary>2026-11-05 (user: "make rules editable"): change a rule's words (any number), category and tag.
-    /// Goes through DataChangeDoor.EditRule (backup, change history, Undo). A refused edit shows its
-    /// reason and reopens the dialog with what was typed.</summary>
-    private async Task EditRuleAsync(RuleLine line, Button trigger)
+    private Task EditRuleAsync(RuleLine line, Button trigger) =>
+        RuleDialogAsync(line.Rule.App, line.Ids, string.Join(", ", line.Rule.Words), line.Rule.Category, line.Rule.Tag, trigger, isAdd: false);
+
+    private async void AddRule_Click(object sender, RoutedEventArgs e)
+    {
+        try { await RuleDialogAsync(null, Array.Empty<long>(), "", DiaryCategory.OnPlan, null, AddRuleButton, isAdd: true); }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.LearnedRules.Add", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't add that rule", ex);
+        }
+    }
+
+    /// <summary>Runs the current rules over the whole diary: shows how many rows would change, then applies
+    /// on confirmation. Rows marked by hand, idle and day-off rows stay as they are. Backup first; Undo is
+    /// in Change history.</summary>
+    private async void ApplyRulesHistory_Click(object sender, RoutedEventArgs e)
     {
         if (_rulesBusy) return;
-        var r = line.Rule;
-        var wordsText = string.Join(" ", r.Words);
-        var category = r.Category;
-        var tag = r.Tag;
+        _rulesBusy = true;
+        ApplyRulesHistoryButton.IsEnabled = false;
+        try
+        {
+            var p = await Task.Run(DataChangeDoor.PreviewRulesOnHistory);
+            string N(int n) => n.ToString("N0", CultureInfo.CurrentCulture);
+            if (p.Changed == 0)
+            {
+                SaveStatus.Text = $"Nothing to change: the current rules already fit all {N(p.Rows)} diary rows they can reach.";
+                return;
+            }
+            var split = string.Join(", ", p.ByCategory.Select(kv => $"{N(kv.Value)} → {kv.Key.Replace('_', '-')}"));
+            var confirm = Dialogs.DialogControls.Build(XamlRoot, "Apply the rules to the history?",
+                $"{N(p.Changed)} of {N(p.Rows)} diary rows would be set by a rule ({split}). " +
+                $"Rows you marked by hand ({N(p.Skipped)} manual, idle or day-off rows in all) are left alone. " +
+                "Day scores are recalculated. A backup is saved first, and you can undo this from Change history.",
+                primaryButtonText: "Apply", closeButtonText: "Cancel");
+            if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+            var r = await Task.Run(DataChangeDoor.ApplyRulesToHistory);
+            SaveStatus.Text = $"Applied the rules to {N(r.Changed)} diary rows. Undo is in Change history.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SettingsPage.LearnedRules.ApplyToHistory", ex);
+            SaveStatus.Text = Log.Friendly("Couldn't apply the rules to the history", ex);
+        }
+        finally
+        {
+            _rulesBusy = false;
+            ApplyRulesHistoryButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>Apps already in a rule or seen in the Diary, for the Add rule picker.</summary>
+    private static List<string> KnownApps()
+    {
+        var apps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using var db = new Database();
+        foreach (var r in LearnedRuleStore.LoadRules(db)) apps.Add(r.App);
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT window FROM time_diary WHERE window <> 'idle'";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            var app = (rd.GetString(0) ?? "").Trim();
+            if (app.Length > 0) apps.Add(app);
+        }
+        return apps.OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Add (no ids) or edit (the ids of an app + category + tag group) a rule: words typed
+    /// separated by commas, matched as an OR; category and tag. Goes through DataChangeDoor.SaveRule (backup,
+    /// change history, Undo, junk words refused). A refused save shows its reason and reopens the dialog with
+    /// what was typed.</summary>
+    private async Task RuleDialogAsync(string? app, IReadOnlyList<long> ids, string wordsText, string category,
+        string? tag, Button trigger, bool isAdd)
+    {
+        if (_rulesBusy) return;
+        List<string> knownApps = isAdd ? await Task.Run(KnownApps) : new();
         string? error = null;
         while (true)
         {
-            var wordsBox = new TextBox { Header = "Words from the window title (any number, separated by spaces)", Text = wordsText };
+            var wordsBox = new TextBox
+            {
+                Header = "Words from the window title, separated by commas (any one of them matches). Leave empty for every window of this app.",
+                Text = wordsText, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 64,
+            };
             var catBox = new ComboBox { Header = "Category", HorizontalAlignment = HorizontalAlignment.Stretch };
             foreach (var (label, value) in DiaryCategory.EditableOptions)
                 catBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
@@ -158,9 +249,23 @@ public sealed partial class SettingsPage
             var tagIdx = tag == null ? 0 : Array.FindIndex(DiaryTag.Options, t => string.Equals(t.Value, tag, StringComparison.OrdinalIgnoreCase)) + 1;
             tagBox.SelectedIndex = Math.Max(0, tagIdx);
             AutomationProperties.SetName(wordsBox, "Rule words");
+            AutomationProperties.SetName(catBox, "Rule category");
+            AutomationProperties.SetName(tagBox, "Rule tag");
 
             var panel = new StackPanel { Spacing = 12, MinWidth = 380 };
-            panel.Children.Add(new TextBlock { Text = $"App: {r.App}", FontWeight = FontWeights.SemiBold });
+            ComboBox? appBox = null;
+            if (isAdd)
+            {
+                appBox = new ComboBox
+                {
+                    Header = "App (pick or type)", IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch,
+                    ItemsSource = knownApps, Text = app ?? "",
+                };
+                AutomationProperties.SetName(appBox, "Rule app");
+                panel.Children.Add(appBox);
+            }
+            else
+                panel.Children.Add(new TextBlock { Text = $"App: {app}", FontWeight = FontWeights.SemiBold });
             panel.Children.Add(wordsBox);
             panel.Children.Add(catBox);
             panel.Children.Add(tagBox);
@@ -170,36 +275,39 @@ public sealed partial class SettingsPage
                     Text = error, TextWrapping = TextWrapping.Wrap,
                     Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
                 });
-            var dialog = Dialogs.DialogControls.Build(XamlRoot, "Edit rule", "", primaryButtonText: "Save", closeButtonText: "Cancel");
+            var dialog = Dialogs.DialogControls.Build(XamlRoot, isAdd ? "Add rule" : "Edit rule", "", primaryButtonText: "Save", closeButtonText: "Cancel");
             dialog.Content = panel;
             if (await Dialogs.DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return;
 
             wordsText = wordsBox.Text ?? "";
             category = (catBox.SelectedItem as ComboBoxItem)?.Tag as string ?? category;
             tag = (tagBox.SelectedItem as ComboBoxItem)?.Tag as string;
+            if (appBox != null) app = (appBox.Text ?? "").Trim();
             _rulesBusy = true;
             trigger.IsEnabled = false;
             try
             {
-                var words = wordsText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                await Task.Run(() => DataChangeDoor.EditRule(r.Id, words, category, tag));
+                var words = wordsText.Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                var changeId = await Task.Run(() => DataChangeDoor.SaveRule(app, ids, words, category, tag));
                 (App.MainWindow as MainWindow)?.ReloadTrackerRules();
-                SaveStatus.Text = "Rule changed. Undo is in Change history.";
+                SaveStatus.Text = changeId > 0 ? (isAdd ? "Rule added." : "Rule changed.") + " Undo is in Change history."
+                                               : "That rule was already gone.";
                 return;
             }
             catch (ArgumentException ex)
             {
-                error = ex.Message;       // refused edit: show why, keep what was typed
+                error = ex.Message;       // refused: show why, keep what was typed
             }
             catch (Exception ex)
             {
-                Log.Error("SettingsPage.LearnedRules.Edit", ex);
-                SaveStatus.Text = Log.Friendly("Couldn't change that rule", ex);
+                Log.Error("SettingsPage.LearnedRules.Save", ex);
+                SaveStatus.Text = Log.Friendly("Couldn't save that rule", ex);
                 return;
             }
             finally
             {
                 _rulesBusy = false;
+                trigger.IsEnabled = true;
                 LoadLearnedRules();
             }
         }
@@ -209,7 +317,7 @@ public sealed partial class SettingsPage
     {
         if (_rulesBusy) return;
         var r = line.Rule;
-        var words = string.Join(" ", r.Words);
+        var words = r.Words.Count == 0 ? "any window" : string.Join(", ", r.Words);
         var confirm = Dialogs.DialogControls.Build(XamlRoot, "Delete this rule?",
             $"\"{r.App} + {words}\" → {r.Category.Replace('_', '-')}{(r.Tag != null ? " + " + r.Tag : "")}. Rows it already marked keep their values; " +
             "from now on the keyword lists decide for this app and these words. A backup is saved first, " +
@@ -221,7 +329,7 @@ public sealed partial class SettingsPage
         trigger.IsEnabled = false;
         try
         {
-            var changeId = await Task.Run(() => DataChangeDoor.DeleteRule(r.Id));
+            var changeId = await Task.Run(() => DataChangeDoor.DeleteRules(line.Ids));
             (App.MainWindow as MainWindow)?.ReloadTrackerRules();
             SaveStatus.Text = changeId > 0 ? "Rule deleted. Undo is in Change history." : "That rule was already gone.";
         }

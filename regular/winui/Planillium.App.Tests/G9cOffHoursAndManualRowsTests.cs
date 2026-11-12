@@ -65,13 +65,28 @@ public sealed class G9cOffHoursAndManualRowsTests
     // ── H5 ────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void H5_confident_neutral_tag_rule_after_hours_records_nothing()
+    public void H5_confident_neutral_tag_rule_after_hours_records_paid_work_2026_11_11()
     {
+        // Was "records nothing"; the user ruled on 2026-11-11 that paid work (tag) is recognised after hours.
         var (t, app) = MakeTagRule(DiaryCategory.Neutral, 30, 30);
         t.SimulateAfterHoursPoll(At(47, 22), $"Quotation_Acme - {app}", 0);
         t.SimulateAfterHoursPoll(At(47, 22, 30), "Something else", 0);
+        var row = Assert.Single(Rows(app));
+        Assert.Equal(DiaryCategory.Neutral, row.Category);
+        Assert.Equal(Tag, row.Tag);
+        Assert.Equal(30, PaidMinutes(At(47, 0)));
+    }
+
+    [Fact]
+    public void H5b_confident_neutral_rule_without_tag_after_hours_records_nothing()
+    {
+        var app = "AppN" + Guid.NewGuid().ToString("N")[..10];
+        var tracker = new ActivityTracker(ConfigService.Root);
+        var rule = new LearnedRule(1, app, new[] { "quotation" }, DiaryCategory.Neutral, null);
+        tracker.SetRulesForTest(new RuleBook(new[] { rule }, new List<HistoryRow> { new(app, S("quotation"), DiaryCategory.Neutral, 30) }));
+        tracker.SimulateAfterHoursPoll(At(49, 22), $"Quotation_Acme - {app}", 0);
+        tracker.SimulateAfterHoursPoll(At(49, 22, 30), "Something else", 0);
         Assert.Empty(Rows(app));
-        Assert.Equal(0, PaidMinutes(At(47, 0)));
     }
 
     // ── H6 ────────────────────────────────────────────────────────────────────

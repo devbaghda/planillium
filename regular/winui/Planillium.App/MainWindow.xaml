@@ -95,7 +95,7 @@
                                  Reports' day/week/month/year figures, which additionally include
                                  today's not-yet-posted live preview — the two can legitimately
                                  differ during the day, by design. -->
-                            <TextBlock x:Name="IncomeLabel" Text="UNEARNED INCOME" FontSize="10" FontWeight="SemiBold"
+                            <TextBlock x:Name="IncomeLabel" Text="FINAL BALANCE" FontSize="10" FontWeight="SemiBold"
                                        CharacterSpacing="50"
                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                             <TextBlock x:Name="IncomeValue" Text="—"
@@ -115,7 +115,7 @@
                 </StackPanel>
             </NavigationView.PaneFooter>
 
-            <Frame x:Name="ContentFrame"/>
+            <Frame x:Name="ContentFrame" Background="{ThemeResource AppGroundBrush}"/>
         </NavigationView>
     </Grid>
 </Window>

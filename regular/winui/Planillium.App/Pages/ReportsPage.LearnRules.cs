@@ -55,10 +55,10 @@ public sealed partial class ReportsPage
             if (cat == null) continue;
             var p = RuleProposer.Propose(g.Key, cat, marked, history, tag);
             if (p == null) continue;
-            var key = LearnedRuleStore.JoinWords(p.Words);
-            if (existing.Any(e => string.Equals(e.App, p.App, StringComparison.OrdinalIgnoreCase)
-                                  && LearnedRuleStore.JoinWords(e.Words) == key && e.Category == p.Category
-                                  && (e.Tag ?? "") == (p.Tag ?? ""))) continue;
+            var have = existing.Where(e => string.Equals(e.App, p.App, StringComparison.OrdinalIgnoreCase)
+                                           && e.Category == p.Category && (e.Tag ?? "") == (p.Tag ?? ""))
+                .SelectMany(e => e.Words).ToHashSet();
+            if (p.Words.All(have.Contains)) continue;      // every word is already in a saved rule
             proposals.Add(p);
         }
         return (proposals, history);
@@ -88,7 +88,7 @@ public sealed partial class ReportsPage
         panel.Children.Add(new TextBlock
         {
             Text = "Teach Planillium a rule so this is marked automatically next time. A rule is an app plus " +
-                   "words from the window title; once saved it acts at once, also outside working hours " +
+                   "words from the window title (any one of them matches); once saved it acts at once, also outside working hours " +
                    "for on-plan work.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
@@ -105,7 +105,7 @@ public sealed partial class ReportsPage
                     : $"{p.App}  →  {categoryLabel} ({MarkValueLabel(DataChangeDoor.Field.DiaryCategory, pCategory)})",
             };
             AutomationProperties.SetName(include, $"Save rule for {p.App}");
-            var words = new TextBox { Text = string.Join(" ", p.Words), Header = "Title words (all must appear)" };
+            var words = new TextBox { Text = string.Join(", ", p.Words), Header = "Title words, separated by commas (any one matches)" };
             AutomationProperties.SetName(words, $"Words for {p.App}");
             var evidence = new TextBlock
             {
@@ -116,8 +116,7 @@ public sealed partial class ReportsPage
             var app = p.App;
             words.TextChanged += (_, _) =>
             {
-                var ws = words.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(TitleWords.NormalizeWord).Where(w => w.Length > 0).Distinct().ToList();
+                var ws = TitleWords.ParseTyped(words.Text, app).Words;
                 evidence.Text = ws.Count == 0
                     ? "Type at least one word."
                     : RangeText(RuleMatcher.Evidence(new LearnedRule(0, app, ws, pCategory, tag), history));
@@ -137,7 +136,8 @@ public sealed partial class ReportsPage
         if (await Dialogs.DialogGate.ShowAsync(dialog) != ContentDialogResult.Primary) return saved;
 
         var chosen = offers.Where(o => o.Include.IsChecked == true)
-            .Select(o => (o.Proposal.App, o.Proposal.Category, Words: o.Words.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)))
+            .Select(o => (o.Proposal.App, o.Proposal.Category, Words: TitleWords.ParseTyped(o.Words.Text, o.Proposal.App).Words.ToArray()))
+            .Where(c => c.Words.Length > 0)      // junk-only or empty text: nothing to save
             .ToList();
         if (chosen.Count == 0) return saved;
         try

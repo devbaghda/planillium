@@ -32,6 +32,17 @@
                 -->
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8F000000"/>
+                    <!-- 2026-11-05 light theme: same values as ThemeSync.Fixed (keep both in step). -->
+                    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#FFEEF2F7"/>
+                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#29000000"/>
+                    <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#1F000000"/>
+                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#12000000"/>
+                    <!-- Page ground: a cool grey-blue so the white cards stand out (the stock ground is almost white). -->
+                    <SolidColorBrush x:Key="AppGroundBrush" Color="#FFE6ECF4"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="AppGroundBrush" Color="Transparent"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

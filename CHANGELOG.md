@@ -5,7 +5,26 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+- **Apply rules to history.** Settings > Learned rules has an "Apply to history" button: it shows how many past diary rows the current rules would change, then sets them (rows you marked by hand, idle and day-off rows are left alone). Backed up first and undoable from Change history.
+
+- Backups: besides the newest 5, the first backup of each of the last 14 days is kept, so a burst of backups can no longer push out every older one.
+
+- Tests can no longer touch your real data folder (the test run now always uses its own temporary folder).
+
+- Removed the Activity keywords lists: learned rules are the only way a window is classified (no rule = neutral). Nothing teaches keywords any more.
+- Rule words in Russian and Armenian also match when the end of the root changes ("рынок" fires on "рынка").
+
+- Learned rules: a rule word also fires on its word forms ("акт" covers акты, актов).
+
+- Learned rules: a rule can have no words and then covers every window of its app (e.g. AnyDesk is always paid work). It acts at once; a rule with a matching word wins over it.
+
+- **Learned rules, simpler.** A rule's words now match as "any of them" (so "договор, договора" is one rule), words are typed separated by commas, Settings shows one card per app with its rules inside, and you can add a rule by hand ("Add rule"). Filler words, app/brand names, numbers and file extensions are never proposed and are refused when typed. Existing rules keep their words (now "any" instead of "all"); every change is undoable from Change history.
+
+- After hours, a saved rule that carries a paid tag (e.g. Studioshoo) now records the work even when its category is neutral; before, only on-plan rules were recorded.
+
 - **Saved rules act at once.** A learned rule you save now marks activities straight away, in and out of working hours (after hours still only on-plan work, with its tag); the old "10 examples" wait is gone. In Settings the Learned rules list now sits above the Activity keywords boxes, which only apply when no rule matches.
+
+- **Follow-up (2026-11-05).** Reports tables now fit the card (proportional columns; sideways scroll only below a minimum width); Diary rows fill the card with minutes flush right and a wider description; light theme: solid white cards, stronger borders, grey-blue page ground; the Diary page column takes the free width; the sidebar income box now reads FINAL BALANCE (was LOST/EXTRA INCOME).
 
 - **Rules window, Diary and Reports polish (2026-11-05).** (1) Learned rules: each has an Edit button (words — any number —, category, tag; undoable from Change history) and the list scrolls in a fixed window; proposed rules can now use up to 5 words. (2) The Diary's App filter and App column show the app opened just before a dialog window instead of the dialog's title. (3) The idle dialog remembers the category you gave each answer and pre-selects it next time; the idle chips and the Edit/Split suggestions follow the last 60 days (same-category first). (4) Diary rows no longer leave an empty strip at the right. (5) Reports tables: fixed column widths, numbers right-aligned.
 

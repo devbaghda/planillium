@@ -19,12 +19,29 @@ namespace Planillium.App.Tests;
 /// never collide with another test's, rather than relying on a clean
 /// database per test.
 /// </summary>
+internal static class TestRootBootstrap
+{
+    /// <summary>2026-11-12: runs when the test assembly loads, before ANY test. Test classes outside the "TestRoot"
+    /// collection (and parallel ones) used to read AppPaths.Root before the fixture set MENTOR_ROOT, which cached
+    /// the REAL data folder and let PlanRemainderTests write fake plans/rows into the user's live data.</summary>
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void Init()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PlanilliumTests_" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        Environment.SetEnvironmentVariable("MENTOR_ROOT", root);
+    }
+}
+
 public sealed class TestRootFixture : IDisposable
 {
     public string Root { get; }
 
     public TestRootFixture()
     {
+        // The module initializer below already set MENTOR_ROOT before any test ran; reuse it.
+        var env = Environment.GetEnvironmentVariable("MENTOR_ROOT");
+        if (!string.IsNullOrEmpty(env) && Directory.Exists(env)) { Root = env; return; }
         Root = Path.Combine(Path.GetTempPath(), "PlanilliumTests_" + Guid.NewGuid());
         Directory.CreateDirectory(Root);
         Environment.SetEnvironmentVariable("MENTOR_ROOT", Root);

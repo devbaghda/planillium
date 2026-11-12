@@ -461,7 +461,7 @@ public sealed partial class MainWindow
             using var score = new ScoreService(PlanStore.LoadActivePlans(), db);
             using var income = new IncomeService(db);
             var balance = income.Balance(score);
-            IncomeLabel.Text = balance < 0 ? "LOST INCOME" : "EXTRA INCOME";
+            IncomeLabel.Text = "FINAL BALANCE"; // user 2026-11-05: one fixed label; the sign shows lost vs gained
             IncomeValue.Text = FormatEur(balance);
         }
         catch (Exception ex)

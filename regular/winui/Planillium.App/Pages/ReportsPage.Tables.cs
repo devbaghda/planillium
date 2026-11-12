@@ -26,9 +26,9 @@ public sealed partial class ReportsPage
         // Columns: Day, Tasks, then one per category (2026-08-05 request), then the row's own
         // Total and Score. Score stays last, where it has always been.
         var columns = 4 + MoneyHeaders.Length + CategoryColumns.Length;
-        var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
+        var grid = new Grid { ColumnSpacing = TableGap, RowSpacing = 6, MinWidth = TableMinWidth(columns) };
         for (var c = 0; c < columns; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TableColumnWidth(c)) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TableColumnWidth(c), GridUnitType.Star), MinWidth = TableColumnMin(c) });
         AddHeaderRow(grid, ["Day", "Tasks",
             .. CategoryColumns.Select(c => c.Label), "Total", "Score", .. MoneyHeaders]);
 
@@ -167,9 +167,9 @@ public sealed partial class ReportsPage
         // table has carried both all along, and a Month or Year row that can't tell you what it
         // scored is the summary missing the one figure the whole app is built around.
         var columns = 4 + MoneyHeaders.Length + CategoryColumns.Length;
-        var grid = new Grid { ColumnSpacing = ColumnGap, RowSpacing = 6 };
+        var grid = new Grid { ColumnSpacing = TableGap, RowSpacing = 6, MinWidth = TableMinWidth(columns) };
         for (var c = 0; c < columns; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TableColumnWidth(c)) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TableColumnWidth(c), GridUnitType.Star), MinWidth = TableColumnMin(c) });
         AddHeaderRow(grid, ["Period", "Tasks",
             .. CategoryColumns.Select(c => c.Label), "Total", "Score", .. MoneyHeaders]);
 
@@ -243,12 +243,31 @@ public sealed partial class ReportsPage
     {
         0 => TableLabelWidth,
         1 => 44,                                   // Tasks "25/28"
-        <= 6 => 48,                                // the five category columns
+        <= 6 => 56,                                // the five category columns
         7 => 56,                                   // Total
         8 => 40,                                   // Score
         9 => 48,                                   // Paid hours
         _ => 72,                                   // money
     };
+
+    /// <summary>2026-11-05 (user: "horizontal scroll only if no other option"): columns are proportional
+    /// (Star, weights above) so the table fills the card at any width; this is the smallest each may get.
+    /// Only below the sum of these (<see cref="TableMinWidth"/>) does the card scroll sideways.</summary>
+    private const double TableGap = 6;
+
+    private static double TableColumnMin(int column) => column switch
+    {
+        0 => 90,
+        1 => 40,
+        <= 6 => 50,
+        7 => 48,
+        8 => 36,
+        9 => 42,
+        _ => 66,
+    };
+
+    private static double TableMinWidth(int columns) =>
+        Enumerable.Range(0, columns).Sum(TableColumnMin) + TableGap * (columns - 1);
 
     private static void RightAlignNumber(TextBlock tb, int column)
     {

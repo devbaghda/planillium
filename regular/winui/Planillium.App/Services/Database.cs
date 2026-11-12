@@ -347,6 +347,7 @@ public sealed class Database : IDisposable
         // change_log_rows.old_rule_state (what Undo puts back). Same detect-then-ALTER pattern.
         AddColumnIfMissing("time_diary", "rule_state", "TEXT");
         AddColumnIfMissing("change_log_rows", "old_rule_state", "TEXT");
+        AddColumnIfMissing("change_log_rows", "old_tag", "TEXT");   // 2026-11-12: Undo of "apply rules to history" puts the tag back
         // G9c: a learned rule may also carry a diary tag (e.g. a paid tag); NULL = category-only rule.
         AddColumnIfMissing("learned_rules", "tag", "TEXT");
         AddColumnIfMissing("change_log_rule_ops", "tag", "TEXT");

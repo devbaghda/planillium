@@ -70,16 +70,18 @@ public static class ThemeSync
     // TextFillColorTertiaryBrush}` bindings that this dictionary's writes
     // don't reach (see this class's own doc comment above). If this value
     // is ever retuned, update BOTH here and App.xaml's override.
+    // 2026-11-05 (user: light theme too pale): the Light card/stroke/divider/subtle values are stronger than
+    // WinUI's stock ones (opaque white cards, ~16% stroke); App.xaml's Light dictionary carries the same values.
     private static readonly Dictionary<string, (Color Light, Color Dark)> Fixed = new()
     {
         ["TextFillColorPrimaryBrush"] = (Color.FromArgb(0xE4, 0, 0, 0), Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
         ["TextFillColorSecondaryBrush"] = (Color.FromArgb(0x9E, 0, 0, 0), Color.FromArgb(0xC5, 0xFF, 0xFF, 0xFF)),
         ["TextFillColorTertiaryBrush"] = (Color.FromArgb(0x8F, 0, 0, 0), Color.FromArgb(0x87, 0xFF, 0xFF, 0xFF)),
-        ["CardBackgroundFillColorDefaultBrush"] = (Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
-        ["CardBackgroundFillColorSecondaryBrush"] = (Color.FromArgb(0x80, 0xF6, 0xF6, 0xF6), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF)),
-        ["CardStrokeColorDefaultBrush"] = (Color.FromArgb(0x0F, 0, 0, 0), Color.FromArgb(0x19, 0, 0, 0)),
-        ["DividerStrokeColorDefaultBrush"] = (Color.FromArgb(0x0F, 0, 0, 0), Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)),
-        ["SubtleFillColorSecondaryBrush"] = (Color.FromArgb(0x09, 0, 0, 0), Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),
+        ["CardBackgroundFillColorDefaultBrush"] = (Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+        ["CardBackgroundFillColorSecondaryBrush"] = (Color.FromArgb(0xFF, 0xEE, 0xF2, 0xF7), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF)),
+        ["CardStrokeColorDefaultBrush"] = (Color.FromArgb(0x29, 0, 0, 0), Color.FromArgb(0x19, 0, 0, 0)),
+        ["DividerStrokeColorDefaultBrush"] = (Color.FromArgb(0x1F, 0, 0, 0), Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)),
+        ["SubtleFillColorSecondaryBrush"] = (Color.FromArgb(0x12, 0, 0, 0), Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)),
         ["SystemFillColorCriticalBrush"] = (Color.FromArgb(0xFF, 0xC4, 0x2B, 0x1C), Color.FromArgb(0xFF, 0xFF, 0x99, 0xA4)),
         ["SystemFillColorSuccessBrush"] = (Color.FromArgb(0xFF, 0x0F, 0x7B, 0x0F), Color.FromArgb(0xFF, 0x6C, 0xCB, 0x5F)),
         ["SystemFillColorCautionBrush"] = (Color.FromArgb(0xFF, 0x9D, 0x5D, 0x00), Color.FromArgb(0xFF, 0xFC, 0xE1, 0x00)),

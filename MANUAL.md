@@ -65,12 +65,7 @@ Each plan can include:
 - briefing context,
 - and, per task, the specific apps/tools/websites it actually needs.
 
-When you generate a plan through Claude (the "Add Plan" wizard's prompt templates), Claude is
-now asked to name the specific apps/tools/websites each task needs. Right after you import the
-plan, those get taught automatically to the same on-plan keyword list Settings' activity
-classification rules use — so time spent in them starts counting toward staying on-plan without
-you having to add each one by hand. A short message tells you what was learned; you can always
-edit or remove any of it afterward from Settings.
+When you generate a plan through Claude (the "Add Plan" wizard's prompt templates), Claude is asked to name the specific apps/tools/websites each task needs. Since 2026-11-12 these are only kept in the plan: Planillium no longer turns them into activity keywords (the keyword lists were removed; learned rules decide).
 
 A plan you were already partway through before this existed isn't left out: if its tasks carry a
 tools list (added by hand or by asking Claude to add one), its card on the Plans page shows a
@@ -187,7 +182,7 @@ In the App filter, entries that are just a window title with no dash (for exampl
 
 Each of those four filter lists starts with a "-" entry: tick it to see the entries that have no value for that field (never categorized, no tag, no page, no app). It combines with the other ticks and filters. Next to the search box, a chooser sets which field the search looks in: All fields (the default), App, Page, Description, Category or Tag.
 
-**Marking many rows at once.** Two menus above the list, "Set category" (on-plan, off-plan, paid, neutral, idle) and "Set tag" (every tag, or Clear tag), work on every entry that matches your current filters and search — not only the ones loaded on screen. If you tick some rows, they work on the ticked rows only; the line next to "Select all" says which. Before anything changes, a dialog shows how many rows have no value yet (will be filled), how many have another value (will be overwritten), how many already have it (unchanged), and the total; "Mark N rows" goes ahead, Cancel changes nothing. A backup copy of your data is saved first (the data folder's `backups` subfolder keeps the last 5). Afterwards a message says "Marked N rows as X" with an Undo button. Settings ▸ Change history lists your last 20 bulk changes (kept 30 days), each with its own Undo. Undo puts every row back exactly as it was before that change; rows you changed since (edited, split, re-marked or deleted) are left alone and the message says how many. Marking paid or idle teaches nothing. Rows that no longer match your filters after marking leave the list (the message counts them); your ticks stay until you change them. Marking on-plan, off-plan or neutral on rows you ticked also teaches the tracker each row's app or page as a keyword; marking all matches without ticking teaches no keywords. Undo forgets the keywords that change taught — keywords you already had are kept, and so is any you changed since in Settings ▸ Activity keywords. Each backup is a full copy of your data, including your diary's full window titles, so keep the data folder private.
+**Marking many rows at once.** Two menus above the list, "Set category" (on-plan, off-plan, paid, neutral, idle) and "Set tag" (every tag, or Clear tag), work on every entry that matches your current filters and search — not only the ones loaded on screen. If you tick some rows, they work on the ticked rows only; the line next to "Select all" says which. Before anything changes, a dialog shows how many rows have no value yet (will be filled), how many have another value (will be overwritten), how many already have it (unchanged), and the total; "Mark N rows" goes ahead, Cancel changes nothing. A backup copy of your data is saved first (the data folder's `backups` subfolder keeps the last 5, plus the first backup of each of the last 14 days). Afterwards a message says "Marked N rows as X" with an Undo button. Settings ▸ Change history lists your last 20 bulk changes (kept 30 days), each with its own Undo. Undo puts every row back exactly as it was before that change; rows you changed since (edited, split, re-marked or deleted) are left alone and the message says how many. Marking paid or idle teaches nothing. Rows that no longer match your filters after marking leave the list (the message counts them); your ticks stay until you change them. Marking on-plan, off-plan or neutral on rows you ticked also teaches the tracker each row's app or page as a keyword; marking all matches without ticking teaches no keywords. Undo forgets the keywords that change taught — keywords you already had are kept, and so is any you changed since in Settings ▸ Learned rules. Each backup is a full copy of your data, including your diary's full window titles, so keep the data folder private.
 
 The diary list itself only loads a batch of entries at a time (40 up front) rather than the whole
 matching history at once, so a long search or a busy day still stays responsive. Under the list,
@@ -200,7 +195,7 @@ clicked into.
 
 ## Settings and configuration
 
-Settings is organised as seven sections — General, Hours & reminders, Scoring, Activity keywords,
+Settings is organised as seven sections — General, Hours & reminders, Scoring, Learned rules,
 Idle-answer library, TickTick, AI, and Data — chosen from the menu down the right-hand side. Each menu
 entry shows a summary of what that section currently holds, so you can read your whole
 configuration off the menu without opening anything, and go straight to the part you want to
@@ -228,9 +223,9 @@ recorded at all. Outside them nothing is tracked, and time away isn't counted ag
 back-filled as unaccounted time. So if you want early mornings or evenings on the record, widen
 your working hours; if you only want your working day logged, leave them as they are. One exception: after hours, work that a confident learned rule marks as on-plan is still recorded.
 
-**Learned rules.** When you tick Diary rows and mark them, Planillium offers a rule (an app plus words from the window title, with how many examples agree and a range); you confirm it and can edit the words. A saved rule acts at once, in and out of working hours (after hours only for on-plan work). The most specific rule wins, and a rule beats the keyword lists. Settings ▸ Activity keywords shows your rules first, the keyword boxes below them (used only when no rule matches) (search box; Delete asks first; Undo is in Change history). The Diary's "Rule status" filter shows rows by rule: acted automatically, suggested, marked by you, or no rule.
+**Learned rules.** When you tick Diary rows and mark them, Planillium offers a rule (an app plus words from the window title, with how many examples agree and a range); you confirm it and can edit the words. Words are separated by commas and a rule matches when ANY one of them is in the title, in any word form ("акт" also fires on акты, актов) ("договор, договора" is one rule). Filler words, app names, numbers and file types are never offered and are refused when typed. In Settings ▸ Learned rules each app has one card with its rules inside; "Add rule" creates one by hand (leave the words empty for a rule that covers every window of the app, e.g. AnyDesk; it acts at once and any rule with a matching word beats it) (adding to an app + category + tag that already has a rule merges the words). A saved rule acts at once, in and out of working hours (after hours only for on-plan work). The most specific rule wins, and a rule beats the keyword lists. Settings ▸ Learned rules lists your rules (search box; Delete asks first; Undo is in Change history). "Apply to history" (next to Add rule) runs your current rules over the past diary: a dialog says how many rows would change; rows you marked by hand, idle and day-off rows are left alone; a backup is saved first and Undo is in Change history. The Diary's "Rule status" filter shows rows by rule: acted automatically, suggested, marked by you, or no rule.
 
-**Rules with a tag, and adding entries by hand.** When you tick Diary rows and mark them with a paid tag (for example Studioshoo), Planillium can offer a rule "app + words -> Studioshoo"; it works like any learned rule (acts at once) and shows in Settings > Activity keywords. After working hours, a rule that marks on-plan work and carries a tag records that work with the tag, so it counts as paid work, in income and in points; a rule that marks it neutral records nothing. To log time yourself (for example an evening session that was not tracked), press "Add entry" in the Diary: date, start, end, category, optional tag and note. An entry that overlaps an existing one is refused and the message names the clash; entries that only touch are fine. A backup is saved first and the message offers Undo (also in Settings > Change history).
+**Rules with a tag, and adding entries by hand.** When you tick Diary rows and mark them with a paid tag (for example Studioshoo), Planillium can offer a rule "app + words -> Studioshoo"; it works like any learned rule (acts at once) and shows in Settings ▸ Learned rules. After working hours, a rule that marks on-plan work and carries a tag records that work with the tag, so it counts as paid work, in income and in points (this holds whether the rule's category is on-plan or neutral); a rule with no tag that marks it neutral records nothing. To log time yourself (for example an evening session that was not tracked), press "Add entry" in the Diary: date, start, end, category, optional tag and note. An entry that overlaps an existing one is refused and the message names the clash; entries that only touch are fine. A backup is saved first and the message offers Undo (also in Settings > Change history).
 
 **Scoring.** Every rule in the score formula is editable: what a completed task is worth, the
 bonus for extra tasks the same day, what a missed task costs, points per hour on-plan and
@@ -240,14 +235,7 @@ days an overdue task keeps costing you, the flat fee for replanning all overdue 
 already closed keep the score they were credited with, and are only recalculated if you edit
 that day's diary.
 
-Activity classification rules (ACTIVITY KEYWORDS) match on a window title, so they can be as
-specific as you need — "Chrome - LinkedIn" and "Chrome - Synology" can be taught as different
-categories even though both are Chrome. Whenever the app teaches a keyword for you automatically
-(marking a diary entry on/off-plan, or importing a plan's tools list), it refuses a bare browser
-name by itself (just "Chrome", "Edge", etc.) — a browser hosts both on-plan and off-plan content
-depending on the tab, so treating the whole browser as one category would misclassify everything
-in it. Typing directly into the ACTIVITY KEYWORDS boxes here has no such restriction, since that's
-a deliberate manual edit rather than an automatic guess.
+Window classification is done by the learned rules only (Settings ▸ Learned rules). A window no rule decides counts as neutral. The old Activity keywords boxes were removed on 2026-11-12; an old "activity_rules" entry in config.json is ignored.
 
 A separate end-of-day nudge warns you once, a configurable number of hours before the day's review
 time (2 hours by default), if any of today's or overdue tasks are still open — a plain toast

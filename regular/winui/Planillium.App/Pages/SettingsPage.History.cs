@@ -56,6 +56,7 @@ public sealed partial class SettingsPage
             DataChangeDoor.Field.DiaryCategory => "diary category",
             DataChangeDoor.Field.LearnedRules => "learned rule",
             DataChangeDoor.Field.DiaryAdd => "added entry",
+            DataChangeDoor.Field.DiaryRules => "rules applied to history",
             _ => "diary tag",
         };
         var title = new TextBlock
@@ -127,17 +128,10 @@ public sealed partial class SettingsPage
         SaveStatus.Text = "Undoing…";
         try
         {
-            // Read before the Undo rewrites config.json: were the keyword boxes edited but not saved?
-            var boxesUnedited = ActivityKeywordsUnedited();
             var result = await Task.Run(() => DataChangeDoor.Undo(c.Id));
             var status = DataChangeDoor.DescribeUndo(result);
             if (result.KeywordsForgotten.Count > 0)
             {
-                // Keep the boxes in step with config.json, or the next Save would write the
-                // forgotten keywords straight back. Unsaved edits there are left alone, with a note.
-                if (boxesUnedited) LoadActivityKeywords();
-                else status += " Your unsaved edits in Activity keywords were kept — saving them " +
-                               "would bring the forgotten keywords back; remove those lines first.";
                 RefreshSummaries();
                 (App.MainWindow as MainWindow)?.RestartTracker();
             }

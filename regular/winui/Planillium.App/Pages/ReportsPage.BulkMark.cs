@@ -148,11 +148,8 @@ public sealed partial class ReportsPage
                 return;
             }
 
-            // A category mark of TICKED rows also teaches the tracker each row's app/page keyword
-            // (Settings ▸ Activity keywords), recorded with the change so Undo forgets exactly
-            // the ones it newly taught (G3 round 2). Marking all filter matches teaches nothing;
-            // tags never teach.
-            var learned = new List<string>();
+            // A category mark of TICKED rows offers learned rules (below); since 2026-11-12 it no longer
+            // teaches activity keywords (the lists were removed). Marking all filter matches teaches nothing.
             var newRules = new List<long>();
             if (!isCategory && teach && value is not null
                 && PaidTags.All().Any(p => DiaryTag.Same(p.Value, value)))
@@ -163,24 +160,9 @@ public sealed partial class ReportsPage
             if (isCategory)
             {
                 // Paid (bought entertainment) and Idle are states, not a kind of activity: marking rows
-                // with them teaches no keyword or rule (2026-11-05, Set category menu got Paid and Idle).
+                // with them teaches no rule (2026-11-05, Set category menu got Paid and Idle).
                 if (teach && value is DiaryCategory.OnPlan or DiaryCategory.OffPlan or DiaryCategory.Neutral)
                 {
-                    var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var row in rows)
-                    {
-                        // "idle" is a placeholder window, never an app: the category mark applies to
-                        // idle rows, but they teach no keyword (G3 round 3).
-                        if (string.Equals(row.Window, DiaryCategory.Idle, StringComparison.OrdinalIgnoreCase)) continue;
-                        var keyword = AppNames.Sub(row.Window) ?? AppNames.Group(row.Window);
-                        if (keyword is { Length: > 0 } && keyword != "—") keywords.Add(keyword);
-                    }
-                    try
-                    {
-                        learned = await Task.Run(() => DataChangeDoor.TeachKeywords(result.ChangeId, value!, keywords));
-                    }
-                    catch (Exception ex) { Log.Error("ReportsPage.BulkMark.Learn", ex); }
-                    if (learned.Count > 0) (App.MainWindow as MainWindow)?.RestartTracker();
                     // G9b: propose app + title-word rules for the same ticked rows (confirm / edit / skip).
                     newRules = await OfferLearnedRulesAsync(result.ChangeId, value!, valueLabel, rows);
                 }
@@ -194,10 +176,6 @@ public sealed partial class ReportsPage
             var parts = new List<string> { "A backup was saved first." };
             if (leftView > 0)
                 parts.Add($"{FormatCount(leftView)} {RowsWord(leftView)} no longer match your filters, so they left the list.");
-            if (learned.Count > 0)
-                parts.Add($"Keywords learned for {valueLabel}: {string.Join(", ", learned.Take(8))}" +
-                          (learned.Count > 8 ? $" and {learned.Count - 8} more" : "") +
-                          " (Undo forgets these too).");
             if (newRules.Count > 0)
                 parts.Add($"{FormatCount(newRules.Count)} rule{(newRules.Count == 1 ? "" : "s")} saved (Undo removes them too).");
             ShowDiaryNotice(new(InfoBarSeverity.Success,

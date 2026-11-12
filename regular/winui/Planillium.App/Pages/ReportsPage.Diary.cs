@@ -701,6 +701,11 @@ public sealed partial class ReportsPage
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = diaryResults,
         };
+        // A ScrollViewer measures its content with unlimited width, so the Star "Details" column would
+        // stay at its minimum and the row would end short of the card (2026-11-05, user screenshot: still
+        // empty space). Size the list to the visible width instead; DiaryListWidth stays the floor.
+        diaryScroller.SizeChanged += (_, e) =>
+            diaryResults.Width = Math.Max(DiaryCardWidth, e.NewSize.Width);
         Body.Children.Add(diaryScroller);
         return diaryResults;
     }
@@ -913,7 +918,7 @@ public sealed partial class ReportsPage
             // to size itself to its true natural (Measure-time) width and never be
             // compressed by Arrange, which is what actually lets the ScrollViewer scroll to
             // it instead of clipping it out of existence.
-            var row = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Left };
+            var row = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Stretch };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
@@ -925,7 +930,7 @@ public sealed partial class ReportsPage
             // DiaryListWidth's own comment) — the longest label ("Procrastination") already
             // needed the ellipsis+tooltip at 90, so shrinking to 75 just makes that the norm
             // instead of the rare case, same tradeoff Page/Details already made.
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(75) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(65) });
             // Fixed pixel widths, not Auto/Star — the page body is a
             // MaxWidth+Center StackPanel (ReportsPage.xaml), which sizes
             // itself to its widest child's natural content width rather
@@ -939,7 +944,7 @@ public sealed partial class ReportsPage
             // columns (and their own filters — see BuildDiarySection) since
             // they're independently meaningful (e.g. "Chrome"/"GitHub" vs.
             // "Telegram"/"Liza Ponomarenko").
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(85) });
             // Page and Details narrowed from 210/260 (2026-08-13 report, "remove the horizontal
             // scroll bar... narrow the descriptions column truncating the name and showing …"),
             // then again from 130/160 (2026-08-28 report — the 08-13 pass never accounted for
@@ -949,12 +954,15 @@ public sealed partial class ReportsPage
             // the full text (TextTrimming.CharacterEllipsis below, same pattern App already
             // used) — narrowing just makes that the common case instead of the rare one, so the
             // row's natural width stops outgrowing the page (see DiaryListWidth's own comment).
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(115) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star), MinWidth = 100 });
             // 2026-11-05 (user: empty strip right of Split): the time-only view is 40px narrower than the
             // dated one and the always-present (usually empty) accept column added a spacing gap, so the
             // row ended short of DiaryListWidth. Details takes the slack; the accept column is added only
             // on a row that actually shows an accept button (index 9, below).
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 147 : 187) });
+            // 2026-11-05 (user: no empty space on the right; minutes flush right): Details is the one Star column,
+            // so the row always fills the card; the duration has its own right-aligned column after it.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star), MinWidth = 60 });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -1035,7 +1043,7 @@ public sealed partial class ReportsPage
             // column above. The tag used to append here as a " · #Label" suffix (2026-08-06)
             // but moved to its own column (2026-08-07 report) — easy to miss buried next to
             // the duration, and the first thing ellipsis-trimming would cut off.
-            var detailsText = !descInPage && desc is { Length: > 0 } ? $"“{desc}” {dur}m" : $"{dur}m";
+            var detailsText = !descInPage && desc is { Length: > 0 } ? $"“{desc}”" : "";
             var details = new TextBlock
             {
                 Text = detailsText,
@@ -1046,6 +1054,14 @@ public sealed partial class ReportsPage
                 Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
             };
             ToolTipService.SetToolTip(details, detailsText);
+            var durText = new TextBlock
+            {
+                Text = $"{dur}m",
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            };
             var edit = new Button
             {
                 Content = new FontIcon { Glyph = "", FontSize = 12 },
@@ -1081,15 +1097,20 @@ public sealed partial class ReportsPage
             Grid.SetColumn(tagText, 3);
             Grid.SetColumn(appText, 4);
             Grid.SetColumn(pageText, 5);
+            // 2026-11-05 (user: still empty): most rows have no separate note, so the page text spans the
+            // Details column too instead of leaving it blank beside a truncated page title.
+            if (detailsText.Length == 0) Grid.SetColumnSpan(pageText, 2);
             Grid.SetColumn(details, 6);
-            Grid.SetColumn(edit, 7);
-            Grid.SetColumn(split, 8);
+            Grid.SetColumn(durText, 7);
+            Grid.SetColumn(edit, 8);
+            Grid.SetColumn(split, 9);
             row.Children.Add(time);
             row.Children.Add(catText);
             row.Children.Add(tagText);
             row.Children.Add(appText);
             row.Children.Add(pageText);
             row.Children.Add(details);
+            row.Children.Add(durText);
             row.Children.Add(edit);
             row.Children.Add(split);
 
@@ -1144,7 +1165,7 @@ public sealed partial class ReportsPage
                     }
                 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                Grid.SetColumn(accept, 9);
+                Grid.SetColumn(accept, 10);
                 row.Children.Add(accept);
             }
             return row;

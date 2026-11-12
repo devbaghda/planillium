@@ -29,7 +29,7 @@ public static class DataChangeDoor
 
     /// <summary>The past-data fields the door can change. Whitelisted (never a free column name)
     /// so the SQL below can never be pointed at something else.</summary>
-    public enum Field { DiaryCategory, DiaryTag, LearnedRules, DiaryAdd }
+    public enum Field { DiaryCategory, DiaryTag, LearnedRules, DiaryAdd, DiaryRules }
 
     public sealed record Preview(int Filled, int Overwritten, int Unchanged, int Missing)
     {
@@ -56,6 +56,7 @@ public static class DataChangeDoor
         Field.DiaryTag => "tag",
         Field.LearnedRules => "learned_rules",   // rule-only change: no time_diary column is written
         Field.DiaryAdd => "row_added",            // G9c: a row added by hand; Undo deletes it again
+        Field.DiaryRules => "rules_applied",      // 2026-11-12: current learned rules applied to old rows (category + state + tag)
         _ => throw new ArgumentOutOfRangeException(nameof(f)),
     };
 
@@ -65,6 +66,7 @@ public static class DataChangeDoor
         "tag" => Field.DiaryTag,
         "learned_rules" => Field.LearnedRules,
         "row_added" => Field.DiaryAdd,
+        "rules_applied" => Field.DiaryRules,
         _ => throw new InvalidDataException($"Unknown change_log field '{column}'"),
     };
 
@@ -79,7 +81,7 @@ public static class DataChangeDoor
     /// had a different value; Unchanged = already this value; Missing = row no longer exists.</summary>
     public static Preview PreviewChange(IReadOnlyCollection<long> ids, Field field, string? newValue)
     {
-        if (field is Field.LearnedRules or Field.DiaryAdd) throw new ArgumentException("No row preview for this kind of change.", nameof(field));
+        if (field is Field.LearnedRules or Field.DiaryAdd or Field.DiaryRules) throw new ArgumentException("No row preview for this kind of change.", nameof(field));
         using var db = new Database();
         var current = ReadRows(db, ids);
         int filled = 0, overwritten = 0, unchanged = 0;
@@ -107,6 +109,7 @@ public static class DataChangeDoor
     {
         if (field == Field.LearnedRules) throw new ArgumentException("Use DeleteRule for rule changes.", nameof(field));
         if (field == Field.DiaryAdd) throw new ArgumentException("Use AddEntry to add a row.", nameof(field));
+        if (field == Field.DiaryRules) throw new ArgumentException("Use ApplyRulesToHistory.", nameof(field));
         if (field == Field.DiaryCategory && Norm(newValue) is null)
             throw new ArgumentException("A diary category can't be set to empty.", nameof(newValue));
         var backup = MakeBackup();
@@ -367,15 +370,15 @@ public static class DataChangeDoor
                 throw new InvalidOperationException("That change was already undone.");
             field = change.Field;
 
-            var saved = new List<(long RowId, string? Old, string Sig, string? OldRuleState)>();
+            var saved = new List<(long RowId, string? Old, string Sig, string? OldRuleState, string? OldTag)>();
             using (var read = db.CreateCommand())
             {
-                read.CommandText = "SELECT row_id, old_value, after_sig, old_rule_state FROM change_log_rows WHERE change_id=$c";
+                read.CommandText = "SELECT row_id, old_value, after_sig, old_rule_state, old_tag FROM change_log_rows WHERE change_id=$c";
                 read.Parameters.AddWithValue("$c", changeId);
                 using var r = read.ExecuteReader();
                 while (r.Read())
                     saved.Add((r.GetInt64(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetString(2),
-                        r.IsDBNull(3) ? null : r.GetString(3)));
+                        r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4)));
             }
 
             var current = ReadRows(db, saved.Select(s => s.RowId).ToList());
@@ -384,13 +387,16 @@ public static class DataChangeDoor
             // a row added by hand (G9c) is deleted again.
             update.CommandText = field == Field.DiaryAdd
                 ? "DELETE FROM time_diary WHERE id=$id AND $v IS NULL"
+                : field == Field.DiaryRules
+                ? "UPDATE time_diary SET category=$v, rule_state=$rs, tag=$tg WHERE id=$id"
                 : field == Field.DiaryCategory
                 ? "UPDATE time_diary SET category=$v, rule_state=$rs WHERE id=$id"
                 : $"UPDATE time_diary SET {Column(field)}=$v WHERE id=$id";
             var pv = update.Parameters.Add("$v", SqliteType.Text);
             var pid = update.Parameters.Add("$id", SqliteType.Integer);
-            var prs = field == Field.DiaryCategory ? update.Parameters.Add("$rs", SqliteType.Text) : null;
-            foreach (var (rowId, old, sig, oldRuleState) in saved)
+            var prs = field is Field.DiaryCategory or Field.DiaryRules ? update.Parameters.Add("$rs", SqliteType.Text) : null;
+            var ptg = field == Field.DiaryRules ? update.Parameters.Add("$tg", SqliteType.Text) : null;
+            foreach (var (rowId, old, sig, oldRuleState, oldTag) in saved)
             {
                 if (!current.TryGetValue(rowId, out var row) || Signature(row) != sig)
                 {
@@ -399,7 +405,8 @@ public static class DataChangeDoor
                 }
                 // The old value goes back exactly as it was stored ("" stays "", NULL stays NULL)
                 // — except a category, which the column never allows to be NULL.
-                pv.Value = field == Field.DiaryCategory ? old ?? "" : (object?)old ?? DBNull.Value;
+                pv.Value = field is Field.DiaryCategory or Field.DiaryRules ? old ?? "" : (object?)old ?? DBNull.Value;
+                if (ptg != null) ptg.Value = (object?)oldTag ?? DBNull.Value;
                 if (prs != null) prs.Value = (object?)oldRuleState ?? DBNull.Value;
                 pid.Value = rowId;
                 update.ExecuteNonQuery();
@@ -428,7 +435,7 @@ public static class DataChangeDoor
             mark.ExecuteNonQuery();
         });
 
-        if (field is Field.DiaryCategory or Field.DiaryAdd && dates.Count > 0)
+        if (field is Field.DiaryCategory or Field.DiaryAdd or Field.DiaryRules && dates.Count > 0)
             ScoreService.TryRecalculateDayScores(db, dates, "DataChangeDoor.Undo.RecalculateScore");
 
         // After the rows commit: config.json is a separate file, outside the transaction. The
@@ -472,9 +479,9 @@ public static class DataChangeDoor
                     string.Join(", ", r.KeywordsForgotten.Take(8)) +
                     (r.KeywordsForgotten.Count > 8 ? $" and {r.KeywordsForgotten.Count - 8} more" : "") + ".";
         if (r.KeywordsKept > 0)
-            text += $" Kept {Keywords(r.KeywordsKept)} you changed since in Settings ▸ Activity keywords.";
+            text += $" Kept {Keywords(r.KeywordsKept)} you changed since.";
         if (r.KeywordsFailed > 0)
-            text += $" Couldn't remove {Keywords(r.KeywordsFailed)} — check Settings ▸ Activity keywords.";
+            text += $" Couldn't remove {Keywords(r.KeywordsFailed)} — they are still in config.json.";
         return text;
     }
 
@@ -499,75 +506,111 @@ public static class DataChangeDoor
     /// <summary>Deletes a learned rule through the door: backup first, a history entry, then the
     /// delete - Undo brings the rule back. Rows the rule had acted on keep their stored values (E2).
     /// Returns the change id, or 0 when the rule no longer exists.</summary>
-    public static long DeleteRule(long ruleId)
+    public static long DeleteRule(long ruleId) => DeleteRules(new[] { ruleId });
+
+    /// <summary>Deletes several learned rules as ONE change (the Settings list shows the rules of an app
+    /// + category + tag as one sub-row). Returns the change id, 0 when none of them exists any more.</summary>
+    public static long DeleteRules(IReadOnlyList<long> ruleIds)
     {
         using (var peek = new Database())
-            if (LearnedRuleStore.GetRule(peek, ruleId) == null) return 0;
+            if (!ruleIds.Any(id => LearnedRuleStore.GetRule(peek, id) != null)) return 0;
         MakeBackup();
         using var db = new Database();
         long changeId = 0;
         db.RunInTransaction(() =>
         {
-            var rule = LearnedRuleStore.GetRule(db, ruleId);
-            if (rule == null) return;
-            using (var log = db.CreateCommand())
+            var rules = ruleIds.Distinct().Select(id => LearnedRuleStore.GetRule(db, id)).OfType<LearnedRule>().ToList();
+            if (rules.Count == 0) return;
+            var first = rules[0];
+            changeId = InsertRuleChange(db, $"Deleted rule: {first.App} + {(rules.All(r => r.Words.Count == 0) ? "any window" : string.Join(", ", rules.SelectMany(r => r.Words).Distinct()))}");
+            foreach (var rule in rules)
             {
-                log.CommandText =
-                    "INSERT INTO change_log (ts, label, tbl, field, new_value, row_count) " +
-                    "VALUES ($ts, $label, 'learned_rules', 'learned_rules', NULL, 0); SELECT last_insert_rowid();";
-                log.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
-                log.Parameters.AddWithValue("$label", $"Deleted rule: {rule.App} + {string.Join(" ", rule.Words)}");
-                changeId = Convert.ToInt64(log.ExecuteScalar(), CultureInfo.InvariantCulture);
+                InsertRuleOp(db, changeId, "deleted", rule);
+                LearnedRuleStore.DeleteRule(db, rule.Id);
             }
-            InsertRuleOp(db, changeId, "deleted", rule);
-            LearnedRuleStore.DeleteRule(db, ruleId);
             Prune(db);
         });
         return changeId;
     }
 
-    /// <summary>2026-11-05 (user): edits a saved rule's words, category and tag (the app stays). One history
-    /// entry holding a "deleted" op for the old rule and an "added" op for the new one, so Undo puts the old
-    /// rule back and removes the new. Backup first. Returns the change id, 0 when the rule is gone. Throws
-    /// ArgumentException (message is user-readable) for no usable word, a rule identical to the old one, or a
-    /// duplicate of another saved rule - checked before anything is written.</summary>
-    public static long EditRule(long ruleId, IEnumerable<string> words, string category, string? tag)
+    private static long InsertRuleChange(Database db, string label)
+    {
+        using var log = db.CreateCommand();
+        log.CommandText =
+            "INSERT INTO change_log (ts, label, tbl, field, new_value, row_count) " +
+            "VALUES ($ts, $label, 'learned_rules', 'learned_rules', NULL, 0); SELECT last_insert_rowid();";
+        log.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
+        log.Parameters.AddWithValue("$label", label);
+        return Convert.ToInt64(log.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>2026-11-05 (user): edits a saved rule's words, category and tag (the app stays).
+    /// See <see cref="SaveRule"/>.</summary>
+    public static long EditRule(long ruleId, IEnumerable<string> words, string category, string? tag) =>
+        SaveRule(null, new[] { ruleId }, words, category, tag);
+
+    /// <summary>2026-11-11 (user): adds a rule by hand; merges into the app's existing rule with the same
+    /// category and tag. See <see cref="SaveRule"/>.</summary>
+    public static long AddRuleByHand(string app, IEnumerable<string> words, string category, string? tag) =>
+        SaveRule(app, Array.Empty<long>(), words, category, tag);
+
+    /// <summary>Replaces the rules <paramref name="replaceIds"/> (none = a new rule) with ONE rule holding the
+    /// typed words (an OR list), category and tag. Any other rule of the same app + category + tag is merged in
+    /// too, so an app never ends up with two lines for the same outcome. One history entry with a "deleted" op
+    /// per replaced rule and an "added" op for the result, so Undo puts the old rules back and removes the new
+    /// one. Backup first. Returns the change id, 0 when the rules to edit are gone. Throws ArgumentException
+    /// (user-readable) for no usable word, junk words (named), no app, or no change - checked before anything
+    /// is written.</summary>
+    public static long SaveRule(string? app, IReadOnlyList<long> replaceIds, IEnumerable<string> words, string category, string? tag)
     {
         if (string.IsNullOrWhiteSpace(tag)) tag = null;
-        var norm = words.Select(w => TitleWords.NormalizeWord(w)).Where(w => w.Length > 0).Distinct().ToList();
-        if (norm.Count == 0) throw new ArgumentException("Type at least one word from the window title.");
-        var key = LearnedRuleStore.JoinWords(norm);
         using (var peek = new Database())
         {
             var all = LearnedRuleStore.LoadRules(peek);
-            var old = all.FirstOrDefault(x => x.Id == ruleId);
-            if (old == null) return 0;
-            bool Same(LearnedRule x) => string.Equals(x.App, old.App, StringComparison.OrdinalIgnoreCase)
-                && LearnedRuleStore.JoinWords(x.Words) == key && x.Category == category
-                && string.Equals(x.Tag ?? "", tag ?? "", StringComparison.OrdinalIgnoreCase);
-            if (Same(old)) throw new ArgumentException("Nothing changed.");
-            if (all.Any(x => x.Id != ruleId && Same(x)))
-                throw new ArgumentException("Another saved rule already says exactly this.");
+            var old = all.Where(x => replaceIds.Contains(x.Id)).ToList();
+            if (replaceIds.Count > 0 && old.Count == 0) return 0;
+            var ruleApp = old.Count > 0 ? old[0].App : (app ?? "").Trim();
+            if (ruleApp.Length == 0) throw new ArgumentException("Pick or type the app.");
+            var (typed, refused) = TitleWords.ParseTyped(string.Join(",", words), ruleApp);
+            if (refused.Count > 0)
+                throw new ArgumentException("These can't be rule words (filler, app or file-type names, numbers): " +
+                                            string.Join(", ", refused.Distinct()) + ".");
+            // No words = an app-only rule: every window of the app (user 2026-11-12). It swallows the same
+            // group's word rules (redundant); a word rule never merges into an app-only one.
+            var appOnly = typed.Count == 0;
+            var others = all.Where(x => !replaceIds.Contains(x.Id)
+                && string.Equals(x.App, ruleApp, StringComparison.OrdinalIgnoreCase) && x.Category == category
+                && string.Equals(x.Tag ?? "", tag ?? "", StringComparison.OrdinalIgnoreCase)
+                && (appOnly || x.Words.Count > 0)).ToList();
+            var toRemove = old.Concat(others).ToList();
+            var merged = appOnly ? new List<string>() : typed.Concat(others.SelectMany(o => o.Words)).Distinct().ToList();
+            if (toRemove.Count == 1)
+            {
+                var one = toRemove[0];
+                if (LearnedRuleStore.JoinWords(one.Words) == LearnedRuleStore.JoinWords(merged) && one.Category == category
+                    && string.Equals(one.Tag ?? "", tag ?? "", StringComparison.OrdinalIgnoreCase))
+                    throw new ArgumentException(old.Count == 0 ? "That rule already exists." : "Nothing changed.");
+            }
+            return WriteRuleGroup(ruleApp, toRemove.Select(r => r.Id).ToList(), merged, category, tag, old.Count == 0);
         }
+    }
+
+    private static long WriteRuleGroup(string app, IReadOnlyList<long> removeIds, IReadOnlyList<string> words,
+        string category, string? tag, bool isAdd)
+    {
         MakeBackup();
         using var db = new Database();
         long changeId = 0;
         db.RunInTransaction(() =>
         {
-            var old = LearnedRuleStore.GetRule(db, ruleId);
-            if (old == null) return;
-            using (var log = db.CreateCommand())
+            var removing = removeIds.Select(id => LearnedRuleStore.GetRule(db, id)).OfType<LearnedRule>().ToList();
+            changeId = InsertRuleChange(db, $"{(isAdd ? "Added" : "Edited")} rule: {app} + {(words.Count == 0 ? "any window" : string.Join(", ", words.OrderBy(w => w, StringComparer.Ordinal)))}");
+            foreach (var r in removing)
             {
-                log.CommandText =
-                    "INSERT INTO change_log (ts, label, tbl, field, new_value, row_count) " +
-                    "VALUES ($ts, $label, 'learned_rules', 'learned_rules', NULL, 0); SELECT last_insert_rowid();";
-                log.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
-                log.Parameters.AddWithValue("$label", $"Edited rule: {old.App} + {key}");
-                changeId = Convert.ToInt64(log.ExecuteScalar(), CultureInfo.InvariantCulture);
+                InsertRuleOp(db, changeId, "deleted", r);
+                LearnedRuleStore.DeleteRule(db, r.Id);
             }
-            InsertRuleOp(db, changeId, "deleted", old);
-            LearnedRuleStore.DeleteRule(db, ruleId);
-            var newId = LearnedRuleStore.AddRule(db, old.App, norm, category, tag);
+            var newId = LearnedRuleStore.AddRule(db, app, words, category, tag, allowAppOnly: true);
             var made = LearnedRuleStore.GetRule(db, newId);
             if (made != null) InsertRuleOp(db, changeId, "added", made);
             Prune(db);
@@ -606,7 +649,9 @@ public static class DataChangeDoor
                     r.IsDBNull(5) || r.GetString(5).Length == 0 ? null : r.GetString(5)));
         }
         int removed = 0, restored = 0;
-        foreach (var (op, ruleId, app, words, category, tag) in ops)
+        // Removals of what the change created come first: a restored rule can have the same words as the
+        // rule that replaced it, and must not be swallowed by it.
+        foreach (var (op, ruleId, app, words, category, tag) in ops.OrderBy(o => o.Op == "added" ? 0 : 1))
         {
             if (op == "added")
             {
@@ -622,7 +667,7 @@ public static class DataChangeDoor
             }
             else if (op == "deleted")
             {
-                if (LearnedRuleStore.AddRule(db, app, LearnedRuleStore.SplitWords(words), category, tag) > 0) restored++;
+                if (LearnedRuleStore.AddRule(db, app, LearnedRuleStore.SplitWords(words), category, tag, allowAppOnly: true) > 0) restored++;
             }
         }
         return (removed, restored);
@@ -689,8 +734,8 @@ public static class DataChangeDoor
 
     /// <summary>
     /// Copies progress.db to data/backups/progress-yyyy-MM-dd_HHmmss-fff.db with SQLite's own online
-    /// backup (a consistent copy even while the tracker is writing), then deletes all but the
-    /// newest 5. Returns the new file's path. Throws on failure — the caller must not write then.
+    /// backup (a consistent copy even while the tracker is writing), then prunes (newest 5 plus
+    /// the earliest backup of each of the last 14 days). Returns the new file's path. Throws on failure — the caller must not write then.
     /// </summary>
     public static string MakeBackup()
     {
@@ -710,12 +755,34 @@ public static class DataChangeDoor
             src.BackupDatabase(dst);
         }
 
-        foreach (var old in ListBackups().Skip(BackupsKept))
+        foreach (var old in BackupsToPrune(ListBackups()))
         {
             try { File.Delete(old); }
             catch (Exception ex) { Log.Error("DataChangeDoor.PruneBackup", ex); }
         }
         return path;
+    }
+
+    /// <summary>Days of history kept as one-per-day backups on top of the newest <see cref="BackupsKept"/>.</summary>
+    public const int DailyBackupDays = 14;
+
+    /// <summary>
+    /// Which backups to delete (<paramref name="newestFirst"/> as <see cref="ListBackups"/> returns them).
+    /// Keeps the newest <see cref="BackupsKept"/> AND the earliest backup of each of the last
+    /// <see cref="DailyBackupDays"/> calendar days. 2026-11-12: a burst of backups (a test run made dozens within a
+    /// second) used to push every older backup out of a newest-5-only window and the real pre-change copies were lost.
+    /// </summary>
+    internal static List<string> BackupsToPrune(IReadOnlyList<string> newestFirst)
+    {
+        var keep = new HashSet<string>(newestFirst.Take(BackupsKept));
+        var byDay = new Dictionary<string, string>();   // yyyy-MM-dd -> earliest file of that day
+        foreach (var f in newestFirst)                  // newest first, so the last write per day is the earliest
+        {
+            var n = Path.GetFileName(f);                // progress-yyyy-MM-dd...
+            if (n.Length >= 20 && n.StartsWith("progress-", StringComparison.Ordinal)) byDay[n.Substring(9, 10)] = f;
+        }
+        foreach (var kv in byDay.OrderByDescending(k => k.Key, StringComparer.Ordinal).Take(DailyBackupDays)) keep.Add(kv.Value);
+        return newestFirst.Where(f => !keep.Contains(f)).ToList();
     }
 
     /// <summary>Backup files, newest first (the names sort by time).</summary>
@@ -741,6 +808,119 @@ public static class DataChangeDoor
             }
         }
         return failed;
+    }
+
+    // ── apply the current learned rules to past rows (2026-11-12) ─────────────
+
+    /// <summary>What one pass of the current rules over the diary would change.
+    /// <c>Skipped</c>: rows left alone because they are manual, idle, day-off or have no window.</summary>
+    public sealed record RulesOnHistoryPreview(int Rows, int Changed, int Unchanged, int Skipped, int NoRule,
+        IReadOnlyDictionary<string, int> ByCategory);
+
+    private sealed record RuleEdit(Row Row, string Category, string? Tag);
+
+    /// <summary>Rows a rule pass may touch: not marked by hand, not idle / day-off, with a window title.</summary>
+    internal static bool EligibleForRules(string category, string? ruleState, string window) =>
+        ruleState != RuleStates.Manual
+        && category is not (DiaryCategory.Idle or DiaryCategory.DayOff)
+        && !string.IsNullOrWhiteSpace(window) && window != "idle";
+
+    private static (List<RuleEdit> Edits, RulesOnHistoryPreview Preview) PlanRulesOnHistory(Database db)
+    {
+        var rules = LearnedRuleStore.LoadRules(db);
+        var edits = new List<RuleEdit>();
+        int rows = 0, unchanged = 0, skipped = 0, noRule = 0;
+        var byCat = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        using var cmd = db.CreateCommand();
+        cmd.CommandText =
+            "SELECT id, date, start_time, end_time, duration_min, category, window, description, tag, rule_state FROM time_diary";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            rows++;
+            var dateText = r.GetString(1);
+            dateText.TryParseIsoDate(out var date);
+            var row = new Row(r.GetInt64(0), date, dateText, r.GetString(2), r.GetString(3), r.GetInt32(4),
+                r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7),
+                r.IsDBNull(8) ? null : r.GetString(8), r.IsDBNull(9) ? null : r.GetString(9));
+            if (!EligibleForRules(row.Category, row.RuleState, row.Window)) { skipped++; continue; }
+            var hit = RuleMatcher.Match(rules, AppNames.Group(row.Window), row.Window);
+            if (hit is null) { noRule++; continue; }
+            var tag = Norm(hit.Tag) ?? row.Tag;   // a rule without a tag never erases a tag already on the row
+            if (row.Category == hit.Category && row.RuleState == RuleStates.Auto && Norm(row.Tag) == Norm(tag))
+            { unchanged++; continue; }
+            edits.Add(new RuleEdit(row, hit.Category, tag));
+            byCat[hit.Category] = byCat.GetValueOrDefault(hit.Category) + 1;
+        }
+        return (edits, new RulesOnHistoryPreview(rows, edits.Count, unchanged, skipped, noRule, byCat));
+    }
+
+    /// <summary>Read-only: how many rows the current rules would change.</summary>
+    public static RulesOnHistoryPreview PreviewRulesOnHistory()
+    {
+        using var db = new Database();
+        return PlanRulesOnHistory(db).Preview;
+    }
+
+    /// <summary>Backs up, then runs the current learned rules over every eligible past row (category,
+    /// rule_state 'auto', and the rule's tag), recording each row's old values so Undo puts them back.
+    /// One transaction; throws and writes nothing if the backup fails. Re-scores the touched days.</summary>
+    public static ApplyResult ApplyRulesToHistory()
+    {
+        var backup = MakeBackup();
+        using var db = new Database();
+        var dates = new HashSet<DateOnly>();
+        long changeId = 0;
+        var changed = 0;
+        db.RunInTransaction(() =>
+        {
+            var (edits, _) = PlanRulesOnHistory(db);
+            using (var log = db.CreateCommand())
+            {
+                log.CommandText =
+                    "INSERT INTO change_log (ts, label, tbl, field, new_value, row_count) " +
+                    "VALUES ($ts, $label, 'time_diary', 'rules_applied', NULL, $n); SELECT last_insert_rowid();";
+                log.Parameters.AddWithValue("$ts", DateTime.Now.ToIsoTimestamp());
+                log.Parameters.AddWithValue("$label", "Applied the learned rules to the history");
+                log.Parameters.AddWithValue("$n", edits.Count);
+                changeId = Convert.ToInt64(log.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+            using var update = db.CreateCommand();
+            update.CommandText = "UPDATE time_diary SET category=$v, rule_state='auto', tag=$tg WHERE id=$id";
+            var pv = update.Parameters.Add("$v", SqliteType.Text);
+            var ptg = update.Parameters.Add("$tg", SqliteType.Text);
+            var pid = update.Parameters.Add("$id", SqliteType.Integer);
+            using var record = db.CreateCommand();
+            record.CommandText =
+                "INSERT INTO change_log_rows (change_id, row_id, old_value, after_sig, old_rule_state, old_tag) " +
+                "VALUES ($c, $r, $old, $sig, $ors, $otg)";
+            record.Parameters.AddWithValue("$c", changeId);
+            var pr = record.Parameters.Add("$r", SqliteType.Integer);
+            var pold = record.Parameters.Add("$old", SqliteType.Text);
+            var psig = record.Parameters.Add("$sig", SqliteType.Text);
+            var pors = record.Parameters.Add("$ors", SqliteType.Text);
+            var potg = record.Parameters.Add("$otg", SqliteType.Text);
+            foreach (var e in edits)
+            {
+                pv.Value = e.Category;
+                ptg.Value = (object?)Norm(e.Tag) ?? DBNull.Value;
+                pid.Value = e.Row.Id;
+                update.ExecuteNonQuery();
+                var after = e.Row with { Category = e.Category, Tag = Norm(e.Tag), RuleState = RuleStates.Auto };
+                pr.Value = e.Row.Id;
+                pold.Value = e.Row.Category;
+                psig.Value = Signature(after);
+                pors.Value = (object?)e.Row.RuleState ?? DBNull.Value;
+                potg.Value = (object?)e.Row.Tag ?? DBNull.Value;
+                record.ExecuteNonQuery();
+                dates.Add(e.Row.Date);
+            }
+            changed = edits.Count;
+            Prune(db);
+        });
+        if (dates.Count > 0)
+            ScoreService.TryRecalculateDayScores(db, dates, "DataChangeDoor.ApplyRulesToHistory.RecalculateScore");
+        return new ApplyResult(changeId, changed, backup, dates);
     }
 
     // ── row access ───────────────────────────────────────────────────────────
