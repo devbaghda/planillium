@@ -266,8 +266,9 @@ tool, not a cloud-first collaboration app. Specifically:
   in place for a short while without closing the app — right-click the tray icon and choose
   "Pause tracking" (the same menu item then reads "Resume tracking"). It also pauses entirely
   on a recurring rest day (a weekday you've excluded for a plan). A single day manually marked
-  "Day off" is different: tracking keeps running as normal on that day — only the off-plan
-  reminder is silenced, so the diary can still record what you did without nagging you about it.
+  "Day off" is different: the whole day behaves like the hours outside your working hours —
+  only work your learned rules recognise as on-plan (or paid-tagged) is recorded, idle time is
+  not recorded, and there is no off-plan reminder and no "where were you" question.
 - **Evening review and idle answers.** Anything you type into the evening review or an idle-time
   prompt is stored as free text, locally, exactly as you wrote it. The idle prompt remembers the
   category you gave each answer and pre-selects it the next time you give the same answer.

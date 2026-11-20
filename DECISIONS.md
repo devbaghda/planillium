@@ -105,9 +105,14 @@
     several) now recalculates that date's `daily_score` via `RecalculateDayScore`
     (unlike `CreditDayScoreIfMissing`, this overwrites an already-credited day — it has
     to, since the whole point is a stale figure needs updating). The off-plan nag alert
-    also doesn't fire on a manually-off day (`ActivityTracker.IsFullyOffToday`) — but
-    unlike a recurring rest day, tracking itself still runs normally on a manual day off
-    (diary rows keep getting written); only scoring and the alert are suppressed.
+    also doesn't fire on a manually-off day (`ActivityTracker.IsFullyOffToday`).
+    **Tracking on a manual day off (changed 2026-11-20, user; replaces the 2026-07-17 "keep
+    tracking normally" rule):** the whole day behaves like non-working hours — only confident
+    on-plan work, or neutral work with a pay tag, is recorded; nothing else; idle is never
+    recorded; no "where were you" question and no evening-review gap. A recurring rest day
+    still tracks nothing at all. Marking/unmarking a day off takes effect within ~2 minutes
+    (the check is re-read, not once per day); work already open when the day is marked off is
+    kept. Acceptance: `context/acceptance/2026-11-20-day-off-tracks-like-after-hours.md`.
 11. **Queued plan ideas (2026-07-22)**: hitting the 2-active-plan limit in "Add Plan" no
     longer just blocks — it offers to save the new plan to `plans/queued/` instead. A
     queued plan is completely inert (not loaded into scoring/Today/Schedule, no

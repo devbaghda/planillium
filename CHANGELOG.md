@@ -5,6 +5,8 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+- **Manual day off tracks like non-working hours.** On a day you mark as "Day off" the app now records only work your learned rules recognise as on-plan (or paid-tagged), never idle time, and asks no "where were you" question. Marking or un-marking a day off takes effect within about 2 minutes instead of at midnight.
+
 - **Apply rules to history.** Settings > Learned rules has an "Apply to history" button: it shows how many past diary rows the current rules would change, then sets them (rows you marked by hand, idle and day-off rows are left alone). Backed up first and undoable from Change history.
 
 - Backups: besides the newest 5, the first backup of each of the last 14 days is kept, so a burst of backups can no longer push out every older one.

@@ -86,13 +86,18 @@ public sealed class ActivityTracker : IDisposable
     private DateOnly? _restCheckDate;
     private bool _restDayToday;
 
-    // "Every active plan off today" — recurring exclusion OR a manually-marked day off —
-    // resolved once per calendar day like _restDayToday above. Deliberately separate: a
-    // recurring rest day already skips tracking entirely (see PollOnce), but a manual day
-    // off should keep tracking normally (2026-07-17 request — "I want to keep the track
-    // on those days"), it just shouldn't nag with the off-plan alert.
+    // "Every active plan off today" — recurring exclusion OR a manually-marked day off.
+    // Deliberately separate from _restDayToday: a recurring rest day skips tracking entirely
+    // (see PollOnce), while a manual day off tracks like non-working hours (user, 2026-11-20;
+    // it replaced the 2026-07-17 "keep tracking normally" rule). Re-read every
+    // FullyOffRecheck so marking/unmarking a day off mid-day takes effect within minutes,
+    // not at the next midnight.
+    private static readonly TimeSpan FullyOffRecheck = TimeSpan.FromMinutes(2);
     private DateOnly? _fullyOffCheckDate;
+    private DateTime _fullyOffCheckedAt;
     private bool _fullyOffToday;
+    /// <summary>Test seam: forces the "every plan off today" answer.</summary>
+    internal bool? FullyOffForTest { get; set; }
 
     // High-water mark of time already written to the diary by an out-of-band
     // reconcile (the evening review's gap sweep). The return-from-idle handler
@@ -349,20 +354,21 @@ public sealed class ActivityTracker : IDisposable
 
     /// <summary>
     /// Whether every active plan is off today — recurring exclusion OR a manually-marked
-    /// day off (plan_days_off). Only gates the off-plan nag alert (CheckAlert) — unlike
-    /// IsRestDayToday, this does NOT stop tracking; a manually-off day still logs its
-    /// diary normally (2026-07-17 request). Cached per calendar day like IsRestDayToday,
-    /// but needs a plan_days_off read, so it takes PollOnce's already-open connection
-    /// rather than opening a second one just for this.
+    /// day off (plan_days_off). Gates the off-plan nag and makes the whole day track like
+    /// non-working hours (PollOnce, user 2026-11-20) — unlike IsRestDayToday, which stops
+    /// tracking altogether. Cached, re-read every FullyOffRecheck; needs a plan_days_off
+    /// read, so it takes PollOnce's already-open connection rather than opening a second one.
     /// </summary>
     private bool IsFullyOffToday(SqliteConnection conn)
     {
+        if (FullyOffForTest is bool forced) return forced;
         var today = DateOnly.FromDateTime(DateTime.Today);
         lock (_dayStateLock)
         {
-            if (_fullyOffCheckDate != today)
+            if (_fullyOffCheckDate != today || DateTime.Now - _fullyOffCheckedAt >= FullyOffRecheck)
             {
                 _fullyOffCheckDate = today;
+                _fullyOffCheckedAt = DateTime.Now;
                 try
                 {
                     var plans = PlanStore.LoadActivePlans();
@@ -400,6 +406,8 @@ public sealed class ActivityTracker : IDisposable
     public (int Minutes, DateTime Start)? PendingDayGap(Database db, DateTime? asOf = null)
     {
         if (IsRestDayToday()) return null;
+        // A manual day off tracks like non-working hours: no stretch of it is "unaccounted".
+        if (FullyOffForTest is bool forced ? forced : OffTodayOwnConnection()) return null;
         var now = asOf ?? DateTime.Now;
         var diaryStartToday = now.Date + _workStart.ToTimeSpan();
         var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
@@ -438,6 +446,12 @@ public sealed class ActivityTracker : IDisposable
 
         var mins = (int)(gapEnd - gapStart).TotalMinutes;
         return mins >= _idleThresholdMin ? (mins, gapStart) : null;
+    }
+
+    private bool OffTodayOwnConnection()
+    {
+        try { using var c = AppPaths.OpenConnection(); return IsFullyOffToday(c); }
+        catch (Exception ex) { Log.Error("ActivityTracker.OffTodayOwnConnection", ex); return false; }
     }
 
     /// <summary>Test-only hook: opens a session the same way HandleActiveSession would, without
@@ -605,10 +619,17 @@ public sealed class ActivityTracker : IDisposable
         var (rawCls, ruleState, ruleTag) = ClassifyRule(title);
         _pollTag = ruleTag;
         var cls = EffectiveClass(rawCls);
-        var diaryEndToday = now.Date + _workEnd.ToTimeSpan();
         var idleThresholdSec = _idleThresholdMin * 60;
 
         using var conn = AppPaths.OpenConnection();
+
+        // A manual day off (every plan off) tracks like non-working hours for the WHOLE day
+        // (user, 2026-11-20): only confident work is recorded, idle never is, and no gap is
+        // asked about. Collapsing the idle window to the day's start makes HandleIdleReturn
+        // log and ask nothing; an already-open normal session is closed at "now", not lost.
+        var offDay = IsFullyOffToday(conn);
+        var diaryEndToday = offDay ? now.Date + _workStart.ToTimeSpan() : now.Date + _workEnd.ToTimeSpan();
+        var sessionCutoff = offDay ? now : diaryEndToday;
 
         // Order matters here (2026-07-21 fix, confirmed via the 2026-07-20 diagnostics below):
         // HandleSleepGap must run BEFORE HandleSessionLock. Both can set _idleSince/_idleNotified
@@ -640,7 +661,7 @@ public sealed class ActivityTracker : IDisposable
 
         if (_idleNotified && idleS < idleThresholdSec)
             HandleIdleReturn(conn, now, title, cls, diaryEndToday, idleS, ruleState);
-        else if (InWorkingHours())
+        else if (InWorkingHours() && !offDay)
         {
             // An after-hours session (G9b) ends where the diary day begins: log it up to now and
             // let the normal in-hours path open the next one.
@@ -652,7 +673,7 @@ public sealed class ActivityTracker : IDisposable
             HandleActiveSession(conn, now, title, cls, idleS, idleThresholdSec, ruleState);
         }
         else
-            HandleAfterHours(conn, now, diaryEndToday, title, cls, idleS, idleThresholdSec, ruleState);
+            HandleAfterHours(conn, now, sessionCutoff, title, cls, idleS, idleThresholdSec, ruleState);
     }
 
     /// <summary>G9b: outside the diary hours nothing is tracked EXCEPT activity a confident learned
@@ -793,7 +814,7 @@ public sealed class ActivityTracker : IDisposable
         }
         _idleNotified = false;
         _idleSince = null;
-        if (InWorkingHours())
+        if (InWorkingHours() && !IsFullyOffToday(conn))
             SetSession(now, title, cls, ruleState, _pollTag);
     }
 
