@@ -12,7 +12,7 @@
 > file stays thin — current state, rules, a short decisions-highlights list, open items with dates,
 > and a Section Index. `DECISIONS.md` was **not** absorbed into `context/` — it's a mature,
 > independent register, pre-dating this scheme (split out 2026-08-04 for the identical reason),
-> and moving it would mean auditing every cross-reference for no benefit. Last updated 4 Nov 2026.
+> and moving it would mean auditing every cross-reference for no benefit. Last updated 20 Nov 2026.
 
 ---
 
@@ -40,6 +40,8 @@ time-of-day-dependent flake (previously time-of-day-dependent within ~3h of midn
 not just unlucky-not-to-hit; see `context/todos.md` Session log 09-22.
 
 **Latest (2026-11-05, pushed 0eb183d, live Release rebuilt):** Reports tables carry Paid hours / Unearned income / Paid-work income / Balance (first column 130 px so no sideways scroll); Diary bulk marks are two menus (Set category incl. Paid, Set tag), Paid/Idle teach no rules; apps pie is a donut with legend share bars. Suite 286/286. Detail: `context/todos.md` 2026-11-05.
+
+**Latest (2026-11-20, pushed 4144476, live Release rebuilt and running):** a manual day off now tracks like non-working hours (only confident on-plan / pay-tagged work recorded; no idle rows, no gap question, no alert; evening review asks nothing); replaces the 2026-07-17 "keep tracking normally" rule (DECISIONS rule 10). Day-off check re-read every 2 min, not once a day. Suite 350/350. Poll-level behaviour NOT seen live (code inspection only). Acceptance: `context/acceptance/2026-11-20-day-off-tracks-like-after-hours.md`. OWED: user decides whether to delete the stray GitHub branches `winui-rebuild` (fa70ec9) and `pilot/winui-agentic` (not made this session).
 
 **2026-11-05 (later, built, not yet pushed/rebuilt live):** saved learned rules act at once (no 10/22-example bar), also after hours for on-plan work; (superseded 2026-11-12: Activity keywords removed, see 0k). Suite 287/287. Acceptance: `context/acceptance/2026-11-05-rules-act-at-once.md`.
 
