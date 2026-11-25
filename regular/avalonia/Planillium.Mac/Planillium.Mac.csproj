@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Planillium.App</RootNamespace>
+    <AssemblyName>Planillium.Mac</AssemblyName>
+    <Version>1.2.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The UI code was written against WinUI's null annotations; Avalonia's differ (e.g. Text is string?).
+         Null-dereference noise from that ported glue stays visible but does not fail the build.
+         CS0618: ToggleButton Checked/Unchecked still work in Avalonia 11.3. -->
+    <WarningsNotAsErrors>CS8600;CS8601;CS8602;CS8603;CS8604;CS8622;CS8625</WarningsNotAsErrors>
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <!-- Shared business logic: compiled straight from the Windows app's folder, so there is ONE copy
+       of every rule. The Windows-only files are replaced by Mac versions under Platform/. -->
+  <PropertyGroup>
+    <Shared>$(MSBuildThisFileDirectory)../../winui/Planillium.App/</Shared>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(Shared)Services/**/*.cs" Exclude="$(Shared)Services/CredentialStore.cs;$(Shared)Services/NativeInput.cs;$(Shared)Services/MoneyBox.cs;$(Shared)Services/ThemeSync.cs;$(Shared)Services/ToastNotifier.cs;$(Shared)Services/StartupService.cs;$(Shared)Services/AppPaths.cs" LinkBase="Shared/Services" />
+    <Compile Include="$(Shared)Models/**/*.cs" LinkBase="Shared/Models" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Controls.ItemsRepeater" Version="11.1.5" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.9" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.6" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,1241 @@
+using Planillium.App.Services;
+
+namespace Planillium.App.Pages;
+
+// The time-diary section (search, mark-selected, edit/split) — see
+// ReportsPage.xaml.cs for the file split.
+public sealed partial class ReportsPage
+{
+    // Survives navigation the same way as _period — leave it on a past day,
+    // come back, it's still there. Resets to today only via the "Today" button.
+    private static DateOnly _diaryDate = DateOnly.FromDateTime(DateTime.Today);
+
+    // Whether _diaryDate means "today" rather than one specific date the user went looking
+    // for. Without this, _diaryDate is a static seeded once at class load: leave the app open
+    // on Reports across midnight and the diary stays pinned to yesterday even though every
+    // other section of the page has moved on, and even though MainWindow's day-change watcher
+    // does call Render() (2026-07-24 fix, 2026-08-04 re-report — the watcher was only ever
+    // half the fix, since re-rendering can't help a date that was never recomputed).
+    // Deliberately not "always snap to today on Render": navigating to a past day and coming
+    // back from another page must still land where you left it, which is the whole point of
+    // _diaryDate being static in the first place.
+    private static bool _diaryFollowsToday = true;
+
+    // Diary search text, same survives-navigation treatment.
+    private static string _diarySearch = "";
+
+    // G2 (2026-10-27): which field the search matches. "all" = the original behaviour (app/page
+    // label, description, category, tag label). Same survives-navigation treatment.
+    private static readonly (string Value, string Label)[] DiarySearchFields =
+    {
+        ("all", "All fields"), ("app", "App"), ("page", "Page"),
+        ("desc", "Description"), ("cat", "Category"), ("tag", "Tag"),
+    };
+    private static string _diarySearchField = "all";
+
+    // G2 (2026-10-27): the "-" entry every filter list now has — rows with no value for that
+    // field. A sentinel that cannot be a real value (control character), shown as "-".
+    private const string DiaryNoValue = "\u0001none";
+
+    // Column filters (2026-07-22 request, app/page split 2026-07-23) — independent of the
+    // free-text search above and combinable with it: null means "no filter." App/page match
+    // AppNames.Group/Sub respectively (the same values the row's own App/Page columns show —
+    // e.g. app="Chrome", page="GitHub", or app="Telegram", page="Liza Ponomarenko"). Same
+    // survives-navigation treatment as _diarySearch/_diaryDate.
+    // 2026-10-01: each filter is now a SET of chosen values (multi-select); empty = no filter.
+    private static readonly HashSet<string> _diaryCategoryFilter = new();
+    private static readonly HashSet<string> _diaryAppFilter = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> _diaryPageFilter = new(StringComparer.OrdinalIgnoreCase);
+    // The DiaryTag axis (2026-08-06) — same null-means-no-filter, survives-navigation
+    // treatment as the three filters above.
+    private static readonly HashSet<string> _diaryTagFilter = new(StringComparer.OrdinalIgnoreCase); // G11: tag case ignored
+    // G9b: "Rule status" — who set the row's category: a confident learned rule (auto), a rule that
+    // only suggests (suggested), the user (manual), or nothing learned (none = DiaryNoValue).
+    private static readonly HashSet<string> _diaryRuleFilter = new(StringComparer.OrdinalIgnoreCase);
+
+    // 2026-07-23 request: filters/search normally scope to whichever single day the date
+    // nav/picker is showing; this widens that scope to the full retention window (same range
+    // free-text search already uses) without requiring a search term. Same survives-navigation
+    // treatment as the other diary state.
+    private static bool _diaryAllTime;
+    // Id -> app for the rows in view, dialog windows folded into the app opened just before (AppNames.InheritedFilterGroups).
+    private Dictionary<long, string> _diaryEffectiveApp = new();
+
+    // How many rows the "Show more" batching (DiaryList) currently has revealed, and which
+    // exact scope it was revealed for (see RenderDiaryResults) — added 2026-07-28 same-day
+    // follow-up to a same-day bug: while viewing "today" or "All time" with no search text,
+    // _diaryLiveRefresh calls RenderDiaryResults() every 30 seconds, which used to rebuild
+    // DiaryList() from scratch every time, silently resetting anyone's "Show more" progress
+    // back to the default 40 with no warning. Persisting the count here (like _diaryDate/
+    // _diarySearch already survive their own kind of rebuild) lets a same-scope refresh
+    // rebuild the list at the size the user left it; only an actual scope change (a
+    // different day/search/filter/all-time state) resets it back to the default.
+    private static int _diaryRowsShown = DefaultDiaryRowsShown;
+    private static string _diaryRowsShownScopeKey = "";
+
+
+    // The debounce timer itself is created once and reused across renders
+    // (NavigationCacheMode="Enabled" reuses this page instance, and
+    // BuildDiarySection runs on every Render — page nav, period switch, diary
+    // day nav). Only _diarySearchDebounceAction is reassigned per render, so
+    // a timer armed just before a re-render fires into the CURRENT render's
+    // RenderDiaryResults closure instead of a stale one from a torn-down
+    // diary panel (round-4 audit finding).
+    //
+    // System.Threading.Timer (not DispatcherQueueTimer) — same swap MainWindow.Startup.cs's
+    // watchers already made, for the same reason: DispatcherQueueTimer.Tick was confirmed to
+    // silently stop firing there with no error and IsRunning still reading true, and this
+    // page's two timers used the exact same WinRT API the fix moved away from everywhere
+    // else (2026-07-24 audit finding #5). These only run while the page is on screen, unlike
+    // the hidden background watchers, but that's a lower-risk profile, not proof this API is
+    // safe here.
+    private System.Threading.Timer? _diarySearchDebounce;
+    private Action? _diarySearchDebounceAction;
+
+    // Diary rows previously only ever appeared on navigation/search/edit —
+    // sitting on today's diary while the tracker keeps logging in the
+    // background never showed anything new until the page was left and
+    // reopened (2026-07-15 bug report). Polls the same read-only query the
+    // page already runs, so it's only worth doing while looking at today
+    // and not mid-search (an active search already re-renders on its own
+    // debounce, and ticking underneath a many-day search result would just
+    // be wasted work). Stopped in OnNavigatedFrom so it doesn't keep
+    // querying the DB in the background once the page is cached-but-hidden.
+    private System.Threading.Timer? _diaryLiveRefresh;
+    private Action? _diaryLiveRefreshAction;
+    private static readonly TimeSpan DiaryLiveRefreshInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DiarySearchDebounceInterval = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Diary search/list section — one day by default; searching widens to
+    /// everything still retained (ConfigService.DiaryRetentionDays(),
+    /// user-configurable — see Settings) instead of just the day on screen.
+    /// Each UI sub-area (search box, filter row, mark-selected toolbar, the
+    /// scrollable list shell) is built by its own method below — those pieces
+    /// share no mutable state with each other, so pulling them out was a safe,
+    /// mechanical split (2026-07-28 code-quality audit finding — this method
+    /// was 389 lines). RenderDiaryResults/UpdateMarkToolbar and the rest of
+    /// the event wiring stay here: they share selectedIds/lastRows/
+    /// syncingFilters/syncingSelectAll with each other in ways that don't
+    /// split apart as cleanly, and moving them would risk exactly the kind of
+    /// closure-capture bug this project has been bitten by before.
+    /// </summary>
+    private void BuildDiarySection(DateOnly today, ScoreService score)
+    {
+        // Ahead of everything below that reads _diaryDate — this is the one place the
+        // calendar date rolling over gets applied to the diary (see _diaryFollowsToday).
+        if (_diaryFollowsToday) _diaryDate = today;
+
+        Body.Children.Add(DiaryHeader());
+
+        // Reflections (the evening review's one-line answers) were
+        // previously write-only — saved but never shown back anywhere in
+        // the app (2026-07-09 audit finding #12). Shown for whichever day
+        // the diary is currently viewing, same as everything else on this
+        // section.
+        if (_diarySearch.Trim().Length == 0 && score.LoadReflection(_diaryDate) is { Length: > 0 } reflection)
+            Body.Children.Add(ReflectionCallout(reflection));
+
+        var (searchBox, searchFieldBox) = BuildDiarySearchBox();
+        var (categoryBox, appBox, pageBox, tagBox, ruleBox, allTimeBox, clearFiltersBtn) = BuildDiaryFilterRow();
+
+        // Subtotal of whatever's currently filtered/shown — updated in RenderDiaryResults
+        // below, right along with the list itself.
+        var subtotalText = Dim("");
+        subtotalText.Margin = new Thickness(0, 0, 0, 6);
+        Body.Children.Add(subtotalText);
+
+        // Mark-selected toolbar — built once (not on every keystroke) so
+        // its buttons don't get re-wired constantly; UpdateMarkToolbar()
+        // just flips enabled/label state as the selection changes.
+        // G3: the ticks live in a page-level static (like the filters) and are no longer cleared
+        // by Mark, so they stay until the user changes them.
+        var selectedIds = _diarySelectedIds;
+        var lastRows = new List<ReportData.DiaryEntry>();
+        // G3: the "Marked N rows as X" message with its Undo sits right above the toolbar it
+        // answers, not at the top of the page where it would be scrolled out of sight.
+        Body.Children.Add(BuildDiaryChangeNotice());
+        var (selectAllBox, selectedLabel, actionButtons, categoryItems, tagItems) = BuildDiaryMarkToolbar();
+
+        var diaryResults = BuildDiaryResultsArea();
+
+        // Guards SelectionChanged from firing when RenderDiaryResults below re-syncs these boxes'
+        // SelectedItem to the persisted filter state (e.g. after the app/page lists are
+        // rebuilt), same pattern as syncingSelectAll further down for the same reason.
+        var syncingFilters = false;
+
+        // Guards Checked/Unchecked below from firing when UpdateMarkToolbar
+        // sets IsChecked itself to reflect the current selection — without
+        // it, syncing the box would immediately re-trigger select-all/none.
+        var syncingSelectAll = false;
+
+        void UpdateMarkToolbar()
+        {
+            var n = selectedIds.Count;
+            // G3: Mark acts on the ticked rows when there are any, otherwise on EVERY row matching
+            // the current filters/search — not just the ones built on screen so far — and each
+            // button says how many rows that is.
+            var target = n > 0 ? n : lastRows.Count;
+            selectedLabel.Text = n > 0 ? $"{FormatCount(n)} selected"
+                : lastRows.Count > 0 ? $"Actions apply to all {FormatCount(lastRows.Count)} matches" : "";
+            foreach (var btn in actionButtons)
+                btn.IsEnabled = target > 0 && !_diaryBulkBusy;
+
+            syncingSelectAll = true;
+            selectAllBox.IsEnabled = lastRows.Count > 0;
+            selectAllBox.IsChecked = lastRows.Count == 0 || n == 0 ? false
+                : n == lastRows.Count ? true
+                : null;
+            syncingSelectAll = false;
+        }
+
+        // Same query RenderDiaryResults runs; the live-refresh tick also uses it to see whether
+        // anything changed before rebuilding (G5).
+        List<ReportData.DiaryEntry> QueryDiaryRows() =>
+            _diarySearch.Trim().Length > 0 || _diaryAllTime
+                ? ReportData.DiaryInRange(today.AddDays(-ConfigService.DiaryRetentionDays()), today)
+                : ReportData.DiaryInRange(_diaryDate, _diaryDate);
+        long? lastRowsSignature = null;
+
+        void RenderDiaryResults()
+        {
+            diaryResults.Children.Clear();
+            ReleaseDroppedTree();
+            var q = _diarySearch.Trim();
+            var searching = q.Length > 0;
+            // "All time" (2026-07-23) reuses exactly the wide range free-text search already
+            // used, just without requiring a search term — so a filter combo alone (e.g. "just
+            // show me every Telegram/Liza Ponomarenko entry") can scope past the single day the
+            // date nav is showing.
+            var wideRange = searching || _diaryAllTime;
+            // Matches the date-picker's own MinDate and Database.PruneAndRollupDiary's
+            // actual cutoff (rows older than today − N are pruned, so today − N is the
+            // oldest day still genuinely present) — this used to be one day short,
+            // silently excluding the single oldest day still on disk (round-5 audit
+            // finding #6).
+            var rows = QueryDiaryRows();
+            lastRowsSignature = DiaryRowsSignature(rows);
+
+            // Rebuild the app/page filters' options from what's actually in the current scope
+            // (today, or the whole range) rather than a fixed list — re-syncs all three boxes'
+            // displayed selection to the persisted filter state at the same time, since the
+            // app/page lists (and therefore whether the current filter values still appear in
+            // view) can change on every call, not just when a filter itself changes. App
+            // matches AppNames.Group (e.g. "Chrome", "Telegram"); Page matches AppNames.Sub
+            // (e.g. "GitHub", "Liza Ponomarenko") — the same two values the row's own App/Page
+            // columns show, split out 2026-07-23 so each is independently filterable.
+            //
+            // The four filters (category/app/page/search) are combined with AND on the actual
+            // results below, but the App/Page dropdowns' own OPTION LISTS used to be built from
+            // every row in view regardless of any filter already active — so picking Category =
+            // Off-plan still offered every app that had ANY entry that day, including ones whose
+            // entries were entirely on-plan, and picking App also didn't narrow Page's options
+            // (2026-07-29 user report: filters "should be interconnected"). Each dropdown's
+            // options are now built from rows matching every OTHER active filter — the standard
+            // faceted-search shape — so a filter only ever offers choices that can actually
+            // produce a result under the filters already applied.
+            // G2: each filter set may also hold DiaryNoValue ("-"), which matches rows with no
+            // value for that field (OR-ed with any real values ticked alongside it).
+            // Category: blank category. App: no window text ("—"). Page: no detected sub-item.
+            // Tag: no tag.
+            bool MatchesCategory(ReportData.DiaryEntry e) =>
+                _diaryCategoryFilter.Count == 0 || _diaryCategoryFilter.Contains(e.Cat) ||
+                (string.IsNullOrWhiteSpace(e.Cat) && _diaryCategoryFilter.Contains(DiaryNoValue));
+            // Dialog windows (no readable program name) count under the app opened just before them.
+            _diaryEffectiveApp = AppNames.InheritedFilterGroups(rows.Select(e => (e.Id, e.Date, e.Start, e.Window)));
+            string EffGroup(ReportData.DiaryEntry e) =>
+                _diaryEffectiveApp.TryGetValue(e.Id, out var eg) ? eg : AppNames.FilterGroup(e.Window);
+            bool MatchesApp(ReportData.DiaryEntry e)
+            {
+                if (_diaryAppFilter.Count == 0) return true;
+                var g = EffGroup(e);
+                return g == "—" ? _diaryAppFilter.Contains(DiaryNoValue) : _diaryAppFilter.Contains(g);
+            }
+            bool MatchesPage(ReportData.DiaryEntry e)
+            {
+                if (_diaryPageFilter.Count == 0) return true;
+                var s = AppNames.Sub(e.Window);
+                return string.IsNullOrEmpty(s) ? _diaryPageFilter.Contains(DiaryNoValue) : _diaryPageFilter.Contains(s);
+            }
+            bool MatchesTag(ReportData.DiaryEntry e) =>
+                _diaryTagFilter.Count == 0 ||
+                (string.IsNullOrWhiteSpace(e.Tag) ? _diaryTagFilter.Contains(DiaryNoValue) : _diaryTagFilter.Contains(e.Tag));
+            bool MatchesRule(ReportData.DiaryEntry e) =>
+                _diaryRuleFilter.Count == 0 ||
+                (string.IsNullOrEmpty(e.RuleState) ? _diaryRuleFilter.Contains(DiaryNoValue) : _diaryRuleFilter.Contains(e.RuleState));
+            bool Has(string? text) => text is { Length: > 0 } && text.Contains(q, StringComparison.OrdinalIgnoreCase);
+            bool MatchesSearch(ReportData.DiaryEntry e) =>
+                !searching || _diarySearchField switch
+                {
+                    "app" => Has(AppNames.Group(e.Window)),
+                    "page" => Has(AppNames.Sub(e.Window)),
+                    "desc" => Has(e.Desc),
+                    "cat" => Has(e.Cat.Replace('_', ' ')),
+                    "tag" => Has(DiaryTag.LabelOf(e.Tag)),
+                    // "all fields": exactly the pre-G2 behaviour.
+                    _ => Has(AppNames.Label(e.Window)) || Has(e.Desc) ||
+                         Has(e.Cat.Replace('_', ' ')) || Has(DiaryTag.LabelOf(e.Tag)),
+                };
+
+            syncingFilters = true;
+            var appsInView = rows.Where(e => MatchesCategory(e) && MatchesPage(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e))
+                .Select(e => EffGroup(e))
+                .Where(a => a != "—")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(a => a == AppNames.OtherGroup ? 1 : 0)   // "Other" last
+                .ThenBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
+            // drops filters whose app no longer appears in view ("-" always stays offered)
+            _diaryAppFilter.RemoveWhere(x => x != DiaryNoValue && !appsInView.Contains(x, StringComparer.OrdinalIgnoreCase));
+            appBox.SetOptions(appsInView.Select(x => (x, x)).Prepend((DiaryNoValue, "-")));
+
+            var pagesInView = rows.Where(e => MatchesCategory(e) && MatchesApp(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e))
+                .Select(e => AppNames.Sub(e.Window))
+                .Where(p => p is { Length: > 0 })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+            // drops filters whose page no longer appears in view
+            _diaryPageFilter.RemoveWhere(x => x != DiaryNoValue && !pagesInView.Contains(x, StringComparer.OrdinalIgnoreCase));
+            pageBox.SetOptions(pagesInView.Select(x => (x!, x!)).Prepend((DiaryNoValue, "-")));
+
+            // Fixed option lists for category and tag — never rebuilt from what's in view.
+            // "-" first in each list (G2).
+            categoryBox.SetOptions(DiaryCategory.EditableOptions.Select(o => (o.Value, o.Label)).Prepend((DiaryNoValue, "-")));
+            tagBox.SetOptions(DiaryTag.Options.Select(o => (o.Value, o.Label)).Prepend((DiaryNoValue, "-")));
+            ruleBox.SetOptions(new[]
+            {
+                (RuleStates.Auto, "Auto (learned rule)"), (RuleStates.Suggested, "Suggested"),
+                (RuleStates.Manual, "Marked by you"), (DiaryNoValue, "No rule"),
+            });
+            allTimeBox.IsChecked = _diaryAllTime;
+            syncingFilters = false;
+
+            // Same five predicates decide what actually shows in the results list — the
+            // dropdown-option narrowing above and the results below can never disagree with
+            // each other, since both read from the same single definition of each filter.
+            var filteredList = rows.Where(e =>
+                MatchesCategory(e) && MatchesApp(e) && MatchesPage(e) && MatchesTag(e) && MatchesRule(e) && MatchesSearch(e)).ToList();
+            var filtersActive = _diaryCategoryFilter.Count > 0 || _diaryAppFilter.Count > 0 ||
+                _diaryPageFilter.Count > 0 || _diaryTagFilter.Count > 0 || _diaryRuleFilter.Count > 0;
+
+            var totalMin = filteredList.Sum(e => e.Dur);
+            subtotalText.Text = filteredList.Count == 0
+                ? ""
+                : $"{filteredList.Count} entr{(filteredList.Count == 1 ? "y" : "ies")} · {FormatDuration(totalMin)} total";
+
+            if (filteredList.Count == 0)
+            {
+                diaryResults.Children.Add(Dim(wideRange
+                    ? $"No entries match your search/filters in the last {ConfigService.DiaryRetentionDays()} days."
+                    : filtersActive
+                        ? "No entries match the selected filter(s) on this day."
+                        : (_diaryDate == today
+                            // The window is configurable (Settings ▸ Hours), so this sentence
+                            // has to read it rather than restate the old hardcoded 06:00–20:00
+                            // constants it used to quote (2026-08-04).
+                            ? "No diary entries yet today. Tracking runs " +
+                              $"{ConfigService.DiaryStartTime().ToIsoTimeOfDay()}–" +
+                              $"{ConfigService.DiaryEndTime().ToIsoTimeOfDay()}."
+                            : "No diary entries on this day.")));
+                lastRows.Clear();
+                selectedIds.Clear();
+                UpdateMarkToolbar();
+                return;
+            }
+            // G2: the old 300-row cap on wide (search / All time) results is gone — paging below
+            // now reaches every match ("Show all"), and rows are only built as they are revealed.
+            lastRows = filteredList;
+            // A set, not filteredList.Any per tick: ticks now persist (G3), so thousands of ticked
+            // rows against thousands of matches would otherwise cost millions of comparisons.
+            var inView = filteredList.Select(e => e.Id).ToHashSet();
+            selectedIds.RemoveWhere(id => !inView.Contains(id));
+            UpdateMarkToolbar();
+            // A genuine scope change (different day/search/filters/all-time) starts the reveal
+            // count fresh; the periodic live-refresh timer re-running this same method with an
+            // UNCHANGED scope must not — see _diaryRowsShown's own comment for why.
+            static string Key(HashSet<string> f) => string.Join(',', f.OrderBy(x => x, StringComparer.Ordinal));
+            var scopeKey = string.Join('|', _diaryDate, q, _diarySearchField, Key(_diaryCategoryFilter), Key(_diaryAppFilter),
+                Key(_diaryPageFilter), Key(_diaryTagFilter), Key(_diaryRuleFilter), _diaryAllTime);
+            if (scopeKey != _diaryRowsShownScopeKey)
+            {
+                _diaryRowsShown = DefaultDiaryRowsShown;
+                _diaryRowsShownScopeKey = scopeKey;
+            }
+            // Card()'s Border has a non-zero CornerRadius (ReportsPage.Styling.cs), which makes
+            // WinUI corner-clip its content to the Border's OWN arranged bounds — MinWidth on
+            // diaryResults/the DiaryList StackPanel further down (see their own comments) only
+            // ever affected LAYOUT sizing, but couldn't stop this Border, defaulting to
+            // Stretch, from being arranged at whatever narrower width diaryResults handed it
+            // and then clipping away everything past that (2026-07-28: this is what was
+            // actually eating Edit/Split, invisibly — not a scroll/alignment issue at all).
+            // MinWidth here has to cover the diary list's own MinWidth (DiaryListWidth) *plus*
+            // this Border's horizontal Padding (18+18), or the clip region is still too narrow
+            // for what's arranged inside it — that sum is DiaryCardWidth (ReportsPage.xaml.cs).
+            var diaryCard = Card(DiaryList(filteredList, selectedIds, UpdateMarkToolbar, showDate: wideRange));
+            diaryCard.MinWidth = DiaryCardWidth;
+            diaryResults.Children.Add(diaryCard);
+        }
+        RenderDiaryResults();
+
+        foreach (var box in new[] { categoryBox, appBox, pageBox, tagBox, ruleBox })
+            box.Changed = () => { if (!syncingFilters) RenderDiaryResults(); };
+        // Unlike the category/app/page boxes, this needs a full Render() (not just
+        // RenderDiaryResults()) — it changes wideMode, which DiaryHeader() also reads to decide
+        // the "TIME DIARY · ALL TIME" caption and whether the date-nav arrows/picker are
+        // enabled, and DiaryHeader is only rebuilt on a full Render.
+        allTimeBox.Checked += (_, _) => { if (!syncingFilters) { _diaryAllTime = true; Render(); } };
+        allTimeBox.Unchecked += (_, _) => { if (!syncingFilters) { _diaryAllTime = false; Render(); } };
+        clearFiltersBtn.Click += (_, _) =>
+        {
+            _diaryCategoryFilter.Clear();
+            _diaryAppFilter.Clear();
+            _diaryPageFilter.Clear();
+            _diaryTagFilter.Clear();
+            _diaryRuleFilter.Clear();
+            _diaryAllTime = false;
+            // The search box sits directly above this button and reads as part of the same
+            // filter row — leaving it untouched made "Clear filters" look broken when a typed
+            // search term kept the list scoped after a click (2026-07-23 UX re-audit).
+            _diarySearch = "";
+            // Full Render(), not RenderDiaryResults() — this button resets _diaryAllTime (and
+            // now _diarySearch), both of which DiaryHeader()'s wideMode reads to decide the
+            // "ALL TIME" caption and whether the date-nav arrows are enabled. The allTimeBox
+            // checkbox's own handlers already call Render() for the same reason; this button
+            // was the one sibling still calling the partial refresh and left the header stale.
+            Render();
+        };
+
+        // G3: every bulk mark goes through DataChangeDoor (confirm → backup → write with old
+        // values → Undo). The row list is read at click time: ticked rows if any, else all matches.
+        // Only a mark of ticked rows teaches activity keywords (G3 round 2; tags never do).
+        List<ReportData.DiaryEntry> MarkTargets() =>
+            selectedIds.Count > 0 ? lastRows.Where(r => selectedIds.Contains(r.Id)).ToList() : lastRows.ToList();
+        void Refresh() { RenderDiaryResults(); }
+        HashSet<long> ShownIds() => lastRows.Select(r => r.Id).ToHashSet();
+        foreach (var (categoryValue, item) in categoryItems)
+            item.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryCategory, categoryValue,
+                MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
+        foreach (var (tagValue, item) in tagItems)
+            item.Click += (_, _) => _ = BulkMarkDiaryAsync(DataChangeDoor.Field.DiaryTag, tagValue,
+                MarkTargets(), selectedIds.Count > 0, UpdateMarkToolbar, Refresh, ShownIds);
+        _diaryRerenderAction = RenderDiaryResults;
+
+        selectAllBox.Checked += (_, _) =>
+        {
+            if (syncingSelectAll) return;
+            foreach (var row in lastRows) selectedIds.Add(row.Id);
+            RenderDiaryResults();
+        };
+        selectAllBox.Unchecked += (_, _) =>
+        {
+            if (syncingSelectAll) return;
+            selectedIds.Clear();
+            RenderDiaryResults();
+        };
+        // A three-state box that's currently indeterminate (partial
+        // selection) cycles to Unchecked on the next click, same as if
+        // it were fully checked — clicking a partial state clears it.
+        selectAllBox.Indeterminate += (_, _) =>
+        {
+            if (syncingSelectAll) return;
+            selectedIds.Clear();
+            RenderDiaryResults();
+        };
+
+        // Filters in place (doesn't touch searchBox itself) so typing
+        // keeps focus/cursor position instead of losing it every keystroke.
+        // Debounced: each keystroke would otherwise open a fresh connection
+        // and scan the full retention window synchronously on the UI thread
+        // — fine at personal-DB scale today, but a free anti-pattern to fix
+        // while the file's already open, before it accumulates enough
+        // history to actually be felt.
+        _diarySearchDebounceAction = RenderDiaryResults;
+        var searchDebounce = EnsureDiarySearchDebounceTimer();
+        // Today's own rows are in scope whenever the single day shown IS today, or "All time"
+        // is on (its wide range always includes today) — either way freshly-tracked rows for
+        // today could appear while this section sits open.
+        void SyncLiveRefresh()
+        {
+            if ((_diaryDate == today || _diaryAllTime) && _diarySearch.Trim().Length == 0)
+                _diaryLiveRefresh?.Change(DiaryLiveRefreshInterval, DiaryLiveRefreshInterval);
+            else
+                _diaryLiveRefresh?.Change(System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+        }
+        searchFieldBox.SelectionChanged += (_, _) =>
+        {
+            if (searchFieldBox.SelectedItem is not ComboBoxItem { Tag: string field } || field == _diarySearchField) return;
+            _diarySearchField = field;
+            RenderDiaryResults();
+        };
+        searchBox.TextChanged += (_, _) =>
+        {
+            _diarySearch = searchBox.Text;
+            searchDebounce.Change(DiarySearchDebounceInterval, System.Threading.Timeout.InfiniteTimeSpan);
+            SyncLiveRefresh();
+        };
+
+        // Only re-poll while today's rows are actually in scope with no search active — a
+        // past-only day view is finished history (nothing new will ever appear), and a search
+        // already re-renders itself on its own typing debounce above.
+        // G5 (2026-10-27): the 30-second tick used to rebuild the whole list and all four filter
+        // drop-downs even when nothing had been logged since the last look, so a page left open
+        // kept allocating fresh controls every half minute and its memory crept up while idle
+        // (measured: 160 -> 214 MB in 8 minutes on a 9,000-row diary). It now re-reads the rows
+        // and rebuilds only when they differ from what is on screen; any user action still goes
+        // straight to RenderDiaryResults as before.
+        _diaryLiveRefreshAction = () =>
+        {
+            if (lastRowsSignature is long shown && DiaryRowsSignature(QueryDiaryRows()) == shown) return;
+            RenderDiaryResults();
+        };
+        EnsureDiaryLiveRefreshTimer();
+        SyncLiveRefresh();
+    }
+
+    /// <summary>Fingerprint of a diary query result: every field a row shows or is filtered
+    /// on, in order. Equal fingerprints mean the list on screen is already current (G5).</summary>
+    private static long DiaryRowsSignature(List<ReportData.DiaryEntry> rows)
+    {
+        var h = new HashCode();
+        h.Add(rows.Count);
+        foreach (var e in rows)
+        {
+            h.Add(e.Id); h.Add(e.Date); h.Add(e.Start); h.Add(e.End); h.Add(e.Dur);
+            h.Add(e.Cat); h.Add(e.Window); h.Add(e.Desc); h.Add(e.Tag);
+        }
+        return ((long)rows.Count << 32) ^ (uint)h.ToHashCode();
+    }
+
+    /// <summary>The diary's free-text search box — split out of BuildDiarySection
+    /// (2026-07-28 code-quality audit finding: that method was 389 lines) since this
+    /// piece is pure "build one control, add it to Body," with no shared mutable state.</summary>
+    private (TextBox SearchBox, ComboBox FieldBox) BuildDiarySearchBox()
+    {
+        var searchBox = new TextBox
+        {
+            PlaceholderText = $"Search the last {ConfigService.DiaryRetentionDays()} days' diary…",
+            Text = _diarySearch,
+        };
+        // Placeholder text alone isn't exposed to screen readers as an accessible
+        // name — a static name here (audit finding #16) since the placeholder text
+        // itself already varies with the retention setting.
+        Ui.Name(searchBox, "Search the time diary");
+
+        // G2 (2026-10-27): which field the search looks in. "All fields" (the default) is the
+        // pre-G2 behaviour. Seeded from the persisted choice before the caller wires
+        // SelectionChanged, so building the page never fires a re-render.
+        var fieldBox = new ComboBox { MinWidth = 150, VerticalAlignment = VerticalAlignment.Stretch };
+        foreach (var (value, label) in DiarySearchFields)
+            fieldBox.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+        fieldBox.SelectedIndex = Math.Max(0, Array.FindIndex(DiarySearchFields, f => f.Value == _diarySearchField));
+        Ui.Name(fieldBox, "Search field");
+
+        var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(searchBox, 0);
+        Grid.SetColumn(fieldBox, 1);
+        grid.Children.Add(searchBox);
+        grid.Children.Add(fieldBox);
+        Body.Children.Add(grid);
+        return (searchBox, fieldBox);
+    }
+
+    /// <summary>The category/app/page/tag filter row plus "All time" checkbox and "Clear
+    /// filters" button, in their own horizontally-scrollable row — split out of
+    /// BuildDiarySection for the same reason as BuildDiarySearchBox above.
+    /// RenderDiaryResults (which stays in BuildDiarySection, since it also touches
+    /// diaryResults/subtotalText/lastRows) re-syncs these boxes' items/selection on every
+    /// call; this method only constructs them, seeded with whatever filter state already
+    /// persisted from before.</summary>
+    private (MultiPicker CategoryBox, MultiPicker AppBox, MultiPicker PageBox, MultiPicker TagBox,
+        MultiPicker RuleBox, CheckBox AllTimeBox, Button ClearFiltersBtn) BuildDiaryFilterRow()
+    {
+        var categoryBox = new MultiPicker("Category", _diaryCategoryFilter, 140, "Filter diary by category");
+        var appBox = new MultiPicker("App", _diaryAppFilter, 150, "Filter diary by app");
+        var pageBox = new MultiPicker("Page", _diaryPageFilter, 180, "Filter diary by page");
+        // The DiaryTag axis (2026-08-06) — fixed option list like Category (not rebuilt from
+        // what's in view like App/Page, which are open-ended value sets).
+        var tagBox = new MultiPicker("Tag", _diaryTagFilter, 140, "Filter diary by tag");
+        var ruleBox = new MultiPicker("Rule status", _diaryRuleFilter, 150, "Filter diary by rule status");
+
+        var allTimeBox = new CheckBox { Content = "All time (not just this day)" };
+        Ui.Name(allTimeBox,
+            $"Apply filters across the last {ConfigService.DiaryRetentionDays()} days instead of just this day");
+        allTimeBox.IsChecked = _diaryAllTime;
+
+        var clearFiltersBtn = new Button { Content = "Clear filters", Padding = new Thickness(8, 4, 8, 4) };
+
+        // 2026-11-05 (user: "the horizontal scroll here is excessive and not comfortable"): no
+        // scrolling. The five pickers share the row width equally (star columns, so they shrink with
+        // the window instead of running off it - the old fixed-width row pushed "Clear filters" out of
+        // sight once the Rule status picker was added); "All time" and "Clear filters" sit on a second
+        // line, always visible. The picker button text clips inside its own button when long.
+        var filterGrid = new Grid { ColumnSpacing = 8, RowSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        filterGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        filterGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var pickers = new[] { categoryBox, appBox, pageBox, tagBox, ruleBox };
+        for (var i = 0; i < pickers.Length; i++)
+        {
+            filterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            pickers[i].Button.MinWidth = 0;
+            pickers[i].Button.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Grid.SetColumn(pickers[i].Button, i);
+            filterGrid.Children.Add(pickers[i].Button);
+        }
+        Grid.SetRow(allTimeBox, 1); Grid.SetColumnSpan(allTimeBox, 3);
+        Grid.SetRow(clearFiltersBtn, 1); Grid.SetColumn(clearFiltersBtn, 3); Grid.SetColumnSpan(clearFiltersBtn, 2);
+        clearFiltersBtn.HorizontalAlignment = HorizontalAlignment.Right;
+        filterGrid.Children.Add(allTimeBox);
+        filterGrid.Children.Add(clearFiltersBtn);
+        Body.Children.Add(filterGrid);
+
+        return (categoryBox, appBox, pageBox, tagBox, ruleBox, allTimeBox, clearFiltersBtn);
+    }
+
+    /// <summary>The bulk-action toolbar: "Select all", the count of rows the actions apply to, a
+    /// "Set category" menu, a "Set tag" menu and "Add entry" - one row, no sideways scrolling
+    /// (2026-11-05, user request; it used to be nine buttons across two scrolling rows).
+    /// UpdateMarkToolbar (which stays in BuildDiarySection, since it also touches
+    /// selectedIds/lastRows) flips the menu buttons' enabled state and the count text as the
+    /// selection changes; this method only constructs them, starting disabled/empty.</summary>
+    private (CheckBox SelectAllBox, TextBlock SelectedLabel, List<DropDownButton> ActionButtons,
+        List<(string Value, MenuItem Item)> CategoryItems, List<(string? Tag, MenuItem Item)> TagItems)
+        BuildDiaryMarkToolbar()
+    {
+        // IsThreeState so it can show "some but not all selected" as a
+        // dash rather than lying with a plain checked/unchecked state.
+        var selectAllBox = new CheckBox { Content = "Select all", IsThreeState = true, IsEnabled = false };
+        var selectedLabel = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+        };
+
+        // Set category: the five categories of the Edit dialog (On-plan, Off-plan, Paid, Neutral, Idle).
+        var categoryItems = new List<(string Value, MenuItem Item)>();
+        var categoryFlyout = new MenuFlyout();
+        foreach (var (label, value) in DiaryCategory.EditableOptions)
+        {
+            var item = new MenuItem { Header = label };
+            categoryFlyout.Items.Add(item);
+            categoryItems.Add((value, item));
+        }
+        var categoryBtn = new DropDownButton { Content = "Set category", Flyout = categoryFlyout, IsEnabled = false };
+        Ui.Name(categoryBtn, "Set category");
+
+        // Set tag: every tag (built-in and payable), then "Clear tag" last (the common actions first).
+        var tagItems = new List<(string? Tag, MenuItem Item)>();
+        var tagFlyout = new MenuFlyout();
+        foreach (var (label, value) in DiaryTag.Options)
+        {
+            var item = new MenuItem { Header = label };
+            tagFlyout.Items.Add(item);
+            tagItems.Add((value, item));
+        }
+        tagFlyout.Items.Add(new Separator());
+        var clearTagItem = new MenuItem { Header = "Clear tag" };
+        tagFlyout.Items.Add(clearTagItem);
+        tagItems.Add((null, clearTagItem));
+        var tagBtn = new DropDownButton { Content = "Set tag", Flyout = tagFlyout, IsEnabled = false };
+        Ui.Name(tagBtn, "Set tag");
+
+        // G9c: add a row by hand (any time of day, incl. after hours; overlaps refused).
+        var addEntryBtn = new Button { Content = "Add entry" };
+        Ui.Name(addEntryBtn, "Add diary entry");
+        addEntryBtn.Click += (_, _) => _ = AddDiaryEntryAsync();
+
+        var bar = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var parts = new FrameworkElement[] { selectAllBox, selectedLabel, categoryBtn, tagBtn, addEntryBtn };
+        for (var i = 0; i < parts.Length; i++) { Grid.SetColumn(parts[i], i); bar.Children.Add(parts[i]); }
+        Body.Children.Add(bar);
+
+        return (selectAllBox, selectedLabel, [categoryBtn, tagBtn], categoryItems, tagItems);
+    }
+
+    /// <summary>The diary list's own scrollable area — split out of BuildDiarySection for
+    /// the same reason as the methods above. RenderDiaryResults (which stays in
+    /// BuildDiarySection) fills the returned StackPanel's Children on every call; this
+    /// method only builds the empty scroll shell around it.</summary>
+    private StackPanel BuildDiaryResultsArea()
+    {
+        // Own scroll box, both directions: a long day (or a search hitting the
+        // full retention window) used to keep growing the whole Reports page
+        // and could push row content wider than the page, which then either
+        // clipped off-screen or shifted the page's own measured width from
+        // one day to the next. Bounding it here keeps the page's width and
+        // the diary's own scrolling independent of how much/how wide the
+        // content for a given day happens to be.
+        // MinWidth pins the row grids to a sane layout width even though the
+        // scroller offers them unconstrained width in the scrollable
+        // direction — without it, a Grid measured with infinite width can
+        // collapse its Star column instead of sizing sensibly.
+        // Widened from 820 (2026-07-23) — the App/Page column split added ~130px of row width.
+        var diaryResults = new StackPanel { Spacing = 0, MinWidth = DiaryListWidth };
+        var diaryScroller = new ScrollViewer
+        {
+            MaxHeight = 520,
+            // Back to Auto (2026-08-13 report: "remove the horizontal scroll bar") — Visible was
+            // set 2026-07-28 because the row's own width had silently outgrown the page's max
+            // content width (DiaryListWidth was stale — see its own comment), so a permanently
+            // shown scrollbar was the only thing standing between the user and silently-clipped
+            // Edit/Split buttons. That root cause is fixed now (DiaryListWidth recomputed, Page/
+            // Details narrowed), so the row fits without scrolling on any window this app
+            // supports — Auto still engages if a future column ever grows past that again, it
+            // just doesn't sit there permanently, mostly empty, when there's nothing to scroll.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = diaryResults,
+        };
+        // A ScrollViewer measures its content with unlimited width, so the Star "Details" column would
+        // stay at its minimum and the row would end short of the card (2026-11-05, user screenshot: still
+        // empty space). Size the list to the visible width instead; DiaryListWidth stays the floor.
+        diaryScroller.SizeChanged += (_, e) =>
+            diaryResults.Width = Math.Max(DiaryCardWidth, e.NewSize.Width);
+        Body.Children.Add(diaryScroller);
+        return diaryResults;
+    }
+
+    /// <summary>Lazily creates the search-input debounce timer once, reused across renders
+    /// (see the field's own doc comment) — pulled out of BuildDiarySection so that ~400-line
+    /// method isn't also responsible for timer lifecycle bookkeeping (code-quality audit
+    /// finding #7).</summary>
+    private System.Threading.Timer EnsureDiarySearchDebounceTimer() =>
+        _diarySearchDebounce ??= new System.Threading.Timer(
+            _ => DispatcherQueue.TryEnqueue(() => _diarySearchDebounceAction?.Invoke()),
+            null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+
+    /// <summary>Lazily creates the "today's rows might still be growing" live-refresh
+    /// timer once, reused across renders — see EnsureDiarySearchDebounceTimer's doc comment.
+    /// Starts idle (infinite due-time); SyncLiveRefresh arms/disarms the actual period.</summary>
+    private System.Threading.Timer EnsureDiaryLiveRefreshTimer() =>
+        _diaryLiveRefresh ??= new System.Threading.Timer(
+            _ => DispatcherQueue.TryEnqueue(() => _diaryLiveRefreshAction?.Invoke()),
+            null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+
+    // ── diary ────────────────────────────────────────────────────────────
+
+    private static string FormatDuration(int totalMin) =>
+        totalMin >= 60 ? $"{totalMin / 60}h {totalMin % 60}m" : $"{totalMin}m";
+
+    private static Border ReflectionCallout(string text) => new()
+    {
+        Background = Ui.Brush("CardBackgroundFillColorSecondaryBrush"),
+        CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(12, 8, 12, 8),
+        Margin = new Thickness(0, 0, 0, 10),
+        Child = new TextBlock
+        {
+            Text = "💭 " + text,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontStyle = Avalonia.Media.FontStyle.Italic,
+            Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+        },
+    };
+
+    private Grid DiaryHeader()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var searching = _diarySearch.Trim().Length > 0;
+        // Date nav is meaningless once the list spans more than the one day it controls —
+        // either from a free-text search (always wide) or the "All time" filter toggle.
+        var wideMode = searching || _diaryAllTime;
+        var caption = searching
+            ? $"TIME DIARY · SEARCH (LAST {ConfigService.DiaryRetentionDays()} DAYS)"
+            : _diaryAllTime
+                ? $"TIME DIARY · ALL TIME (LAST {ConfigService.DiaryRetentionDays()} DAYS)"
+                : "TIME DIARY";
+
+        var grid = new Grid { Margin = new Thickness(2, 22, 0, 8), ColumnSpacing = 10 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        Button NavBtn(object content, string name, Action onClick, bool enabled = true)
+        {
+            var btn = new Button
+            {
+                Content = content,
+                Padding = new Thickness(8, 4, 8, 4),
+                MinWidth = 0,
+                MinHeight = 0,
+                IsEnabled = enabled,
+            };
+            Ui.Name(btn, name);
+            btn.Click += (_, _) => onClick();
+            return btn;
+        }
+
+        // Every date move goes through here so _diaryFollowsToday can't be updated at three
+        // of the four navigation sites and missed at the fourth — landing back on today by
+        // any route (the button, or stepping forward with the arrow) re-arms the follow.
+        void GoTo(DateOnly target)
+        {
+            _diaryDate = target;
+            _diaryFollowsToday = target == today;
+            Render();
+        }
+
+        // Today is now the jump-shortcut on the left, next to the caption —
+        // it used to sit between the prev/next arrows, which read as a state
+        // indicator rather than the button it actually is. The current date
+        // now lives on the right, between the arrows that move it.
+        var todayBtn = NavBtn("Today", "Jump to today",
+            () => GoTo(today), enabled: !wideMode && _diaryDate != today);
+        var captionText = Section(caption);
+        captionText.Margin = new Thickness(0);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        left.Children.Add(todayBtn);
+        left.Children.Add(captionText);
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
+        var prevGlyph = new FontIcon { Glyph = "", FontSize = 12 };
+        var nextGlyph = new FontIcon { Glyph = "", FontSize = 12 };
+        var prev = NavBtn(prevGlyph, "Previous day",
+            () => GoTo(_diaryDate.AddDays(-1)), enabled: !wideMode);
+        // A calendar picker, not just a label — jumping more than a few days
+        // used to mean clicking prev/next repeatedly. DateFormat is spelled
+        // out numerically (no month/weekday names) for the same reason the
+        // rest of the diary uses InvariantCulture: the OS locale is Russian,
+        // and name-based tokens would render in Russian instead of digits.
+        static DateTimeOffset ToOffset(DateOnly d) => new(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var datePicker = new CalendarDatePicker
+        {
+            Date = ToOffset(_diaryDate),
+            MinDate = ToOffset(today.AddDays(-ConfigService.DiaryRetentionDays())),
+            MaxDate = ToOffset(today),
+            DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
+            IsEnabled = !wideMode,
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 0,
+            FontSize = 12,
+            Padding = new Thickness(8, 4, 8, 4),
+        };
+        Ui.Name(datePicker, "Jump to date");
+        datePicker.DateChanged += (_, e) =>
+        {
+            if (e.NewDate is { } picked && DateOnly.FromDateTime(picked.DateTime) != _diaryDate)
+                GoTo(DateOnly.FromDateTime(picked.DateTime));
+        };
+
+        var next = NavBtn(nextGlyph, "Next day",
+            () => GoTo(_diaryDate.AddDays(1)), enabled: !wideMode && _diaryDate < today);
+
+        Grid.SetColumn(prev, 1); Grid.SetColumn(datePicker, 2); Grid.SetColumn(next, 3);
+        grid.Children.Add(prev);
+        grid.Children.Add(datePicker);
+        grid.Children.Add(next);
+        return grid;
+    }
+
+    // Rows shown before "Show more" is needed — a single busy day can hold
+    // close to 300 entries (all built as plain Grids in a non-virtualizing
+    // StackPanel), so rendering every one of them unconditionally on every
+    // Render() was a real, measured contributor to a 2026-07-21 "Reports
+    // takes too long to load" report. Selection state lives in selectedIds/
+    // lastRows independent of what's actually been built, so rows built
+    // later by "Show more" still pick up the right checked state.
+    private const int DefaultDiaryRowsShown = 40;
+
+    /// <summary>Builds one diary row when the ItemsRepeater brings it near the screen (G5).
+    /// No pooling, same as SchedulePage's DayCardElementFactory: each row closes over its own
+    /// entry's handlers, so a reused row would need rewiring anyway.
+    ///
+    /// Holds its row builder only WEAKLY; the page keeps the current one alive in
+    /// _diaryRowBuilder. Measured: with a strong reference every diary list ever shown stayed in
+    /// memory (27 repeaters and 227,000 row records after 24 period switches, +7 MB per switch,
+    /// not freed by a full collection). The repeater holds this factory in a way .NET's
+    /// collector can't see through, and the builder's closure (DiaryList's locals) holds the
+    /// repeater back, so the pair kept each other alive for good. With the weak link, replacing
+    /// _diaryRowBuilder is what lets the old list go.</summary>
+    private sealed partial class DiaryRowElementFactory : Avalonia.Controls.Templates.IDataTemplate
+    {
+        private readonly WeakReference<Func<ReportData.DiaryEntry, UIElement>> _build;
+        public DiaryRowElementFactory(Func<ReportData.DiaryEntry, UIElement> build) => _build = new(build);
+        public bool Match(object? data) => data is ReportData.DiaryEntry;
+        public Control? Build(object? data) =>
+            // An old, already-replaced list can't be on screen, so an empty element is never seen.
+            _build.TryGetTarget(out var build) ? build((ReportData.DiaryEntry)data!) : new Grid();
+        
+    }
+
+    /// <summary>The row builder of the diary list currently shown; see DiaryRowElementFactory.</summary>
+    private Func<ReportData.DiaryEntry, UIElement>? _diaryRowBuilder;
+
+    private StackPanel DiaryList(
+        List<ReportData.DiaryEntry> diary,
+        HashSet<long> selectedIds, Action onSelectionChanged, bool showDate = false)
+    {
+        // MinWidth must be repeated here, not just on diaryResults two levels up (2026-07-28
+        // user report: "can't split the unaccounted time" — Edit/Split were being silently
+        // clipped, no scrollbar, no overhang). diaryResults' own MinWidth=DiaryListWidth only
+        // forces *that* StackPanel to claim that much width from the ScrollViewer; this
+        // StackPanel and the Card() Border between them both default to
+        // HorizontalAlignment.Stretch, which means each one gets arranged at whatever width its
+        // own parent hands it — and nothing upstream of diaryResults was actually offering that
+        // width back down through that chain, so this level (and Card's Border) were both
+        // getting stretch-clipped to the page's content column width instead, quietly cutting
+        // off Edit/Split with no visual sign anything was missing. Confirmed via a live
+        // PrintWindow capture: no scrollbar, no overhang, the row just ends flush with the card
+        // edge.
+        var list = new StackPanel { Spacing = 4, MinWidth = DiaryListWidth };
+
+        // G9b: the rule book is read only when a row on screen came from a suggestion-only rule —
+        // it is what says which category that rule suggests. A failed read just hides the buttons.
+        RuleBook? ruleBook = null;
+        if (diary.Any(d => d.RuleState == RuleStates.Suggested))
+        {
+            try { using var rdb = new Database(); ruleBook = RuleBook.Load(rdb); }
+            catch (Exception ex) { Log.Error("ReportsPage.Diary.RuleBook", ex); }
+        }
+
+        Grid BuildRow(ReportData.DiaryEntry entry)
+        {
+            var (id, date, start, end, dur, cat, window, desc, tag, ruleState) = entry;
+            // Left, not the FrameworkElement default Stretch (2026-07-28 — the MinWidth
+            // changes above turned out not to be enough on their own): a Stretch-aligned
+            // Grid gets ARRANGED at whatever final size its ancestor chain hands it, and
+            // with no Star column to absorb a shortfall, WinUI was silently zeroing out the
+            // Auto-width Edit/Split columns entirely (BoundingRectangle: Empty, not just
+            // scrolled off) rather than preserving their measured size and letting the
+            // ScrollViewer's own horizontal scroll handle the overflow. Left tells the row
+            // to size itself to its true natural (Measure-time) width and never be
+            // compressed by Arrange, which is what actually lets the ScrollViewer scroll to
+            // it instead of clipping it out of existence.
+            var row = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Stretch };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(showDate ? 150 : 110) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+            // Its own column (2026-08-07 report: was riding along inside the Details column as
+            // a " · #Label" suffix, easy to miss next to the duration and liable to get
+            // ellipsis-trimmed off first). Narrower than Category — tag labels are short and
+            // most rows have none at all, so "—" is the common case here, same convention the
+            // Page column already uses for "nothing to show." Narrowed further 2026-08-28 (see
+            // DiaryListWidth's own comment) — the longest label ("Procrastination") already
+            // needed the ellipsis+tooltip at 90, so shrinking to 75 just makes that the norm
+            // instead of the rare case, same tradeoff Page/Details already made.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(65) });
+            // Fixed pixel widths, not Auto/Star — the page body is a
+            // MaxWidth+Center StackPanel (ReportsPage.xaml), which sizes
+            // itself to its widest child's natural content width rather
+            // than a fixed width. An Auto or capped-MaxWidth column still
+            // measures narrower for a short entry than a long one, so the
+            // whole centered page visibly grew/shrank per day. A fixed
+            // width makes every row occupy the exact same space regardless
+            // of that day's content; overflow past it ellipsis-trims with
+            // a tooltip for the full text. App/Page were one combined
+            // "App - Page" column until 2026-07-23, split into their own
+            // columns (and their own filters — see BuildDiarySection) since
+            // they're independently meaningful (e.g. "Chrome"/"GitHub" vs.
+            // "Telegram"/"Liza Ponomarenko").
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(85) });
+            // Page and Details narrowed from 210/260 (2026-08-13 report, "remove the horizontal
+            // scroll bar... narrow the descriptions column truncating the name and showing …"),
+            // then again from 130/160 (2026-08-28 report — the 08-13 pass never accounted for
+            // showDate widening the Time column by 40px in search/All-time view, so the row
+            // still overflowed its budget exactly when a search or filter was active, e.g. the
+            // "unacc" search that surfaced this). Both already ellipsis-trim with a tooltip for
+            // the full text (TextTrimming.CharacterEllipsis below, same pattern App already
+            // used) — narrowing just makes that the common case instead of the rare one, so the
+            // row's natural width stops outgrowing the page (see DiaryListWidth's own comment).
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star), MinWidth = 100 });
+            // 2026-11-05 (user: empty strip right of Split): the time-only view is 40px narrower than the
+            // dated one and the always-present (usually empty) accept column added a spacing gap, so the
+            // row ended short of DiaryListWidth. Details takes the slack; the accept column is added only
+            // on a row that actually shows an accept button (index 9, below).
+            // 2026-11-05 (user: no empty space on the right; minutes flush right): Details is the one Star column,
+            // so the row always fills the card; the duration has its own right-aligned column after it.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star), MinWidth = 60 });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var select = new CheckBox
+            {
+                MinWidth = 0,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsChecked = selectedIds.Contains(id),
+            };
+            Ui.Name(select,
+                $"Select entry: {AppNames.Label(window)}, {start}–{end}");
+            select.Checked += (_, _) => { selectedIds.Add(id); onSelectionChanged(); };
+            select.Unchecked += (_, _) => { selectedIds.Remove(id); onSelectionChanged(); };
+            Grid.SetColumn(select, 0);
+            row.Children.Add(select);
+
+            var time = Dim(showDate ? $"{date.ToDisplayDateShort()} · {start} → {end}" : $"{start} → {end}");
+            var catText = new TextBlock
+            {
+                Text = cat.Replace('_', '-'),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Ui.Brush(CategoryBrushKey(cat)),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Ui.SetTip(catText, ruleState switch
+            {
+                RuleStates.Auto => "Set by a learned rule",
+                RuleStates.Suggested => "A learned rule suggests a category, but has too few examples to act alone",
+                RuleStates.Manual => "Marked by you",
+                _ => cat.Replace('_', '-'),
+            });
+            var tagLabelText = DiaryTag.LabelOf(tag) ?? "—";
+            var tagText = new TextBlock
+            {
+                Text = tagLabelText,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            if (DiaryTag.LabelOf(tag) is { } realTagLabel) Ui.SetTip(tagText, realTagLabel);
+            // Split app/page, same grouping AppNames already does for the combined label
+            // (kept below for accessible names/tooltips) and for the app/page filters.
+            var windowLabel = AppNames.Label(window);
+            var appGroup = AppNames.Group(window);
+            // A dialog window shows the app opened just before it (AppNames.InheritedFilterGroups).
+            var appShown = _diaryEffectiveApp.TryGetValue(id, out var inheritedApp) && inheritedApp != AppNames.OtherGroup && window != "idle"
+                ? inheritedApp : appGroup;
+            var rawPageSub = AppNames.Sub(window);
+            // idle/dismissed entries (and anything else with no app-detected sub-item) have
+            // nothing else to show in the Page column — but once the user's answered "what
+            // were you doing" for one, that free-text description IS the activity, so show it
+            // there instead of a bare "—" (2026-07-29 report: it was landing only in the
+            // details column, buried next to the duration, while Page kept showing "—" as if
+            // nothing had been recorded). Left untouched whenever there's a real detected page
+            // (e.g. Chrome's actual site) — a manually-added note on top of a real page is a
+            // supplementary detail, not a replacement for it, so it stays in the details column.
+            var descInPage = rawPageSub is null && desc is { Length: > 0 };
+            var pageSub = descInPage ? desc! : rawPageSub ?? "—";
+            var appText = new TextBlock
+            {
+                Text = appShown,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Ui.SetTip(appText, appShown);
+            var pageText = new TextBlock
+            {
+                Text = pageSub,
+                FontStyle = descInPage ? Avalonia.Media.FontStyle.Italic : Avalonia.Media.FontStyle.Normal,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Ui.SetTip(pageText, pageSub);
+            // No parens around the duration (2026-07-29 report) — just "12m", or
+            // "“desc” 12m" when there's a description that didn't already move to the Page
+            // column above. The tag used to append here as a " · #Label" suffix (2026-08-06)
+            // but moved to its own column (2026-08-07 report) — easy to miss buried next to
+            // the duration, and the first thing ellipsis-trimming would cut off.
+            var detailsText = !descInPage && desc is { Length: > 0 } ? $"“{desc}”" : "";
+            var details = new TextBlock
+            {
+                Text = detailsText,
+                FontStyle = !descInPage && desc is { Length: > 0 }
+                    ? Avalonia.Media.FontStyle.Italic : Avalonia.Media.FontStyle.Normal,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+            };
+            Ui.SetTip(details, detailsText);
+            var durText = new TextBlock
+            {
+                Text = $"{dur}m",
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+            };
+            var edit = new Button
+            {
+                Content = new FontIcon { Glyph = "", FontSize = 12 },
+                Padding = new Thickness(6),
+                MinWidth = 0,
+                MinHeight = 0,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Ui.Name(edit, $"Edit entry: {windowLabel}, {start}–{end}");
+            edit.Click += async (_, _) =>
+            {
+                var ok = await Dialogs.EditDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, desc, tag);
+                if (ok == true) Render();
+                else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
+            };
+            var split = new Button
+            {
+                Content = "Split",
+                Padding = new Thickness(8, 4, 8, 4),
+                MinWidth = 0,
+                MinHeight = 0,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Ui.Name(split, $"Split into several activities: {windowLabel}, {start}–{end}");
+            split.Click += async (_, _) =>
+            {
+                var ok = await Dialogs.SplitDiaryEntryDialog.ShowAsync(XamlRoot, id, date, start, end, dur, cat, window, desc, tag);
+                if (ok == true) Render();
+                else if (ok == false) { Render(); SaveErrorBar.IsOpen = true; }
+            };
+            Grid.SetColumn(time, 1);
+            Grid.SetColumn(catText, 2);
+            Grid.SetColumn(tagText, 3);
+            Grid.SetColumn(appText, 4);
+            Grid.SetColumn(pageText, 5);
+            // 2026-11-05 (user: still empty): most rows have no separate note, so the page text spans the
+            // Details column too instead of leaving it blank beside a truncated page title.
+            if (detailsText.Length == 0) Grid.SetColumnSpan(pageText, 2);
+            Grid.SetColumn(details, 6);
+            Grid.SetColumn(durText, 7);
+            Grid.SetColumn(edit, 8);
+            Grid.SetColumn(split, 9);
+            row.Children.Add(time);
+            row.Children.Add(catText);
+            row.Children.Add(tagText);
+            row.Children.Add(appText);
+            row.Children.Add(pageText);
+            row.Children.Add(details);
+            row.Children.Add(durText);
+            row.Children.Add(edit);
+            row.Children.Add(split);
+
+            // G9b (C3): a suggestion-only rule shows its category with a one-click accept. Accepting
+            // goes through the data-change door (backup, change history, Undo) like any bulk mark.
+            if (ruleState == RuleStates.Suggested && ruleBook != null
+                && ruleBook.Match(appGroup, window)?.Rule is { } suggestedRule
+                && (suggestedRule.Category != cat
+                    || (suggestedRule.Tag != null && !string.Equals(tag ?? "", suggestedRule.Tag, StringComparison.OrdinalIgnoreCase))))
+            {
+                var suggested = suggestedRule.Category;
+                var suggestedTag = suggestedRule.Tag;
+                var needCat = suggested != cat;
+                var needTag = suggestedTag != null
+                    && !string.Equals(tag ?? "", suggestedTag, StringComparison.OrdinalIgnoreCase);
+                var acceptLabel = (needCat ? suggested.Replace('_', '-') : "") +
+                                  (needCat && needTag ? " + " : "") + (needTag ? suggestedTag : "");
+                var accept = new Button
+                {
+                    Content = $"Accept: {acceptLabel}",
+                    Padding = new Thickness(8, 4, 8, 4), MinWidth = 0, MinHeight = 0,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                Ui.Name(accept, $"Accept suggested {acceptLabel}: {windowLabel}, {start}–{end}");
+                accept.Click += async (_, _) =>
+                {
+                    accept.IsEnabled = false;
+                    try
+                    {
+                        var res = await Task.Run(() =>
+                        {
+                            var last = needCat
+                                ? DataChangeDoor.Apply($"Accepted suggestion: {suggested.Replace('_', '-')}", new[] { id },
+                                    DataChangeDoor.Field.DiaryCategory, suggested)
+                                : null;
+                            if (needTag)
+                                last = DataChangeDoor.Apply($"Accepted suggestion: {suggestedTag}", new[] { id },
+                                    DataChangeDoor.Field.DiaryTag, suggestedTag);
+                            return last!;
+                        });
+                        MainWindow.Instance?.RefreshScore();
+                        Render();
+                        ShowDiaryNotice(new(InfoBarSeverity.Success, $"Marked as {acceptLabel}",
+                            "A backup was saved first.", res.ChangeId));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error("ReportsPage.Diary.AcceptSuggestion", ex);
+                        accept.IsEnabled = true;
+                        ShowDiaryNotice(new(InfoBarSeverity.Error, "Couldn't save that change",
+                            Log.Friendly("Nothing was changed", ex), null));
+                    }
+                };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetColumn(accept, 10);
+                row.Children.Add(accept);
+            }
+            return row;
+        }
+
+        // Starts from _diaryRowsShown, not always the default — so a same-scope rebuild
+        // (the periodic live-refresh timer while viewing "today"/"All time") redraws the
+        // list at whatever size the user had already revealed via "Show more," instead of
+        // silently collapsing back to the default every time it fires (see that field's own
+        // comment). RenderDiaryResults already resets it to the default on an actual scope
+        // change before this method is ever called.
+        var shown = Math.Min(_diaryRowsShown, diary.Count);
+        // G5 (2026-10-27): the revealed rows sit in a virtualizing ItemsRepeater instead of being
+        // built one Grid each into this StackPanel. The diary's own scroll box (520 px high, see
+        // BuildDiaryResultsArea) is what it virtualizes against, so only the rows on or near
+        // screen exist as controls; the rest are plain records. Measured before this: about
+        // 90 KB per built row, so "Show all" on a 9,000-row diary drove the app past 840 MB and
+        // hung it. What is revealed (and "Showing N of M") is unchanged; rows scrolled out of
+        // view are rebuilt from the same record when they come back, with their tick read from
+        // selectedIds as before.
+        var repeater = new ItemsRepeater
+        {
+            ItemsSource = diary.GetRange(0, shown),
+            Layout = new StackLayout { Spacing = 4 },
+            ItemTemplate = new DiaryRowElementFactory(_diaryRowBuilder = BuildRow),
+        };
+        list.Children.Add(repeater);
+
+        // One batch at a time, not the whole rest in one go (2026-07-28 request) — a busy
+        // search/date-range match can leave hundreds of rows hidden behind this button, and
+        // building them all at once defeats the whole point of DefaultDiaryRowsShown above
+        // (the same non-virtualizing-StackPanel cost that capped the initial render). Re-adds
+        // itself after each batch if there's still more left, so repeated clicks keep working.
+        // G2 (2026-10-27): graded increments (50 / 100 / 500 / 1000) up to "Show all", plus a
+        // "Showing N of M" count, in one footer row that is rebuilt after every click. An
+        // increment is offered only while it is smaller than what is still hidden (an equal or
+        // larger one would just be "Show all"); the first button keeps its old
+        // "Show min(50, hidden) more" label.
+        var footer = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 6, 0, 0),
+        };
+        list.Children.Add(footer);
+        void RevealTo(int target)
+        {
+            var next = Math.Min(target, diary.Count);
+            repeater.ItemsSource = diary.GetRange(0, next);
+            shown = next;
+            _diaryRowsShown = next;
+            RebuildFooter();
+        }
+        void RebuildFooter()
+        {
+            footer.Children.Clear();
+            footer.Children.Add(new TextBlock
+            {
+                Text = $"Showing {shown} of {diary.Count}",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+            });
+            var hidden = diary.Count - shown;
+            if (hidden <= 0) return;
+            HyperlinkButton Btn(string text, int count)
+            {
+                var b = new HyperlinkButton { Content = text };
+                Ui.Name(b, count == hidden && hidden > 50 ? $"Show all {hidden} remaining" : $"Show {count} more");
+                b.Click += (_, _) => RevealTo(shown + count);
+                return b;
+            }
+            footer.Children.Add(Btn($"Show {Math.Min(50, hidden)} more", 50));
+            foreach (var inc in new[] { 100, 500, 1000 })
+                if (inc < hidden) footer.Children.Add(Btn($"{inc}", inc));
+            if (hidden > 50) footer.Children.Add(Btn($"Show all ({hidden})", hidden));
+        }
+        RebuildFooter();
+        return list;
+    }
+}

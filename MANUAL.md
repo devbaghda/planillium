@@ -332,3 +332,6 @@ If TickTick integration is failing, verify the connection settings and ensure th
 ## Development note
 
 This manual reflects the current desktop application version and its core experience. As the app evolves, the feature set may expand.
+
+## Mac version
+On a Mac, build with `regular/avalonia/Planillium.Mac/tools/build-app.sh` and drag `dist/Planillium.app` to Applications. The data folder is `~/Library/Application Support/Planillium` (or set `MENTOR_ROOT`). To record window titles, allow Planillium in System Settings → Privacy & Security → Accessibility (Settings shows a warning until you do). Closing the window hides it to the menu bar; use the menu-bar icon → Quit to stop tracking. TickTick/AI keys are kept in the macOS Keychain.

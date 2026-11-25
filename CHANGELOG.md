@@ -5,6 +5,10 @@ going forward; the original Python/Tkinter version is retired.
 
 ## Unreleased
 
+- **Mac version (new, `regular/avalonia/Planillium.Mac/`).** Planillium now runs on macOS (Apple Silicon) as `Planillium.app`, built with Avalonia and sharing the Windows app's business logic (one copy of every rule). Menu-bar icon (closing the window hides it; Quit stops tracking), macOS notifications, secrets in the Keychain, optional start at login. Windows app unchanged. Build: `tools/build-app.sh`.
+
+- **Mac look matches Windows.** Dialogs (Welcome back etc.) and text boxes no longer show Fluent's near-black; buttons are white in light mode; text-box headers are plain grey text, not blue; Light/Dark choice now saves the option you clicked.
+
 - **Manual day off tracks like non-working hours.** On a day you mark as "Day off" the app now records only work your learned rules recognise as on-plan (or paid-tagged), never idle time, and asks no "where were you" question. Marking or un-marking a day off takes effect within about 2 minutes instead of at midnight.
 
 - **Apply rules to history.** Settings > Learned rules has an "Apply to history" button: it shows how many past diary rows the current rules would change, then sets them (rows you marked by hand, idle and day-off rows are left alone). Backed up first and undoable from Change history.

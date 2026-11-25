@@ -1,0 +1,424 @@
+using Planillium.App.Dialogs;
+using Planillium.App.Models;
+using Planillium.App.Services;
+
+namespace Planillium.App.Pages;
+
+public sealed partial class PlansPage : PageBase
+{
+    private const double MaxContentWidth = 880;
+
+    public PlansPage()
+    {
+        InitializeComponent();
+    }
+
+    // See PageLayout's own doc comment.
+    private void RootScroller_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        PageLayout.CenterContent(RootScroller, ContentColumn, MaxContentWidth, e.NewSize);
+
+    // NavigationCacheMode="Enabled" (see XAML) reuses this instance across
+    // menu switches instead of reconstructing the page + reopening the DB
+    // every time; OnNavigatedTo fires every visit (cached or not), unlike
+    // Loaded which would only fire once for a reused instance.
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        Render();
+    }
+
+    /// <summary>Internal (not private) so MainWindow's day-change watcher can force a
+    /// refresh when the calendar date rolls over while this cached page stays on screen —
+    /// same reasoning as TodayPage/SchedulePage's own Render() (2026-07-24 audit finding #1:
+    /// the original day-change fix covered those two pages but missed this structurally
+    /// identical one, which shows date-dependent "Day X of Y"/"Originally due" figures).</summary>
+    internal void Render()
+    {
+        ActiveList.Children.Clear();
+        QueuedList.Children.Clear();
+        ArchivedList.Children.Clear();
+        SaveErrorBar.IsOpen = false;
+
+        List<Plan> plans;
+        Dictionary<(string, int, string), bool> completions;
+        try
+        {
+            plans = PlanStore.LoadActivePlans(out var failedFiles);
+            var queued = PlanStore.LoadQueuedPlans(out var failedQueuedFiles);
+            failedFiles.AddRange(failedQueuedFiles);
+            if (failedFiles.Count > 0)
+            {
+                LoadErrorBar.Title = failedFiles.Count == 1
+                    ? $"Couldn't load '{failedFiles[0]}'"
+                    : $"Couldn't load {failedFiles.Count} plan files";
+                LoadErrorBar.Message = $"{string.Join(", ", failedFiles)} — the file's JSON " +
+                    "may be malformed. Fix it manually or re-generate the plan; it won't " +
+                    "appear here until then. See the log for details.";
+                LoadErrorBar.IsOpen = true;
+            }
+            else
+            {
+                LoadErrorBar.IsOpen = false;
+            }
+
+            foreach (var idea in queued)
+                QueuedList.Children.Add(QueuedRow(idea, plans.Count));
+            if (queued.Count == 0)
+                QueuedList.Children.Add(new TextBlock
+                {
+                    Text = "No queued ideas — plans saved for later show up here.",
+                    FontSize = 12,
+                    Foreground = Ui.Brush("TextFillColorTertiaryBrush"),
+                });
+
+            using var db = new Database();
+            completions = db.LoadCompletions();
+
+            foreach (var plan in plans)
+            {
+                var tasks = PlanStore.TasksFor(plan, db, completions);
+                var done = tasks.Count(t => t.Completed);
+                var complete = tasks.Count > 0 && done == tasks.Count;
+
+                var originalEndDate = plan.DateForPlanDay(plan.TotalDaysComputed);
+                var driftDays = plan.DriftDays(tasks);
+                // Passed in rather than read off `plan` inside PlanCard, since it needs the
+                // task list — and this card must show the same "Day X of Y" as Today and
+                // Schedule, not a second differently-derived number for the same plan
+                // (2026-08-04; this repo has already had one report of exactly that shape).
+                var progressDay = plan.ProgressDay(tasks, plan.TotalDaysComputed);
+
+                ActiveList.Children.Add(PlanCard(plan, done, tasks.Count, complete, originalEndDate,
+                    driftDays, progressDay));
+            }
+            if (plans.Count == 0)
+                ActiveList.Children.Add(new TextBlock
+                {
+                    Text = "No active plans.",
+                    Foreground = Ui.Brush("TextFillColorTertiaryBrush"),
+                });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("PlansPage.Render", ex);
+            ActiveList.Children.Add(new TextBlock { Text = Log.Friendly("Couldn't load your plans", ex) });
+            return;
+        }
+
+        var archiveDir = Path.Combine(AppPaths.Root, "plans", "archive");
+        var archived = Directory.Exists(archiveDir)
+            ? Directory.GetFiles(archiveDir, "*.json").OrderBy(f => f).ToList()
+            : new List<string>();
+        foreach (var file in archived)
+            ArchivedList.Children.Add(ArchivedRow(file, plans.Count));
+        if (archived.Count == 0)
+            ArchivedList.Children.Add(new TextBlock
+            {
+                Text = "No archived plans.",
+                FontSize = 12,
+                Foreground = Ui.Brush("TextFillColorTertiaryBrush"),
+            });
+    }
+
+    private Border PlanCard(Plan plan, int done, int total, bool complete,
+        DateOnly originalEndDate, int driftDays, int progressDay)
+    {
+        // Layout (2026-10-09 redesign): the text block gets the card's full width on top; the
+        // actions sit in their own row beneath it. Three everyday actions stay visible, the rest
+        // live under "More". A single horizontal row of six buttons used to crush the plan name
+        // to one word per line.
+        var grid = new Grid { Margin = new Thickness(18, 14, 18, 14), RowSpacing = 12 };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        Grid.SetRow(actions, 1);
+        var more = new MenuFlyout();
+
+        var left = new StackPanel { Spacing = 4 };
+        left.Children.Add(new TextBlock
+        {
+            Text = plan.Name,
+            FontSize = 20, FontWeight = FontWeight.SemiBold,
+        });
+        var metaLine = $"Day {progressDay} of {plan.TotalDaysComputed} · {done}/{total} tasks done";
+        if (plan.ExcludedWeekdays.Count > 0)
+        {
+            var names = plan.ExcludedWeekdays
+                .Select(d => ((DayOfWeek)d).ToString()[..3]);
+            metaLine += $" · excludes {string.Join(", ", names)}";
+        }
+        left.Children.Add(new TextBlock
+        {
+            Text = metaLine,
+            Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+            FontSize = 13,
+        });
+
+        // Originally-due date is fixed the moment the plan is created — it
+        // comes from each task's un-overridden Day (or the plan's own
+        // total_days), neither of which a reschedule ever touches. The
+        // "(+Nd)"/"(-Nd)" is how far the plan's actual finish has since
+        // drifted from that: later from reschedules/day-offs pushing tasks
+        // back, earlier from pulling a task forward and compacting the gap.
+        var dueLine = $"Originally due {originalEndDate.ToDisplayDateNumeric()}";
+        if (driftDays != 0)
+            dueLine += driftDays > 0 ? $" — now {driftDays}d later" : $" — now {-driftDays}d earlier";
+        left.Children.Add(new TextBlock
+        {
+            Text = dueLine,
+            // On-track (driftDays == 0) reads as success-green here, same as
+            // the sidebar's mirrored status line — both treat "on schedule"
+            // as good news, not a neutral non-event.
+            Foreground = Ui.Brush(
+                driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"),
+            FontSize = 12,
+        });
+        var bar = new ProgressBar
+        {
+            Value = total > 0 ? done * 100.0 / total : 0,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        left.Children.Add(bar);
+        grid.Children.Add(left);
+
+        if (plan.Briefing != null)
+        {
+            var briefing = new MenuFlyoutItem { Text = "Briefing" };
+            // Per-card actions must say which plan they act on (2026-07-24 audit finding #5).
+            Ui.Name(briefing, $"Briefing: {plan.Name}");
+            briefing.Click += async (_, _) => await BriefingDialog.ShowAsync(XamlRoot, plan);
+            more.Items.Add(briefing);
+        }
+
+        // "task" everywhere else in the app (Today/Schedule/Reports); this
+        // used to say "step" here and in the dialog title, while the
+        // dialog's own field was already headered "Task" three lines below
+        // it (2026-07-09 audit finding #32).
+        var addStep = new Button { Content = "+ Add task" };
+        Ui.Name(addStep, $"Add task: {plan.Name}");
+        addStep.Click += async (_, _) =>
+        {
+            var ok = await AddTaskDialog.ShowAsync(XamlRoot, plan);
+            if (ok == true)
+            {
+                Render();
+                MainWindow.Instance?.RefreshScore();
+            }
+            else if (ok == false)
+            {
+                Render();
+                SaveErrorBar.IsOpen = true;
+            }
+        };
+        actions.Children.Add(addStep);
+
+        var replaceRest = new Button { Content = "Replace remaining…" };
+        Ui.SetTip(replaceRest,
+            "Keep the tasks you've done; replace everything else with a new list from Claude");
+        Ui.Name(replaceRest, $"Replace remaining tasks: {plan.Name}");
+        replaceRest.IsEnabled = !complete;
+        replaceRest.Click += async (_, _) =>
+        {
+            var ok = await ReplaceRemainingDialog.ShowAsync(XamlRoot, plan);
+            if (ok == true)
+            {
+                Render();
+                MainWindow.Instance?.RefreshScore();
+            }
+            else if (ok == false)
+            {
+                Render();
+                SaveErrorBar.IsOpen = true;
+            }
+        };
+        actions.Children.Add(replaceRest);
+
+        var excludeDays = new MenuFlyoutItem { Text = "Excluded days…" };
+        Ui.Name(excludeDays, $"Excluded days: {plan.Name}");
+        excludeDays.Click += async (_, _) =>
+        {
+            if (await ExcludedWeekdaysDialog.ShowAsync(XamlRoot, plan))
+            {
+                Render();
+                MainWindow.Instance?.RefreshScore();
+            }
+        };
+        more.Items.Add(excludeDays);
+
+        var archive = new Button
+        {
+            Content = complete ? "Archive ✓" : "Archive",
+            IsEnabled = complete,
+        };
+        Ui.SetTip(archive,
+            complete ? "All tasks done — free the slot" : "Enabled once every task is complete");
+        Ui.Name(archive, $"Archive: {plan.Name}");
+        archive.Click += async (_, _) => await ArchiveAsync(plan);
+        actions.Children.Add(archive);
+
+        var moreBtn = new Button { Content = "More ▾", Flyout = more };
+        Ui.Name(moreBtn, $"More actions: {plan.Name}");
+        actions.Children.Add(moreBtn);
+        grid.Children.Add(actions);
+
+        return new Border
+        {
+            Background = Ui.Brush("CardBackgroundFillColorDefaultBrush"),
+            BorderBrush = Ui.Brush("CardStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Child = grid,
+        };
+    }
+
+    private async Task ArchiveAsync(Plan plan)
+    {
+        var confirm = DialogControls.Build(XamlRoot, $"Archive '{plan.Name}'?",
+            "It disappears from Today and frees a plan slot. You can restore it below any time.",
+            primaryButtonText: "Archive", closeButtonText: "Cancel");
+        if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+
+        var src = Path.Combine(AppPaths.ActivePlansDir, $"{plan.Id}.json");
+        var dstDir = Path.Combine(AppPaths.Root, "plans", "archive");
+        try
+        {
+            Directory.CreateDirectory(dstDir);
+            if (File.Exists(src))
+                File.Move(src, Path.Combine(dstDir, $"{plan.Id}.json"), overwrite: false);
+        }
+        catch (Exception ex)
+        {
+            // overwrite:false throws IOException if a same-named file is
+            // already sitting in the archive from a previous archive/
+            // restore cycle — this used to be an unhandled exception on an
+            // async void handler, silently swallowed by the app-wide
+            // handler with no sign anything happened (2026-07-14 round-6
+            // audit finding #8).
+            Log.Error("PlansPage.ArchiveAsync", ex);
+            Render();
+            SaveErrorBar.IsOpen = true;
+            return;
+        }
+        Render();
+        MainWindow.Instance?.RefreshScore();
+
+        // A slot just freed up — if there's anywhere to put it, offer straight away
+        // instead of making the user remember to check the Queued ideas section
+        // themselves (2026-07-22 request).
+        var queued = PlanStore.LoadQueuedPlans();
+        if (queued.Count > 0 && await Dialogs.StartQueuedPlanDialog.ShowAsync(this, queued))
+        {
+            Render();
+            MainWindow.Instance?.RefreshScore();
+        }
+    }
+
+    private Grid QueuedRow(Plan idea, int activeCount)
+    {
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new TextBlock { Text = idea.Name, VerticalAlignment = VerticalAlignment.Center });
+
+        var start = new Button { Content = "Start now", IsEnabled = activeCount < AppInfo.MaxActivePlans };
+        Ui.SetTip(start, activeCount < AppInfo.MaxActivePlans
+            ? "Move this idea to your active plans, starting today"
+            : $"Archive an active plan first — max {AppInfo.MaxActivePlans} active.");
+        start.Click += async (_, _) =>
+        {
+            if (!await TeachPlanTools.ActivateQueuedPlanAsync(XamlRoot, idea.Id, "PlansPage.StartQueuedIdea"))
+            {
+                SaveErrorBar.IsOpen = true;
+                return;
+            }
+            Render();
+            MainWindow.Instance?.RefreshScore();
+        };
+        Grid.SetColumn(start, 1);
+        grid.Children.Add(start);
+
+        var delete = new Button
+        {
+            Content = "Delete",
+            Background = Ui.Brush("SystemFillColorCriticalBrush"), Foreground = Brushes.White,
+        };
+        delete.Click += async (_, _) =>
+        {
+            var confirm = DialogControls.Build(XamlRoot, $"Delete '{idea.Name}'?",
+                "This idea hasn't started yet — deleting it can't be undone.",
+                primaryButtonText: "Delete", closeButtonText: "Cancel");
+            if (await Dialogs.DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return;
+            PlanStore.DeleteQueuedPlan(idea.Id);
+            Render();
+        };
+        Grid.SetColumn(delete, 2);
+        grid.Children.Add(delete);
+        return grid;
+    }
+
+    private Grid ArchivedRow(string file, int activeCount)
+    {
+        string name;
+        try
+        {
+            name = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file))
+                .RootElement.GetProperty("name").GetString() ?? Path.GetFileName(file);
+        }
+        catch (Exception ex)
+        {
+            // Runs once per archived plan file on page render, not a hot
+            // loop, so logging every occurrence is fine here — unlike the
+            // tracker's per-minute poll catches, this doesn't need
+            // once-per-run suppression (2026-07-09 audit finding #26).
+            Log.Warn("PlansPage.ArchivedRow", $"couldn't read name from {Path.GetFileName(file)}: {ex.Message}");
+            name = Path.GetFileName(file);
+        }
+
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+
+        var restore = new Button { Content = "Restore", IsEnabled = activeCount < AppInfo.MaxActivePlans };
+        // Mirrors Archive's own tooltip pattern above — a disabled Restore used to give
+        // no reason why (round-5 audit finding #21).
+        Ui.SetTip(restore, activeCount < AppInfo.MaxActivePlans
+            ? "Bring this plan back to your active list"
+            : $"Archive an active plan first — max {AppInfo.MaxActivePlans} active.");
+        restore.Click += (_, _) =>
+        {
+            try
+            {
+                var dst = Path.Combine(AppPaths.ActivePlansDir, Path.GetFileName(file));
+                if (!File.Exists(dst)) File.Move(file, dst);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("PlansPage.Restore", ex);
+                Render();
+                SaveErrorBar.IsOpen = true;
+                return;
+            }
+            Render();
+            MainWindow.Instance?.RefreshScore();
+        };
+        Grid.SetColumn(restore, 1);
+        grid.Children.Add(restore);
+        return grid;
+    }
+
+    private async void Add_Click(object sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (await AddPlanDialog.ShowAsync(this))
+        {
+            Render();
+            // The sidebar's plan-drift panel used to only refresh after
+            // "Excluded days…" — Archive/Restore/Add each already change
+            // which plans are active (and thus what the sidebar should show)
+            // just as much, but didn't call this (2026-07-14 round-6 audit
+            // finding #7).
+            MainWindow.Instance?.RefreshScore();
+        }
+    }
+}

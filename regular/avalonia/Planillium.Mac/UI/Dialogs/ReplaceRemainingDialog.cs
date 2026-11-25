@@ -1,0 +1,184 @@
+using Planillium.App.Models;
+using Planillium.App.Services;
+
+namespace Planillium.App.Dialogs;
+
+/// <summary>
+/// Replace the not-yet-done part of an active plan (2026-10-09 request — e.g. dropping Reddit
+/// tasks from a plan that no longer needs them). Done tasks stay exactly where they are;
+/// every other task is removed and the pasted Claude reply takes its place. Two steps so
+/// nothing changes by accident: paste → preview ("N removed, M added") → confirm.
+/// </summary>
+public static class ReplaceRemainingDialog
+{
+    /// <returns>null if cancelled, true once replaced, false if the save failed.</returns>
+    public static async Task<bool?> ShowAsync(XamlRoot xamlRoot, Plan plan)
+    {
+        List<AssignedTask> tasks;
+        try
+        {
+            using var db = new Database();
+            tasks = PlanStore.TasksFor(plan, db, db.LoadCompletions());
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReplaceRemainingDialog (load)", ex);
+            return false;
+        }
+
+        if (!PlanRemainder.HasUnfinished(tasks))
+        {
+            await DialogGate.ShowAsync(DialogControls.Build(xamlRoot, "Nothing to replace",
+                new TextBlock { Text = "Every task in this plan is already done.", TextWrapping = TextWrapping.Wrap },
+                closeButtonText: "OK"));
+            return null;
+        }
+
+        var intro = new TextBlock
+        {
+            Text = "Your done tasks stay exactly as they are. Everything else in this plan is replaced by what " +
+                   "you paste below. 1) Say what should change, 2) copy the prompt into claude.ai, " +
+                   "3) paste Claude's reply here. (With an API key set in Settings → AI, \"Ask Claude\" does steps 2 and 3 for you.)",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Opacity = 0.8,
+        };
+        var wish = new TextBox
+        {
+            Header = "What should change?",
+            PlaceholderText = "e.g. Remove everything about Reddit; spend that time on LinkedIn instead",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 70,
+        };
+        var words = new TextBox
+        {
+            Header = "Words that must be gone (optional)",
+            PlaceholderText = "e.g. Reddit — the preview will warn if a new task still mentions it",
+        };
+        var prompt = new TextBox
+        {
+            AcceptsReturn = true,
+            IsReadOnly = true,
+            Height = 110,
+            TextWrapping = TextWrapping.Wrap,
+            Header = "Prompt for Claude",
+        };
+        void RefreshPrompt() => prompt.Text = PlanRemainder.BuildPrompt(plan, tasks, wish.Text);
+        RefreshPrompt();
+        wish.TextChanged += (_, _) => RefreshPrompt();
+
+        var copy = new Button { Content = "Copy prompt" };
+        copy.Click += (_, _) =>
+        {
+            Ui.CopyText(prompt.Text);
+            copy.Content = "Copied ✓";
+        };
+        wish.TextChanged += (_, _) => copy.Content = "Copy prompt";
+
+        var reply = new TextBox
+        {
+            Header = "Claude's reply",
+            PlaceholderText = "Paste Claude's whole reply (with the ```json block) here",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 110,
+        };
+        var error = new TextBlock
+        {
+            Foreground = Ui.Brush("SystemFillColorCriticalBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+        };
+
+        // AI layer (2026-10-13): "Ask Claude" fills the reply box and, when it validates, jumps straight
+        // to the preview — the same Prepare() a pasted reply goes through, so nothing is applied by it.
+        PlanRemainder.Change? change = null;
+        var advance = false;
+        ContentDialog? dialog = null;
+        var ai = new AiAskPanel(() => prompt.Text, text =>
+        {
+            reply.Text = text;
+            var problem = PlanRemainder.Prepare(plan, tasks, text, out change);
+            if (problem != null)
+            {
+                error.Text = problem + " The reply is in the box below; you can fix it by hand, or clear the box and ask again.";
+                error.IsVisible = true;
+            }
+            else
+            {
+                advance = true;
+                dialog?.Hide();
+            }
+            return Task.CompletedTask;
+        }, () => reply.Text.Trim().Length > 0 ? "The reply box already has text — clear it first so Claude's answer doesn't overwrite it." : null);
+
+        var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
+        panel.Children.Add(intro);
+        panel.Children.Add(wish);
+        panel.Children.Add(words);
+        panel.Children.Add(ai);
+        panel.Children.Add(copy);
+        panel.Children.Add(prompt);
+        panel.Children.Add(reply);
+        panel.Children.Add(error);
+
+        dialog = DialogControls.Build(xamlRoot, $"Replace remaining tasks — {plan.Name}",
+            new ScrollViewer { Content = panel, MaxHeight = 560 },
+            primaryButtonText: "Preview", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Primary);
+        // Keep the dialog open on a bad reply, show the problem inline (same pattern as AddPlanDialog).
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            var problem = PlanRemainder.Prepare(plan, tasks, reply.Text, out change);
+            if (problem != null)
+            {
+                error.Text = problem;
+                error.IsVisible = true;
+                args.Cancel = true;
+            }
+        };
+        var shown = await DialogGate.ShowAsync(dialog);
+        ai.CancelRunning();
+        if ((shown != ContentDialogResult.Primary && !advance) || change is null) return null;
+
+        var oldEnd = plan.DateForPlanDay(plan.TotalDaysComputed);
+        var newEnd = plan.DateForPlanDay(change.LastNewDay);
+        var wordList = PlanRemainder.ParseWords(words.Text);
+        var mentions = PlanRemainder.FindMentions(change, wordList);
+        var wordCheck = wordList.Count == 0 ? "" :
+            mentions.Count == 0
+                ? $"\n\n✓ No mention of {string.Join(", ", wordList)} found in the new tasks."
+                : $"\n\n⚠ Still mentioned ({mentions.Count}):\n" +
+                  string.Join("\n", mentions.Select(m => $"• “{m.TaskTitle}” — “{m.Word}” in {m.Field}")) +
+                  "\nYou can still replace, or cancel and ask Claude again.";
+        var confirm = DialogControls.Build(xamlRoot, "Replace remaining tasks?",
+            new ScrollViewer
+            {
+                MaxHeight = 420,
+                Content = new TextBlock
+                {
+                    Text = $"{change.DoneCount} done task(s) stay untouched.\n" +
+                           $"{change.RemovedTexts.Count} unfinished task(s) will be removed.\n" +
+                           $"{change.AddedCount} new task(s) will be added, days {change.StartDay}–{change.LastNewDay}.\n" +
+                           $"The plan will now finish on {newEnd:dd.MM.yyyy} (was {oldEnd:dd.MM.yyyy}); " +
+                           "its \"late from plan\" count restarts from zero." + wordCheck +
+                           "\n\nThis can't be undone.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            },
+            primaryButtonText: "Replace", closeButtonText: "Cancel", defaultButton: ContentDialogButton.Close);
+        if (await DialogGate.ShowAsync(confirm) != ContentDialogResult.Primary) return null;
+
+        try
+        {
+            using var db = new Database();
+            PlanStore.ReplaceRemainingTasks(plan.Id, change, db);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ReplaceRemainingDialog (apply)", ex);
+            return false;
+        }
+        return true;
+    }
+}

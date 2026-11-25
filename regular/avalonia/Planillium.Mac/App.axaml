@@ -1,0 +1,50 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Planillium.Mac.App"
+             RequestedThemeVariant="Default">
+             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+
+    <!-- Fluent paints text boxes near-black in dark mode; the Windows app uses a faint lift over the page. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#0FFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#15FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#B31E1E1E" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#0BFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#0FFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#15FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#08FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#0BFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#12FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#18FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#0EFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#0EFFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#B3FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#80F9F9F9" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#4DF9F9F9" />
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#B3FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#80F9F9F9" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#4DF9F9F9" />
+                    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#4DF9F9F9" />
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#29000000" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#33000000" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#1F000000" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#1F000000" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <!-- Header label in text boxes: plain secondary text like Windows, not Fluent's accent blue. -->
+        <Style Selector="TextBox /template/ TextBlock#PART_FloatingWatermark">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </Application.Styles>
+</Application>
