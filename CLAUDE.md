@@ -30,9 +30,9 @@ progress — that's the part with no substitute.
   `winui-rebuild` by name (e.g. a bare `git push` with its old upstream tracking still
   configured) would silently recreate it on GitHub; push explicitly as `origin master` or push
   `winui-rebuild` and immediately delete the remote branch again if that happens.
-- Push fixes to `origin` when the user asks for it ("transfer to public version," "publish
-  this," "github is ready for publication," etc.) — this has been the pattern every session so
-  far, but it's still been on request each time, not automatic. Don't push without being asked.
+- **Standing rule (user, 2026-11-26): every commit is pushed right after it** — commit on `winui-rebuild`,
+  run the secret scan as its own command, read it, then `git push origin winui-rebuild:master`
+  (never push `winui-rebuild` by name). No need to be asked each time.
 - GitHub repo is `devbaghda/planillium` (renamed from `mentor-overseer` 2026-07-21, matching the
   app's actual display name — `git remote` already points here, no action needed). It's **Public**
   (flipped 2026-07-21, alongside the first real installable release, `v1.1.0` — see `release/`).
