@@ -160,19 +160,15 @@ public sealed partial class PlansPage : PageBase
         // "(+Nd)"/"(-Nd)" is how far the plan's actual finish has since
         // drifted from that: later from reschedules/day-offs pushing tasks
         // back, earlier from pulling a task forward and compacting the gap.
-        var dueLine = $"Originally due {originalEndDate.ToDisplayDateNumeric()}";
-        if (driftDays != 0)
-            dueLine += driftDays > 0 ? $" — now {driftDays}d later" : $" — now {-driftDays}d earlier";
-        left.Children.Add(new TextBlock
-        {
-            Text = dueLine,
-            // On-track (driftDays == 0) reads as success-green here, same as
-            // the sidebar's mirrored status line — both treat "on schedule"
-            // as good news, not a neutral non-event.
-            Foreground = Ui.Brush(
-                driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"),
-            FontSize = 12,
-        });
+        var dueBlock = new TextBlock { FontSize = 12 };
+        var dueText = $"Originally due {originalEndDate.ToDisplayDateNumeric()}";
+        // "now Nd later/earlier" carries the status colour (on-track stays plain: nothing to colour).
+        if (driftDays == 0)
+            Ui.StatusRuns(dueBlock, "TextFillColorSecondaryBrush", (dueText, null));
+        else
+            Ui.StatusRuns(dueBlock, "TextFillColorSecondaryBrush", (dueText + " — now ", null),
+                driftDays > 0 ? ($"{driftDays}d later", "SystemFillColorCriticalBrush") : ($"{-driftDays}d earlier", "SystemFillColorSuccessBrush"));
+        left.Children.Add(dueBlock);
         var bar = new ProgressBar
         {
             Value = total > 0 ? done * 100.0 / total : 0,

@@ -9,6 +9,7 @@ public sealed partial class SettingsPage
     private StackPanel GeneralPanel = null!;
     private TextBox YourName = null!;
     private RadioButtons ThemeChoice = null!;
+    private RadioButtons PaletteChoice = null!;
     private Slider OpacitySlider = null!;
     private ToggleSwitch StartupToggle = null!;
     private StackPanel HoursPanel = null!;
@@ -118,6 +119,11 @@ public sealed partial class SettingsPage
         var _n13 = new RadioButton { Content = "Dark", Tag = "dark" };
         ThemeChoice.Items.Add(_n13);
         GeneralPanel.Children.Add(ThemeChoice);
+        PaletteChoice = new RadioButtons { Header = "Colour theme" };
+        PaletteChoice.SelectionChanged += Palette_Changed;
+        PaletteChoice.Items.Add(new RadioButton { Content = "Mint", Tag = ThemeSync.Mint });
+        PaletteChoice.Items.Add(new RadioButton { Content = "Muted blue", Tag = ThemeSync.MutedBlue });
+        GeneralPanel.Children.Add(PaletteChoice);
         OpacitySlider = new Slider { Header = "Window opacity (%)", Width = 260, HorizontalAlignment = HorizontalAlignment.Left, Minimum = 40, Maximum = 100, StepFrequency = 5, TickFrequency = 10 };
         OpacitySlider.ValueChanged += Opacity_Changed;
         GeneralPanel.Children.Add(OpacitySlider);

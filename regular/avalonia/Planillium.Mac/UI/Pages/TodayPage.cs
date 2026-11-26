@@ -454,13 +454,15 @@ public sealed partial class TodayPage : Page
         // overdue task still deserves its "why this matters" line, not one
         // or the other.
         if (item.Overdue)
-            textCol.Children.Add(new TextBlock
-            {
-                Text = item.OverdueCaption(plan.PlanDay),
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = Ui.Brush("TextFillColorTertiaryBrush"),
-            });
+        {
+            // "N day(s) late" carries the status colour; "— from day N" stays regular.
+            var late = Math.Max(0, plan.PlanDay - item.AssignedDay);
+            var cap = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+            Ui.StatusRuns(cap, "TextFillColorTertiaryBrush",
+                ($"{late} day{(late == 1 ? "" : "s")} late", "SystemFillColorCriticalBrush"),
+                ($" — from day {item.AssignedDay}", null));
+            textCol.Children.Add(cap);
+        }
         if (MentorNoteLine(item.Task.MentorNote) is { } mentorLine) textCol.Children.Add(mentorLine);
         textCol.Children.Add(Views.TaskNoteView.Build(note, plan.Id, item.Task.Text, "TodayPage.SetTaskNote",
             onError: () => SaveErrorBar.IsOpen = true));

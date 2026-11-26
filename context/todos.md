@@ -635,3 +635,6 @@ User change: on a manual day off the app behaves as outside working hours (confi
 - Built `regular/avalonia/Planillium.Mac/` (decisions + results: `context/acceptance/2026-11-25-mac-version.md`). Data = a COPY at `~/CLAUDE/Planillium-mac-data/`; real `data/` never touched (md5 unchanged). Shared `Services/`+`Models/` compiled by link; 7 Platform replacements; Compat layer maps WinUI names to Avalonia.
 - Verified on the copy: all 5 pages, refusal on missing MENTOR_ROOT, task completion writes only the copy's DB, tracking rows, hide-to-menu-bar + Quit, Keychain round-trip, `.app` launch. Shared tests 348-349/350 on Mac (2 backup tests hard-code `C:\x\` paths; 1 income-strip Day test is time-of-day flaky).
 - Crash lesson: Accessibility (AX) calls against the app's own process segfault in Avalonia; NativeInput asks NSWorkspace for the frontmost pid and skips AX for our own pid.
+
+## 2026-11-26
+- Mac: Mint + Muted blue themes (light/dark), Settings "Colour theme", Fluent accent tied to theme; status text colours only figure + status word (drift card, Plans due line, Today overdue caption, sidebar balances, Reports Total score). Not touched: shared `OverdueCaption` (Windows code), overdue task title stays red (task state).

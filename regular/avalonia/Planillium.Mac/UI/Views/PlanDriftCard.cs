@@ -12,13 +12,6 @@ public static class PlanDriftCard
 {
     public static Border Build(string planName, int driftDays, string finishDateText)
     {
-        var status = driftDays switch
-        {
-            > 0 => $"{driftDays}d late from plan",
-            < 0 => $"{-driftDays}d ahead of plan",
-            _ => "On track",
-        };
-
         var nameBlock = new TextBlock
         {
             Text = planName,
@@ -30,13 +23,16 @@ public static class PlanDriftCard
 
         var block = new StackPanel { Spacing = 1 };
         block.Children.Add(nameBlock);
-        block.Children.Add(new TextBlock
+        // Only "Nd late" / "Nd ahead" carries the status colour; "from plan" stays regular text.
+        var statusBlock = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold };
+        var ok = "SystemFillColorSuccessBrush";
+        Ui.StatusRuns(statusBlock, "TextFillColorPrimaryBrush", driftDays switch
         {
-            Text = status,
-            FontSize = 13,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = Ui.Brush(driftDays > 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush"),
+            > 0 => new[] { ($"{driftDays}d late", (string?)"SystemFillColorCriticalBrush"), (" from plan", null) },
+            < 0 => new[] { ($"{-driftDays}d ahead", (string?)ok), (" of plan", null) },
+            _ => new[] { ("On track", (string?)ok) },
         });
+        block.Children.Add(statusBlock);
         block.Children.Add(new TextBlock
         {
             Text = "Finishes " + finishDateText,

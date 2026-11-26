@@ -7,6 +7,9 @@ going forward; the original Python/Tkinter version is retired.
 
 - **Mac version (new, `regular/avalonia/Planillium.Mac/`).** Planillium now runs on macOS (Apple Silicon) as `Planillium.app`, built with Avalonia and sharing the Windows app's business logic (one copy of every rule). Menu-bar icon (closing the window hides it; Quit stops tracking), macOS notifications, secrets in the Keychain, optional start at login. Windows app unchanged. Build: `tools/build-app.sh`.
 
+- **Mac: Mint and Muted blue colour themes, each in light and dark.** New "Colour theme" choice in Settings > General (independent of Follow macOS / Light / Dark; saved in `data/mac_colour_theme.txt`). Checkboxes, radios, sliders and accent buttons follow the theme accent.
+- **Mac: status text colouring.** In "98d late from plan" only "98d late" is red (green for ahead); "from plan" is regular text. Same on the Plans due line ("now 98d later"), the Today overdue caption, and the sidebar balances (red negative, green positive, amber zero); the Reports Total score is coloured like the rows above it.
+
 - **Mac look matches Windows.** Dialogs (Welcome back etc.) and text boxes no longer show Fluent's near-black; buttons are white in light mode; text-box headers are plain grey text, not blue; Light/Dark choice now saves the option you clicked.
 
 - **Manual day off tracks like non-working hours.** On a day you mark as "Day off" the app now records only work your learned rules recognise as on-plan (or paid-tagged), never idle time, and asks no "where were you" question. Marking or un-marking a day off takes effect within about 2 minutes instead of at midnight.

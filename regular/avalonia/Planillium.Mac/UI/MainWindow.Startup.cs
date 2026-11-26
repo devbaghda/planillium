@@ -392,7 +392,9 @@ public sealed partial class MainWindow
         try
         {
             using var db = new Database();
-            ScoreValue.Text = db.ScoreBalance().ToString();
+            var pts = db.ScoreBalance();
+            ScoreValue.Text = pts.ToString();
+            ScoreValue.Foreground = Ui.Brush(Ui.SignBrushKey(pts));
         }
         catch (Exception ex)
         {
@@ -439,6 +441,7 @@ public sealed partial class MainWindow
             var balance = income.Balance(score);
             IncomeLabel.Text = "FINAL BALANCE"; // user 2026-11-05: one fixed label; the sign shows lost vs gained
             IncomeValue.Text = FormatEur(balance);
+            IncomeValue.Foreground = Ui.Brush(Ui.SignBrushKey(balance));
         }
         catch (Exception ex)
         {

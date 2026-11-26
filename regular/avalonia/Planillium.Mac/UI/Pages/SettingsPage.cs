@@ -80,6 +80,7 @@ public sealed partial class SettingsPage : PageBase
                 "dark" => 2,
                 _ => 0,
             };
+            PaletteChoice.SelectedIndex = ThemeSync.LoadPalette() == ThemeSync.MutedBlue ? 1 : 0;
             OpacitySlider.Value = StateService.Load().Opacity;
             StartupToggle.IsOn = StartupService.IsEnabled;
             YourName.Text = ConfigService.UserName;
@@ -153,7 +154,7 @@ public sealed partial class SettingsPage : PageBase
         SumGeneral.Text = string.Join(" · ", new[]
         {
             name.Length > 0 ? name : "No name set",
-            theme,
+            theme + (ThemeSync.LoadPalette() == ThemeSync.MutedBlue ? " · Muted blue" : " · Mint"),
             $"{(int)StateService.Load().Opacity}%",
             StartupService.IsEnabled ? "autostart on" : "autostart off",
         });
@@ -1666,6 +1667,15 @@ public sealed partial class SettingsPage : PageBase
             ThrowIfExportFilesRemain(failed);
         }, "All data cleared.", "your data", "SettingsPage.ClearAllData");
         RefreshTickTickStatus();
+    }
+
+    private void Palette_Changed(object sender, object? e)
+    {
+        if (_initialising) return;
+        var tag = (PaletteChoice.SelectedItem as RadioButton)?.Tag as string ?? ThemeSync.Mint;
+        ThemeSync.SavePalette(tag);
+        MainWindow.Instance?.ApplyTheme(StateService.Load().Theme);
+        RefreshSummaries();
     }
 
     private void Theme_Changed(object sender, object? e)

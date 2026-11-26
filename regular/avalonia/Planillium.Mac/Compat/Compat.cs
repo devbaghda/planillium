@@ -44,6 +44,23 @@ public static class FontWeights
 /// <summary>Brush lookup + the handful of text styles the Windows code took from Application resources.</summary>
 public static class Ui
 {
+    /// <summary>Status text rule: the figure and the status word carry the status colour, the rest of the
+    /// sentence keeps the regular colour. Parts are (text, brush key or null for the regular colour).</summary>
+    public static void StatusRuns(Avalonia.Controls.TextBlock block, string regularBrushKey, params (string Text, string? BrushKey)[] parts)
+    {
+        block.Inlines!.Clear();
+        block.Foreground = Brush(regularBrushKey);
+        foreach (var (text, key) in parts)
+        {
+            var run = new Avalonia.Controls.Documents.Run { Text = text };
+            if (key != null) run.Foreground = Brush(key);
+            block.Inlines.Add(run);
+        }
+    }
+
+    public static string SignBrushKey(double value) =>
+        value > 0 ? "SystemFillColorSuccessBrush" : value < 0 ? "SystemFillColorCriticalBrush" : "SystemFillColorCautionBrush";
+
     public static IBrush Brush(string key) => Services.ThemeSync.Brush(key);
     public static IBrush Muted => Brush("TextFillColorTertiaryBrush");
     public static IBrush Secondary => Brush("TextFillColorSecondaryBrush");

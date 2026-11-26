@@ -90,7 +90,7 @@ public sealed partial class ReportsPage
                  .. CategoryColumns.Select((c, i) =>
                      (ReportData.FmtHours(rows.Sum(s => s.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
                  (ReportData.FmtHours(rows.Sum(s => s.Minutes.TotalMin)), columns - 6, null),
-                 (rows.Sum(s => s.Score).ToString(), columns - 5, null),
+                 (rows.Sum(s => s.Score).ToString(), columns - 5, ScoreBrush(rows.Sum(s => s.Score))),
                  .. MoneyTotals(m, columns)]);
         }
         return grid;
@@ -214,7 +214,7 @@ public sealed partial class ReportsPage
                  .. CategoryColumns.Select((c, i) =>
                      (ReportData.FmtHours(buckets.Sum(b => b.Minutes.Of(c.Category))), i + 2, (Brush?)null)),
                  (ReportData.FmtHours(buckets.Sum(b => b.Minutes.TotalMin)), columns - 6, null),
-                 (buckets.Sum(b => b.Score).ToString(), columns - 5, null),
+                 (buckets.Sum(b => b.Score).ToString(), columns - 5, ScoreBrush(buckets.Sum(b => b.Score))),
                  .. MoneyTotals(m, columns)]);
         }
         return grid;

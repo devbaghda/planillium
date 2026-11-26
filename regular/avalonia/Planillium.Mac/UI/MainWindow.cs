@@ -91,7 +91,7 @@ public sealed partial class MainWindow : Window
         };
         if (Application.Current != null) Application.Current.RequestedThemeVariant = RequestedThemeVariant;
         var dark = theme == "dark" || (theme != "light" && (Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant ?? Avalonia.Platform.PlatformThemeVariant.Dark) == Avalonia.Platform.PlatformThemeVariant.Dark);
-        ThemeSync.Apply(dark);
+        ThemeSync.Apply(dark, ThemeSync.LoadPalette());
         if (Content != null) Background = Ui.Brush("AppGroundBrush");
     }
 
